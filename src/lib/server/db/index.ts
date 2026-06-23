@@ -1,16 +1,8 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { createDb, type DB } from './createDb';
 import * as schema from './schema';
 
-export type DB = ReturnType<typeof createDb>['db'];
+export { createDb, type DB, schema };
 
-export function createDb(path: string) {
-	const sqlite = new Database(path);
-	sqlite.pragma('journal_mode = WAL');
-	sqlite.pragma('foreign_keys = ON');
-	const db = drizzle(sqlite, { schema });
-	return { db, sqlite };
-}
-
-const { db, sqlite } = createDb(process.env.DATABASE_PATH ?? '/data/roamarr.db');
-export { db, sqlite, schema };
+const singleton = createDb(process.env.DATABASE_PATH ?? '/data/roamarr.db');
+export const db: DB = singleton.db;
+export const sqlite = singleton.sqlite;

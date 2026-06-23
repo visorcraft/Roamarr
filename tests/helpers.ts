@@ -1,4 +1,4 @@
-import { createDb } from '../src/lib/server/db';
+import { createDb } from '../src/lib/server/db/createDb';
 import { applyMigrations } from '../src/lib/server/db/migrate';
 import { settings, users } from '../src/lib/server/db/schema';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';

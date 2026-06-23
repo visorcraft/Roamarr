@@ -4,7 +4,10 @@
 
 {#if data.owner === true}
 	<h1 class="text-2xl font-bold p-4">{data.trip.name}</h1>
-	<a href={`/trips/${data.trip.id}/edit`} class="text-blue-600 px-4">Edit</a>
+	<div class="px-4 flex gap-3">
+		<a href={`/trips/${data.trip.id}/edit`} class="text-blue-600">Edit</a>
+		<a href={`/trips/${data.trip.id}/share`} class="text-blue-600">Share</a>
+	</div>
 	<ul class="p-4">
 		{#each data.segments as s (s.id)}
 			<li>

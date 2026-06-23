@@ -13,3 +13,7 @@ export function computeFireAt(
 		.toUTC()
 		.toISO()!;
 }
+
+// Stubs — full implementations added in Task 16.
+export function upsertRemindersForSegment(_seg: unknown): void {}
+export function cancelRemindersFor(_refType: 'segment' | 'document', _refId: number): void {}

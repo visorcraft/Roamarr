@@ -1,4 +1,13 @@
 import { DateTime } from 'luxon';
+import { and, eq, lte, sql } from 'drizzle-orm';
+import { db } from './db';
+import { reminders, segments, travelDocuments, trips, users } from './db/schema';
+import { deliver } from './notify';
+import { nowIso } from './tz';
+
+type Seg = typeof segments.$inferSelect;
+type Doc = typeof travelDocuments.$inferSelect;
+type Reminder = typeof reminders.$inferSelect;
 
 export function computeFireAt(
 	kind: 'flight_checkin' | 'document_expiry',
@@ -14,6 +23,93 @@ export function computeFireAt(
 		.toISO()!;
 }
 
-// Stubs — full implementations added in Task 16.
-export function upsertRemindersForSegment(_seg: unknown): void {}
-export function cancelRemindersFor(_refType: 'segment' | 'document', _refId: number): void {}
+function arm(
+	userId: number,
+	kind: 'flight_checkin' | 'document_expiry',
+	refType: 'segment' | 'document',
+	refId: number,
+	fireAt: string
+) {
+	const now = nowIso();
+	const status = fireAt > now ? 'pending' : 'sent';
+	db.insert(reminders)
+		.values({ userId, kind, refType, refId, fireAt, status })
+		.onConflictDoUpdate({
+			target: [reminders.kind, reminders.refType, reminders.refId],
+			set: {
+				fireAt,
+				status: sql`case when ${fireAt} > ${now} then 'pending' else 'sent' end`,
+				attempts: 0,
+				sentAt: null
+			}
+		})
+		.run();
+}
+
+export function upsertRemindersForSegment(seg: Seg) {
+	if (seg.type !== 'flight') {
+		cancelRemindersFor('segment', seg.id);
+		return;
+	}
+	const owner = db
+		.select({ ownerId: trips.ownerId })
+		.from(trips)
+		.where(eq(trips.id, seg.tripId))
+		.get()!;
+	arm(owner.ownerId, 'flight_checkin', 'segment', seg.id, computeFireAt('flight_checkin', seg.startAt));
+}
+
+export function upsertRemindersForDocument(doc: Doc) {
+	if (!doc.expiresOn) {
+		cancelRemindersFor('document', doc.id);
+		return;
+	}
+	const tz =
+		db.select({ timezone: users.timezone }).from(users).where(eq(users.id, doc.userId)).get()
+			?.timezone ?? 'UTC';
+	arm(doc.userId, 'document_expiry', 'document', doc.id, computeFireAt('document_expiry', doc.expiresOn, tz));
+}
+
+export function cancelRemindersFor(refType: 'segment' | 'document', refId: number) {
+	db.delete(reminders)
+		.where(and(eq(reminders.refType, refType), eq(reminders.refId, refId)))
+		.run();
+}
+
+export async function runDueReminders(now: Date) {
+	const claimed = db
+		.update(reminders)
+		.set({ status: 'sending' })
+		.where(and(eq(reminders.status, 'pending'), lte(reminders.fireAt, now.toISOString())))
+		.returning()
+		.all();
+	for (const r of claimed) {
+		try {
+			await deliver(r.userId, messageFor(r));
+			db.update(reminders)
+				.set({ status: 'sent', sentAt: now.toISOString() })
+				.where(eq(reminders.id, r.id))
+				.run();
+		} catch {
+			const next = r.attempts >= 5 ? 'sent' : 'pending';
+			db.update(reminders)
+				.set({ status: next, attempts: r.attempts + 1 })
+				.where(eq(reminders.id, r.id))
+				.run();
+		}
+	}
+}
+
+function messageFor(r: Reminder): { title: string; body: string; link: string } {
+	return r.kind === 'flight_checkin'
+		? {
+				title: 'Check-in reminder',
+				body: 'A flight departs in about 24 hours.',
+				link: `/trips`
+			}
+		: {
+				title: 'Document expiring',
+				body: 'A travel document expires in 90 days.',
+				link: `/profile/documents`
+			};
+}

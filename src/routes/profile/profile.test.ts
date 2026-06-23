@@ -12,7 +12,7 @@ const remindersMock = vi.hoisted(() => ({
 }));
 vi.mock('$lib/server/reminders', () => remindersMock);
 
-import { addDocument } from './documents/+page.server';
+import { _addDocument as addDocument } from './documents/+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
 import { users, travelDocuments } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';

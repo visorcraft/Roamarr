@@ -14,7 +14,7 @@ export const load: Load = () => {
 	return {};
 };
 
-export async function registerUser(email: string, password: string, displayName: string) {
+export async function _registerUser(email: string, password: string, displayName: string) {
 	return db
 		.insert(users)
 		.values({
@@ -38,7 +38,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'All fields required; password ≥ 8 chars.' });
 		let u;
 		try {
-			u = await registerUser(email, password, displayName);
+			u = await _registerUser(email, password, displayName);
 		} catch {
 			return fail(409, { error: 'Email already registered.' });
 		}

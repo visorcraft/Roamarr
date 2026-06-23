@@ -1,0 +1,18 @@
+import { db } from './db';
+import { applyMigrations } from './db/migrate';
+import { settings } from './db/schema';
+
+export function requireSecret(secret: string | undefined) {
+	if (!secret) throw new Error('ROAMARR_SECRET is required to start Roamarr');
+}
+
+let booted = false;
+
+/** Idempotent one-time boot: enforce secret, apply migrations, ensure the settings singleton. */
+export function bootApp() {
+	if (booted) return;
+	booted = true;
+	requireSecret(process.env.ROAMARR_SECRET);
+	applyMigrations(db);
+	db.insert(settings).values({ id: 1 }).onConflictDoNothing().run();
+}

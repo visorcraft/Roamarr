@@ -7,7 +7,7 @@ import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/remin
 import { db } from '$lib/server/db';
 import { segments } from '$lib/server/db/schema';
 
-export function addSegment(
+export function _addSegment(
 	userId: number,
 	tripId: number,
 	i: {
@@ -44,7 +44,7 @@ export function addSegment(
 	return seg;
 }
 
-export function deleteSegment(userId: number, tripId: number, segId: number) {
+export function _deleteSegment(userId: number, tripId: number, segId: number) {
 	requireOwnedTrip(userId, tripId);
 	db.delete(segments).where(and(eq(segments.id, segId), eq(segments.tripId, tripId))).run();
 	cancelRemindersFor('segment', segId);
@@ -54,7 +54,7 @@ export const actions: Actions = {
 	add: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addSegment(u.id, Number(params.id), {
+		_addSegment(u.id, Number(params.id), {
 			type: f.get('type') as 'flight' | 'lodging',
 			title: String(f.get('title')),
 			localStart: String(f.get('localStart')),
@@ -69,7 +69,7 @@ export const actions: Actions = {
 	delete: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		deleteSegment(u.id, Number(params.id), Number(f.get('segmentId')));
+		_deleteSegment(u.id, Number(params.id), Number(f.get('segmentId')));
 		throw redirect(303, `/trips/${params.id}`);
 	}
 };

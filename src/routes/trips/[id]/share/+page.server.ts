@@ -7,7 +7,7 @@ import { db } from '$lib/server/db';
 import { users, trips, tripShares, groups } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
-export function shareWithUserEmail(ownerId: number, tripId: number, email: string) {
+export function _shareWithUserEmail(ownerId: number, tripId: number, email: string) {
 	requireOwnedTrip(ownerId, tripId);
 	const target = db
 		.select()
@@ -21,12 +21,12 @@ export function shareWithUserEmail(ownerId: number, tripId: number, email: strin
 		.run();
 }
 
-export function shareWithGroup(ownerId: number, tripId: number, groupId: number) {
+export function _shareWithGroup(ownerId: number, tripId: number, groupId: number) {
 	requireOwnedTrip(ownerId, tripId);
 	db.insert(tripShares).values({ tripId, sharedWithGroupId: groupId }).onConflictDoNothing().run();
 }
 
-export function mintPublicToken(ownerId: number, tripId: number) {
+export function _mintPublicToken(ownerId: number, tripId: number) {
 	requireOwnedTrip(ownerId, tripId);
 	const token = randomBytes(24).toString('base64url');
 	db.update(trips).set({ publicToken: token }).where(eq(trips.id, tripId)).run();
@@ -49,17 +49,17 @@ export const load: PageServerLoad = ({ locals, params }) => {
 export const actions: Actions = {
 	shareUser: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
-		shareWithUserEmail(u.id, Number(params.id), String((await request.formData()).get('email')));
+		_shareWithUserEmail(u.id, Number(params.id), String((await request.formData()).get('email')));
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	shareGroup: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
-		shareWithGroup(u.id, Number(params.id), Number((await request.formData()).get('groupId')));
+		_shareWithGroup(u.id, Number(params.id), Number((await request.formData()).get('groupId')));
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	makePublic: async ({ locals, params }) => {
 		const u = requireUser(locals);
-		mintPublicToken(u.id, Number(params.id));
+		_mintPublicToken(u.id, Number(params.id));
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	revokePublic: async ({ locals, params }) => {

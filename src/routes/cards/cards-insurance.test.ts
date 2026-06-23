@@ -7,8 +7,8 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { addCard, addBenefit } from './+page.server';
-import { addPolicy } from '../insurance/+page.server';
+import { _addCard as addCard, _addBenefit as addBenefit } from './+page.server';
+import { _addPolicy as addPolicy } from '../insurance/+page.server';
 import { users, trips, cards, cardBenefits } from '$lib/server/db/schema';
 
 test('card + benefit are owner-scoped; insurance to foreign trip is rejected', () => {

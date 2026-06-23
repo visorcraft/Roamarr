@@ -6,7 +6,7 @@ import { viewerProjection } from '$lib/server/sharing';
 import { getSettings } from '$lib/server/settings';
 import type { PageServerLoad } from './$types';
 
-export function loadByToken(token: string) {
+export function _loadByToken(token: string) {
 	if (!token) throw error(404, 'Not found');
 	const t = db.select().from(trips).where(eq(trips.publicToken, token)).get();
 	if (!t) throw error(404, 'Not found');
@@ -14,4 +14,4 @@ export function loadByToken(token: string) {
 	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs) };
 }
 
-export const load: PageServerLoad = ({ params }) => loadByToken(params.token);
+export const load: PageServerLoad = ({ params }) => _loadByToken(params.token);

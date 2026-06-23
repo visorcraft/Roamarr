@@ -7,7 +7,7 @@ import { encrypt, decrypt } from '$lib/server/crypto';
 import { upsertRemindersForDocument, cancelRemindersFor } from '$lib/server/reminders';
 import type { PageServerLoad } from './$types';
 
-export function addDocument(
+export function _addDocument(
 	userId: number,
 	i: {
 		type: 'passport' | 'drivers_license' | 'global_entry';
@@ -43,7 +43,7 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addDocument(u.id, {
+		_addDocument(u.id, {
 			type: f.get('type') as 'passport' | 'drivers_license' | 'global_entry',
 			number: String(f.get('number') || '') || undefined,
 			issuingAuthority: String(f.get('issuingAuthority') || '') || undefined,

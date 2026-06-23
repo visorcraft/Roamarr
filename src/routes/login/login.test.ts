@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { authenticate } from './+page.server';
+import { _authenticate as authenticate } from './+page.server';
 import { users } from '$lib/server/db/schema';
 import { hashPassword } from '$lib/server/auth';
 

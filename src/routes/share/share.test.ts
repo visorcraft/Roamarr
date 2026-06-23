@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { loadByToken } from './[token]/+page.server';
+import { _loadByToken as loadByToken } from './[token]/+page.server';
 import { users, trips, segments } from '$lib/server/db/schema';
 
 test('valid token returns projection without sensitive data; bad token 404s', () => {

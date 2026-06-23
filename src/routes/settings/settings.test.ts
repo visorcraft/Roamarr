@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { saveAdminSettings } from './+page.server';
+import { _saveAdminSettings as saveAdminSettings } from './+page.server';
 import { settings } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';

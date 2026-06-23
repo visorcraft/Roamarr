@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { shareWithUserEmail, mintPublicToken } from '../trips/[id]/share/+page.server';
+import { _shareWithUserEmail as shareWithUserEmail, _mintPublicToken as mintPublicToken } from '../trips/[id]/share/+page.server';
 import { canView } from '$lib/server/sharing';
 import { users, trips } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';

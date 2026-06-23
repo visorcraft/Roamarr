@@ -6,7 +6,7 @@ import { db } from '$lib/server/db';
 import { insurancePolicies, trips } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
-export function addPolicy(
+export function _addPolicy(
 	userId: number,
 	i: {
 		provider: string;
@@ -53,7 +53,7 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addPolicy(u.id, {
+		_addPolicy(u.id, {
 			provider: String(f.get('provider')),
 			policyNumber: String(f.get('policyNumber') || '') || undefined,
 			coverageSummary: String(f.get('coverageSummary') || '') || undefined,

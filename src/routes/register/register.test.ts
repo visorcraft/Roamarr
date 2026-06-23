@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { registerUser } from './+page.server';
+import { _registerUser as registerUser } from './+page.server';
 import { users, settings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 

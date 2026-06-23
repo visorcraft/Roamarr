@@ -1,42 +1,59 @@
-# sv
+# Roamarr
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A self-hosted, single-container TripIt alternative. SvelteKit + SQLite, every planned
+subsystem present but shallow (walking skeleton, v0.1).
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
+## Quick start (Docker)
 
 ```sh
-# create a new project
-npx sv create my-app
+docker build -t roamarr .
+docker run -p 3000:3000 -v roamarr-data:/data \
+  -e ROAMARR_SECRET="$(openssl rand -base64 32)" \
+  -e ORIGIN=http://localhost:3000 \
+  roamarr
+# open http://localhost:3000 → first-run /setup creates the admin account
 ```
 
-To recreate this project with the same configuration:
+The container refuses to boot without `ROAMARR_SECRET` (a base64-encoded 32-byte key
+used for at-rest encryption). On startup it applies database migrations, then starts
+the in-process scheduler (reminders + fare-watch ticks every 60s).
+
+## Local development
 
 ```sh
-# recreate this project
-npx sv@0.16.1 create --template minimal --types ts --no-install .
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+npm install
+export ROAMARR_SECRET="$(openssl rand -base64 32)"
+export DATABASE_PATH="./roamarr.db"   # default /data/roamarr.db
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-## Building
-
-To create a production version of your app:
+Tests (Vitest):
 
 ```sh
-npm run build
+npm test                 # run once
+npm run test:watch       # watch
 ```
 
-You can preview the production build with `npm run preview`.
+Schema migrations are generated with Drizzle Kit:
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```sh
+npm run db:generate      # emit SQL into ./drizzle after schema changes
+```
+
+## Configuration
+
+| Variable        | Required | Default            | Notes                                                            |
+| --------------- | -------- | ------------------ | ---------------------------------------------------------------- |
+| `ROAMARR_SECRET`| yes      | —                  | base64 32-byte key; AES-256-GCM at rest; refuses to boot if unset|
+| `DATABASE_PATH` | no       | `/data/roamarr.db` | SQLite file path                                                 |
+| `PORT`          | no       | `3000`             | adapter-node listen port                                         |
+| `ORIGIN`        | no       | —                  | public origin (cookies / redirects)                              |
+
+See `.env.example`.
+
+## Architecture
+
+Single SvelteKit (`@sveltejs/adapter-node`) app over SQLite (Drizzle + better-sqlite3).
+All server logic lives under `src/lib/server/`; routes are thin. Authorization is
+centralized (`sharing.ts` for reads, `ownership.ts` for mutations). Sensitive fields
+(document numbers, API keys, SMTP password) are AES-256-GCM encrypted at rest.

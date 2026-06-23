@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { markRead } from './+page.server';
+import { _markRead as markRead } from './+page.server';
 import { users, notifications } from '$lib/server/db/schema';
 
 test('markRead only affects the caller’s own notification', () => {

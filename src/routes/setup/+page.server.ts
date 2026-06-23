@@ -4,7 +4,7 @@ import { db, sqlite } from '$lib/server/db';
 import { users, settings } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 
-export function createAdmin(
+export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },
 	passwordHash?: string
 ) {
@@ -45,7 +45,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'All fields required; password ≥ 8 chars.' });
 		let user;
 		try {
-			user = createAdmin(
+			user = _createAdmin(
 				{ email, password, displayName, instanceName, timezone },
 				await hashPassword(password)
 			);

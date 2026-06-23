@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { createAdmin } from './+page.server';
+import { _createAdmin as createAdmin } from './+page.server';
 import { users } from '$lib/server/db/schema';
 
 test('creates exactly one admin; second attempt rejected', () => {

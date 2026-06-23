@@ -4,7 +4,7 @@ import { getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
 import type { PageServerLoad } from './$types';
 
-export function saveAdminSettings(i: {
+export function _saveAdminSettings(i: {
 	instanceName: string;
 	allowRegistration: boolean;
 	defaultTimezone: string;
@@ -38,7 +38,7 @@ export const actions: Actions = {
 		requireAdmin(locals);
 		const f = await request.formData();
 		const pass = String(f.get('smtpPass') || '');
-		saveAdminSettings({
+		_saveAdminSettings({
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
 			allowRegistration: f.get('allowRegistration') === 'on',
 			defaultTimezone: String(f.get('defaultTimezone') || 'UTC'),

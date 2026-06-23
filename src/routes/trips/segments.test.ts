@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { addSegment } from './[id]/segments/+page.server';
+import { _addSegment as addSegment } from './[id]/segments/+page.server';
 import { users, trips, cards, segments } from '$lib/server/db/schema';
 
 test('flight start_at is stored as a UTC instant; foreign card rejected', () => {

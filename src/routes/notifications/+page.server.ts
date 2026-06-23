@@ -6,7 +6,7 @@ import { notifications } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
 import type { PageServerLoad } from './$types';
 
-export function markRead(userId: number, id: number) {
+export function _markRead(userId: number, id: number) {
 	db.update(notifications)
 		.set({ readAt: nowIso() })
 		.where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
@@ -27,7 +27,7 @@ export const load: PageServerLoad = ({ locals }) => {
 export const actions: Actions = {
 	markRead: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		markRead(u.id, Number((await request.formData()).get('id')));
+		_markRead(u.id, Number((await request.formData()).get('id')));
 		throw redirect(303, '/notifications');
 	}
 };

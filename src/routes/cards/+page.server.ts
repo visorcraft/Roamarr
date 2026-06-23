@@ -5,7 +5,7 @@ import { db } from '$lib/server/db';
 import { cards, cardBenefits } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
-export function addCard(
+export function _addCard(
 	userId: number,
 	i: { nickname: string; network: string; last4?: string; notes?: string }
 ) {
@@ -22,7 +22,7 @@ export function addCard(
 		.get();
 }
 
-export function addBenefit(
+export function _addBenefit(
 	userId: number,
 	cardId: number,
 	i: {
@@ -64,7 +64,7 @@ export const actions: Actions = {
 	addCard: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addCard(u.id, {
+		_addCard(u.id, {
 			nickname: String(f.get('nickname')),
 			network: String(f.get('network')),
 			last4: String(f.get('last4') || '') || undefined,
@@ -75,7 +75,7 @@ export const actions: Actions = {
 	addBenefit: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addBenefit(u.id, Number(f.get('cardId')), {
+		_addBenefit(u.id, Number(f.get('cardId')), {
 			benefitType: String(f.get('benefitType')),
 			coverageAmount: f.get('coverageAmount') ? Number(f.get('coverageAmount')) : undefined,
 			notes: String(f.get('notes') || '') || undefined

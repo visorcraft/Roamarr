@@ -28,7 +28,7 @@ test('renders segment events with UTC datetimes', () => {
 			location: 'JFK → LHR'
 		},
 		{
-			type: 'lodging',
+			type: 'hotel',
 			title: 'Park Hotel',
 			startAt: '2026-07-01T20:00:00Z',
 			location: 'Shibuya'
@@ -38,7 +38,7 @@ test('renders segment events with UTC datetimes', () => {
 	expect(ics).toContain('UID:roamarr-trip-1-segment-1@roamarr');
 	expect(ics).toContain('UID:roamarr-trip-1-segment-2@roamarr');
 	expect(ics).toContain('SUMMARY:Flight: UA123');
-	expect(ics).toContain('SUMMARY:Lodging: Park Hotel');
+	expect(ics).toContain('SUMMARY:Hotel: Park Hotel');
 	expect(ics).toContain('DTSTART:20260701T150000Z');
 	expect(ics).toContain('DTEND:20260701T183000Z');
 	expect(ics).toContain('LOCATION:JFK → LHR');
@@ -92,13 +92,13 @@ test('renders all segment types', () => {
 	const ics = buildCalendar(
 		{ id: 5, name: 'Multi' },
 		[
-			{ type: 'car', title: 'Rental', startAt: '2026-07-01T10:00:00Z' },
-			{ type: 'activity', title: 'Museum', startAt: '2026-07-02T10:00:00Z' },
+			{ type: 'rental_car', title: 'Rental', startAt: '2026-07-01T10:00:00Z' },
+			{ type: 'poi', title: 'Museum', startAt: '2026-07-02T10:00:00Z' },
 			{ type: 'food', title: 'Dinner', startAt: '2026-07-03T19:00:00Z' }
 		] as any
 	);
-	expect(ics).toContain('SUMMARY:Car: Rental');
-	expect(ics).toContain('SUMMARY:Activity: Museum');
+	expect(ics).toContain('SUMMARY:Rental car: Rental');
+	expect(ics).toContain('SUMMARY:POI: Museum');
 	expect(ics).toContain('SUMMARY:Food: Dinner');
 });
 
@@ -107,7 +107,7 @@ test('omits DTEND when segment has no end time', () => {
 		{ id: 4, name: 'Trip' },
 		[
 			{
-				type: 'lodging',
+				type: 'hotel',
 				title: 'Check-in',
 				startAt: '2026-07-01T16:00:00Z'
 			}

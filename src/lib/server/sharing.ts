@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, like, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from './db';
 import { trips, tripShares, groupMembers, segments } from './db/schema';
 import type { trips as tripsTable } from './db/schema';

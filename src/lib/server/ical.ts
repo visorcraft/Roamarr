@@ -19,11 +19,6 @@ export type CalendarSegment = {
 
 const SEGMENT_LABELS: Record<SegmentType, string> = {
 	flight: 'Flight',
-	lodging: 'Lodging',
-	car: 'Car',
-	rail: 'Rail',
-	activity: 'Activity',
-	cruise: 'Cruise',
 	event: 'Event',
 	hotel: 'Hotel',
 	rental_car: 'Rental car',

@@ -119,7 +119,7 @@ test('cancel removes the reminder', () => {
 
 test('non-flight segments do not arm reminders', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	for (const type of ['lodging', 'car', 'rail', 'activity', 'cruise'] as const) {
+	for (const type of ['hotel', 'rental_car', 'train', 'poi', 'boat'] as const) {
 		const seg = db
 			.insert(segments)
 			.values({
@@ -152,7 +152,7 @@ test('changing a flight to a non-flight cancels its reminder', () => {
 	upsertRemindersForSegment(seg);
 	expect(db.select().from(reminders).all().length).toBe(1);
 
-	const lodging = { ...seg, type: 'lodging' as const };
+	const lodging = { ...seg, type: 'hotel' as const };
 	upsertRemindersForSegment(lodging);
 	expect(db.select().from(reminders).all().length).toBe(0);
 });

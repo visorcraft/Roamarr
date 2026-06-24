@@ -146,7 +146,7 @@ test('extra segment types can be added and do not arm flight reminders', () => {
 		.get();
 	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
 
-	for (const type of ['car', 'rail', 'activity', 'cruise'] as const) {
+	for (const type of ['hotel', 'rental_car', 'train', 'boat'] as const) {
 		const seg = addSegment(a.id, t.id, {
 			type,
 			title: `${type} segment`,

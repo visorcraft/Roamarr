@@ -57,7 +57,7 @@ test('shared viewer receives a calendar without private fields', async () => {
 	db.insert(segments)
 		.values({
 			tripId: t.id,
-			type: 'lodging',
+			type: 'hotel',
 			title: 'Hotel',
 			startAt: '2026-08-01T16:00:00Z',
 			startTz: 'UTC',
@@ -70,7 +70,7 @@ test('shared viewer receives a calendar without private fields', async () => {
 	const res = await GET(event({ user: b }, { id: String(t.id) }));
 	expect(res.status).toBe(200);
 	const body = await res.text();
-	expect(body).toContain('SUMMARY:Lodging: Hotel');
+	expect(body).toContain('SUMMARY:Hotel: Hotel');
 	expect(body).toContain('LOCATION:Mitte');
 	expect(body).not.toContain('SECRET NOTES');
 	expect(body).not.toContain('CONF123');

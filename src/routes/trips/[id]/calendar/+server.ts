@@ -7,7 +7,7 @@ import type { RequestHandler } from './$types';
 function toCalendarSegments(view: ReturnType<typeof loadTripFor>): CalendarSegment[] {
 	if (view.editor) {
 		return view.segments.map((s) => ({
-			type: s.type as 'flight' | 'lodging',
+			type: s.type as CalendarSegment['type'],
 			title: s.title,
 			startAt: s.startAt,
 			endAt: s.endAt,

@@ -62,7 +62,7 @@ test('does not leak private fields in the feed', async () => {
 	db.insert(segments)
 		.values({
 			tripId: t.id,
-			type: 'lodging',
+			type: 'hotel',
 			title: 'Hotel',
 			startAt: '2026-10-01T16:00:00Z',
 			startTz: 'UTC',
@@ -73,7 +73,7 @@ test('does not leak private fields in the feed', async () => {
 
 	const res = await GET(event({ id: String(t.id) }, `?token=${encodeURIComponent(token)}`));
 	const body = await res.text();
-	expect(body).toContain('SUMMARY:Lodging: Hotel');
+	expect(body).toContain('SUMMARY:Hotel: Hotel');
 	expect(body).not.toContain('SECRET TRIP NOTES');
 	expect(body).not.toContain('CONF-LEAK');
 });

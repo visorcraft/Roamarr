@@ -82,6 +82,20 @@ npm run db:push
 
 See `.env.example`. SMTP and webhook settings are configured via `/settings` in the app.
 
+## Features
+
+- **Trips & segments** — itinerary builder with flight, hotel, rental car, train, event, and other segment types.
+- **Sharing** — share trips with users or groups, with read/edit/detail visibility controls; public token shares and calendar feeds.
+- **Organization** — trip tags, archive/favorite flags, bulk actions, full-text search across trips and segments.
+- **Export & import** — export owned trips as JSON or CSV; import JSON/CSV with a dry-run preview.
+- **Reminders** — automatic flight check-in and document-expiry reminders, plus per-trip custom reminders.
+- **Fare watch** — optional fare checks via configurable provider accounts.
+- **Travel documents & loyalty** — passport/driver's license/global entry tracking and loyalty-program balances.
+- **Cards & insurance** — credit-card tracking with global benefit templates and insurance-policy records.
+- **Notifications** — in-app inbox with optional SMTP and signed webhook delivery; per-user channel toggles.
+- **Admin** — user management, audit-log viewer with filters, scheduled-job history, database backup, and instance stats.
+- **Security** — argon2id passwords, session metadata, rate-limited auth, CSP + security headers, and audit logging.
+
 ## Architecture
 
 Single SvelteKit (`@sveltejs/adapter-node`) app over SQLite (Drizzle + better-sqlite3).

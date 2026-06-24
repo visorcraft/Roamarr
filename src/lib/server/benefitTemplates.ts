@@ -1,5 +1,4 @@
 import { eq, count } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { benefitTemplates } from './db/schema';
 import type { DB } from './db';
@@ -30,43 +29,12 @@ const DEFAULT_BENEFIT_TEMPLATES: Array<
 	}
 ];
 
-function requireAdminRole(role: string) {
-	if (role !== 'admin') throw error(403, 'Admin only');
-}
-
 export function listBenefitTemplates() {
 	return db.select().from(benefitTemplates).all();
 }
 
 export function getBenefitTemplate(id: number) {
 	return db.select().from(benefitTemplates).where(eq(benefitTemplates.id, id)).get();
-}
-
-export function createBenefitTemplate(
-	user: { role: string },
-	input: Omit<typeof benefitTemplates.$inferInsert, 'id'>
-) {
-	requireAdminRole(user.role);
-	return db.insert(benefitTemplates).values(input).returning().get();
-}
-
-export function updateBenefitTemplate(
-	user: { role: string },
-	id: number,
-	input: Partial<Omit<typeof benefitTemplates.$inferInsert, 'id'>>
-) {
-	requireAdminRole(user.role);
-	return db
-		.update(benefitTemplates)
-		.set(input)
-		.where(eq(benefitTemplates.id, id))
-		.returning()
-		.get();
-}
-
-export function deleteBenefitTemplate(user: { role: string }, id: number) {
-	requireAdminRole(user.role);
-	return db.delete(benefitTemplates).where(eq(benefitTemplates.id, id)).run();
 }
 
 export function ensureDefaultBenefitTemplates(database: DB) {

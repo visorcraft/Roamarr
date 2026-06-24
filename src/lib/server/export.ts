@@ -2,9 +2,10 @@ import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { trips, segments } from './db/schema';
 import { utcToLocal } from './tz';
+import { tripTags } from './sharing';
 import type { SegmentType } from './db/schema';
 
-export interface ExportedSegment {
+interface ExportedSegment {
 	type: SegmentType;
 	title: string;
 	localStart: string;
@@ -15,7 +16,7 @@ export interface ExportedSegment {
 	details?: Record<string, unknown>;
 }
 
-export interface ExportedTrip {
+interface ExportedTrip {
 	name: string;
 	destination?: string;
 	startDate?: string;
@@ -24,16 +25,6 @@ export interface ExportedTrip {
 	tags?: string[];
 	defaultVisibility?: string;
 	segments?: ExportedSegment[];
-}
-
-function tripTags(raw: string): string[] {
-	try {
-		const parsed = JSON.parse(raw);
-		if (Array.isArray(parsed)) return parsed.filter((t) => typeof t === 'string');
-	} catch {
-		// ignore
-	}
-	return [];
 }
 
 export function exportTrips(userId: number): ExportedTrip[] {
@@ -46,7 +37,7 @@ export function exportTrips(userId: number): ExportedTrip[] {
 			startDate: t.startDate ?? undefined,
 			endDate: t.endDate ?? undefined,
 			notes: t.notes ?? undefined,
-			tags: tripTags(t.tags),
+			tags: tripTags(t),
 			defaultVisibility: t.defaultVisibility,
 			segments: segs.map((s) => ({
 				type: s.type as SegmentType,

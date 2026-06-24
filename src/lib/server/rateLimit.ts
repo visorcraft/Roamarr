@@ -3,7 +3,7 @@ const store = new Map<string, { count: number; resetAt: number }>();
 export const DEFAULT_MAX_ATTEMPTS = 10;
 export const DEFAULT_WINDOW_MS = 60_000;
 
-export interface RateLimitResult {
+interface RateLimitResult {
 	allowed: boolean;
 	retryAfter?: number;
 }

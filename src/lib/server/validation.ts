@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 
-export type FieldErrors = Record<string, string>;
+type FieldErrors = Record<string, string>;
 
 export class Validator {
 	errors: FieldErrors = {};

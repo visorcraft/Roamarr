@@ -2,11 +2,11 @@ import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from './db';
 import { auditLogs, users } from './db/schema';
 
-export interface AuditMeta {
+interface AuditMeta {
 	[key: string]: unknown;
 }
 
-export interface AuditLogEntry {
+interface AuditLogEntry {
 	id: number;
 	action: string;
 	entityType: string;
@@ -36,7 +36,7 @@ export function logAudit(
 	}).run();
 }
 
-export interface AuditFilters {
+interface AuditFilters {
 	userId?: number;
 	action?: string;
 	entityType?: string;
@@ -46,7 +46,7 @@ export interface AuditFilters {
 	offset?: number;
 }
 
-export interface AuditListResult {
+interface AuditListResult {
 	logs: AuditLogEntry[];
 	total: number;
 }

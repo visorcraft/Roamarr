@@ -121,7 +121,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 	};
 }
 
-export type ListedTrip =
+type ListedTrip =
 	| (Trip & { isShared: false })
 	| (ReturnType<typeof viewerProjection> & { isShared: true });
 

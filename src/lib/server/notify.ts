@@ -6,9 +6,9 @@ import { users, notifications } from './db/schema';
 import { getSettings } from './settings';
 import { decrypt } from './crypto';
 
-export type NotificationMessage = { title: string; body: string; link?: string };
+type NotificationMessage = { title: string; body: string; link?: string };
 
-export interface Channel {
+interface Channel {
 	send(userId: number, msg: NotificationMessage): Promise<void>;
 }
 
@@ -88,4 +88,3 @@ export async function deliver(userId: number, msg: NotificationMessage) {
 	await Promise.all(externalChannels.map((c) => c.send(userId, msg)));
 }
 
-export { signWebhookBody };

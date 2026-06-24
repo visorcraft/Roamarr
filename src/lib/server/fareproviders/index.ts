@@ -6,7 +6,7 @@ import { encrypt, decrypt } from '../crypto';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
 import { stub } from './stub';
 
-export type FareResult = { ok: boolean; summary: string; raw?: unknown };
+type FareResult = { ok: boolean; summary: string; raw?: unknown };
 
 export interface FareProvider {
 	key: string;

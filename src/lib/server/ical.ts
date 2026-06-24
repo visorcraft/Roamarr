@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
 import type { SegmentType } from './db/schema';
 
-export type CalendarTrip = {
+type CalendarTrip = {
 	id: number;
 	name: string;
 	destination?: string | null;

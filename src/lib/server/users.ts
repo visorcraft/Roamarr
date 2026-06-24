@@ -31,7 +31,7 @@ function assertCanChangeAdminAccess(
 	}
 }
 
-export interface AdminUpdateUserInput {
+interface AdminUpdateUserInput {
 	displayName: string;
 	email: string;
 	role: 'admin' | 'user';

@@ -6,7 +6,7 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 
-export interface ImportSegment {
+interface ImportSegment {
 	type: SegmentType;
 	title: string;
 	localStart: string;
@@ -17,7 +17,7 @@ export interface ImportSegment {
 	details?: Record<string, unknown>;
 }
 
-export interface ImportTrip {
+interface ImportTrip {
 	name: string;
 	destination?: string;
 	startDate?: string;
@@ -27,13 +27,13 @@ export interface ImportTrip {
 	segments?: ImportSegment[];
 }
 
-export interface ImportError {
+interface ImportError {
 	row: number;
 	field: string;
 	message: string;
 }
 
-export interface ImportPreviewTrip {
+interface ImportPreviewTrip {
 	name: string;
 	destination?: string;
 	startDate?: string;
@@ -41,7 +41,7 @@ export interface ImportPreviewTrip {
 	segments: { type: SegmentType; title: string; localStart: string; startTz: string }[];
 }
 
-export interface ImportResult {
+interface ImportResult {
 	imported: number;
 	segmentCount: number;
 	errors: ImportError[];

@@ -80,7 +80,7 @@ npm run db:push
 | `PORT`          | no       | `3000`             | adapter-node listen port                                         |
 | `ORIGIN`        | no       | —                  | public origin (cookies / redirects)                              |
 
-See `.env.example`.
+See `.env.example`. SMTP and webhook settings are configured via `/settings` in the app.
 
 ## Architecture
 

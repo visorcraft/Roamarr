@@ -1,7 +1,7 @@
 <script lang="ts">
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	const s = $derived(data.settings);
 </script>
 
@@ -10,7 +10,40 @@
 	<p class="mt-1 text-sm text-muted">Configure your Roamarr instance and outgoing email.</p>
 </header>
 
-<form method="POST" class="mt-8 grid gap-6">
+{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
+
+<section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+	<div class="card p-4">
+		<p class="text-sm text-slate-400">Users</p>
+		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.users}</p>
+	</div>
+	<div class="card p-4">
+		<p class="text-sm text-slate-400">Trips</p>
+		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.trips}</p>
+	</div>
+	<div class="card p-4">
+		<p class="text-sm text-slate-400">Segments</p>
+		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.segments}</p>
+	</div>
+	<div class="card p-4">
+		<p class="text-sm text-slate-400">Groups</p>
+		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.groups}</p>
+	</div>
+	<div class="card p-4">
+		<p class="text-sm text-slate-400">Notifications</p>
+		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.notifications}</p>
+	</div>
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Notification channels</h2>
+	<p class="mt-1 text-sm text-slate-400">Send a test notification to yourself to verify SMTP/webhook configuration.</p>
+	<form method="POST" action="?/testNotification" class="mt-4">
+		<button class="btn btn-primary">Send test notification</button>
+	</form>
+</section>
+
+<form method="POST" class="mt-6 grid gap-6">
 	<section class="card p-5 sm:p-6">
 		<h2 class="section-title">General</h2>
 		<div class="settings-rows">

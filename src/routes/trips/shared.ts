@@ -16,6 +16,15 @@ export type TripView =
 	| { owner: false; editor: true; trip: Trip; segments: Segment[] }
 	| { owner: false; editor: false; trip: Projection };
 
+export function serializeTags(raw?: string): string {
+	if (!raw) return '[]';
+	const tags = raw
+		.split(',')
+		.map((t) => t.trim().toLowerCase())
+		.filter(Boolean);
+	return JSON.stringify(tags);
+}
+
 export function createTrip(
 	userId: number,
 	i: {
@@ -24,6 +33,7 @@ export function createTrip(
 		startDate?: string;
 		endDate?: string;
 		notes?: string;
+		tags?: string;
 		defaultVisibility?: string;
 	}
 ) {
@@ -38,6 +48,7 @@ export function createTrip(
 			startDate: i.startDate,
 			endDate: i.endDate,
 			notes: i.notes,
+			tags: serializeTags(i.tags),
 			defaultVisibility: i.defaultVisibility ?? 'private',
 			publicToken
 		})
@@ -55,6 +66,43 @@ export function regenerateCalendarToken(ownerId: number, tripId: number) {
 export function revokeCalendarToken(ownerId: number, tripId: number) {
 	requireOwnedTrip(ownerId, tripId);
 	db.update(trips).set({ calendarToken: null }).where(eq(trips.id, tripId)).run();
+}
+
+export function duplicateTrip(ownerId: number, tripId: number) {
+	const t = db.select().from(trips).where(eq(trips.id, tripId)).get();
+	if (!t || t.ownerId !== ownerId) throw error(403, 'Not allowed');
+	const segs = db.select().from(segments).where(eq(segments.tripId, tripId)).all();
+	const copy = db
+		.insert(trips)
+		.values({
+			ownerId,
+			name: `Copy of ${t.name}`,
+			destination: t.destination,
+			startDate: t.startDate,
+			endDate: t.endDate,
+			notes: t.notes,
+			tags: t.tags,
+			defaultVisibility: t.defaultVisibility
+		})
+		.returning()
+		.get();
+	for (const s of segs) {
+		db.insert(segments)
+			.values({
+				tripId: copy.id,
+				type: s.type,
+				title: s.title,
+				startAt: s.startAt,
+				startTz: s.startTz,
+				endAt: s.endAt,
+				location: s.location,
+				confirmationNumber: s.confirmationNumber,
+				detailsJson: s.detailsJson,
+				cardId: s.cardId
+			})
+			.run();
+	}
+	return copy;
 }
 
 export function loadTripFor(userId: number, tripId: number): TripView {

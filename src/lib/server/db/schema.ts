@@ -87,6 +87,7 @@ export const trips = sqliteTable(
 		startDate: text('start_date'),
 		endDate: text('end_date'),
 		notes: text('notes'),
+		tags: text('tags').notNull().default('[]'),
 		defaultVisibility: text('default_visibility').notNull().default('private'),
 		publicToken: text('public_token').unique(),
 		calendarToken: text('calendar_token').unique(),
@@ -261,9 +262,6 @@ export const cards = sqliteTable(
 		userIdx: index('cards_user_idx').on(t.userId)
 	})
 );
-
-export const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
-export type BenefitType = (typeof BENEFIT_TYPES)[number];
 
 export const cardBenefits = sqliteTable(
 	'card_benefits',

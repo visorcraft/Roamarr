@@ -57,6 +57,13 @@
       "when": 1782320368594,
       "tag": "0007_true_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1782325601275,
+      "tag": "0008_special_juggernaut",
+      "breakpoints": true
     }
   ]
 }

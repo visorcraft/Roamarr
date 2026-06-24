@@ -3,8 +3,6 @@ import { requireUser } from '$lib/server/auth';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, updateSegment } from '$lib/server/segments';
 
-export { addSegment, deleteSegment, updateSegment, _addSegment, _deleteSegment, _updateSegment } from '$lib/server/segments';
-
 export const actions: Actions = {
 	delete: async ({ request, locals, params }) => {
 		const u = requireUser(locals);

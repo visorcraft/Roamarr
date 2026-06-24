@@ -4,7 +4,7 @@ import { db } from './db';
 import { benefitTemplates } from './db/schema';
 import type { DB } from './db';
 
-export const DEFAULT_BENEFIT_TEMPLATES: Array<
+const DEFAULT_BENEFIT_TEMPLATES: Array<
 	Omit<typeof benefitTemplates.$inferInsert, 'id'>
 > = [
 	{

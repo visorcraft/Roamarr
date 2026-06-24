@@ -138,6 +138,26 @@ export function deleteWatch(userId: number, watchId: number) {
 	db.delete(fareWatches).where(eq(fareWatches.id, watchId)).run();
 }
 
+export async function checkWatch(userId: number, watchId: number): Promise<FareResult> {
+	const w = requireOwnedWatch(userId, watchId);
+	const p = db.select().from(fareProviders).where(eq(fareProviders.id, w.providerId)).get();
+	if (!p || !p.enabled) throw error(400, 'Provider not found or disabled');
+	const provider = registry[p.providerKey];
+	if (!provider) throw error(400, 'Unknown provider');
+	const now = new Date();
+	let res: FareResult;
+	try {
+		res = await provider.check(w, p.apiKey ? decrypt(p.apiKey) : '');
+	} catch (e) {
+		res = { ok: false, summary: String(e) };
+	}
+	db.update(fareWatches)
+		.set({ lastResultJson: JSON.stringify(res), lastCheckedAt: now.toISOString() })
+		.where(eq(fareWatches.id, w.id))
+		.run();
+	return res;
+}
+
 export async function runFareChecks(now: Date) {
 	const rows = db
 		.select()

@@ -2,6 +2,15 @@
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 
 	let { data, form } = $props();
+
+	function fmt(iso: string | null | undefined) {
+		if (!iso) return '';
+		try {
+			return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+		} catch {
+			return iso;
+		}
+	}
 </script>
 
 <header class="flex flex-wrap items-end justify-between gap-4">
@@ -75,4 +84,29 @@
 			<button class="btn btn-primary">Update password</button>
 		</div>
 	</form>
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Active sessions</h2>
+	{#if data.sessions.length}
+		<ul class="mt-4 divide-y divide-white/5">
+			{#each data.sessions as s (s.id)}
+				<li class="flex flex-wrap items-center justify-between gap-3 py-3">
+					<div class="text-sm">
+						<p class="font-medium text-white">
+							{s.current ? 'This session' : `Session ${s.id}`}
+							{#if s.current}<span class="badge badge-brand ml-2">Current</span>{/if}
+						</p>
+						<p class="text-slate-400">Created {fmt(s.createdAt)} · Expires {fmt(s.expiresAt)}</p>
+					</div>
+					<form method="POST" action="?/revokeSession">
+						<input type="hidden" name="id" value={s.id} />
+						<button class="btn btn-ghost text-red-300 hover:text-red-200">Revoke</button>
+					</form>
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="mt-4 text-sm text-slate-500">No active sessions.</p>
+	{/if}
 </section>

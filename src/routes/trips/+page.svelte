@@ -1,5 +1,17 @@
 <script lang="ts">
-	let { data } = $props();
+	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string }; form?: { error?: string } } = $props();
+
+	function tags(t: (typeof data.trips)[number]): string[] {
+		if (t.isShared) return (t.tags as string[]) ?? [];
+		try {
+			const parsed = JSON.parse(t.tags as string);
+			if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string');
+		} catch {
+			// ignore
+		}
+		return [];
+	}
+
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
 		groups: 'badge-brand',
@@ -32,6 +44,10 @@
 		<input type="search" name="q" value={data.q ?? ''} placeholder="Trip name or destination" class="input" />
 	</label>
 	<label class="field min-w-[8rem]">
+		<span class="label">Tag</span>
+		<input type="text" name="tag" value={data.tag ?? ''} placeholder="e.g. work" class="input" />
+	</label>
+	<label class="field min-w-[8rem]">
 		<span class="label">Sort by</span>
 		<select name="sort" value={data.sort} class="input">
 			<option value="startDate">Start date</option>
@@ -49,35 +65,57 @@
 	<button type="submit" class="btn btn-ghost">Apply</button>
 </form>
 
+{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
+
 {#if data.trips.length}
-	<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-		{#each data.trips as t (t.id)}
-			<a
-				href={`/trips/${t.id}`}
-				class="card group flex flex-col gap-3 p-5 transition hover:-translate-y-0.5 hover:ring-white/20"
-			>
-				<div class="flex items-start justify-between gap-3">
-					<h2 class="font-display text-lg leading-tight font-bold text-white">{t.name}</h2>
-					{#if t.isShared}
-						<span class="badge badge-brand shrink-0">Shared</span>
-					{:else}
-						<span class="badge {visBadge[t.defaultVisibility] ?? 'badge-slate'} shrink-0 capitalize"
-							>{t.defaultVisibility}</span
-						>
+	<form method="POST" action="?/delete" class="mt-6">
+		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+			<p class="text-sm text-slate-400">Select your own trips to remove them in bulk.</p>
+			<button class="btn btn-danger">Delete selected</button>
+		</div>
+		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+			{#each data.trips as t (t.id)}
+				<div class="card group relative flex flex-col gap-3 p-5 transition hover:-translate-y-0.5 hover:ring-white/20">
+					{#if !t.isShared}
+						<input
+							type="checkbox"
+							name="selected"
+							value={t.id}
+							class="absolute top-3 right-3 h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
+							onclick={(e) => e.stopPropagation()}
+						/>
 					{/if}
+					<a href={`/trips/${t.id}`} class="contents">
+						<div class="flex items-start justify-between gap-3">
+							<h2 class="font-display text-lg leading-tight font-bold text-white">{t.name}</h2>
+							{#if t.isShared}
+								<span class="badge badge-brand shrink-0">Shared</span>
+							{:else}
+								{@const badgeClass = t.defaultVisibility ? visBadge[t.defaultVisibility] ?? 'badge-slate' : 'badge-slate'}
+								<span class="badge {badgeClass} shrink-0 capitalize">{t.defaultVisibility || 'private'}</span>
+							{/if}
+						</div>
+						{#if t.destination}
+							<p class="flex items-center gap-1.5 text-sm text-slate-400">
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0 text-slate-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+								{t.destination}
+							</p>
+						{/if}
+						{#if tags(t).length}
+							<div class="flex flex-wrap gap-1.5">
+								{#each tags(t) as tag}
+									<span class="badge badge-slate text-xs">{tag}</span>
+								{/each}
+							</div>
+						{/if}
+						{#if t.startDate || t.endDate}
+							<p class="mt-auto font-mono text-xs text-slate-500">{t.startDate || '—'} → {t.endDate || '—'}</p>
+						{/if}
+					</a>
 				</div>
-				{#if t.destination}
-					<p class="flex items-center gap-1.5 text-sm text-slate-400">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0 text-slate-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
-						{t.destination}
-					</p>
-				{/if}
-				{#if t.startDate || t.endDate}
-					<p class="mt-auto font-mono text-xs text-slate-500">{t.startDate || '—'} → {t.endDate || '—'}</p>
-				{/if}
-			</a>
-		{/each}
-	</div>
+			{/each}
+		</div>
+	</form>
 {:else}
 	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
 		<div class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">

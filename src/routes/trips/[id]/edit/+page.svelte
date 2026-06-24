@@ -1,7 +1,17 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+
+	function tagString(raw: string): string {
+		try {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed)) return parsed.join(', ');
+		} catch {
+			// ignore
+		}
+		return '';
+	}
 </script>
 
 <header>
@@ -39,6 +49,11 @@
 			<label class="label" for="notes">Notes</label>
 			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}">{data.trip.notes ?? ''}</textarea>
 			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="tags">Tags</label>
+			<input id="tags" name="tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" class="input {form?.errors?.tags ? 'input-error' : ''}" />
+			{#if form?.errors?.tags}<p class="field-error">{form.errors.tags}</p>{/if}
 		</div>
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
 			<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>

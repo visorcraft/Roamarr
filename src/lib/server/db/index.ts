@@ -1,8 +1,7 @@
 import type Database from 'better-sqlite3';
 import { createDb, type DB } from './createDb';
-import * as schema from './schema';
 
-export { createDb, type DB, schema };
+export type { DB };
 
 // Lazy singleton: the DB file is only opened on first property access, not at
 // import time. This keeps SvelteKit's build-time server analysis side-effect-free

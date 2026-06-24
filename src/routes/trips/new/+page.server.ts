@@ -14,6 +14,7 @@ export const actions: Actions = {
 		const startDate = v.date(f.get('startDate'), 'startDate');
 		const endDate = v.date(f.get('endDate'), 'endDate');
 		const notes = v.optionalString(f.get('notes'), 'notes', { max: 5000 });
+		const tags = v.optionalString(f.get('tags'), 'tags', { max: 200 });
 		const defaultVisibility = v.enumValue(
 			String(f.get('defaultVisibility') || 'private'),
 			['private', 'groups', 'public'] as const,
@@ -29,6 +30,7 @@ export const actions: Actions = {
 			startDate,
 			endDate,
 			notes,
+			tags,
 			defaultVisibility
 		});
 		throw redirect(303, `/trips/${t.id}`);

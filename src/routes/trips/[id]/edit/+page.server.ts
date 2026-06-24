@@ -8,6 +8,7 @@ import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
 import { Validator } from '$lib/server/validation';
+import { serializeTags } from '../../shared';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
@@ -38,6 +39,7 @@ export const actions: Actions = {
 		const startDate = v.date(f.get('startDate'), 'startDate');
 		const endDate = v.date(f.get('endDate'), 'endDate');
 		const notes = v.optionalString(f.get('notes'), 'notes', { max: 5000 });
+		const tags = v.optionalString(f.get('tags'), 'tags', { max: 200 });
 		v.dateRange(startDate, endDate);
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
@@ -49,6 +51,7 @@ export const actions: Actions = {
 				startDate,
 				endDate,
 				notes,
+				tags: serializeTags(tags),
 				updatedAt: nowIso()
 			})
 			.where(eq(trips.id, tripId))

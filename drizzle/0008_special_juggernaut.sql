@@ -1,0 +1,1 @@
+ALTER TABLE `trips` ADD `tags` text DEFAULT '[]' NOT NULL;

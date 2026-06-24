@@ -1,7 +1,6 @@
 import { test, expect } from 'vitest';
 import { freshDb } from '../../../../tests/helpers';
 import { users } from './schema';
-import { sql } from 'drizzle-orm';
 
 test('foreign_keys pragma is ON', () => {
 	const { sqlite } = freshDb();

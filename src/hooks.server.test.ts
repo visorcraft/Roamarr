@@ -120,15 +120,17 @@ test('redirects users who must reset password', async () => {
 		.returning()
 		.get();
 	const token = createSession(u.id);
-	const res: any = await handle({
-		event: {
-			url: new URL('http://x/trips'),
-			cookies: { get: (name: string) => (name === 'session' ? token : undefined) },
-			locals: {} as App.Locals,
-			request: new Request('http://x/trips')
-		} as any,
-		resolve: async () => new Response('ok')
-	}).catch((e: any) => e);
+	const res: any = await Promise.resolve(
+		handle({
+			event: {
+				url: new URL('http://x/trips'),
+				cookies: { get: (name: string) => (name === 'session' ? token : undefined) },
+				locals: {} as App.Locals,
+				request: new Request('http://x/trips')
+			} as any,
+			resolve: async () => new Response('ok')
+		})
+	).catch((e: any) => e);
 	expect(res.status).toBe(302);
 	expect(res.location).toBe('/profile/change-password');
 });

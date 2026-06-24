@@ -34,7 +34,7 @@ export function _addDocument(
 	return doc;
 }
 
-export function _updateDocument(
+function _updateDocument(
 	userId: number,
 	id: number,
 	i: {

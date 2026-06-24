@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { _deleteTrip, actions } from './+page.server';
 import { createTrip } from '../../shared';
-import { _addSegment } from '../segments/+page.server';
+import { addSegment } from '$lib/server/segments';
 import {
 	users,
 	trips,
@@ -62,7 +62,7 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 		.get();
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
 
-	_addSegment(a.id, t.id, {
+	addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
 		localStart: '2026-07-01T15:00:00',
@@ -194,7 +194,8 @@ test('edit trip form highlights invalid fields and shows per-field errors', () =
 		destination: '',
 		startDate: '',
 		endDate: '',
-		notes: null
+		notes: null,
+		tags: '[]'
 	};
 	const { body } = render(EditTripPage, {
 		props: { data: { trip, owner: true }, form: { errors: { name: 'name is required' } } }

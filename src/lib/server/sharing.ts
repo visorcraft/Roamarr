@@ -6,6 +6,21 @@ import type { trips as tripsTable, segments } from './db/schema';
 type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segments.$inferSelect;
 
+export function tripTags(trip: { tags: string }): string[] {
+	try {
+		const parsed = JSON.parse(trip.tags);
+		if (Array.isArray(parsed)) return parsed.filter((t) => typeof t === 'string');
+	} catch {
+		// fall through
+	}
+	return [];
+}
+
+function tripHasTag(trip: ListedTrip, tag: string): boolean {
+	const tags = 'isShared' in trip && trip.isShared ? trip.tags : tripTags(trip as Trip);
+	return tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+}
+
 export function canEdit(userId: number, trip: Trip) {
 	if (trip.ownerId === userId) return true;
 	const direct = db
@@ -89,6 +104,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		startDate: trip.startDate,
 		endDate: trip.endDate,
 		createdAt: trip.createdAt,
+		tags: tripTags(trip),
 		segments: segs.map((s) => ({
 			type: s.type,
 			title: s.title,
@@ -112,7 +128,7 @@ type SortOrder = 'asc' | 'desc';
 
 export function listViewableTrips(
 	userId: number,
-	options?: { startDateGte?: string; q?: string; sort?: SortField; order?: SortOrder }
+	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder }
 ): ListedTrip[] {
 	const ownedWhere = options?.startDateGte
 		? and(eq(trips.ownerId, userId), gte(trips.startDate, options.startDateGte))
@@ -152,6 +168,11 @@ export function listViewableTrips(
 			const haystack = `${t.name ?? ''} ${t.destination ?? ''}`.toLowerCase();
 			return haystack.includes(needle);
 		});
+	}
+
+	const tag = options?.tag?.trim();
+	if (tag) {
+		result = result.filter((t) => tripHasTag(t, tag));
 	}
 
 	const sort: SortField = options?.sort ?? 'startDate';

@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _registerUser as registerUser, actions } from './+page.server';
-import { users, settings } from '$lib/server/db/schema';
+import { settings } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 

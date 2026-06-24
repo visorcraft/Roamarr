@@ -1,9 +1,13 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { count } from 'drizzle-orm';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
+import { deliver } from '$lib/server/notify';
+import { db } from '$lib/server/db';
+import { users, trips, segments, groups, notifications } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
 function validDefaultLead(n: number) {
@@ -53,7 +57,14 @@ export function _saveAdminSettings(
 export const load: PageServerLoad = ({ locals }) => {
 	requireAdmin(locals);
 	const s = getSettings();
-	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' } };
+	const stats = {
+		users: db.select({ count: count() }).from(users).get()?.count ?? 0,
+		trips: db.select({ count: count() }).from(trips).get()?.count ?? 0,
+		segments: db.select({ count: count() }).from(segments).get()?.count ?? 0,
+		groups: db.select({ count: count() }).from(groups).get()?.count ?? 0,
+		notifications: db.select({ count: count() }).from(notifications).get()?.count ?? 0
+	};
+	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats };
 };
 
 function parseLead(value: FormDataEntryValue | null, fallback: number): number {
@@ -62,6 +73,16 @@ function parseLead(value: FormDataEntryValue | null, fallback: number): number {
 }
 
 export const actions: Actions = {
+	testNotification: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		try {
+			await deliver(u.id, { title: 'Test notification', body: 'This is a test notification from Roamarr.', link: '/' });
+			setFlash(cookies, 'Test notification sent.');
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test notification' });
+		}
+		throw redirect(303, '/settings');
+	},
 	default: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();

@@ -1,13 +1,18 @@
+import { createHash } from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { hashPassword, invalidateOtherSessions, requireUser, verifyPassword } from '$lib/server/auth';
 import { requireOwnedUser } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import { users, sessions } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
+
+function tokenHash(token: string) {
+	return createHash('sha256').update(token).digest('hex');
+}
 
 function validTimezone(tz: string) {
 	return DateTime.local().setZone(tz).isValid;
@@ -54,8 +59,18 @@ export async function _updatePassword(
 	logAudit(userId, 'password_change', 'user', userId);
 }
 
-export const load: PageServerLoad = ({ locals }) => {
+export const load: PageServerLoad = ({ locals, cookies }) => {
 	const u = requireUser(locals);
+	const currentToken = cookies.get('session');
+	const currentHash = currentToken ? tokenHash(currentToken) : null;
+	const sessionRows = db
+		.select({ id: sessions.id, tokenHash: sessions.tokenHash, createdAt: sessions.createdAt, expiresAt: sessions.expiresAt })
+		.from(sessions)
+		.where(eq(sessions.userId, u.id))
+		.all();
+	const userSessions = sessionRows
+		.filter((s) => s.expiresAt >= DateTime.utc().toISO()!)
+		.map((s) => ({ ...s, current: s.tokenHash === currentHash }));
 	return {
 		user: {
 			email: u.email,
@@ -64,7 +79,8 @@ export const load: PageServerLoad = ({ locals }) => {
 			timezone: u.timezone,
 			flightCheckinLeadHours: u.flightCheckinLeadHours,
 			documentExpiryLeadDays: u.documentExpiryLeadDays
-		}
+		},
+		sessions: userSessions
 	};
 };
 
@@ -87,6 +103,24 @@ export const actions: Actions = {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });
 		}
 		setFlash(cookies, 'Profile updated.');
+		throw redirect(303, '/profile');
+	},
+	revokeSession: async ({ cookies, request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const id = Number(f.get('id'));
+		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid session' });
+		const currentToken = cookies.get('session');
+		const currentHash = currentToken ? tokenHash(currentToken) : null;
+		db.delete(sessions).where(and(eq(sessions.id, id), eq(sessions.userId, u.id))).run();
+		if (currentHash) {
+			const removed = db.select().from(sessions).where(eq(sessions.tokenHash, currentHash)).get();
+			if (!removed) {
+				cookies.delete('session', { path: '/' });
+				throw redirect(303, '/login');
+			}
+		}
+		setFlash(cookies, 'Session revoked.');
 		throw redirect(303, '/profile');
 	},
 	updatePassword: async ({ cookies, request, locals }) => {

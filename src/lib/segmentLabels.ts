@@ -124,6 +124,3 @@ export const ADD_SEGMENT_WIZARD_TYPES = [
 	{ type: 'shuttle', label: 'Shuttle' }
 ] as const satisfies ReadonlyArray<{ type: SegmentType; label: string }>;
 
-export function segmentLabel(type: string) {
-	return SEG[type as SegmentType]?.label ?? type;
-}

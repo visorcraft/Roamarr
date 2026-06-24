@@ -1,5 +1,8 @@
 <script lang="ts">
+	import PasswordStrength from '$lib/components/PasswordStrength.svelte';
+
 	let { form } = $props();
+	let password = $state('');
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
@@ -23,7 +26,8 @@
 		</div>
 		<div class="field">
 			<label class="label" for="password">Password</label>
-			<input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" class="input" required />
+			<input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" class="input" required bind:value={password} />
+			<PasswordStrength {password} />
 		</div>
 		<div class="field">
 			<label class="label" for="timezone">Timezone</label>

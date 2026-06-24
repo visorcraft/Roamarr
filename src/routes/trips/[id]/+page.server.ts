@@ -4,6 +4,7 @@ import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { fareProviders, fareWatches } from '$lib/server/db/schema';
 import {
+	duplicateTrip,
 	loadTripFor,
 	regenerateCalendarToken,
 	revokeCalendarToken,
@@ -40,10 +41,14 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const feedUrl = view.trip.calendarToken
 			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
 			: null;
-		return { ...view, providers, watches, feedUrl } as TripView & {
+		const publicShareUrl = view.trip.publicToken
+			? `${url.origin}/share/${encodeURIComponent(view.trip.publicToken)}`
+			: null;
+		return { ...view, providers, watches, feedUrl, publicShareUrl } as TripView & {
 			providers: { id: number; providerKey: string; label: string }[];
 			watches: typeof watches;
 			feedUrl: string | null;
+			publicShareUrl: string | null;
 		};
 	}
 	return view;
@@ -63,5 +68,12 @@ export const actions: Actions = {
 		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
 		revokeCalendarToken(u.id, tripId);
 		throw redirect(303, `/trips/${tripId}`);
+	},
+	duplicate: async ({ locals, params }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const copy = duplicateTrip(u.id, tripId);
+		throw redirect(303, `/trips/${copy.id}`);
 	}
 };

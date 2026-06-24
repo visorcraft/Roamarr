@@ -1,9 +1,10 @@
 <script lang="ts">
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
+	import { trips } from '$lib/server/db/schema';
+	import { renderMarkdown } from '$lib/markdown';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
@@ -131,6 +132,7 @@
 
 	const trip = $derived(data.trip);
 	const isEditor = $derived(data.editor === true);
+	const ownerTrip = $derived(data.owner === true ? (trip as typeof trips.$inferSelect) : undefined);
 	const segmentList = $derived(
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);
@@ -178,8 +180,8 @@
 							<span class="badge badge-brand badge-compact">Shared view</span>
 						{/if}
 						<span class="badge badge-compact {statusBadge[status].class}">{statusBadge[status].label}</span>
-						{#if isEditor && data.owner === true}
-							<span class="badge badge-compact {visBadge[trip.defaultVisibility] ?? 'badge-slate'} capitalize">{trip.defaultVisibility}</span>
+						{#if ownerTrip}
+							<span class="badge badge-compact {visBadge[ownerTrip.defaultVisibility] ?? 'badge-slate'} capitalize">{ownerTrip.defaultVisibility}</span>
 						{/if}
 					</div>
 
@@ -213,11 +215,17 @@
 					</a>
 					{#if isEditor}
 						<a href={`/trips/${trip.id}/edit`} class="btn btn-ghost">Edit trip</a>
+						<form method="POST" action="?/duplicate">
+							<button class="btn btn-ghost">Duplicate</button>
+						</form>
 						{#if data.owner === true}
 							<a href={`/trips/${trip.id}/share`} class="btn btn-primary">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" x2="12" y1="2" y2="15" /></svg>
 								Share
 							</a>
+							{#if data.publicShareUrl}
+								<CopyButton text={data.publicShareUrl} class="btn btn-ghost" label="Copy public link" />
+							{/if}
 						{/if}
 					{/if}
 				</div>
@@ -230,10 +238,10 @@
 	<div class="trip-detail-body mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_17.5rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
 		<!-- Main column -->
 		<div class="min-w-0 space-y-8">
-			{#if isEditor && trip.notes}
+			{#if ownerTrip?.notes}
 				<section>
 					<h2 class="section-title mb-3">Overview</h2>
-					<p class="text-sm leading-relaxed text-slate-300">{trip.notes}</p>
+					<div class="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300">{@html renderMarkdown(ownerTrip.notes)}</div>
 				</section>
 			{/if}
 
@@ -401,6 +409,10 @@
 										{/if}
 									</div>
 									<div class="flex items-center gap-1">
+										<form method="POST" action={`/trips/${trip.id}/fare-watch?/check`}>
+											<input type="hidden" name="watchId" value={w.id} />
+											<button class="btn btn-ghost">Check now</button>
+										</form>
 										{#if w.status === 'active'}
 											<form method="POST" action={`/trips/${trip.id}/fare-watch?/pause`}>
 												<input type="hidden" name="watchId" value={w.id} />
@@ -460,10 +472,10 @@
 							<dd>{trip.destination}</dd>
 						</div>
 					{/if}
-					{#if isEditor && data.owner === true}
+					{#if ownerTrip}
 						<div>
 							<dt>Visibility</dt>
-							<dd class="capitalize">{trip.defaultVisibility}</dd>
+							<dd class="capitalize">{ownerTrip.defaultVisibility}</dd>
 						</div>
 					{/if}
 				</dl>

@@ -110,7 +110,10 @@
 							class="h-5 w-5 shrink-0 {isActive(item.href) ? 'text-indigo-300' : ''}"
 							aria-hidden="true">{@html item.icon}</svg
 						>
-						{item.label}
+						<span class="flex-1">{item.label}</span>
+						{#if item.href === '/notifications' && data.unreadCount > 0}
+							<span class="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-bold text-white">{data.unreadCount}</span>
+						{/if}
 					</a>
 				{/each}
 			</nav>

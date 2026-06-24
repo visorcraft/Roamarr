@@ -87,10 +87,3 @@ export function updateSegment(
 	upsertRemindersForSegment(seg);
 	return seg;
 }
-
-/** @deprecated use addSegment */
-export const _addSegment = addSegment;
-/** @deprecated use deleteSegment */
-export const _deleteSegment = deleteSegment;
-/** @deprecated use updateSegment */
-export const _updateSegment = updateSegment;

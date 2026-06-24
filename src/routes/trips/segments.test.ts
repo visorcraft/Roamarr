@@ -8,12 +8,8 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import {
-	addSegment,
-	deleteSegment,
-	updateSegment,
-	actions
-} from './[id]/segments/+page.server';
+import { actions } from './[id]/segments/+page.server';
+import { addSegment, updateSegment } from '$lib/server/segments';
 import { newSegmentPage } from '$lib/server/segmentNewPage';
 import { users, trips, cards, segments, reminders, tripShares } from '$lib/server/db/schema';
 

@@ -1,4 +1,4 @@
-import { and, eq, gte, isNotNull, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, lte } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { notifications, travelDocuments } from '$lib/server/db/schema';

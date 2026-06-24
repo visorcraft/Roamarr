@@ -1,6 +1,6 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
-import { pauseWatch, resumeWatch, deleteWatch, toggleWatch } from '$lib/server/fareproviders';
+import { pauseWatch, resumeWatch, deleteWatch, toggleWatch, checkWatch } from '$lib/server/fareproviders';
 
 export const actions: Actions = {
 	enable: async ({ request, locals, params }) => {
@@ -30,6 +30,16 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		deleteWatch(u.id, Number(f.get('watchId')));
+		throw redirect(303, `/trips/${params.id}`);
+	},
+	check: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		try {
+			await checkWatch(u.id, Number(f.get('watchId')));
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Check failed' });
+		}
 		throw redirect(303, `/trips/${params.id}`);
 	}
 };

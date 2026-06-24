@@ -9,7 +9,7 @@ import { submitAddSegment } from '$lib/server/segmentAdd';
 
 const WIZARD_TYPES = new Set<SegmentType>(ADD_SEGMENT_WIZARD_TYPES.map((entry) => entry.type));
 
-export function isWizardSegmentType(type: string): type is SegmentType {
+function isWizardSegmentType(type: string): type is SegmentType {
 	return WIZARD_TYPES.has(type as SegmentType);
 }
 
@@ -27,7 +27,7 @@ export function loadNewSegmentPicker(event: RequestEvent) {
 	return { trip };
 }
 
-export function loadNewSegmentForm(event: RequestEvent, type: SegmentType) {
+function loadNewSegmentForm(event: RequestEvent, type: SegmentType) {
 	const { trip } = loadNewSegmentPicker(event);
 	if (!isWizardSegmentType(type)) throw error(404, 'Not found');
 	return { trip, type, label: SEG[type].label };

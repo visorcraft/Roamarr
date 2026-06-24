@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, auditLogs } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/schema';
 import { logAudit } from '$lib/server/audit';
 import { beforeEach } from 'vitest';
 

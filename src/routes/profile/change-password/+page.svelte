@@ -1,5 +1,8 @@
 <script lang="ts">
+	import PasswordStrength from '$lib/components/PasswordStrength.svelte';
+
 	let { data, form } = $props();
+	let newPassword = $state('');
 </script>
 
 <header>
@@ -17,7 +20,8 @@
 	<form method="POST" class="grid gap-4">
 		<div class="field">
 			<label class="label" for="newPassword">New password</label>
-			<input id="newPassword" name="newPassword" type="password" autocomplete="new-password" class="input" required />
+			<input id="newPassword" name="newPassword" type="password" autocomplete="new-password" class="input" required bind:value={newPassword} />
+			<PasswordStrength password={newPassword} />
 		</div>
 		<div class="field">
 			<label class="label" for="confirmPassword">Confirm new password</label>

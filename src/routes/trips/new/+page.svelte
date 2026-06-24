@@ -47,6 +47,11 @@
 			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}"></textarea>
 			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
 		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="tags">Tags</label>
+			<input id="tags" name="tags" placeholder="work, summer, family" class="input {form?.errors?.tags ? 'input-error' : ''}" />
+			{#if form?.errors?.tags}<p class="field-error">{form.errors.tags}</p>{/if}
+		</div>
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
 			<a href="/trips" class="btn btn-ghost">Cancel</a>
 			<button class="btn btn-primary">Create trip</button>

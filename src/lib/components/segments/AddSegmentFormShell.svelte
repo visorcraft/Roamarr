@@ -9,7 +9,7 @@
 	}: {
 		trip: { id: number; name: string };
 		label: string;
-		form?: { error?: string; errors?: Record<string, string> };
+		form?: { error?: string; errors?: Record<string, string> } | null;
 		children: Snippet;
 	} = $props();
 </script>

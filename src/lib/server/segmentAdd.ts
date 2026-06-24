@@ -5,26 +5,30 @@ import { Validator } from '$lib/server/validation';
 import type { SegmentType } from '$lib/server/db/schema';
 import { addSegment } from '$lib/server/segments';
 
-export function readLocalStart(v: Validator, f: FormData, optional = false): string | undefined {
+function readLocalStart(v: Validator, f: FormData, optional = false): string | undefined {
 	const direct = f.get('localStart');
 	if (typeof direct === 'string' && direct.trim()) {
 		return optional ? v.dateTime(direct, 'localStart') : v.requiredDateTime(direct, 'localStart');
 	}
 
-	const startDate = optional ? v.date(f.get('startDate'), 'startDate') : v.requiredDate(f.get('startDate'), 'startDate');
-	const startTime = typeof f.get('startTime') === 'string' ? f.get('startTime').trim() : '';
+	const startDateRaw = f.get('startDate');
+	const startDate = optional ? v.date(startDateRaw, 'startDate') : v.requiredDate(startDateRaw, 'startDate');
+	const startTimeRaw = f.get('startTime');
+	const startTime = typeof startTimeRaw === 'string' ? startTimeRaw.trim() : '';
 	if (!startDate) return undefined;
 
 	const combined = combineDateTime(startDate, startTime);
 	return optional ? v.dateTime(combined, 'localStart') : v.requiredDateTime(combined!, 'localStart');
 }
 
-export function readEndAt(v: Validator, f: FormData): string | undefined {
+function readEndAt(v: Validator, f: FormData): string | undefined {
 	const direct = f.get('endAt');
 	if (typeof direct === 'string' && direct.trim()) return v.dateTime(direct, 'endAt');
 
-	const endDate = v.date(f.get('endDate'), 'endDate');
-	const endTime = typeof f.get('endTime') === 'string' ? f.get('endTime').trim() : '';
+	const endDateRaw = f.get('endDate');
+	const endDate = v.date(endDateRaw, 'endDate');
+	const endTimeRaw = f.get('endTime');
+	const endTime = typeof endTimeRaw === 'string' ? endTimeRaw.trim() : '';
 	if (!endDate) return undefined;
 	return v.dateTime(combineDateTime(endDate, endTime), 'endAt');
 }

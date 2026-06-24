@@ -1,6 +1,7 @@
 <script lang="ts">
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+	import CardSelect from '$lib/components/CardSelect.svelte';
 	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
@@ -21,7 +22,7 @@
 		startTz?: string;
 	};
 
-	type SegmentRow = SharedSegment & { id?: number; startTz: string };
+	type SegmentRow = SharedSegment & { id?: number; startTz: string; cardId?: number | null };
 
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
@@ -35,6 +36,8 @@
 		past: { label: 'Completed', class: 'badge-slate' },
 		unknown: { label: 'Planned', class: 'badge-slate' }
 	};
+
+	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
 
 	function fmt(iso: string | null | undefined, tz = 'UTC') {
 		if (!iso) return '';
@@ -316,6 +319,10 @@
 														<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs {form?.errors?.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
 														{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
 													</div>
+												{#if data.cards?.length}
+													<CardSelect cards={data.cards} name="cardId" value={s.cardId} errors={form?.errors} />
+												{/if}
+
 													<div class="flex gap-2 sm:col-span-2">
 														<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
 														<button class="btn btn-primary">Save</button>
@@ -345,19 +352,49 @@
 															{#if isEditor && s.confirmationNumber}
 																<p class="mt-1 font-mono text-xs text-slate-500">Confirmation {s.confirmationNumber}</p>
 															{/if}
+												{#if s.cardId}
+													{@const c = cardMap.get(s.cardId)}
+													{#if c}
+														<p class="mt-1 text-xs text-slate-400">
+															<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline h-3.5 w-3.5 mr-1"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+															{c.nickname}{#if c.network || c.last4} — {c.network}{c.last4 ? ` ····${c.last4}` : ''}{/if}
+														</p>
+													{/if}
+												{/if}
 															{#if !isEditor && s.detailsJson}
 																<div class="mt-2 rounded-lg bg-white/[0.03] p-2 ring-1 ring-white/5">
 																	<pre class="whitespace-pre-wrap font-mono text-[10px] text-slate-400">{s.detailsJson}</pre>
 																</div>
 															{/if}
 														</div>
-														{#if isEditor && s.id}
-															<div class="flex shrink-0 gap-1">
+																												{#if isEditor && s.id}
+															<div class="flex shrink-0 flex-wrap items-center gap-1">
 																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
 																<form method="POST" action={`/trips/${trip.id}/segments?/delete`}>
 																	<input type="hidden" name="segmentId" value={s.id} />
 																	<button class="btn btn-ghost btn-ghost-danger">Delete</button>
 																</form>
+																<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="flex items-center gap-1">
+																	<input type="hidden" name="segmentId" value={s.id} />
+																	<select name="offsetMinutes" class="input h-8 py-0 text-xs">
+																		<option value="15">15m</option>
+																		<option value="60">1h</option>
+																		<option value="180">3h</option>
+																		<option value="1440">1d</option>
+																	</select>
+																	<button class="btn btn-ghost btn-sm">Remind</button>
+																</form>
+																{#if data.providers?.length}
+																	<form method="POST" action={`/trips/${trip.id}/fare-watch?/enable`} class="flex items-center gap-1">
+																		<input type="hidden" name="segmentId" value={s.id} />
+																		<select name="providerId" class="select h-8 py-0 text-xs w-auto">
+																		{#each data.providers as p (p.id)}
+																			<option value={p.id}>{p.label || p.providerKey}</option>
+																		{/each}
+																		</select>
+																		<button class="btn btn-ghost btn-sm">Watch</button>
+																	</form>
+																{/if}
 															</div>
 														{/if}
 													</div>
@@ -405,6 +442,7 @@
 									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
 											<span class="badge badge-slate">{w.label || w.providerKey}</span>
+										{#if w.segmentTitle}<span class="badge badge-slate">{w.segmentTitle}</span>{/if}
 											<span class="badge {w.status === 'active' ? 'badge-brand' : 'badge-slate'}">{w.status}</span>
 										</div>
 										{#if last?.summary}
@@ -556,6 +594,21 @@
 						{#if data.owner === true}
 							<a href={`/trips/${trip.id}/share`} class="rounded-lg px-2.5 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Sharing settings</a>
 						{/if}
+				{#if isEditor && data.policies?.length}
+					<div class="trip-sidebar-card">
+						<h2 class="mb-3 text-sm font-semibold text-white">Insurance</h2>
+						<ul class="space-y-2">
+							{#each data.policies as p (p.id)}
+							<li class="rounded-lg bg-white/[0.03] p-2.5 ring-1 ring-white/5">
+							<p class="text-sm font-medium text-white">{p.provider}</p>
+							{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
+							{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
+							{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
+							</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 					</nav>
 				</div>
 			{/if}

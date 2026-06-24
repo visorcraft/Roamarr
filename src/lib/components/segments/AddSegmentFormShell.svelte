@@ -1,15 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import CardSelect from '$lib/components/CardSelect.svelte';
 
 	let {
 		trip,
 		label,
 		form,
+		cards,
 		children
 	}: {
 		trip: { id: number; name: string };
 		label: string;
 		form?: { error?: string; errors?: Record<string, string> } | null;
+		cards?: { id: number; nickname: string; network: string; last4: string | null }[];
 		children: Snippet;
 	} = $props();
 </script>
@@ -31,6 +34,10 @@
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
 		{@render children()}
+
+		{#if cards?.length}
+			<CardSelect {cards} name="cardId" errors={form?.errors} />
+		{/if}
 
 		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 sm:col-span-2">
 			<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>

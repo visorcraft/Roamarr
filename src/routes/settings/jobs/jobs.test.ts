@@ -7,8 +7,9 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { load } from './+page.server';
+import { load, actions } from './+page.server';
 import { schedulerRuns, users } from '$lib/server/db/schema';
+import { sql } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
 
 beforeEach(() => {
@@ -84,4 +85,17 @@ test('load limits to 50 runs', () => {
 
 	const result = load({ locals: admin } as any) as { runs: unknown[] };
 	expect(result.runs).toHaveLength(50);
+});
+
+
+test('runNow action triggers a scheduler tick and redirects', async () => {
+	const db = (ctx as any).db;
+	const admin = adminLocals();
+	const before = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
+	await expect(actions.runNow({ locals: admin } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/settings/jobs'
+	});
+	const after = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
+	expect(after).toBeGreaterThan(before);
 });

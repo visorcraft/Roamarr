@@ -12,6 +12,7 @@ import { actions } from './[id]/segments/+page.server';
 import { addSegment, updateSegment } from '$lib/server/segments';
 import { newSegmentPage } from '$lib/server/segmentNewPage';
 import { users, trips, cards, segments, reminders, tripShares } from '$lib/server/db/schema';
+import { actions as tripActions } from './[id]/+page.server';
 
 beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
@@ -314,4 +315,75 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 		location: `/trips/${t.id}`
 	});
 	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()).toBeUndefined();
+});
+
+
+test('update action attaches an owned card and rejects a foreign card', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'card-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const b = db.insert(users).values({ email: 'card-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const seg = addSegment(a.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+	const aCard = db.insert(cards).values({ userId: a.id, nickname: 'A', network: 'visa' }).returning().get();
+	const bCard = db.insert(cards).values({ userId: b.id, nickname: 'B', network: 'mc' }).returning().get();
+
+	const okForm = formData({
+		segmentId: String(seg.id),
+		title: 'UA1',
+		localStart: '2026-07-01T15:00',
+		startTz: 'UTC',
+		cardId: String(aCard.id)
+	});
+	await expect(actions.update(makeEvent(okForm, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()!.cardId).toBe(aCard.id);
+
+	const badForm = formData({
+		segmentId: String(seg.id),
+		title: 'UA1',
+		localStart: '2026-07-01T15:00',
+		startTz: 'UTC',
+		cardId: String(bCard.id)
+	});
+	await expect(actions.update(makeEvent(badForm, { id: String(t.id) }, a.id))).rejects.toThrow();
+});
+
+function makeTripEvent(user: { id: number }, body: FormData, tripId: number) {
+	return {
+		request: { formData: async () => body } as Request,
+		params: { id: String(tripId) },
+		locals: { user } as App.Locals,
+		url: new URL(`http://localhost/trips/${tripId}`)
+	} as any;
+}
+
+test('segmentReminder action creates a custom reminder for a segment', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'rem-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const seg = addSegment(a.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+	const body = formData({ segmentId: String(seg.id), offsetMinutes: '60' });
+	await expect(tripActions.segmentReminder(makeTripEvent(a, body, t.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const rem = db
+		.select()
+		.from(reminders)
+		.where(and(eq(reminders.refType, 'segment'), eq(reminders.refId, seg.id), eq(reminders.kind, 'custom')))
+		.get();
+	expect(rem).toBeTruthy();
+	expect(rem!.fireAt).toBe('2026-07-01T14:00:00.000Z');
 });

@@ -155,6 +155,9 @@ export const segments = sqliteTable(
 	})
 );
 
+export const TRAVEL_DOCUMENT_TYPES = ['passport', 'drivers_license', 'global_entry', 'visa'] as const;
+export type TravelDocumentType = (typeof TRAVEL_DOCUMENT_TYPES)[number];
+
 export const travelDocuments = sqliteTable(
 	'travel_documents',
 	{
@@ -169,7 +172,10 @@ export const travelDocuments = sqliteTable(
 		notes: text('notes')
 	},
 	(t) => ({
-		typeCk: check('docs_type_ck', sql`${t.type} in ('passport','drivers_license','global_entry')`),
+		typeCk: check(
+			'docs_type_ck',
+			sql`${t.type} in ('passport','drivers_license','global_entry','visa')`
+		),
 		expIdx: index('docs_user_exp_idx').on(t.userId, t.expiresOn)
 	})
 );

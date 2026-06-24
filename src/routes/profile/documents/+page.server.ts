@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedDocument } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
-import { travelDocuments } from '$lib/server/db/schema';
+import { travelDocuments, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { upsertRemindersForDocument, cancelRemindersFor } from '$lib/server/reminders';
 import type { PageServerLoad } from './$types';
@@ -11,7 +11,7 @@ import type { PageServerLoad } from './$types';
 export function _addDocument(
 	userId: number,
 	i: {
-		type: 'passport' | 'drivers_license' | 'global_entry';
+		type: TravelDocumentType;
 		number?: string;
 		issuingAuthority?: string;
 		expiresOn?: string;
@@ -38,7 +38,7 @@ function _updateDocument(
 	userId: number,
 	id: number,
 	i: {
-		type: 'passport' | 'drivers_license' | 'global_entry';
+		type: TravelDocumentType;
 		number?: string;
 		issuingAuthority?: string;
 		expiresOn?: string;
@@ -72,8 +72,11 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
+		const type = String(f.get('type'));
 		_addDocument(u.id, {
-			type: f.get('type') as 'passport' | 'drivers_license' | 'global_entry',
+			type: (TRAVEL_DOCUMENT_TYPES as readonly string[]).includes(type)
+				? (type as TravelDocumentType)
+				: 'passport',
 			number: String(f.get('number') || '') || undefined,
 			issuingAuthority: String(f.get('issuingAuthority') || '') || undefined,
 			expiresOn: String(f.get('expiresOn') || '') || undefined,
@@ -84,8 +87,11 @@ export const actions: Actions = {
 	update: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
+		const type = String(f.get('type'));
 		_updateDocument(u.id, Number(f.get('id')), {
-			type: f.get('type') as 'passport' | 'drivers_license' | 'global_entry',
+			type: (TRAVEL_DOCUMENT_TYPES as readonly string[]).includes(type)
+				? (type as TravelDocumentType)
+				: 'passport',
 			number: String(f.get('number') || '') || undefined,
 			issuingAuthority: String(f.get('issuingAuthority') || '') || undefined,
 			expiresOn: String(f.get('expiresOn') || '') || undefined,

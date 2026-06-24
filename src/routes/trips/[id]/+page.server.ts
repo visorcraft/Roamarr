@@ -2,7 +2,7 @@ import { error, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { fareProviders, fareWatches, trips } from '$lib/server/db/schema';
+import { cards, fareProviders, fareWatches, insurancePolicies, segments, trips } from '$lib/server/db/schema';
 import {
 	duplicateTrip,
 	loadTripFor,
@@ -10,7 +10,7 @@ import {
 	revokeCalendarToken,
 	type TripView
 } from '../shared';
-import { requireOwnedTrip } from '$lib/server/ownership';
+import { requireOwnedTrip, requireEditableTrip } from '$lib/server/ownership';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import type { PageServerLoad } from './$types';
 
@@ -31,6 +31,8 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			.select({
 				id: fareWatches.id,
 				status: fareWatches.status,
+				segmentId: fareWatches.segmentId,
+				segmentTitle: segments.title,
 				providerKey: fareProviders.providerKey,
 				label: fareProviders.label,
 				lastCheckedAt: fareWatches.lastCheckedAt,
@@ -38,6 +40,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			})
 			.from(fareWatches)
 			.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
+			.leftJoin(segments, eq(fareWatches.segmentId, segments.id))
 			.where(eq(fareWatches.tripId, view.trip.id))
 			.all();
 		const feedUrl = view.trip.calendarToken
@@ -46,9 +49,21 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const publicShareUrl = view.trip.publicToken
 			? `${url.origin}/share/${encodeURIComponent(view.trip.publicToken)}`
 			: null;
-		return { ...view, providers, watches, feedUrl, publicShareUrl } as TripView & {
+		const userCards = db
+			.select({ id: cards.id, nickname: cards.nickname, network: cards.network, last4: cards.last4 })
+			.from(cards)
+			.where(eq(cards.userId, u.id))
+			.all();
+		const policies = db
+			.select()
+			.from(insurancePolicies)
+			.where(eq(insurancePolicies.tripId, view.trip.id))
+			.all();
+		return { ...view, providers, watches, cards: userCards, policies, feedUrl, publicShareUrl } as TripView & {
 			providers: { id: number; providerKey: string; label: string }[];
 			watches: typeof watches;
+			cards: typeof userCards;
+			policies: typeof policies;
 			feedUrl: string | null;
 			publicShareUrl: string | null;
 		};
@@ -105,6 +120,25 @@ export const actions: Actions = {
 		if (!t.startDate) throw error(400, 'Trip has no start date');
 		const startAt = `${t.startDate}T09:00:00Z`;
 		upsertCustomReminder(u.id, 'trip', tripId, startAt, offset);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	segmentReminder: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		requireEditableTrip(u.id, tripId);
+		const f = await request.formData();
+		const segmentId = Number(f.get('segmentId'));
+		const offset = Number(f.get('offsetMinutes') ?? 60);
+		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
+		if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
+		const seg = db
+			.select()
+			.from(segments)
+			.where(and(eq(segments.id, segmentId), eq(segments.tripId, tripId)))
+			.get();
+		if (!seg) throw error(404, 'Segment not found');
+		upsertCustomReminder(u.id, 'segment', segmentId, seg.startAt, offset);
 		throw redirect(303, `/trips/${tripId}`);
 	}
 };

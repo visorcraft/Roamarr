@@ -46,7 +46,11 @@
 				></span>
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
-						<span class="font-semibold text-white">{n.title}</span>
+						{#if n.link}
+							<a href={n.link} class="font-semibold text-white hover:underline">{n.title}</a>
+						{:else}
+							<span class="font-semibold text-white">{n.title}</span>
+						{/if}
 						{#if !n.readAt}<span class="badge badge-brand">New</span>{/if}
 					</div>
 					{#if n.body}<p class="mt-0.5 text-sm text-slate-400">{n.body}</p>{/if}

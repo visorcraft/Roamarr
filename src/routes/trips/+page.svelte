@@ -12,6 +12,12 @@
 		return [];
 	}
 
+	const allTags = $derived(
+		Array.from(
+			new Set(data.trips.flatMap((t) => tags(t).map((x) => x.toLowerCase())))
+		).sort()
+	);
+
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
 		groups: 'badge-brand',
@@ -75,6 +81,14 @@
 	<a href="?filter=favorites" class="btn btn-sm {data.filter === 'favorites' ? 'btn-primary' : 'btn-ghost'}">Favorites</a>
 </div>
 
+{#if allTags.length}
+	<div class="mt-3 flex flex-wrap gap-1.5">
+		{#each allTags as tag}
+			<a href="?tag={tag}" class="badge badge-slate text-xs {data.tag === tag ? 'badge-brand' : ''}">{tag}</a>
+		{/each}
+	</div>
+{/if}
+
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
 {#if data.trips.length}
@@ -84,6 +98,8 @@
 			<div class="flex flex-wrap gap-2">
 				<button formaction="?/favorite" class="btn btn-ghost">Favorite</button>
 				<button formaction="?/archive" class="btn btn-ghost">Archive</button>
+				<button formaction="?/unfavorite" class="btn btn-ghost">Unfavorite</button>
+				<button formaction="?/unarchive" class="btn btn-ghost">Unarchive</button>
 				<button formaction="?/delete" class="btn btn-danger">Delete</button>
 			</div>
 		</div>

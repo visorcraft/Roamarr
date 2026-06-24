@@ -60,6 +60,7 @@ export function updateSegment(
 		endAt?: string;
 		location?: string;
 		confirmationNumber?: string;
+		cardId?: number;
 		details?: object;
 	}
 ) {
@@ -70,6 +71,7 @@ export function updateSegment(
 		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
 		.get();
 	if (!existing) throw error(404, 'Not found');
+	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const seg = db
 		.update(segments)
 		.set({
@@ -79,6 +81,7 @@ export function updateSegment(
 			endAt: i.endAt ?? null,
 			location: i.location ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
+			cardId: i.cardId ?? null,
 			detailsJson: i.details ? JSON.stringify(i.details) : null
 		})
 		.where(eq(segments.id, segId))

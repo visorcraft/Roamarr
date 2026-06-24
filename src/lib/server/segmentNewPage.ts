@@ -4,7 +4,7 @@ import { ADD_SEGMENT_WIZARD_TYPES, SEG, type SegmentType } from '$lib/segmentLab
 import { requireUser } from '$lib/server/auth';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
-import { trips } from '$lib/server/db/schema';
+import { trips, cards } from '$lib/server/db/schema';
 import { submitAddSegment } from '$lib/server/segmentAdd';
 
 const WIZARD_TYPES = new Set<SegmentType>(ADD_SEGMENT_WIZARD_TYPES.map((entry) => entry.type));
@@ -30,7 +30,13 @@ export function loadNewSegmentPicker(event: RequestEvent) {
 function loadNewSegmentForm(event: RequestEvent, type: SegmentType) {
 	const { trip } = loadNewSegmentPicker(event);
 	if (!isWizardSegmentType(type)) throw error(404, 'Not found');
-	return { trip, type, label: SEG[type].label };
+	const u = requireUser(event.locals);
+	const userCards = db
+		.select({ id: cards.id, nickname: cards.nickname, network: cards.network, last4: cards.last4 })
+		.from(cards)
+		.where(eq(cards.userId, u.id))
+		.all();
+	return { trip, type, label: SEG[type].label, cards: userCards };
 }
 
 export function newSegmentPage(type: SegmentType) {

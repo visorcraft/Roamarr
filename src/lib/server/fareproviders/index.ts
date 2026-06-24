@@ -75,6 +75,23 @@ export function deleteProvider(userId: number, providerId: number) {
 		.run();
 }
 
+export async function testProvider(userId: number, providerId: number): Promise<FareResult> {
+	const p = requireOwnedProvider(userId, providerId);
+	const provider = registry[p.providerKey];
+	if (!provider) throw error(400, 'Unknown provider');
+	const dummyWatch = {
+		id: 0,
+		tripId: 0,
+		segmentId: null,
+		providerId: p.id,
+		status: 'active',
+		lastCheckedAt: null,
+		lastResultJson: null,
+		createdAt: new Date().toISOString()
+	} as typeof fareWatches.$inferSelect;
+	return provider.check(dummyWatch, p.apiKey ? decrypt(p.apiKey) : '');
+}
+
 export function toggleWatch(
 	userId: number,
 	tripId: number,

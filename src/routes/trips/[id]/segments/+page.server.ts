@@ -37,6 +37,7 @@ export const actions: Actions = {
 			'confirmationNumber',
 			{ max: 100 }
 		);
+		const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 
@@ -47,6 +48,7 @@ export const actions: Actions = {
 			endAt: endAt ?? undefined,
 			location,
 			confirmationNumber,
+			cardId,
 			details
 		});
 		throw redirect(303, `/trips/${params.id}`);

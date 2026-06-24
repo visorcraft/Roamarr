@@ -9,7 +9,8 @@
 	const typeLabel: Record<string, string> = {
 		passport: 'Passport',
 		drivers_license: "Driver's license",
-		global_entry: 'Global Entry'
+		global_entry: 'Global Entry',
+		visa: 'Visa'
 	};
 </script>
 
@@ -37,6 +38,7 @@
 									<option value="passport">Passport</option>
 									<option value="drivers_license">Driver's license</option>
 									<option value="global_entry">Global Entry</option>
+									<option value="visa">Visa</option>
 								</select>
 							</div>
 							<div class="field">
@@ -106,6 +108,7 @@
 				<option value="passport">Passport</option>
 				<option value="drivers_license">Driver's license</option>
 				<option value="global_entry">Global Entry</option>
+				<option value="visa">Visa</option>
 			</select>
 		</div>
 		<div class="field">

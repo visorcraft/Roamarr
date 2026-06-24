@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
-	let { data } = $props();
+	let { data, form }: { data: import('./$types').PageData; form?: { testResult?: string } } = $props();
 	let editingId = $state<number | null>(null);
 
 	const providerLabel = $derived(
@@ -16,6 +16,7 @@
 
 <section class="card mt-8 p-5 sm:p-6">
 	<h2 class="section-title">Your accounts</h2>
+	{#if form?.testResult}<p class="notice notice-info mt-3 text-sm">{form.testResult}</p>{/if}
 	{#if data.saved.length}
 		<div class="mt-3 space-y-3">
 			{#each data.saved as s (s.id)}
@@ -33,12 +34,16 @@
 							</div>
 						</div>
 						<div class="flex gap-1">
-							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => editingId = s.id}>Edit</button>
-							<form method="POST" action="?/delete">
-								<input type="hidden" name="id" value={s.id} />
-								<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
-							</form>
-						</div>
+								<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => editingId = s.id}>Edit</button>
+								<form method="POST" action="?/test">
+									<input type="hidden" name="id" value={s.id} />
+									<button class="btn btn-ghost">Test</button>
+								</form>
+								<form method="POST" action="?/delete">
+									<input type="hidden" name="id" value={s.id} />
+									<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
+								</form>
+							</div>
 					</div>
 					{#if editingId === s.id}
 						<form method="POST" action="?/update" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2">

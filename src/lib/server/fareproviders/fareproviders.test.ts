@@ -13,6 +13,7 @@ import {
 	createProvider,
 	updateProvider,
 	deleteProvider,
+	testProvider,
 	toggleWatch,
 	pauseWatch,
 	resumeWatch,
@@ -161,4 +162,14 @@ test('runFareChecks skips paused watches and disabled providers', async () => {
 	const r2 = db.select().from(fareWatches).where(eq(fareWatches.id, wDisabled.id)).get()!;
 	expect(r1.lastCheckedAt).toBeNull();
 	expect(r2.lastCheckedAt).toBeNull();
+});
+
+
+test('testProvider returns the stub result for an owned account', async () => {
+	const db = (ctx as { db: import('../db').DB }).db;
+	const a = db.insert(users).values({ email: 'fare-test@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const p = createProvider(a.id, 'stub', 'Test', 'KEY', true);
+	const res = await testProvider(a.id, p.id);
+	expect(res.ok).toBe(true);
+	expect(res.summary).toContain('stub provider');
 });

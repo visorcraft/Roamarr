@@ -7,8 +7,9 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
+import { eq } from 'drizzle-orm';
 import { createTrip, loadTripFor } from './shared';
-import { load } from './+page.server';
+import { load, actions } from './+page.server';
 import { users, trips, groups, groupMembers, tripShares } from '$lib/server/db/schema';
 
 function event(user: { id: number }, search = '') {
@@ -155,4 +156,38 @@ test('trip list rejects invalid sort and order values', () => {
 	const badOrder = load(event(a, '?sort=name&order=side')) as any;
 	expect(badOrder.trips.map((t: any) => t.name)).toEqual(['Only']);
 	expect(badOrder.order).toBe('asc');
+});
+
+
+function makeEvent(user: { id: number }, body: FormData) {
+	return {
+		locals: { user } as App.Locals,
+		request: { formData: async () => body } as Request
+	} as any;
+}
+
+test('bulk unarchive and unfavorite actions update selected trips', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'bulk@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t1 = db.insert(trips).values({ ownerId: a.id, name: 'A', archived: true, favorite: true }).returning().get();
+	const t2 = db.insert(trips).values({ ownerId: a.id, name: 'B', archived: true, favorite: true }).returning().get();
+
+	const unarchive = new FormData();
+	unarchive.append('selected', String(t1.id));
+	unarchive.append('selected', String(t2.id));
+	await expect(actions.unarchive(makeEvent(a, unarchive))).rejects.toMatchObject({
+		status: 303,
+		location: '/trips'
+	});
+	expect(db.select().from(trips).where(eq(trips.id, t1.id)).get()!.archived).toBe(false);
+	expect(db.select().from(trips).where(eq(trips.id, t2.id)).get()!.archived).toBe(false);
+
+	const unfavorite = new FormData();
+	unfavorite.append('selected', String(t1.id));
+	await expect(actions.unfavorite(makeEvent(a, unfavorite))).rejects.toMatchObject({
+		status: 303,
+		location: '/trips'
+	});
+	expect(db.select().from(trips).where(eq(trips.id, t1.id)).get()!.favorite).toBe(false);
+	expect(db.select().from(trips).where(eq(trips.id, t2.id)).get()!.favorite).toBe(true);
 });

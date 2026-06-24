@@ -6,6 +6,6 @@
 	let { data, form }: { data: PageData; form?: ActionData } = $props();
 </script>
 
-<AddSegmentFormShell trip={data.trip} label={data.label} {form}>
+<AddSegmentFormShell trip={data.trip} label={data.label} cards={data.cards} {form}>
 	<RideshareForm errors={form?.errors} />
 </AddSegmentFormShell>

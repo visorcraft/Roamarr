@@ -95,3 +95,16 @@ test('delete action removes an owned account', async () => {
 	await expect(actions.delete(event(u, body))).rejects.toEqual(expect.objectContaining({ status: 303 }));
 	expect(db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()).toBeUndefined();
 });
+
+
+test('test action returns the stub result without redirecting', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'fp-test@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Test', apiKey: null, enabled: true }).returning().get();
+
+	const body = new FormData();
+	body.set('id', String(p.id));
+	const result = (await actions.test(event(u, body))) as { testResult: string };
+	expect(result.testResult).toContain('OK');
+	expect(result.testResult).toContain('stub provider');
+});

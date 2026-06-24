@@ -78,6 +78,13 @@
       "when": 1782329352383,
       "tag": "0010_real_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1782331174730,
+      "tag": "0011_slippery_tusk",
+      "breakpoints": true
     }
   ]
 }

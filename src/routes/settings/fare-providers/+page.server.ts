@@ -1,9 +1,15 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { fareProviders } from '$lib/server/db/schema';
-import { createProvider, updateProvider, deleteProvider, registry } from '$lib/server/fareproviders';
+import {
+	createProvider,
+	updateProvider,
+	deleteProvider,
+	testProvider,
+	registry
+} from '$lib/server/fareproviders';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -62,5 +68,17 @@ export const actions: Actions = {
 		const f = await request.formData();
 		deleteProvider(u.id, Number(f.get('id')));
 		throw redirect(303, '/settings/fare-providers');
+	},
+	test: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		try {
+			const result = await testProvider(u.id, Number(f.get('id')));
+			return { testResult: result.ok ? `OK: ${result.summary}` : `Failed: ${result.summary}` };
+		} catch (e) {
+			return fail(400, {
+				testResult: e instanceof Error ? e.message : 'Test failed'
+			});
+		}
 	}
 };

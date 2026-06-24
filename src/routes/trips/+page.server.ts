@@ -69,5 +69,23 @@ export const actions: Actions = {
 			db.update(trips).set({ favorite: true }).where(eq(trips.id, id)).run();
 		}
 		throw redirect(303, '/trips');
+	},
+	unarchive: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const ids = selectedIds(await request.formData());
+		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
+		for (const id of requireOwnedIds(u.id, ids)) {
+			db.update(trips).set({ archived: false }).where(eq(trips.id, id)).run();
+		}
+		throw redirect(303, '/trips');
+	},
+	unfavorite: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const ids = selectedIds(await request.formData());
+		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
+		for (const id of requireOwnedIds(u.id, ids)) {
+			db.update(trips).set({ favorite: false }).where(eq(trips.id, id)).run();
+		}
+		throw redirect(303, '/trips');
 	}
 };

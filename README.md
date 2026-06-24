@@ -24,20 +24,51 @@ the in-process scheduler (reminders + fare-watch ticks every 60s).
 npm install
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
 export DATABASE_PATH="./roamarr.db"   # default /data/roamarr.db
-npm run dev
+npm run dev              # http://localhost:5173 (Vite dev server)
 ```
 
-Tests (Vitest):
+On first boot, open `http://localhost:5173/setup` to create the admin account.
+
+## Production build
 
 ```sh
-npm test                 # run once
-npm run test:watch       # watch
+npm install
+export ROAMARR_SECRET="$(openssl rand -base64 32)"
+export DATABASE_PATH="./roamarr.db"
+export ORIGIN=https://roamarr.example.com
+npm run build            # outputs to ./build
+node build               # starts the adapter-node server
 ```
 
-Schema migrations are generated with Drizzle Kit:
+The production server listens on `PORT` (default `3000`). Set `ORIGIN` to your public URL so cookies and redirects work correctly behind a reverse proxy.
+
+## Preview the production build
 
 ```sh
-npm run db:generate      # emit SQL into ./drizzle after schema changes
+npm run build
+npm run preview          # preview locally on the Vite dev port
+```
+
+## Tests and type-checking
+
+```sh
+npm test                 # run the Vitest suite once
+npm run test:watch       # run tests in watch mode
+npm run check            # TypeScript + Svelte type-check
+```
+
+## Database migrations
+
+Migrations are applied automatically on startup. To generate a new migration after editing `src/lib/server/db/schema.ts`:
+
+```sh
+npm run db:generate      # emit SQL into ./drizzle
+```
+
+To push schema changes directly to the configured database (use with care):
+
+```sh
+npm run db:push
 ```
 
 ## Configuration

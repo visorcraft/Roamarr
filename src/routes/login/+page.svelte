@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { form } = $props();
+	let { data, form } = $props();
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
@@ -23,7 +23,9 @@
 		</div>
 	</form>
 
-	<p class="mt-5 text-center text-sm text-muted">
-		Need an account? <a href="/register" class="link">Create one</a>
-	</p>
+	{#if data.allowRegistration}
+		<p class="mt-5 text-center text-sm text-muted">
+			Need an account? <a href="/register" class="link">Create one</a>
+		</p>
+	{/if}
 </div>

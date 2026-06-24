@@ -6,13 +6,8 @@
 </script>
 
 <header>
-	<h1 class="text-3xl font-extrabold text-white">Settings</h1>
+	<h1 class="text-3xl font-extrabold text-white">General</h1>
 	<p class="mt-1 text-sm text-muted">Configure your Roamarr instance and outgoing email.</p>
-	<div class="mt-3 flex flex-wrap gap-4 text-sm">
-		<a href="/settings/users" class="text-indigo-400 hover:text-indigo-300">Manage users →</a>
-		<a href="/settings/jobs" class="text-indigo-400 hover:text-indigo-300">Scheduled job runs →</a>
-		<a href="/settings/audit-logs" class="text-indigo-400 hover:text-indigo-300">Audit log →</a>
-	</div>
 </header>
 
 <form method="POST" class="mt-8 grid gap-6">

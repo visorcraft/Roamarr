@@ -25,8 +25,9 @@
 			<label class="label" for="file">File</label>
 			<input id="file" name="file" type="file" accept=".json,.csv" class="input" required />
 		</div>
-		<div>
-			<button class="btn btn-primary">Import</button>
+		<div class="flex flex-wrap gap-2">
+			<button type="submit" name="dryRun" value="true" class="btn btn-ghost">Preview</button>
+			<button type="submit" name="dryRun" value="false" class="btn btn-primary">Import</button>
 		</div>
 	</form>
 
@@ -37,11 +38,21 @@
 	{/if}
 
 	{#if form?.success && form?.result}
-		<div class="mt-4 rounded-lg bg-green-500/10 p-4 text-green-200 ring-1 ring-green-400/20">
+		<div class="mt-4 rounded-lg {form.dryRun ? 'bg-indigo-500/10 ring-indigo-400/20' : 'bg-green-500/10 ring-green-400/20'} p-4 {form.dryRun ? 'text-indigo-200' : 'text-green-200'} ring-1">
 			<p>
-				Imported {form.result.imported} trip{form.result.imported === 1 ? '' : 's'} with
+				{form.dryRun ? 'Would import' : 'Imported'} {form.result.imported} trip{form.result.imported === 1 ? '' : 's'} with
 				{form.result.segmentCount} segment{form.result.segmentCount === 1 ? '' : 's'}.
 			</p>
+			{#if form.result.preview?.length}
+				<ul class="mt-3 list-inside list-disc text-sm">
+					{#each form.result.preview as p}
+						<li>
+							<strong>{p.name}</strong>{#if p.startDate} ({p.startDate}){/if}
+							{#if p.segments.length} — {p.segments.length} segment{p.segments.length === 1 ? '' : 's'}{/if}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 			{#if form.result.errors.length}
 				<p class="mt-2 font-semibold">{form.result.errors.length} row(s) had errors:</p>
 				<ul class="mt-1 list-inside list-disc text-sm">

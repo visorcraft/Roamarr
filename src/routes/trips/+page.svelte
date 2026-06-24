@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string }; form?: { error?: string } } = $props();
+	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string; filter: string }; form?: { error?: string } } = $props();
 
 	function tags(t: (typeof data.trips)[number]): string[] {
 		if (t.isShared) return (t.tags as string[]) ?? [];
@@ -31,6 +31,10 @@
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 11l5 5 5-5" /><path d="M12 4v12" /></svg>
 			Import
 		</a>
+		<a href="/trips/export" class="btn btn-ghost">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 9l5-5 5 5" /><path d="M12 4v12" /></svg>
+			Export
+		</a>
 		<a href="/trips/new" class="btn btn-primary">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
 			New trip
@@ -41,7 +45,7 @@
 <form method="GET" action="/trips" class="mt-6 flex flex-wrap items-end gap-3">
 	<label class="field flex-1 min-w-[12rem]">
 		<span class="label">Search</span>
-		<input type="search" name="q" value={data.q ?? ''} placeholder="Trip name or destination" class="input" />
+		<input type="search" name="q" value={data.q ?? ''} placeholder="Trip, destination, or segment" class="input" />
 	</label>
 	<label class="field min-w-[8rem]">
 		<span class="label">Tag</span>
@@ -65,13 +69,23 @@
 	<button type="submit" class="btn btn-ghost">Apply</button>
 </form>
 
+<div class="mt-4 flex gap-2">
+	<a href="?filter=active" class="btn btn-sm {data.filter === 'active' ? 'btn-primary' : 'btn-ghost'}">Active</a>
+	<a href="?filter=archived" class="btn btn-sm {data.filter === 'archived' ? 'btn-primary' : 'btn-ghost'}">Archived</a>
+	<a href="?filter=favorites" class="btn btn-sm {data.filter === 'favorites' ? 'btn-primary' : 'btn-ghost'}">Favorites</a>
+</div>
+
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
 {#if data.trips.length}
-	<form method="POST" action="?/delete" class="mt-6">
+	<form method="POST" class="mt-6">
 		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-			<p class="text-sm text-slate-400">Select your own trips to remove them in bulk.</p>
-			<button class="btn btn-danger">Delete selected</button>
+			<p class="text-sm text-slate-400">Select your own trips to manage them in bulk.</p>
+			<div class="flex flex-wrap gap-2">
+				<button formaction="?/favorite" class="btn btn-ghost">Favorite</button>
+				<button formaction="?/archive" class="btn btn-ghost">Archive</button>
+				<button formaction="?/delete" class="btn btn-danger">Delete</button>
+			</div>
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.trips as t (t.id)}
@@ -87,7 +101,10 @@
 					{/if}
 					<a href={`/trips/${t.id}`} class="contents">
 						<div class="flex items-start justify-between gap-3">
-							<h2 class="font-display text-lg leading-tight font-bold text-white">{t.name}</h2>
+							<h2 class="font-display text-lg leading-tight font-bold text-white">
+								{#if t.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
+								{t.name}
+							</h2>
 							{#if t.isShared}
 								<span class="badge badge-brand shrink-0">Shared</span>
 							{:else}

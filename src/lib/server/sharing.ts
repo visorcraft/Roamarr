@@ -1,7 +1,7 @@
-import { and, eq, gte } from 'drizzle-orm';
+import { and, eq, gte, inArray, like, sql } from 'drizzle-orm';
 import { db } from './db';
-import { trips, tripShares, groupMembers } from './db/schema';
-import type { trips as tripsTable, segments } from './db/schema';
+import { trips, tripShares, groupMembers, segments } from './db/schema';
+import type { trips as tripsTable } from './db/schema';
 
 type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segments.$inferSelect;
@@ -104,6 +104,8 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		startDate: trip.startDate,
 		endDate: trip.endDate,
 		createdAt: trip.createdAt,
+		archived: trip.archived,
+		favorite: trip.favorite,
 		tags: tripTags(trip),
 		segments: segs.map((s) => ({
 			type: s.type,
@@ -125,10 +127,11 @@ export type ListedTrip =
 
 type SortField = 'name' | 'startDate' | 'createdAt';
 type SortOrder = 'asc' | 'desc';
+type TripFilter = 'active' | 'archived' | 'favorites';
 
 export function listViewableTrips(
 	userId: number,
-	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder }
+	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder; filter?: TripFilter }
 ): ListedTrip[] {
 	const ownedWhere = options?.startDateGte
 		? and(eq(trips.ownerId, userId), gte(trips.startDate, options.startDateGte))
@@ -164,15 +167,41 @@ export function listViewableTrips(
 	const q = options?.q?.trim();
 	if (q) {
 		const needle = q.toLowerCase();
+		const pattern = `%${q.toLowerCase()}%`;
+		const ownedIds = result.filter((t) => !t.isShared).map((t) => t.id);
+		const segmentMatches = ownedIds.length
+			? db
+					.select({ tripId: segments.tripId })
+					.from(segments)
+					.where(
+						and(
+							inArray(segments.tripId, ownedIds),
+							sql`lower(${segments.title}) like ${pattern} or lower(${segments.location}) like ${pattern} or lower(${segments.confirmationNumber}) like ${pattern}`
+						)
+					)
+					.all()
+			: [];
+		const segmentTripIds = new Set(segmentMatches.map((s) => s.tripId));
 		result = result.filter((t) => {
 			const haystack = `${t.name ?? ''} ${t.destination ?? ''}`.toLowerCase();
-			return haystack.includes(needle);
+			if (haystack.includes(needle)) return true;
+			if (!t.isShared && segmentTripIds.has(t.id)) return true;
+			return false;
 		});
 	}
 
 	const tag = options?.tag?.trim();
 	if (tag) {
 		result = result.filter((t) => tripHasTag(t, tag));
+	}
+
+	const filter: TripFilter = options?.filter ?? 'active';
+	if (filter === 'archived') {
+		result = result.filter((t) => t.archived);
+	} else if (filter === 'favorites') {
+		result = result.filter((t) => t.favorite);
+	} else {
+		result = result.filter((t) => !t.archived);
 	}
 
 	const sort: SortField = options?.sort ?? 'startDate';

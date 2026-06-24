@@ -59,6 +59,18 @@
 				required
 			/>
 		</div>
+		<div class="field sm:col-span-2">
+			<label class="flex items-center gap-2 text-sm text-slate-300">
+				<input type="checkbox" name="emailNotifications" checked={data.user.emailNotifications} class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500" />
+				Email notifications
+			</label>
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="flex items-center gap-2 text-sm text-slate-300">
+				<input type="checkbox" name="webhookNotifications" checked={data.user.webhookNotifications} class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500" />
+				Webhook notifications
+			</label>
+		</div>
 		<div class="sm:col-span-2">
 			<button class="btn btn-primary">Save profile</button>
 		</div>
@@ -97,7 +109,10 @@
 							{s.current ? 'This session' : `Session ${s.id}`}
 							{#if s.current}<span class="badge badge-brand ml-2">Current</span>{/if}
 						</p>
-						<p class="text-slate-400">Created {fmt(s.createdAt)} · Expires {fmt(s.expiresAt)}</p>
+						<p class="text-slate-400">
+							Created {fmt(s.createdAt)} · Expires {fmt(s.expiresAt)}
+							{#if s.lastIp || s.userAgent}<span class="block text-xs text-slate-500">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
+						</p>
 					</div>
 					<form method="POST" action="?/revokeSession">
 						<input type="hidden" name="id" value={s.id} />

@@ -20,10 +20,12 @@ export async function verifyPassword(h: string, pw: string) {
 	return verify(h, pw, ARGON).catch(() => false);
 }
 
-export function createSession(userId: number) {
+export function createSession(userId: number, ip?: string, userAgent?: string) {
 	const token = randomBytes(32).toString('base64url');
 	const expiresAt = DateTime.utc().plus({ days: 30 }).toISO()!;
-	db.insert(sessions).values({ tokenHash: th(token), userId, expiresAt }).run();
+	db.insert(sessions)
+		.values({ tokenHash: th(token), userId, expiresAt, lastIp: ip ?? null, userAgent: userAgent ?? null })
+		.run();
 	return token;
 }
 
@@ -34,6 +36,14 @@ export async function validateSession(token?: string) {
 	const u = db.select().from(users).where(eq(users.id, s.userId)).get();
 	if (!u || u.disabled) return null;
 	return u;
+}
+
+export function updateSessionMetadata(token: string, ip?: string, userAgent?: string) {
+	if (!ip && !userAgent) return;
+	db.update(sessions)
+		.set({ lastIp: ip ?? null, userAgent: userAgent ?? null })
+		.where(eq(sessions.tokenHash, th(token)))
+		.run();
 }
 
 export function invalidateSession(token: string) {

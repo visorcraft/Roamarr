@@ -8,6 +8,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const file = f.get('file');
 		const format = String(f.get('format') || 'json');
+		const dryRun = f.get('dryRun') === 'true';
 
 		if (!file || !(file instanceof File)) {
 			return fail(400, { error: 'Please select a file.' });
@@ -24,11 +25,11 @@ export const actions: Actions = {
 			return fail(400, { error: e instanceof Error ? e.message : 'Invalid file.' });
 		}
 
-		const result = importTrips(u.id, parsed);
+		const result = importTrips(u.id, parsed, dryRun);
 		if (result.imported === 0 && result.errors.length > 0) {
 			return fail(400, { error: 'Import completed with errors.', result });
 		}
 
-		return { success: true, result };
+		return { success: true, result, dryRun };
 	}
 };

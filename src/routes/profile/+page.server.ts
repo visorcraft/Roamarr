@@ -24,7 +24,14 @@ function validLead(n: number) {
 
 export function _updateProfile(
 	userId: number,
-	i: { displayName: string; timezone: string; flightCheckinLeadHours: number; documentExpiryLeadDays: number }
+	i: {
+		displayName: string;
+		timezone: string;
+		flightCheckinLeadHours: number;
+		documentExpiryLeadDays: number;
+		emailNotifications: boolean;
+		webhookNotifications: boolean;
+	}
 ) {
 	requireOwnedUser(userId);
 	if (!i.displayName) throw new Error('Display name is required');
@@ -36,7 +43,9 @@ export function _updateProfile(
 			displayName: i.displayName,
 			timezone: i.timezone,
 			flightCheckinLeadHours: i.flightCheckinLeadHours,
-			documentExpiryLeadDays: i.documentExpiryLeadDays
+			documentExpiryLeadDays: i.documentExpiryLeadDays,
+			emailNotifications: i.emailNotifications,
+			webhookNotifications: i.webhookNotifications
 		})
 		.where(eq(users.id, userId))
 		.run();
@@ -64,7 +73,7 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 	const currentToken = cookies.get('session');
 	const currentHash = currentToken ? tokenHash(currentToken) : null;
 	const sessionRows = db
-		.select({ id: sessions.id, tokenHash: sessions.tokenHash, createdAt: sessions.createdAt, expiresAt: sessions.expiresAt })
+		.select({ id: sessions.id, tokenHash: sessions.tokenHash, createdAt: sessions.createdAt, expiresAt: sessions.expiresAt, lastIp: sessions.lastIp, userAgent: sessions.userAgent })
 		.from(sessions)
 		.where(eq(sessions.userId, u.id))
 		.all();
@@ -78,7 +87,9 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 			role: u.role,
 			timezone: u.timezone,
 			flightCheckinLeadHours: u.flightCheckinLeadHours,
-			documentExpiryLeadDays: u.documentExpiryLeadDays
+			documentExpiryLeadDays: u.documentExpiryLeadDays,
+			emailNotifications: u.emailNotifications,
+			webhookNotifications: u.webhookNotifications
 		},
 		sessions: userSessions
 	};
@@ -92,12 +103,16 @@ export const actions: Actions = {
 		const timezone = String(f.get('timezone') ?? 'UTC');
 		const flightCheckinLeadHours = Number(f.get('flightCheckinLeadHours') ?? 24);
 		const documentExpiryLeadDays = Number(f.get('documentExpiryLeadDays') ?? 90);
+		const emailNotifications = f.get('emailNotifications') === 'on';
+		const webhookNotifications = f.get('webhookNotifications') === 'on';
 		try {
 			_updateProfile(u.id, {
 				displayName,
 				timezone,
 				flightCheckinLeadHours,
-				documentExpiryLeadDays
+				documentExpiryLeadDays,
+				emailNotifications,
+				webhookNotifications
 			});
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });

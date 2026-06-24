@@ -22,7 +22,9 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const u = await _authenticate(String(f.get('email') ?? ''), String(f.get('password') ?? ''));
 		if (!u) return fail(401, { error: 'Invalid email or password.' });
-		cookies.set('session', createSession(u.id), sessionCookieOptions());
+		const ip = getClientAddress();
+		const ua = request.headers.get('user-agent') ?? undefined;
+		cookies.set('session', createSession(u.id, ip, ua), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

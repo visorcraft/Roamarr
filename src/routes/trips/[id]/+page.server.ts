@@ -2,7 +2,7 @@ import { error, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { fareProviders, fareWatches } from '$lib/server/db/schema';
+import { fareProviders, fareWatches, trips } from '$lib/server/db/schema';
 import {
 	duplicateTrip,
 	loadTripFor,
@@ -10,6 +10,8 @@ import {
 	revokeCalendarToken,
 	type TripView
 } from '../shared';
+import { requireOwnedTrip } from '$lib/server/ownership';
+import { upsertCustomReminder } from '$lib/server/reminders';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -75,5 +77,34 @@ export const actions: Actions = {
 		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
 		const copy = duplicateTrip(u.id, tripId);
 		throw redirect(303, `/trips/${copy.id}`);
+	},
+	toggleArchive: async ({ locals, params }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const t = requireOwnedTrip(u.id, tripId);
+		db.update(trips).set({ archived: !t.archived }).where(eq(trips.id, tripId)).run();
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	toggleFavorite: async ({ locals, params }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const t = requireOwnedTrip(u.id, tripId);
+		db.update(trips).set({ favorite: !t.favorite }).where(eq(trips.id, tripId)).run();
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	customReminder: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const t = requireOwnedTrip(u.id, tripId);
+		const f = await request.formData();
+		const offset = Number(f.get('offsetMinutes') ?? 60);
+		if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
+		if (!t.startDate) throw error(400, 'Trip has no start date');
+		const startAt = `${t.startDate}T09:00:00Z`;
+		upsertCustomReminder(u.id, 'trip', tripId, startAt, offset);
+		throw redirect(303, `/trips/${tripId}`);
 	}
 };

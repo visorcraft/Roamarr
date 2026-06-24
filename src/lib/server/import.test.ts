@@ -131,3 +131,22 @@ test('importTrips skips invalid segments but keeps the trip', () => {
 	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
 	expect(db.select().from(segments).where(eq(segments.tripId, t!.id)).all()).toHaveLength(1);
 });
+
+test('importTrips dryRun validates and previews without writing', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'dry@x.c', passwordHash: 'x', displayName: 'D' }).returning().get();
+	const beforeTrips = db.select().from(trips).where(eq(trips.ownerId, u.id)).all().length;
+	const result = importTrips(
+		u.id,
+		{
+			trips: [{ name: 'Dry', startDate: '2026-07-01', segments: [{ type: 'flight', title: 'F', localStart: '2026-07-01T10:00', startTz: 'UTC' }] }]
+		},
+		true
+	);
+	expect(result.imported).toBe(1);
+	expect(result.segmentCount).toBe(1);
+	expect(result.preview).toHaveLength(1);
+	expect(result.preview![0].name).toBe('Dry');
+	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all().length).toBe(beforeTrips);
+	expect(db.select().from(segments).all().length).toBe(0);
+});

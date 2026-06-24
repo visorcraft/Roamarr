@@ -15,6 +15,7 @@ vi.mock('./notify', () => ({
 import {
 	upsertRemindersForSegment,
 	upsertRemindersForDocument,
+	upsertCustomReminder,
 	cancelRemindersFor,
 	runDueReminders
 } from './reminders';
@@ -193,4 +194,18 @@ test('arms a reminder using the owners configured document expiry lead', () => {
 	upsertRemindersForDocument(doc);
 	const r = db.select().from(reminders).get();
 	expect(r!.fireAt).toBe('2026-11-30T14:00:00.000Z');
+});
+
+test('custom reminder arms before a trip start', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const t = db
+		.insert(trips)
+		.values({ ownerId: owner.id, name: 'Custom', startDate: '2099-06-01' })
+		.returning()
+		.get();
+	upsertCustomReminder(owner.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 1440);
+	const rows = db.select().from(reminders).where(eq(reminders.refType, 'trip')).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].kind).toBe('custom');
+	expect(rows[0].fireAt).toBe('2099-05-31T09:00:00.000Z');
 });

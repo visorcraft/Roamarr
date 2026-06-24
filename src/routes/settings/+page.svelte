@@ -165,7 +165,7 @@
 			<div class="settings-row">
 				<div>
 					<label class="label" for="webhookUrl">Webhook URL</label>
-					<p class="field-help">POSTs JSON {`{title, body, link}`} when notifications are sent.</p>
+					<p class="field-help">POSTs JSON {`{title, body, link}`} with X-Roamarr-Signature (HMAC-SHA256) and X-Roamarr-Timestamp headers.</p>
 				</div>
 				<input
 					id="webhookUrl"

@@ -8,8 +8,8 @@ vi.mock('./db', async () => {
 });
 
 import { eq } from 'drizzle-orm';
-import { canView, canEdit, canViewDetails, viewerProjection } from './sharing';
-import { users, trips, groups, groupMembers, tripShares } from './db/schema';
+import { canView, canEdit, canViewDetails, viewerProjection, listViewableTrips } from './sharing';
+import { users, trips, segments, groups, groupMembers, tripShares } from './db/schema';
 
 test('view matrix + projection omits sensitive fields', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -155,4 +155,17 @@ test('showDetails gate exposes confirmation numbers and details only when enable
 		.values({ tripId: t.id, sharedWithGroupId: g.id, showDetails: true })
 		.run();
 	expect(canViewDetails(groupMember.id, t)).toBe(true);
+});
+
+test('listViewableTrips searches segment titles and confirmation numbers for owners', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const owner = db.insert(users).values({ email: 'search@x.c', passwordHash: 'x', displayName: 'S' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'Trip' }).returning().get();
+	db.insert(segments)
+		.values({ tripId: t.id, type: 'flight', title: 'Delta 15', startAt: '2026-07-01T15:00:00Z', startTz: 'UTC', confirmationNumber: 'ABC999' })
+		.run();
+
+	expect(listViewableTrips(owner.id, { q: 'Delta' })).toHaveLength(1);
+	expect(listViewableTrips(owner.id, { q: 'ABC999' })).toHaveLength(1);
+	expect(listViewableTrips(owner.id, { q: 'nowhere' })).toHaveLength(0);
 });

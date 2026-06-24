@@ -3,7 +3,7 @@
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
-	import { trips } from '$lib/server/db/schema';
+	import type { trips } from '$lib/server/db/schema';
 	import { renderMarkdown } from '$lib/markdown';
 	import type { PageData } from './$types';
 
@@ -219,6 +219,12 @@
 							<button class="btn btn-ghost">Duplicate</button>
 						</form>
 						{#if data.owner === true}
+							<form method="POST" action="?/toggleFavorite">
+								<button class="btn btn-ghost" title={trip.favorite ? 'Unfavorite' : 'Favorite'}>{trip.favorite ? '★ Favorited' : '☆ Favorite'}</button>
+							</form>
+							<form method="POST" action="?/toggleArchive">
+								<button class="btn btn-ghost">{trip.archived ? 'Unarchive' : 'Archive'}</button>
+							</form>
 							<a href={`/trips/${trip.id}/share`} class="btn btn-primary">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" x2="12" y1="2" y2="15" /></svg>
 								Share
@@ -523,6 +529,23 @@
 					{/if}
 				</div>
 			{/if}
+
+				{#if isEditor && data.owner === true && trip.startDate}
+					<div class="trip-sidebar-card">
+						<h2 class="mb-3 text-sm font-semibold text-white">Custom reminder</h2>
+						<form method="POST" action="?/customReminder" class="flex flex-col gap-2">
+							<label for="customReminderOffset" class="text-xs text-slate-400">Remind me before start</label>
+							<select id="customReminderOffset" name="offsetMinutes" class="input text-sm">
+								<option value="15">15 minutes</option>
+								<option value="60">1 hour</option>
+								<option value="180">3 hours</option>
+								<option value="1440">1 day</option>
+								<option value="10080">1 week</option>
+							</select>
+							<button class="btn btn-ghost btn-sm">Set reminder</button>
+						</form>
+					</div>
+				{/if}
 
 			{#if isEditor}
 				<div class="trip-sidebar-card">

@@ -62,12 +62,34 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 	expect(fetches.length).toBe(1);
 	expect(fetches[0].url).toBe('https://hooks.example.com/roamarr');
 	expect(fetches[0].init.method).toBe('POST');
-	expect(fetches[0].init.headers).toEqual({ 'Content-Type': 'application/json' });
+	const headers = fetches[0].init.headers as Record<string, string>;
+	expect(headers['Content-Type']).toBe('application/json');
+	expect(headers['X-Roamarr-Signature']).toMatch(/^[0-9a-f]{64}$/);
+	expect(headers['X-Roamarr-Timestamp']).toMatch(/^\d+$/);
 	expect(JSON.parse(fetches[0].init.body as string)).toEqual({
 		title: 'T',
 		body: 'B',
 		link: 'https://r/l'
 	});
+});
+
+test('respects user channel toggles', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 't@x.c', passwordHash: 'x', displayName: 'T', emailNotifications: false, webhookNotifications: false })
+		.returning()
+		.get();
+	db.update(settings)
+		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'r@x.c', smtpPass: encrypt('pw'), webhookUrl: 'https://hooks.example.com/roamarr' })
+		.where(eq(settings.id, 1))
+		.run();
+	const before = fetches.length;
+	const beforeSent = sent.length;
+	await deliver(u.id, { title: 'T', body: 'B' });
+	expect(db.select().from(notifications).all().length).toBeGreaterThan(0);
+	expect(fetches.length).toBe(before);
+	expect(sent.length).toBe(beforeSent);
 });
 
 test('skips webhook when webhookUrl is not set', async () => {

@@ -1,4 +1,5 @@
 import { DateTime } from 'luxon';
+import type { SegmentType } from './db/schema';
 
 export type CalendarTrip = {
 	id: number;
@@ -9,11 +10,34 @@ export type CalendarTrip = {
 };
 
 export type CalendarSegment = {
-	type: 'flight' | 'lodging';
+	type: SegmentType;
 	title: string;
 	startAt: string;
 	endAt?: string | null;
 	location?: string | null;
+};
+
+const SEGMENT_LABELS: Record<SegmentType, string> = {
+	flight: 'Flight',
+	lodging: 'Lodging',
+	car: 'Car',
+	rail: 'Rail',
+	activity: 'Activity',
+	cruise: 'Cruise',
+	event: 'Event',
+	hotel: 'Hotel',
+	rental_car: 'Rental car',
+	note: 'Note',
+	todo: 'Todo',
+	parking: 'Parking',
+	boat: 'Boat',
+	train: 'Train',
+	directions: 'Directions',
+	food: 'Food',
+	poi: 'POI',
+	meetup: 'Meetup',
+	rideshare: 'Rideshare',
+	shuttle: 'Shuttle'
 };
 
 function escapeText(value: string): string {
@@ -55,14 +79,16 @@ function formatUtcDateTime(iso: string): string {
 	return dt.toFormat("yyyyMMdd'T'HHmmss'Z'");
 }
 
-function buildEvent(
-	trip: CalendarTrip,
-	segment: CalendarSegment,
-	index: number,
-	stamp: string
-): string {
+function formatDate(iso: string): string {
+	const dt = DateTime.fromISO(iso, { zone: 'utc' });
+	if (!dt.isValid) throw new Error(`invalid date: ${iso}`);
+	return dt.toFormat('yyyyMMdd');
+}
+
+function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number, stamp: string): string {
 	const uid = `roamarr-trip-${trip.id}-segment-${index + 1}@roamarr`;
-	const summary = `${segment.type === 'flight' ? 'Flight' : 'Lodging'}: ${segment.title}`;
+	const label = SEGMENT_LABELS[segment.type] ?? segment.type;
+	const summary = `${label}: ${segment.title}`;
 	const lines: string[] = [];
 
 	lines.push('BEGIN:VEVENT');
@@ -84,6 +110,26 @@ function buildEvent(
 	return lines.map(foldLine).join('\r\n');
 }
 
+function buildTripEvent(trip: CalendarTrip, stamp: string): string | null {
+	if (!trip.startDate) return null;
+	const uid = `roamarr-trip-${trip.id}@roamarr`;
+	const lines: string[] = [];
+	lines.push('BEGIN:VEVENT');
+	lines.push(`UID:${uid}`);
+	lines.push(`DTSTAMP:${stamp}`);
+	lines.push(`SUMMARY:${escapeText(trip.name)}`);
+	lines.push(`DTSTART;VALUE=DATE:${formatDate(trip.startDate)}`);
+	if (trip.endDate) {
+		const end = DateTime.fromISO(trip.endDate, { zone: 'utc' }).plus({ days: 1 });
+		lines.push(`DTEND;VALUE=DATE:${end.toFormat('yyyyMMdd')}`);
+	}
+	if (trip.destination) {
+		lines.push(`DESCRIPTION:${escapeText(trip.destination)}`);
+	}
+	lines.push('END:VEVENT');
+	return lines.map(foldLine).join('\r\n');
+}
+
 export function buildCalendar(trip: CalendarTrip, segments: CalendarSegment[]): string {
 	const stamp = formatUtcDateTime(DateTime.utc().toISO()!);
 
@@ -95,6 +141,9 @@ export function buildCalendar(trip: CalendarTrip, segments: CalendarSegment[]): 
 	parts.push(`METHOD:PUBLISH`);
 	parts.push(`X-WR-CALNAME:${escapeText(trip.name)}`);
 	parts.push(`X-WR-TIMEZONE:UTC`);
+
+	const tripEvent = buildTripEvent(trip, stamp);
+	if (tripEvent) parts.push(tripEvent);
 
 	segments.forEach((segment, index) => {
 		parts.push(buildEvent(trip, segment, index, stamp));

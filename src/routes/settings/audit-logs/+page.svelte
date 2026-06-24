@@ -1,13 +1,67 @@
 <script lang="ts">
 	let { data } = $props();
+
+	const totalPages = $derived(Math.ceil(data.total / data.pageSize));
+	const hasPrev = $derived(data.page > 1);
+	const hasNext = $derived(data.page < totalPages);
+
+	function queryFor(page: number) {
+		const params = new URLSearchParams();
+		if (data.filters.userId) params.set('userId', String(data.filters.userId));
+		if (data.filters.action) params.set('action', data.filters.action);
+		if (data.filters.entityType) params.set('entityType', data.filters.entityType);
+		if (data.filters.from) params.set('from', data.filters.from);
+		if (data.filters.to) params.set('to', data.filters.to);
+		params.set('page', String(page));
+		return '?' + params.toString();
+	}
 </script>
 
 <header>
 	<h1 class="text-3xl font-extrabold text-white">Audit log</h1>
-	<p class="mt-1 text-sm text-muted">Recent security-relevant events across the instance.</p>
+	<p class="mt-1 text-sm text-muted">Security-relevant events across the instance.</p>
 </header>
 
-<section class="card mt-8 p-5 sm:p-6">
+<section class="card mt-6 p-5 sm:p-6">
+	<form method="GET" class="flex flex-wrap items-end gap-3">
+		<label class="field min-w-[10rem]">
+			<span class="label">User</span>
+			<select name="userId" class="input">
+				<option value="">All users</option>
+				{#each data.users as u}
+					<option value={u.id} selected={data.filters.userId === u.id}>{u.displayName} ({u.email})</option>
+				{/each}
+			</select>
+		</label>
+		<label class="field min-w-[8rem]">
+			<span class="label">Action</span>
+			<input type="text" name="action" value={data.filters.action ?? ''} placeholder="e.g. login" class="input" />
+		</label>
+		<label class="field min-w-[8rem]">
+			<span class="label">Entity type</span>
+			<input type="text" name="entityType" value={data.filters.entityType ?? ''} placeholder="e.g. trip" class="input" />
+		</label>
+		<label class="field min-w-[8rem]">
+			<span class="label">From</span>
+			<input type="date" name="from" value={data.filters.from ?? ''} class="input" />
+		</label>
+		<label class="field min-w-[8rem]">
+			<span class="label">To</span>
+			<input type="date" name="to" value={data.filters.to ?? ''} class="input" />
+		</label>
+		<button type="submit" class="btn btn-ghost">Filter</button>
+		<a href="/settings/audit-logs" class="btn btn-ghost">Reset</a>
+	</form>
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+		<p class="text-sm text-muted">{data.total} event{data.total === 1 ? '' : 's'} · page {data.page} of {totalPages || 1}</p>
+		<div class="flex gap-2">
+			<a href={queryFor(data.page - 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasPrev} aria-disabled={!hasPrev}>Previous</a>
+			<a href={queryFor(data.page + 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasNext} aria-disabled={!hasNext}>Next</a>
+		</div>
+	</div>
 	<div class="overflow-x-auto">
 		<table class="table">
 			<thead>
@@ -41,7 +95,7 @@
 					</tr>
 				{:else}
 					<tr>
-						<td colspan="5" class="py-8 text-center text-slate-500">No audit events yet.</td>
+						<td colspan="5" class="py-8 text-center text-slate-500">No audit events match.</td>
 					</tr>
 				{/each}
 			</tbody>

@@ -51,7 +51,7 @@ test('listAuditLogs returns recent logs with user details in descending order', 
 	logAudit(a.id, 'trip_delete', 'trip', 1, { name: 'Old' });
 	logAudit(b.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
 
-	const logs = listAuditLogs(10);
+	const { logs } = listAuditLogs({ limit: 10 });
 	expect(logs).toHaveLength(2);
 	expect(logs[0].action).toBe('settings_update');
 	expect(logs[0].user.email).toBe('b@x.c');
@@ -69,8 +69,8 @@ test('listAuditLogs respects the limit', () => {
 		logAudit(u.id, 'action', 'trip', i);
 	}
 
-	expect(listAuditLogs(2)).toHaveLength(2);
-	expect(listAuditLogs(100)).toHaveLength(5);
+	expect(listAuditLogs({ limit: 2 }).logs).toHaveLength(2);
+	expect(listAuditLogs({ limit: 100 }).logs).toHaveLength(5);
 });
 
 test('listAuditLogs never exposes passwordHash', () => {
@@ -78,7 +78,7 @@ test('listAuditLogs never exposes passwordHash', () => {
 	const u = db.insert(users).values({ email: 'safe@x.c', passwordHash: 'secret-hash', displayName: 'S' }).returning().get();
 	logAudit(u.id, 'plain', 'settings', 1);
 
-	const logs = listAuditLogs(1);
+	const { logs } = listAuditLogs({ limit: 1 });
 	expect(logs[0].user).not.toHaveProperty('passwordHash');
 	expect(Object.keys(logs[0].user).sort()).toEqual(['displayName', 'email', 'id']);
 });

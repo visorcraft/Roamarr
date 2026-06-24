@@ -92,7 +92,9 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		displayName: 'Ada',
 		timezone: 'America/New_York',
 		flightCheckinLeadHours: 48,
-		documentExpiryLeadDays: 60
+		documentExpiryLeadDays: 60,
+		emailNotifications: true,
+		webhookNotifications: false
 	});
 	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
 	expect(row.displayName).toBe('Ada');
@@ -113,7 +115,9 @@ test('update profile rejects invalid timezone', () => {
 			displayName: 'P2',
 			timezone: 'Mars/Colony',
 			flightCheckinLeadHours: 24,
-			documentExpiryLeadDays: 90
+			documentExpiryLeadDays: 90,
+			emailNotifications: true,
+			webhookNotifications: true
 		})
 	).toThrow('Invalid timezone');
 });
@@ -130,7 +134,9 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			displayName: 'P',
 			timezone: 'UTC',
 			flightCheckinLeadHours: -1,
-			documentExpiryLeadDays: 90
+			documentExpiryLeadDays: 90,
+			emailNotifications: true,
+			webhookNotifications: true
 		})
 	).toThrow('Flight check-in lead must be a non-negative integer');
 	expect(() =>
@@ -138,7 +144,9 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			displayName: 'P',
 			timezone: 'UTC',
 			flightCheckinLeadHours: 24,
-			documentExpiryLeadDays: 1.5
+			documentExpiryLeadDays: 1.5,
+			emailNotifications: true,
+			webhookNotifications: true
 		})
 	).toThrow('Document expiry lead must be a non-negative integer');
 });

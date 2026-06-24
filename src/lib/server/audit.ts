@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from './db';
 import { auditLogs, users } from './db/schema';
 
@@ -36,7 +36,38 @@ export function logAudit(
 	}).run();
 }
 
-export function listAuditLogs(limit = 100): AuditLogEntry[] {
+export interface AuditFilters {
+	userId?: number;
+	action?: string;
+	entityType?: string;
+	from?: string;
+	to?: string;
+	limit?: number;
+	offset?: number;
+}
+
+export interface AuditListResult {
+	logs: AuditLogEntry[];
+	total: number;
+}
+
+export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
+	const conditions = [];
+	if (filters.userId != null) conditions.push(eq(auditLogs.userId, filters.userId));
+	if (filters.action) conditions.push(eq(auditLogs.action, filters.action));
+	if (filters.entityType) conditions.push(eq(auditLogs.entityType, filters.entityType));
+	if (filters.from) conditions.push(gte(auditLogs.createdAt, filters.from));
+	if (filters.to) conditions.push(lte(auditLogs.createdAt, filters.to));
+
+	const where = conditions.length ? and(...conditions) : undefined;
+
+	const totalRow = db
+		.select({ count: sql<number>`count(*)` })
+		.from(auditLogs)
+		.where(where)
+		.get();
+	const total = totalRow?.count ?? 0;
+
 	const rows = db
 		.select({
 			id: auditLogs.id,
@@ -51,11 +82,13 @@ export function listAuditLogs(limit = 100): AuditLogEntry[] {
 		})
 		.from(auditLogs)
 		.innerJoin(users, eq(auditLogs.userId, users.id))
+		.where(where)
 		.orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-		.limit(limit)
+		.limit(filters.limit ?? 100)
+		.offset(filters.offset ?? 0)
 		.all();
 
-	return rows.map((r) => ({
+	const logs = rows.map((r) => ({
 		id: r.id,
 		action: r.action,
 		entityType: r.entityType,
@@ -68,4 +101,5 @@ export function listAuditLogs(limit = 100): AuditLogEntry[] {
 			displayName: r.userDisplayName
 		}
 	}));
+	return { logs, total };
 }

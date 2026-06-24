@@ -126,6 +126,23 @@ test('trip list sorts by name and order', () => {
 	expect(desc.trips.map((t: any) => t.name)).toEqual(['Zebra', 'Mango', 'Apple']);
 });
 
+test('trip list filters archived and favorite trips', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'af-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	db.insert(trips).values({ ownerId: a.id, name: 'Active', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Archived', startDate: '2026-08-01', archived: true }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Favorite', startDate: '2026-09-01', favorite: true }).run();
+
+	const active = load(event(a, '?filter=active')) as any;
+	expect(active.trips.map((t: any) => t.name).sort()).toEqual(['Active', 'Favorite']);
+
+	const archived = load(event(a, '?filter=archived')) as any;
+	expect(archived.trips.map((t: any) => t.name)).toEqual(['Archived']);
+
+	const favorites = load(event(a, '?filter=favorites')) as any;
+	expect(favorites.trips.map((t: any) => t.name)).toEqual(['Favorite']);
+});
+
 test('trip list rejects invalid sort and order values', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();

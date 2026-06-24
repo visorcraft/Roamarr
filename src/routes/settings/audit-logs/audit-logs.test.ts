@@ -43,7 +43,9 @@ test('load returns recent audit logs for admin', () => {
 	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
 	logAudit(target.id, 'trip_delete', 'trip', 42, { name: 'Gone' });
 
-	const result = load({ locals: admin } as any) as { logs: Array<{ action: string; user: { email: string } }> };
+	const result = load({ locals: admin, url: new URL('http://localhost/settings/audit-logs') } as any) as {
+		logs: Array<{ action: string; user: { email: string } }>;
+	};
 	expect(result.logs).toHaveLength(2);
 	expect(result.logs[0].action).toBe('trip_delete');
 	expect(result.logs[1].action).toBe('settings_update');
@@ -53,7 +55,7 @@ test('load returns recent audit logs for admin', () => {
 test('load rejects non-admin', () => {
 	const u = userLocals();
 	try {
-		load({ locals: u } as any);
+		load({ locals: u, url: new URL('http://localhost/settings/audit-logs') } as any);
 		expect.fail('should have thrown');
 	} catch (e: any) {
 		expect(e.status).toBe(403);
@@ -62,6 +64,8 @@ test('load rejects non-admin', () => {
 
 test('load returns empty logs when no events exist', () => {
 	const admin = adminLocals();
-	const result = load({ locals: admin } as any) as { logs: unknown[] };
+	const result = load({ locals: admin, url: new URL('http://localhost/settings/audit-logs') } as any) as {
+		logs: unknown[];
+	};
 	expect(result.logs).toEqual([]);
 });

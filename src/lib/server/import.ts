@@ -33,10 +33,19 @@ export interface ImportError {
 	message: string;
 }
 
+export interface ImportPreviewTrip {
+	name: string;
+	destination?: string;
+	startDate?: string;
+	endDate?: string;
+	segments: { type: SegmentType; title: string; localStart: string; startTz: string }[];
+}
+
 export interface ImportResult {
 	imported: number;
 	segmentCount: number;
 	errors: ImportError[];
+	preview?: ImportPreviewTrip[];
 }
 
 export function parseJson(text: string): { trips: ImportTrip[] } {
@@ -144,8 +153,9 @@ function validateSegment(input: ImportSegment, index: number): ImportError[] {
 	}));
 }
 
-export function importTrips(userId: number, input: { trips: ImportTrip[] }): ImportResult {
+export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryRun = false): ImportResult {
 	const result: ImportResult = { imported: 0, segmentCount: 0, errors: [] };
+	if (dryRun) result.preview = [];
 
 	for (let i = 0; i < input.trips.length; i++) {
 		const tripInput = input.trips[i]!;
@@ -153,6 +163,38 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }): Imp
 		const tripErrors = validateTrip(tripInput).map((e) => ({ ...e, row }));
 		if (tripErrors.length) {
 			result.errors.push(...tripErrors);
+			continue;
+		}
+
+		const validSegments: ImportSegment[] = [];
+
+		if (tripInput.segments) {
+			for (let j = 0; j < tripInput.segments.length; j++) {
+				const segInput = tripInput.segments[j]!;
+				const segErrors = validateSegment(segInput, j).map((e) => ({ ...e, row }));
+				if (segErrors.length) {
+					result.errors.push(...segErrors);
+					continue;
+				}
+				validSegments.push(segInput);
+			}
+		}
+
+		if (dryRun) {
+			result.preview!.push({
+				name: tripInput.name.trim(),
+				destination: tripInput.destination,
+				startDate: tripInput.startDate,
+				endDate: tripInput.endDate,
+				segments: validSegments.map((s) => ({
+					type: s.type,
+					title: s.title.trim(),
+					localStart: s.localStart,
+					startTz: s.startTz || 'UTC'
+				}))
+			});
+			result.imported++;
+			result.segmentCount += validSegments.length;
 			continue;
 		}
 
@@ -176,37 +218,29 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }): Imp
 			.get();
 		result.imported++;
 
-		if (tripInput.segments) {
-			for (let j = 0; j < tripInput.segments.length; j++) {
-				const segInput = tripInput.segments[j]!;
-				const segErrors = validateSegment(segInput, j).map((e) => ({ ...e, row }));
-				if (segErrors.length) {
-					result.errors.push(...segErrors);
-					continue;
-				}
-				const seg = db
-					.insert(segments)
-					.values({
-						tripId: trip.id,
-						type: segInput.type,
-						title: segInput.title.trim(),
-						startAt: localToUtc(segInput.localStart, segInput.startTz || 'UTC'),
-						startTz: segInput.startTz || 'UTC',
-						endAt: segInput.endAt ?? null,
-						location: segInput.location ?? null,
-						confirmationNumber: segInput.confirmationNumber ?? null,
-						detailsJson: segInput.details ? JSON.stringify(segInput.details) : null,
-						cardId: null
-					})
-					.returning()
-					.get();
-				upsertRemindersForSegment(seg);
-				result.segmentCount++;
-			}
+		for (const segInput of validSegments) {
+			const seg = db
+				.insert(segments)
+				.values({
+					tripId: trip.id,
+					type: segInput.type,
+					title: segInput.title.trim(),
+					startAt: localToUtc(segInput.localStart, segInput.startTz || 'UTC'),
+					startTz: segInput.startTz || 'UTC',
+					endAt: segInput.endAt ?? null,
+					location: segInput.location ?? null,
+					confirmationNumber: segInput.confirmationNumber ?? null,
+					detailsJson: segInput.details ? JSON.stringify(segInput.details) : null,
+					cardId: null
+				})
+				.returning()
+				.get();
+			upsertRemindersForSegment(seg);
+			result.segmentCount++;
 		}
 	}
 
-	if (result.imported > 0) {
+	if (result.imported > 0 && !dryRun) {
 		logAudit(userId, 'bulk_import', 'trips', 0, {
 			imported: result.imported,
 			segmentCount: result.segmentCount,

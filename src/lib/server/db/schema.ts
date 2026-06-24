@@ -30,6 +30,8 @@ export const users = sqliteTable(
 		timezone: text('timezone').notNull().default('UTC'),
 		flightCheckinLeadHours: integer('flight_checkin_lead_hours').notNull().default(24),
 		documentExpiryLeadDays: integer('document_expiry_lead_days').notNull().default(90),
+		emailNotifications: integer('email_notifications', { mode: 'boolean' }).notNull().default(true),
+		webhookNotifications: integer('webhook_notifications', { mode: 'boolean' }).notNull().default(true),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
@@ -46,6 +48,8 @@ export const sessions = sqliteTable('sessions', {
 		.notNull()
 		.references(() => users.id, { onDelete: 'cascade' }),
 	expiresAt: text('expires_at').notNull(),
+	lastIp: text('last_ip'),
+	userAgent: text('user_agent'),
 	createdAt: text('created_at').notNull().default(now)
 });
 
@@ -88,6 +92,8 @@ export const trips = sqliteTable(
 		endDate: text('end_date'),
 		notes: text('notes'),
 		tags: text('tags').notNull().default('[]'),
+		archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+		favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
 		defaultVisibility: text('default_visibility').notNull().default('private'),
 		publicToken: text('public_token').unique(),
 		calendarToken: text('calendar_token').unique(),
@@ -375,8 +381,8 @@ export const reminders = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		kindCk: check('rem_kind_ck', sql`${t.kind} in ('flight_checkin','document_expiry')`),
-		refCk: check('rem_ref_ck', sql`${t.refType} in ('segment','document')`),
+		kindCk: check('rem_kind_ck', sql`${t.kind} in ('flight_checkin','document_expiry','custom')`),
+		refCk: check('rem_ref_ck', sql`${t.refType} in ('segment','document','trip')`),
 		statCk: check('rem_stat_ck', sql`${t.status} in ('pending','sending','sent')`),
 		uq: unique('rem_source_uq').on(t.kind, t.refType, t.refId),
 		dueIdx: index('rem_due_idx').on(t.status, t.fireAt)

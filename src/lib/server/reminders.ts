@@ -10,14 +10,19 @@ type Doc = typeof travelDocuments.$inferSelect;
 type Reminder = typeof reminders.$inferSelect;
 
 export function computeFireAt(
-	kind: 'flight_checkin' | 'document_expiry',
+	kind: 'flight_checkin' | 'document_expiry' | 'custom',
 	ref: string,
 	opts: {
 		tz?: string;
 		flightCheckinLeadHours?: number;
 		documentExpiryLeadDays?: number;
+		customOffsetMinutes?: number;
 	} = {}
 ): string {
+	if (kind === 'custom') {
+		const offset = opts.customOffsetMinutes ?? 0;
+		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ minutes: offset }).toUTC().toISO()!;
+	}
 	const { tz = 'UTC', flightCheckinLeadHours = 24, documentExpiryLeadDays = 90 } = opts;
 	if (kind === 'flight_checkin')
 		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ hours: flightCheckinLeadHours }).toUTC().toISO()!;
@@ -30,8 +35,8 @@ export function computeFireAt(
 
 function arm(
 	userId: number,
-	kind: 'flight_checkin' | 'document_expiry',
-	refType: 'segment' | 'document',
+	kind: 'flight_checkin' | 'document_expiry' | 'custom',
+	refType: 'segment' | 'document' | 'trip',
 	refId: number,
 	fireAt: string
 ) {
@@ -75,6 +80,17 @@ export function upsertRemindersForSegment(seg: Seg) {
 	);
 }
 
+export function upsertCustomReminder(
+	userId: number,
+	refType: 'trip' | 'segment',
+	refId: number,
+	startAt: string,
+	offsetMinutes: number
+) {
+	const fireAt = computeFireAt('custom', startAt, { customOffsetMinutes: offsetMinutes });
+	arm(userId, 'custom', refType, refId, fireAt);
+}
+
 export function upsertRemindersForDocument(doc: Doc) {
 	if (!doc.expiresOn) {
 		cancelRemindersFor('document', doc.id);
@@ -96,7 +112,7 @@ export function upsertRemindersForDocument(doc: Doc) {
 	);
 }
 
-export function cancelRemindersFor(refType: 'segment' | 'document', refId: number) {
+export function cancelRemindersFor(refType: 'segment' | 'document' | 'trip', refId: number) {
 	db.delete(reminders)
 		.where(and(eq(reminders.refType, refType), eq(reminders.refId, refId)))
 		.run();
@@ -132,15 +148,23 @@ export async function runDueReminders(now: Date) {
 }
 
 function messageFor(r: Reminder): { title: string; body: string; link: string } {
-	return r.kind === 'flight_checkin'
-		? {
-				title: 'Check-in reminder',
-				body: 'A flight departs in about 24 hours.',
-				link: `/trips`
-			}
-		: {
-				title: 'Document expiring',
-				body: 'A travel document expires in 90 days.',
-				link: `/profile/documents`
-			};
+	if (r.kind === 'flight_checkin') {
+		return {
+			title: 'Check-in reminder',
+			body: 'A flight departs in about 24 hours.',
+			link: `/trips`
+		};
+	}
+	if (r.kind === 'document_expiry') {
+		return {
+			title: 'Document expiring',
+			body: 'A travel document expires in 90 days.',
+			link: `/profile/documents`
+		};
+	}
+	return {
+		title: 'Reminder',
+		body: 'A scheduled reminder is due.',
+		link: r.refType === 'trip' ? `/trips/${r.refId}` : `/trips`
+	};
 }

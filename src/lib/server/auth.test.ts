@@ -51,3 +51,16 @@ test('validateSession rejects disabled users', async () => {
 	const token = createSession(u.id);
 	expect(await validateSession(token)).toBeNull();
 });
+
+test('createSession stores IP and user agent metadata', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'm@b.c', passwordHash: 'x', displayName: 'M' })
+		.returning()
+		.get();
+	createSession(u.id, '127.0.0.1', 'TestAgent/1.0');
+	const row = db.select().from(sessions).get();
+	expect(row!.lastIp).toBe('127.0.0.1');
+	expect(row!.userAgent).toBe('TestAgent/1.0');
+});

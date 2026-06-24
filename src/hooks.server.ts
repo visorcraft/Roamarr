@@ -1,6 +1,6 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import { validateSession } from '$lib/server/auth';
+import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp } from '$lib/server/boot';
 
@@ -33,7 +33,15 @@ function contentSecurityPolicy() {
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	event.locals.user = await validateSession(event.cookies.get('session'));
+	const sessionToken = event.cookies.get('session');
+	event.locals.user = await validateSession(sessionToken);
+	if (sessionToken && event.locals.user) {
+		try {
+			updateSessionMetadata(sessionToken, event.getClientAddress(), event.request.headers.get('user-agent') ?? undefined);
+		} catch {
+			// best-effort; getClientAddress may throw in some environments
+		}
+	}
 
 	const flash = event.cookies.get('flash');
 	if (flash) {

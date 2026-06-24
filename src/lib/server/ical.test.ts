@@ -80,6 +80,28 @@ test('folds long lines at 75 octets', () => {
 	expect(lines.some((l) => l.startsWith(' ') && l.includes('AAAA'))).toBe(true);
 });
 
+test('renders a trip-bounds all-day event', () => {
+	const ics = buildCalendar(trip, []);
+	expect(ics).toContain('UID:roamarr-trip-1@roamarr');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260701');
+	expect(ics).toContain('DTEND;VALUE=DATE:20260711');
+	expect(ics).toContain('SUMMARY:Summer Escape');
+});
+
+test('renders all segment types', () => {
+	const ics = buildCalendar(
+		{ id: 5, name: 'Multi' },
+		[
+			{ type: 'car', title: 'Rental', startAt: '2026-07-01T10:00:00Z' },
+			{ type: 'activity', title: 'Museum', startAt: '2026-07-02T10:00:00Z' },
+			{ type: 'food', title: 'Dinner', startAt: '2026-07-03T19:00:00Z' }
+		] as any
+	);
+	expect(ics).toContain('SUMMARY:Car: Rental');
+	expect(ics).toContain('SUMMARY:Activity: Museum');
+	expect(ics).toContain('SUMMARY:Food: Dinner');
+});
+
 test('omits DTEND when segment has no end time', () => {
 	const ics = buildCalendar(
 		{ id: 4, name: 'Trip' },

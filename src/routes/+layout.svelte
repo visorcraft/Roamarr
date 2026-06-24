@@ -166,7 +166,7 @@
 				{@render brand('sm')}
 			</header>
 
-			<main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+			<main class="w-full flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
 				{@render children()}
 			</main>
 		</div>

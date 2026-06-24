@@ -25,7 +25,7 @@ test('load includes fare watches with segment titles', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).returning().get();
+	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
 	db.insert(insurancePolicies).values({ userId: u.id, provider: 'X', tripId: t.id }).run();
 
 	const result = load(event(u, t.id)) as { watches: unknown[] };
@@ -37,7 +37,7 @@ test('load includes attached insurance policies and user cards for the owner', (
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'td@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).returning().get();
+	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
 	db.insert(insurancePolicies).values({
 		userId: u.id,
 		provider: 'Acme Insurance',

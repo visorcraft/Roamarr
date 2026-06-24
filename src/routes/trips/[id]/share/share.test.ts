@@ -202,7 +202,7 @@ test('listGroupsForUser returns owned and member groups', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'lg-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const b = db.insert(users).values({ email: 'lg-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const owned = db.insert(groups).values({ ownerId: a.id, name: 'Owned' }).returning().get();
+	db.insert(groups).values({ ownerId: a.id, name: 'Owned' }).run();
 	const memberGroup = db.insert(groups).values({ ownerId: b.id, name: 'Member' }).returning().get();
 	db.insert(groupMembers).values({ groupId: memberGroup.id, userId: a.id }).run();
 	db.insert(groups).values({ ownerId: b.id, name: 'Other' }).run();

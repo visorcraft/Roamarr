@@ -2,7 +2,7 @@ import { error, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { cards, fareProviders, fareWatches, insurancePolicies, segments, trips } from '$lib/server/db/schema';
+import { cards, fareProviders, fareWatches, segments, trips } from '$lib/server/db/schema';
 import {
 	attachPolicyToTrip,
 	detachPolicyFromTrip,

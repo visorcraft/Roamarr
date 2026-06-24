@@ -20,7 +20,6 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 	const c = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
 
-	const today = '2026-06-24';
 	const future = '2026-07-01';
 	const past = '2026-01-01';
 

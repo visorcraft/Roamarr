@@ -41,11 +41,9 @@ test('trip list includes shared trips and labels them shared', () => {
 	const b = db.insert(users).values({ email: 'list-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 	const c = db.insert(users).values({ email: 'list-c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
 
-	const owned = db
-		.insert(trips)
+	db.insert(trips)
 		.values({ ownerId: a.id, name: 'Owned Trip', destination: 'Paris', startDate: '2026-07-01', notes: 'OWNER NOTE' })
-		.returning()
-		.get();
+		.run();
 
 	const shared = db
 		.insert(trips)

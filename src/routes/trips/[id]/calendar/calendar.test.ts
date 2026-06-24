@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { GET } from './+server';
 import { createTrip } from '../../shared';
-import { users, trips, segments, tripShares } from '$lib/server/db/schema';
+import { users, segments, tripShares } from '$lib/server/db/schema';
 
 function event(locals: App.Locals, params: { id: string }) {
 	return { locals, params, url: new URL(`http://localhost/trips/${params.id}/calendar`), request: new Request('http://localhost') } as any;

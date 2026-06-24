@@ -69,7 +69,6 @@ test('markAllRead only affects the caller’s unread notifications', () => {
 });
 
 test('markAllRead action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser('a-action@x.c', 'A');
 	insertNotification(a.id, 'n1');
 	const cookies = { set: vi.fn(), get: vi.fn() };

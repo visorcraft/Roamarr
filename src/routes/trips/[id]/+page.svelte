@@ -1,5 +1,7 @@
 <script lang="ts">
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { DateTime } from 'luxon';
+	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string } } = $props();
@@ -35,9 +37,17 @@
 		if (!dt.isValid) return iso;
 		return dt.toFormat("yyyy-MM-dd'T'HH:mm");
 	}
+
+	type SharedSegment = {
+		type: string;
+		title: string;
+		startAt: string | null;
+		endAt: string | null;
+		location: string | null;
+	};
 </script>
 
-{#if data.owner === true}
+{#if data.editor === true}
 	<header class="flex flex-wrap items-end justify-between gap-4">
 		<div class="min-w-0">
 			<h1 class="truncate text-3xl font-extrabold text-white">{data.trip.name}</h1>
@@ -51,11 +61,36 @@
 		<div class="flex gap-2">
 			<a href={`/trips/${data.trip.id}/calendar`} class="btn btn-ghost btn-sm">Calendar</a>
 			<a href={`/trips/${data.trip.id}/edit`} class="btn btn-ghost btn-sm">Edit</a>
-			<a href={`/trips/${data.trip.id}/share`} class="btn btn-ghost btn-sm">Share</a>
+			{#if data.owner === true}
+				<a href={`/trips/${data.trip.id}/share`} class="btn btn-ghost btn-sm">Share</a>
+			{/if}
 		</div>
 	</header>
 
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
+
+	{#if data.owner === true}
+		<section class="card mt-6 p-5">
+			<h2 class="section-title mb-3">Calendar feed</h2>
+			{#if data.feedUrl}
+				<p class="text-sm text-slate-400">Subscribe to this trip with any calendar app.</p>
+				<p class="mt-2 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">{data.feedUrl}</p>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<form method="POST" action="?/regenerateCalendarFeed">
+						<button class="btn btn-primary btn-sm">Regenerate feed URL</button>
+					</form>
+					<form method="POST" action="?/revokeCalendarFeed">
+						<button class="btn btn-danger btn-sm">Revoke feed</button>
+					</form>
+				</div>
+			{:else}
+				<p class="text-sm text-slate-400">Generate a public .ics feed URL for this trip.</p>
+				<form method="POST" action="?/regenerateCalendarFeed" class="mt-3">
+					<button class="btn btn-primary btn-sm">Generate feed URL</button>
+				</form>
+			{/if}
+		</section>
+	{/if}
 
 	<section class="card mt-6 p-5">
 		<h2 class="section-title mb-3">Itinerary</h2>
@@ -76,7 +111,7 @@
 								</div>
 								<div class="field">
 									<label class="label" for={`startTz-${s.id}`}>Timezone</label>
-									<input id={`startTz-${s.id}`} name="startTz" value={s.startTz} class="input" />
+									<TimezoneSelect id={`startTz-${s.id}`} name="startTz" value={s.startTz} class="input" />
 								</div>
 								<div class="field">
 									<label class="label" for={`endAt-${s.id}`}>Ends</label>
@@ -152,7 +187,7 @@
 			</div>
 			<div class="field">
 				<label class="label" for="startTz">Timezone</label>
-				<input id="startTz" name="startTz" placeholder="America/New_York" value="UTC" class="input" />
+				<TimezoneSelect id="startTz" name="startTz" value="UTC" class="input" />
 			</div>
 			<div class="field">
 				<label class="label" for="location">Location</label>
@@ -168,7 +203,7 @@
 		</form>
 	</section>
 
-	{#if data.providers?.length || data.watches?.length}
+	{#if data.owner === true && (data.providers?.length || data.watches?.length)}
 		<section class="card mt-6 p-5">
 			<div class="mb-3 flex flex-wrap items-center gap-3">
 				<h2 class="section-title mr-auto">Fare watch</h2>
@@ -244,9 +279,9 @@
 
 	<section class="card mt-6 p-5">
 		<h2 class="section-title mb-3">Itinerary</h2>
-		{#if data.trip.segments.length}
+		{#if (data.trip as { segments: SharedSegment[] }).segments.length}
 			<ul class="space-y-2">
-				{#each data.trip.segments as s, i (i)}
+				{#each (data.trip as { segments: SharedSegment[] }).segments as s, i (i)}
 					<li class="flex items-start gap-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
 						<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4.5 w-4.5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg>

@@ -31,7 +31,9 @@ export async function validateSession(token?: string) {
 	if (!token) return null;
 	const s = db.select().from(sessions).where(eq(sessions.tokenHash, th(token))).get();
 	if (!s || s.expiresAt < DateTime.utc().toISO()!) return null;
-	return db.select().from(users).where(eq(users.id, s.userId)).get() ?? null;
+	const u = db.select().from(users).where(eq(users.id, s.userId)).get();
+	if (!u || u.disabled) return null;
+	return u;
 }
 
 export function invalidateSession(token: string) {

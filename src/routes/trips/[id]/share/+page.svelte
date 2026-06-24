@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+
 	let { data } = $props();
 	const userShares = $derived(data.shares.filter((s) => s.email));
 	const groupShares = $derived(data.shares.filter((s) => s.groupName));
@@ -23,10 +25,11 @@
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
 						</span>
 						<span class="truncate text-sm text-slate-200">{s.email}</span>
+						<span class="badge badge-slate text-[10px] uppercase">{s.permission}</span>
 					</div>
 					<form method="POST" action="?/unshareUser">
 						<input type="hidden" name="shareId" value={s.id} />
-						<button class="btn btn-danger btn-sm" aria-label="Remove share">Remove</button>
+						<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove share" message="Remove this share?">Remove</ConfirmButton>
 					</form>
 				</li>
 			{/each}
@@ -39,6 +42,13 @@
 		<div class="field min-w-0 flex-1">
 			<label class="label" for="email">Invite by email</label>
 			<input id="email" name="email" type="email" placeholder="user@example.com" class="input" required />
+		</div>
+		<div class="field w-32">
+			<label class="label" for="permission-user">Permission</label>
+			<select id="permission-user" name="permission" class="select">
+				<option value="read">Read</option>
+				<option value="edit">Edit</option>
+			</select>
 		</div>
 		<button class="btn btn-primary">Share</button>
 	</form>
@@ -56,10 +66,11 @@
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
 							</span>
 							<span class="truncate text-sm text-slate-200">{s.groupName}</span>
+							<span class="badge badge-slate text-[10px] uppercase">{s.permission}</span>
 						</div>
 						<form method="POST" action="?/unshareGroup">
 							<input type="hidden" name="shareId" value={s.id} />
-							<button class="btn btn-danger btn-sm" aria-label="Remove group share">Remove</button>
+							<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove group share" message="Remove this group share?">Remove</ConfirmButton>
 						</form>
 					</li>
 				{/each}
@@ -78,6 +89,13 @@
 						{/each}
 					</select>
 				</div>
+				<div class="field w-32">
+					<label class="label" for="permission-group">Permission</label>
+					<select id="permission-group" name="permission" class="select">
+						<option value="read">Read</option>
+						<option value="edit">Edit</option>
+					</select>
+				</div>
 				<button class="btn btn-primary">Share</button>
 			</form>
 		{/if}
@@ -90,7 +108,7 @@
 		<p class="text-sm text-slate-400">Anyone with this link can view the trip.</p>
 		<p class="mt-2 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">/share/{data.trip.publicToken}</p>
 		<form method="POST" action="?/revokePublic" class="mt-3">
-			<button class="btn btn-danger btn-sm">Revoke public link</button>
+			<ConfirmButton class="btn btn-danger btn-sm" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
 		</form>
 	{:else}
 		<p class="text-sm text-slate-400">Generate a link that lets anyone view this trip without an account.</p>

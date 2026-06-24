@@ -7,7 +7,7 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 
 export async function _authenticate(email: string, password: string) {
 	const u = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
-	if (!u || !(await verifyPassword(u.passwordHash, password))) return null;
+	if (!u || u.disabled || !(await verifyPassword(u.passwordHash, password))) return null;
 	return u;
 }
 

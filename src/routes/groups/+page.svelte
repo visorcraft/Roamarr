@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+
 	let { data } = $props();
 </script>
 
@@ -43,9 +45,9 @@
 								<form method="POST" action="?/removeMember" class="contents">
 									<input type="hidden" name="groupId" value={g.id} />
 									<input type="hidden" name="userId" value={m.id} />
-									<button class="ml-1 text-slate-500 hover:text-red-300" aria-label={`Remove ${m.email}`}>
+									<ConfirmButton class="ml-1 text-slate-500 hover:text-red-300" aria-label={`Remove ${m.email}`} message="Remove this member from the group?">
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M18 6 6 18" /><path d="M6 6l12 12" /></svg>
-									</button>
+									</ConfirmButton>
 								</form>
 							</li>
 						{/each}
@@ -65,7 +67,7 @@
 
 				<form method="POST" action="?/deleteGroup" class="mt-2 flex justify-end">
 					<input type="hidden" name="groupId" value={g.id} />
-					<button class="btn btn-ghost btn-sm text-red-300 hover:text-red-200">Delete group</button>
+					<ConfirmButton class="btn btn-ghost btn-sm text-red-300 hover:text-red-200" message="Delete this group? This cannot be undone.">Delete group</ConfirmButton>
 				</form>
 			</section>
 		{/each}

@@ -5,7 +5,7 @@ import { loadTripFor } from '../../shared';
 import type { RequestHandler } from './$types';
 
 function toCalendarSegments(view: ReturnType<typeof loadTripFor>): CalendarSegment[] {
-	if (view.owner) {
+	if (view.editor) {
 		return view.segments.map((s) => ({
 			type: s.type as 'flight' | 'lodging',
 			title: s.title,

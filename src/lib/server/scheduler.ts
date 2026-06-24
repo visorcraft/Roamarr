@@ -2,10 +2,12 @@ import { runDueReminders } from './reminders';
 import { runFareChecks } from './fareproviders';
 import { purgeExpiredSessions } from './auth';
 
+const SCHEDULER_FLAG = '__roamarr_scheduler';
+
 export function startScheduler() {
-	const g = globalThis as { __roamarr_scheduler?: boolean };
-	if (g.__roamarr_scheduler) return;
-	g.__roamarr_scheduler = true;
+	const g = globalThis as { [SCHEDULER_FLAG]?: boolean };
+	if (g[SCHEDULER_FLAG]) return;
+	g[SCHEDULER_FLAG] = true;
 	let running = false;
 	setInterval(async () => {
 		if (running) return;
@@ -21,4 +23,8 @@ export function startScheduler() {
 			running = false;
 		}
 	}, 60_000);
+}
+
+export function isSchedulerRunning(): boolean {
+	return (globalThis as { [SCHEDULER_FLAG]?: boolean })[SCHEDULER_FLAG] === true;
 }

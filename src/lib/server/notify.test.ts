@@ -12,6 +12,11 @@ vi.mock('nodemailer', () => ({
 		createTransport: () => ({ sendMail: async (m: Record<string, unknown>) => sent.push(m) })
 	}
 }));
+const fetches = vi.hoisted(() => [] as Array<{ url: string; init: RequestInit }>);
+vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+	fetches.push({ url: String(url), init: init ?? {} });
+	return new Response('ok', { status: 200 });
+});
 
 import { deliver } from './notify';
 import { users, notifications, settings } from './db/schema';
@@ -40,4 +45,40 @@ test('always writes in-app; emails only when SMTP configured', async () => {
 	await deliver(u.id, { title: 'Hi2', body: 'There2' });
 	expect(sent.length).toBe(1);
 	expect(sent[0].to).toBe('a@x.c');
+});
+
+test('POSTs JSON to webhookUrl when configured', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
+		.returning()
+		.get();
+	db.update(settings)
+		.set({ webhookUrl: 'https://hooks.example.com/roamarr' })
+		.where(eq(settings.id, 1))
+		.run();
+	await deliver(u.id, { title: 'T', body: 'B', link: 'https://r/l' });
+	expect(fetches.length).toBe(1);
+	expect(fetches[0].url).toBe('https://hooks.example.com/roamarr');
+	expect(fetches[0].init.method).toBe('POST');
+	expect(fetches[0].init.headers).toEqual({ 'Content-Type': 'application/json' });
+	expect(JSON.parse(fetches[0].init.body as string)).toEqual({
+		title: 'T',
+		body: 'B',
+		link: 'https://r/l'
+	});
+});
+
+test('skips webhook when webhookUrl is not set', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const before = fetches.length;
+	const u = db
+		.insert(users)
+		.values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' })
+		.returning()
+		.get();
+	db.update(settings).set({ webhookUrl: null }).where(eq(settings.id, 1)).run();
+	await deliver(u.id, { title: 'T', body: 'B' });
+	expect(fetches.length).toBe(before);
 });

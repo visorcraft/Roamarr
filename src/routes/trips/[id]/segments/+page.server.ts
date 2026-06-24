@@ -1,7 +1,7 @@
 import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { requireOwnedTrip, assertOwnedRefs } from '$lib/server/ownership';
+import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
 import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
@@ -23,7 +23,7 @@ export function _addSegment(
 		details?: object;
 	}
 ) {
-	requireOwnedTrip(userId, tripId);
+	requireEditableTrip(userId, tripId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const seg = db
 		.insert(segments)
@@ -46,7 +46,7 @@ export function _addSegment(
 }
 
 export function _deleteSegment(userId: number, tripId: number, segId: number) {
-	requireOwnedTrip(userId, tripId);
+	requireEditableTrip(userId, tripId);
 	db.delete(segments).where(and(eq(segments.id, segId), eq(segments.tripId, tripId))).run();
 	cancelRemindersFor('segment', segId);
 }
@@ -65,7 +65,7 @@ export function _updateSegment(
 		details?: object;
 	}
 ) {
-	requireOwnedTrip(userId, tripId);
+	requireEditableTrip(userId, tripId);
 	const existing = db
 		.select()
 		.from(segments)

@@ -2,24 +2,29 @@ import { redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
+import { logAudit } from '$lib/server/audit';
 import type { PageServerLoad } from './$types';
 
 function validDefaultLead(n: number) {
 	return Number.isInteger(n) && n >= 0;
 }
 
-export function _saveAdminSettings(i: {
-	instanceName: string;
-	allowRegistration: boolean;
-	defaultTimezone: string;
-	defaultFlightCheckinLeadHours: number;
-	defaultDocumentExpiryLeadDays: number;
-	smtpHost?: string;
-	smtpPort?: number;
-	smtpUser?: string;
-	smtpPass?: string;
-	smtpFrom?: string;
-}) {
+export function _saveAdminSettings(
+	userId: number,
+	i: {
+		instanceName: string;
+		allowRegistration: boolean;
+		defaultTimezone: string;
+		defaultFlightCheckinLeadHours: number;
+		defaultDocumentExpiryLeadDays: number;
+		smtpHost?: string;
+		smtpPort?: number;
+		smtpUser?: string;
+		smtpPass?: string;
+		smtpFrom?: string;
+		webhookUrl?: string;
+	}
+) {
 	if (!validDefaultLead(i.defaultFlightCheckinLeadHours))
 		throw new Error('Default flight check-in lead must be a non-negative integer');
 	if (!validDefaultLead(i.defaultDocumentExpiryLeadDays))
@@ -33,10 +38,15 @@ export function _saveAdminSettings(i: {
 		smtpHost: i.smtpHost || null,
 		smtpPort: i.smtpPort ?? null,
 		smtpUser: i.smtpUser || null,
-		smtpFrom: i.smtpFrom || null
+		smtpFrom: i.smtpFrom || null,
+		webhookUrl: i.webhookUrl || null
 	};
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
 	updateSettings(patch);
+	logAudit(userId, 'settings_update', 'settings', 1, {
+		changed: Object.keys(patch).filter((k) => k !== 'smtpPass'),
+		smtpPassSet: patch.smtpPass !== undefined
+	});
 }
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -52,10 +62,10 @@ function parseLead(value: FormDataEntryValue | null, fallback: number): number {
 
 export const actions: Actions = {
 	default: async ({ request, locals }) => {
-		requireAdmin(locals);
+		const u = requireAdmin(locals);
 		const f = await request.formData();
 		const pass = String(f.get('smtpPass') || '');
-		_saveAdminSettings({
+		_saveAdminSettings(u.id, {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
 			allowRegistration: f.get('allowRegistration') === 'on',
 			defaultTimezone: String(f.get('defaultTimezone') || 'UTC'),
@@ -65,7 +75,8 @@ export const actions: Actions = {
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
 			smtpPass: pass && pass !== '********' ? pass : undefined,
-			smtpFrom: String(f.get('smtpFrom') || '') || undefined
+			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
+			webhookUrl: String(f.get('webhookUrl') || '') || undefined
 		});
 		throw redirect(303, '/settings');
 	}

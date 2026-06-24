@@ -1,7 +1,8 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { requireOwnedTrip } from '$lib/server/ownership';
+import { requireOwnedTrip, requireEditableTrip } from '$lib/server/ownership';
+import { logAudit } from '$lib/server/audit';
 import { cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
@@ -11,7 +12,9 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
-	return { trip: requireOwnedTrip(u.id, Number(params.id)) };
+	const tripId = Number(params.id);
+	const trip = requireEditableTrip(u.id, tripId);
+	return { trip, owner: trip.ownerId === u.id };
 };
 
 export function _deleteTrip(userId: number, tripId: number) {
@@ -19,13 +22,14 @@ export function _deleteTrip(userId: number, tripId: number) {
 	const segs = db.select({ id: segments.id }).from(segments).where(eq(segments.tripId, tripId)).all();
 	for (const s of segs) cancelRemindersFor('segment', s.id);
 	db.delete(trips).where(eq(trips.id, tripId)).run();
+	logAudit(userId, 'trip_delete', 'trip', tripId);
 }
 
 export const actions: Actions = {
 	default: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const tripId = Number(params.id);
-		requireOwnedTrip(u.id, tripId);
+		requireEditableTrip(u.id, tripId);
 		const f = await request.formData();
 		const v = new Validator();
 

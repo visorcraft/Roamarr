@@ -75,3 +75,14 @@ test('sets CSP headers on a public share link', async () => {
 	expect(res.status).toBe(200);
 	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
 });
+
+test('/health is public and not redirected before setup', async () => {
+	const res = (await run('/health')) as Response;
+	expect(res.status).toBe(200);
+});
+
+test('/health is public and not redirected after setup', async () => {
+	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	const res = (await run('/health')) as Response;
+	expect(res.status).toBe(200);
+});

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
 
@@ -90,7 +92,7 @@
 							<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingId = p.id)}>Edit</button>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={p.id} />
-								<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+								<ConfirmButton class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this insurance policy?">Delete</ConfirmButton>
 							</form>
 						</div>
 					{/if}

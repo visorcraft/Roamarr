@@ -1,4 +1,6 @@
 <script lang="ts">
+	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+
 	let { data, form } = $props();
 </script>
 
@@ -20,7 +22,7 @@
 		</div>
 		<div class="field">
 			<label class="label" for="timezone">Timezone</label>
-			<input id="timezone" name="timezone" value={data.user.timezone} class="input" required />
+			<TimezoneSelect id="timezone" name="timezone" value={data.user.timezone} required class="input" />
 		</div>
 		<div class="field">
 			<label class="label" for="flightCheckinLeadHours">Flight check-in lead (hours)</label>

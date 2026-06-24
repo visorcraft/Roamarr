@@ -40,3 +40,14 @@ test('session: raw token never stored; validates then invalidates', async () => 
 	invalidateSession(token);
 	expect(await validateSession(token)).toBeNull();
 });
+
+test('validateSession rejects disabled users', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'd@b.c', passwordHash: 'x', displayName: 'D', disabled: true })
+		.returning()
+		.get();
+	const token = createSession(u.id);
+	expect(await validateSession(token)).toBeNull();
+});

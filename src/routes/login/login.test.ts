@@ -21,6 +21,19 @@ test('authenticate returns user on correct creds, null otherwise', async () => {
 	expect(await authenticate('a@b.c', 'wrong')).toBeNull();
 });
 
+test('authenticate rejects disabled users', async () => {
+	(ctx as any).db
+		.insert(users)
+		.values({
+			email: 'disabled@b.c',
+			passwordHash: await hashPassword('correcthorse'),
+			displayName: 'D',
+			disabled: true
+		})
+		.run();
+	expect(await authenticate('disabled@b.c', 'correcthorse')).toBeNull();
+});
+
 test('login action returns 429 when rate limited', async () => {
 	resetRateLimit();
 	const ip = '9.9.9.9';

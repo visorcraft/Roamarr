@@ -17,7 +17,7 @@ import { _addDocument as addDocument } from './documents/+page.server';
 import { _updateProgram as updateProgram } from './loyalty/+page.server';
 import { _updateProfile, _updatePassword } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
-import { users, travelDocuments, loyaltyPrograms, sessions } from '$lib/server/db/schema';
+import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
@@ -164,6 +164,12 @@ test('update password requires old password and hashes new password', async () =
 	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
 	expect(await verifyPassword(row.passwordHash, 'newsecret1')).toBe(true);
 	expect(await verifyPassword(row.passwordHash, 'oldsecret')).toBe(false);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('password_change');
+	expect(logs[0].entityType).toBe('user');
+	expect(logs[0].entityId).toBe(u.id);
 });
 
 test('update password rejects wrong old password', async () => {
@@ -257,4 +263,8 @@ test('update password invalidates all other sessions for the user', async () => 
 	expect(remaining[0].tokenHash).toBe(
 		createHash('sha256').update(currentToken).digest('hex')
 	);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('password_change');
 });

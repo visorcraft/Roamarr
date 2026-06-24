@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { trips, cards, fareProviders, segments, groups, travelDocuments, users } from './db/schema';
+import { canEdit } from './sharing';
 
 export function requireOwnedUser(userId: number) {
 	const u = db.select().from(users).where(eq(users.id, userId)).get();
@@ -16,6 +17,12 @@ export function requireOwnedTrip(userId: number, tripId: number) {
 		.where(and(eq(trips.id, tripId), eq(trips.ownerId, userId)))
 		.get();
 	if (!t) throw error(404, 'Not found');
+	return t;
+}
+
+export function requireEditableTrip(userId: number, tripId: number) {
+	const t = db.select().from(trips).where(eq(trips.id, tripId)).get();
+	if (!t || !canEdit(userId, t)) throw error(404, 'Not found');
 	return t;
 }
 

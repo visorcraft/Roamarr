@@ -21,6 +21,7 @@ export function makeUser(
 			passwordHash: over.passwordHash ?? 'x',
 			displayName: over.displayName ?? 'U',
 			role: over.role ?? 'user',
+			disabled: over.disabled ?? false,
 			timezone: over.timezone ?? 'UTC',
 			flightCheckinLeadHours: over.flightCheckinLeadHours ?? 24,
 			documentExpiryLeadDays: over.documentExpiryLeadDays ?? 90

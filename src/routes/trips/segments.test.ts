@@ -13,11 +13,11 @@ import {
 	_updateSegment as updateSegment,
 	actions
 } from './[id]/segments/+page.server';
-import { users, trips, cards, segments, reminders } from '$lib/server/db/schema';
+import { users, trips, cards, segments, reminders, tripShares } from '$lib/server/db/schema';
 
 beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from reminders; delete from segments; delete from trips; delete from users; delete from cards;'
+		'delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users; delete from cards;'
 	);
 });
 
@@ -259,4 +259,50 @@ test('update action validates segmentId and required fields', async () => {
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.errors.title).toBe('title is required');
+});
+
+test('shared editor can add, update and delete segments; read-only viewer cannot', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'seg-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const editor = db.insert(users).values({ email: 'seg-editor@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
+	const reader = db.insert(users).values({ email: 'seg-reader@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
+	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
+
+	const addForm = formData({
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00',
+		startTz: 'UTC'
+	});
+	await expect(actions.add(makeEvent(addForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	expect(seg.title).toBe('UA1');
+
+	await expect(actions.add(makeEvent(addForm, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
+		status: 404
+	});
+
+	const updateForm = formData({
+		segmentId: String(seg.id),
+		title: 'UA1 Updated',
+		localStart: '2026-07-01T15:00',
+		startTz: 'UTC'
+	});
+	await expect(actions.update(makeEvent(updateForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()!.title).toBe('UA1 Updated');
+
+	const deleteForm = formData({ segmentId: String(seg.id) });
+	await expect(actions.delete(makeEvent(deleteForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()).toBeUndefined();
 });

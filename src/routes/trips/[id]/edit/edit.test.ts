@@ -17,9 +17,17 @@ import {
 	tripShares,
 	reminders,
 	fareWatches,
-	fareProviders
+	fareProviders,
+	auditLogs
 } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { beforeEach } from 'vitest';
+
+beforeEach(() => {
+	(ctx as any).sqlite.exec(
+		'delete from audit_logs; delete from fare_watches; delete from fare_providers; delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users;'
+	);
+});
 
 function locals(user: { id: number }) {
 	return { user } as App.Locals;
@@ -77,6 +85,12 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all()).toHaveLength(0);
 	expect(db.select().from(fareWatches).where(eq(fareWatches.tripId, t.id)).all()).toHaveLength(0);
 	expect(db.select().from(reminders).all()).toHaveLength(0);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('trip_delete');
+	expect(logs[0].entityType).toBe('trip');
+	expect(logs[0].entityId).toBe(t.id);
 });
 
 test('non-owner cannot delete a trip', () => {
@@ -95,6 +109,7 @@ test('non-owner cannot delete a trip', () => {
 
 	expect(() => _deleteTrip(b.id, t.id)).toThrow();
 	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeDefined();
+	expect(db.select().from(auditLogs).all()).toHaveLength(0);
 });
 
 test('edit action updates a trip with valid data', async () => {
@@ -115,6 +130,34 @@ test('edit action updates a trip with valid data', async () => {
 	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBe('Tokyo');
+});
+
+test('edit action allows shared editors but not read-only viewers', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'edit-owner3@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const editor = db.insert(users).values({ email: 'edit-editor@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
+	const reader = db.insert(users).values({ email: 'edit-reader@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const t = createTrip(owner.id, { name: 'Trip' });
+	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
+	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
+
+	const form = formData({
+		name: 'Editor Updated',
+		destination: 'Osaka',
+		startDate: '2026-08-01',
+		endDate: '2026-08-10',
+		notes: 'editor notes'
+	});
+	await expect(actions.default(makeEvent(form, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	expect(updated.name).toBe('Editor Updated');
+
+	await expect(actions.default(makeEvent(form, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
+		status: 404
+	});
 });
 
 test('edit action rejects invalid data and enforces ownership', async () => {

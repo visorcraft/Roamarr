@@ -11,6 +11,7 @@ export const users = sqliteTable(
 		passwordHash: text('password_hash').notNull(),
 		displayName: text('display_name').notNull(),
 		role: text('role').notNull().default('user'),
+		disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
 		timezone: text('timezone').notNull().default('UTC'),
 		flightCheckinLeadHours: integer('flight_checkin_lead_hours').notNull().default(24),
 		documentExpiryLeadDays: integer('document_expiry_lead_days').notNull().default(90),
@@ -45,7 +46,8 @@ export const settings = sqliteTable('settings', {
 	smtpPort: integer('smtp_port'),
 	smtpUser: text('smtp_user'),
 	smtpPass: text('smtp_pass'),
-	smtpFrom: text('smtp_from')
+	smtpFrom: text('smtp_from'),
+	webhookUrl: text('webhook_url')
 });
 
 export const trips = sqliteTable(
@@ -62,6 +64,7 @@ export const trips = sqliteTable(
 		notes: text('notes'),
 		defaultVisibility: text('default_visibility').notNull().default('private'),
 		publicToken: text('public_token').unique(),
+		calendarToken: text('calendar_token').unique(),
 		createdAt: text('created_at').notNull().default(now),
 		updatedAt: text('updated_at').notNull().default(now)
 	},
@@ -186,7 +189,7 @@ export const tripShares = sqliteTable(
 			'shares_one_target_ck',
 			sql`(${t.sharedWithUserId} is not null) <> (${t.sharedWithGroupId} is not null)`
 		),
-		permCk: check('shares_perm_ck', sql`${t.permission} in ('read')`),
+		permCk: check('shares_perm_ck', sql`${t.permission} in ('read','edit')`),
 		uUser: uniqueIndex('shares_trip_user_uq').on(t.tripId, t.sharedWithUserId),
 		uGroup: uniqueIndex('shares_trip_group_uq').on(t.tripId, t.sharedWithGroupId),
 		userIdx: index('shares_user_idx').on(t.sharedWithUserId),
@@ -212,6 +215,9 @@ export const cards = sqliteTable(
 	})
 );
 
+export const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
+export type BenefitType = (typeof BENEFIT_TYPES)[number];
+
 export const cardBenefits = sqliteTable(
 	'card_benefits',
 	{
@@ -227,6 +233,24 @@ export const cardBenefits = sqliteTable(
 	(t) => ({
 		ck: check(
 			'benefit_type_ck',
+			sql`${t.benefitType} in ('trip_delay','baggage_delay','trip_cancellation','other')`
+		)
+	})
+);
+
+export const benefitTemplates = sqliteTable(
+	'benefit_templates',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		benefitType: text('benefit_type').notNull(),
+		name: text('name').notNull(),
+		coverageAmount: integer('coverage_amount'),
+		currency: text('currency').notNull().default('USD'),
+		description: text('description')
+	},
+	(t) => ({
+		ck: check(
+			'benefit_template_type_ck',
 			sql`${t.benefitType} in ('trip_delay','baggage_delay','trip_cancellation','other')`
 		)
 	})
@@ -334,5 +358,24 @@ export const notifications = sqliteTable(
 	},
 	(t) => ({
 		userIdx: index('notif_user_idx').on(t.userId, t.readAt)
+	})
+);
+
+export const auditLogs = sqliteTable(
+	'audit_logs',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		action: text('action').notNull(),
+		entityType: text('entity_type').notNull(),
+		entityId: integer('entity_id').notNull(),
+		metaJson: text('meta_json').notNull().default('{}'),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		userIdx: index('audit_user_idx').on(t.userId),
+		entityIdx: index('audit_entity_idx').on(t.entityType, t.entityId)
 	})
 );

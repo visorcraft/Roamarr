@@ -2,6 +2,7 @@ import { db } from './db';
 import { applyMigrations } from './db/migrate';
 import { startScheduler } from './scheduler';
 import { settings } from './db/schema';
+import { ensureDefaultBenefitTemplates } from './benefitTemplates';
 
 export function requireSecret(secret: string | undefined) {
 	if (!secret) throw new Error('ROAMARR_SECRET is required to start Roamarr');
@@ -20,5 +21,6 @@ export function bootApp() {
 	requireSecret(process.env.ROAMARR_SECRET);
 	applyMigrations(db);
 	db.insert(settings).values({ id: 1 }).onConflictDoNothing().run();
+	ensureDefaultBenefitTemplates(db);
 	startScheduler();
 }

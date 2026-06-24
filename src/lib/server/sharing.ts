@@ -7,7 +7,32 @@ type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segments.$inferSelect;
 
 export function canEdit(userId: number, trip: Trip) {
-	return trip.ownerId === userId;
+	if (trip.ownerId === userId) return true;
+	const direct = db
+		.select()
+		.from(tripShares)
+		.where(
+			and(
+				eq(tripShares.tripId, trip.id),
+				eq(tripShares.sharedWithUserId, userId),
+				eq(tripShares.permission, 'edit')
+			)
+		)
+		.get();
+	if (direct) return true;
+	const viaGroup = db
+		.select({ id: tripShares.id })
+		.from(tripShares)
+		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
+		.where(
+			and(
+				eq(tripShares.tripId, trip.id),
+				eq(groupMembers.userId, userId),
+				eq(tripShares.permission, 'edit')
+			)
+		)
+		.get();
+	return !!viaGroup;
 }
 
 export function canView(userId: number, trip: Trip) {

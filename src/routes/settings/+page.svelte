@@ -1,4 +1,6 @@
 <script lang="ts">
+	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+
 	let { data } = $props();
 	const s = $derived(data.settings);
 </script>
@@ -6,6 +8,7 @@
 <header>
 	<h1 class="text-3xl font-extrabold text-white">Settings</h1>
 	<p class="mt-1 text-sm text-muted">Configure your Roamarr instance and outgoing email.</p>
+	<a href="/settings/users" class="mt-3 inline-block text-sm text-indigo-400 hover:text-indigo-300">Manage users →</a>
 </header>
 
 <form method="POST" class="mt-8 grid gap-6">
@@ -25,7 +28,7 @@
 					<label class="label" for="defaultTimezone">Default timezone</label>
 					<p class="text-xs text-slate-500">Used when a trip or segment has no timezone set.</p>
 				</div>
-				<input id="defaultTimezone" name="defaultTimezone" value={s.defaultTimezone} class="input" />
+				<TimezoneSelect id="defaultTimezone" name="defaultTimezone" value={s.defaultTimezone} class="input" />
 			</div>
 
 			<div class="grid gap-3 border-b border-white/5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
@@ -113,12 +116,32 @@
 				<input id="smtpPass" name="smtpPass" type="password" value={s.smtpPass} placeholder="Password" class="input" />
 			</div>
 
-			<div class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
+			<div class="grid gap-3 border-b border-white/5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
 				<div>
 					<label class="label" for="smtpFrom">From address</label>
 					<p class="text-xs text-slate-500">The sender address used for outgoing email.</p>
 				</div>
 				<input id="smtpFrom" name="smtpFrom" value={s.smtpFrom ?? ''} placeholder="roamarr@example.com" class="input" />
+			</div>
+		</div>
+	</section>
+
+	<section class="card p-5 sm:p-6">
+		<h2 class="section-title">Webhook</h2>
+		<div class="mt-2">
+			<div class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
+				<div>
+					<label class="label" for="webhookUrl">Webhook URL</label>
+					<p class="text-xs text-slate-500">POSTs JSON {`{title, body, link}`} when notifications are sent.</p>
+				</div>
+				<input
+					id="webhookUrl"
+					name="webhookUrl"
+					type="url"
+					value={s.webhookUrl ?? ''}
+					placeholder="https://example.com/webhook"
+					class="input"
+				/>
 			</div>
 		</div>
 	</section>

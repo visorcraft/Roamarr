@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { hashPassword, invalidateOtherSessions, requireUser, verifyPassword } from '$lib/server/auth';
 import { requireOwnedUser } from '$lib/server/ownership';
+import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -49,6 +50,7 @@ export async function _updatePassword(
 		.where(eq(users.id, userId))
 		.run();
 	invalidateOtherSessions(userId, currentToken);
+	logAudit(userId, 'password_change', 'user', userId);
 }
 
 export const load: PageServerLoad = ({ locals }) => {

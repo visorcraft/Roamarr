@@ -20,6 +20,7 @@ export const load: PageServerLoad = ({ locals, params }) => {
 
 export function _deleteTrip(userId: number, tripId: number) {
 	requireOwnedTrip(userId, tripId);
+	cancelRemindersFor('trip', tripId);
 	const segs = db.select({ id: segments.id }).from(segments).where(eq(segments.tripId, tripId)).all();
 	for (const s of segs) cancelRemindersFor('segment', s.id);
 	db.delete(trips).where(eq(trips.id, tripId)).run();

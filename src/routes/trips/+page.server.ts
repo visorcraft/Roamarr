@@ -46,6 +46,7 @@ export const actions: Actions = {
 		const ids = selectedIds(await request.formData());
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
+			cancelRemindersFor('trip', id);
 			const segs = db.select({ id: segments.id }).from(segments).where(eq(segments.tripId, id)).all();
 			for (const s of segs) cancelRemindersFor('segment', s.id);
 			db.delete(trips).where(eq(trips.id, id)).run();

@@ -8,7 +8,10 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, trips, insurancePolicies, fareProviders } from '$lib/server/db/schema';
+import { _deleteTrip } from './edit/+page.server';
+import { users, trips, insurancePolicies, fareProviders, reminders } from '$lib/server/db/schema';
+import { upsertCustomReminder } from '$lib/server/reminders';
+import { eq } from 'drizzle-orm';
 
 function event(user: { id: number }, tripId: number) {
 	return {
@@ -48,4 +51,17 @@ test('load includes fare watches with segment titles', () => {
 
 	const result = load(event(u, t.id)) as { watches: unknown[] };
 	expect(Array.isArray(result.watches)).toBe(true);
+});
+
+
+test('delete action removes trip-level reminders', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'del@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'Del', startDate: '2099-01-01' }).returning().get();
+	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
+	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
+
+	_deleteTrip(u.id, t.id);
+	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(0);
 });

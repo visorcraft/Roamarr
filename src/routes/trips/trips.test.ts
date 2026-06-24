@@ -10,7 +10,8 @@ vi.mock('$lib/server/db', async () => {
 import { eq } from 'drizzle-orm';
 import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
-import { users, trips, groups, groupMembers, tripShares } from '$lib/server/db/schema';
+import { upsertCustomReminder } from '$lib/server/reminders';
+import { users, trips, groups, groupMembers, tripShares, reminders } from '$lib/server/db/schema';
 
 function event(user: { id: number }, search = '') {
 	return { locals: { user } as App.Locals, url: new URL(`http://localhost/trips${search}`) } as any;
@@ -190,4 +191,19 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 	});
 	expect(db.select().from(trips).where(eq(trips.id, t1.id)).get()!.favorite).toBe(false);
 	expect(db.select().from(trips).where(eq(trips.id, t2.id)).get()!.favorite).toBe(true);
+});
+
+
+test('bulk delete removes trip-level and segment reminders', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'del-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'ToDelete', startDate: '2099-01-01' }).returning().get();
+	upsertCustomReminder(a.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
+	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
+
+	const body = new FormData();
+	body.append('selected', String(t.id));
+	await expect(actions.delete(makeEvent(a, body))).rejects.toMatchObject({ status: 303, location: '/trips' });
+	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(0);
 });

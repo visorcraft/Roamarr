@@ -1,10 +1,7 @@
 import { redirect, type Handle } from '@sveltejs/kit';
 import { validateSession } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
-import { startScheduler } from '$lib/server/scheduler';
 import { bootApp } from '$lib/server/boot';
-
-startScheduler();
 
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/share\//];
 

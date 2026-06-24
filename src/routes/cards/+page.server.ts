@@ -1,6 +1,7 @@
-import { redirect, error, type Actions } from '@sveltejs/kit';
+import { redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
+import { assertOwnedRefs } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
 import { cards, cardBenefits } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -32,10 +33,7 @@ export function _addBenefit(
 		notes?: string;
 	}
 ) {
-	if (
-		!db.select().from(cards).where(and(eq(cards.id, cardId), eq(cards.userId, userId))).get()
-	)
-		throw error(403, 'Forbidden');
+	assertOwnedRefs(userId, { cardId });
 	return db
 		.insert(cardBenefits)
 		.values({

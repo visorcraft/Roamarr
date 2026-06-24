@@ -5,13 +5,14 @@ import { requireOwnedTrip, assertOwnedRefs } from '$lib/server/ownership';
 import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
-import { segments } from '$lib/server/db/schema';
+import { segments, SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
+import { Validator } from '$lib/server/validation';
 
 export function _addSegment(
 	userId: number,
 	tripId: number,
 	i: {
-		type: 'flight' | 'lodging';
+		type: SegmentType;
 		title: string;
 		localStart: string;
 		startTz: string;
@@ -93,22 +94,42 @@ export const actions: Actions = {
 	add: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
+		const v = new Validator();
+
+		const type = v.enumValue(f.get('type'), SEGMENT_TYPES, 'type');
+		const title = v.requiredString(f.get('title'), 'title', { max: 200 });
+		const localStart = v.requiredDateTime(f.get('localStart'), 'localStart');
+		const startTz = v.timezone(f.get('startTz') || u.timezone, 'startTz');
+		const endAt = v.dateTime(f.get('endAt'), 'endAt');
+		const location = v.optionalString(f.get('location'), 'location', { max: 200 });
+		const confirmationNumber = v.optionalString(
+			f.get('confirmationNumber'),
+			'confirmationNumber',
+			{ max: 100 }
+		);
+		const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
+
+		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
+
 		_addSegment(u.id, Number(params.id), {
-			type: f.get('type') as 'flight' | 'lodging',
-			title: String(f.get('title')),
-			localStart: String(f.get('localStart')),
-			startTz: String(f.get('startTz') || u.timezone),
-			endAt: String(f.get('endAt') || '') || undefined,
-			location: String(f.get('location') || '') || undefined,
-			confirmationNumber: String(f.get('confirmationNumber') || '') || undefined,
-			cardId: f.get('cardId') ? Number(f.get('cardId')) : undefined
+			type: type!,
+			title: title!,
+			localStart: localStart!,
+			startTz: startTz!,
+			endAt: endAt ?? undefined,
+			location,
+			confirmationNumber,
+			cardId
 		});
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	delete: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_deleteSegment(u.id, Number(params.id), Number(f.get('segmentId')));
+		const v = new Validator();
+		const segmentId = v.positiveId(f.get('segmentId'), 'segmentId');
+		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
+		_deleteSegment(u.id, Number(params.id), segmentId!);
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	update: async ({ request, locals, params }) => {
@@ -123,13 +144,28 @@ export const actions: Actions = {
 				return fail(400, { error: 'Invalid details JSON' });
 			}
 		}
-		_updateSegment(u.id, Number(params.id), Number(f.get('segmentId')), {
-			title: String(f.get('title')),
-			localStart: String(f.get('localStart')),
-			startTz: String(f.get('startTz') || u.timezone),
-			endAt: String(f.get('endAt') || '') || undefined,
-			location: String(f.get('location') || '') || undefined,
-			confirmationNumber: String(f.get('confirmationNumber') || '') || undefined,
+		const v = new Validator();
+		const segmentId = v.positiveId(f.get('segmentId'), 'segmentId');
+		const title = v.requiredString(f.get('title'), 'title', { max: 200 });
+		const localStart = v.requiredDateTime(f.get('localStart'), 'localStart');
+		const startTz = v.timezone(f.get('startTz') || u.timezone, 'startTz');
+		const endAt = v.dateTime(f.get('endAt'), 'endAt');
+		const location = v.optionalString(f.get('location'), 'location', { max: 200 });
+		const confirmationNumber = v.optionalString(
+			f.get('confirmationNumber'),
+			'confirmationNumber',
+			{ max: 100 }
+		);
+
+		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
+
+		_updateSegment(u.id, Number(params.id), segmentId!, {
+			title: title!,
+			localStart: localStart!,
+			startTz: startTz!,
+			endAt: endAt ?? undefined,
+			location,
+			confirmationNumber,
 			details
 		});
 		throw redirect(303, `/trips/${params.id}`);

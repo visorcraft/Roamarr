@@ -1,4 +1,4 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
@@ -6,6 +6,7 @@ import { cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
+import { Validator } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
@@ -23,18 +24,30 @@ export function _deleteTrip(userId: number, tripId: number) {
 export const actions: Actions = {
 	default: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
-		requireOwnedTrip(u.id, Number(params.id));
+		const tripId = Number(params.id);
+		requireOwnedTrip(u.id, tripId);
 		const f = await request.formData();
+		const v = new Validator();
+
+		const name = v.requiredString(f.get('name'), 'name', { max: 200 });
+		const destination = v.optionalString(f.get('destination'), 'destination', { max: 200 });
+		const startDate = v.date(f.get('startDate'), 'startDate');
+		const endDate = v.date(f.get('endDate'), 'endDate');
+		const notes = v.optionalString(f.get('notes'), 'notes', { max: 5000 });
+		v.dateRange(startDate, endDate);
+
+		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
+
 		db.update(trips)
 			.set({
-				name: String(f.get('name')),
-				destination: String(f.get('destination') ?? ''),
-				startDate: String(f.get('startDate') ?? ''),
-				endDate: String(f.get('endDate') ?? ''),
-				notes: String(f.get('notes') ?? ''),
+				name: name!,
+				destination,
+				startDate,
+				endDate,
+				notes,
 				updatedAt: nowIso()
 			})
-			.where(eq(trips.id, Number(params.id)))
+			.where(eq(trips.id, tripId))
 			.run();
 		throw redirect(303, `/trips/${params.id}`);
 	},

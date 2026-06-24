@@ -1,4 +1,5 @@
 import { redirect, type Handle } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { validateSession } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp } from '$lib/server/boot';
@@ -11,6 +12,25 @@ import { bootApp } from '$lib/server/boot';
 bootApp();
 
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/share\//];
+
+const CSP_DIRECTIVES: Record<string, string[]> = {
+	'default-src': ["'self'"],
+	'script-src': ["'self'", "'unsafe-inline'"],
+	'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+	'font-src': ["'self'", 'https://fonts.gstatic.com'],
+	'img-src': ["'self'", 'data:'],
+	'connect-src': dev ? ["'self'", 'ws:', 'wss:'] : ["'self'"],
+	'form-action': ["'self'"],
+	'base-uri': ["'self'"],
+	'frame-ancestors': ["'none'"],
+	'object-src': ["'none'"]
+};
+
+function contentSecurityPolicy() {
+	return Object.entries(CSP_DIRECTIVES)
+		.map(([directive, values]) => `${directive} ${values.join(' ')}`)
+		.join('; ');
+}
 
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = await validateSession(event.cookies.get('session'));
@@ -26,5 +46,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Content-Security-Policy', contentSecurityPolicy());
 	return response;
 };

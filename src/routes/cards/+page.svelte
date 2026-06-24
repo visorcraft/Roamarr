@@ -119,7 +119,14 @@
 									<span class="text-sm text-slate-300">{benefitLabel[b.benefitType] ?? b.benefitType}</span>
 									<div class="flex items-center gap-3">
 										<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
-										<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingBenefitId = b.id)}>Edit</button>
+										<div class="flex gap-1">
+											<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingBenefitId = b.id)}>Edit</button>
+											<form method="POST" action="?/deleteBenefit">
+												<input type="hidden" name="id" value={b.id} />
+												<input type="hidden" name="cardId" value={c.id} />
+												<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+											</form>
+										</div>
 									</div>
 								{/if}
 							</li>

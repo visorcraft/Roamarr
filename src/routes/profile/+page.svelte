@@ -22,6 +22,32 @@
 			<label class="label" for="timezone">Timezone</label>
 			<input id="timezone" name="timezone" value={data.user.timezone} class="input" required />
 		</div>
+		<div class="field">
+			<label class="label" for="flightCheckinLeadHours">Flight check-in lead (hours)</label>
+			<input
+				id="flightCheckinLeadHours"
+				name="flightCheckinLeadHours"
+				type="number"
+				min="0"
+				step="1"
+				value={data.user.flightCheckinLeadHours}
+				class="input"
+				required
+			/>
+		</div>
+		<div class="field">
+			<label class="label" for="documentExpiryLeadDays">Document expiry lead (days)</label>
+			<input
+				id="documentExpiryLeadDays"
+				name="documentExpiryLeadDays"
+				type="number"
+				min="0"
+				step="1"
+				value={data.user.documentExpiryLeadDays}
+				class="input"
+				required
+			/>
+		</div>
 		<div class="sm:col-span-2">
 			<button class="btn btn-primary">Save profile</button>
 		</div>

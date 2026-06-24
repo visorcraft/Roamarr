@@ -3,6 +3,7 @@ import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/a
 import { db, sqlite } from '$lib/server/db';
 import { users, settings } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
+import { checkRateLimit } from '$lib/server/rateLimit';
 
 export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },
@@ -20,12 +21,18 @@ export function _createAdmin(
 				passwordHash: passwordHash ?? 'PLACEHOLDER',
 				displayName: i.displayName,
 				role: 'admin',
-				timezone: i.timezone
+				timezone: i.timezone,
+				flightCheckinLeadHours: s.defaultFlightCheckinLeadHours,
+				documentExpiryLeadDays: s.defaultDocumentExpiryLeadDays
 			})
 			.returning()
 			.get();
 		db.update(settings)
-			.set({ setupComplete: true, instanceName: i.instanceName, defaultTimezone: i.timezone })
+			.set({
+				setupComplete: true,
+				instanceName: i.instanceName,
+				defaultTimezone: i.timezone
+			})
 			.where(eq(settings.id, 1))
 			.run();
 		return u;
@@ -34,7 +41,13 @@ export function _createAdmin(
 }
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, getClientAddress }) => {
+		const limit = checkRateLimit(getClientAddress(), 'setup');
+		if (!limit.allowed)
+			return fail(429, {
+				error: 'Too many attempts. Try again later.',
+				retryAfter: limit.retryAfter
+			});
 		const f = await request.formData();
 		const email = String(f.get('email') ?? ''),
 			password = String(f.get('password') ?? '');

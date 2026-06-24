@@ -7,9 +7,10 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { _authenticate as authenticate } from './+page.server';
+import { _authenticate as authenticate, actions } from './+page.server';
 import { users } from '$lib/server/db/schema';
 import { hashPassword } from '$lib/server/auth';
+import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
 test('authenticate returns user on correct creds, null otherwise', async () => {
 	(ctx as any).db
@@ -18,4 +19,18 @@ test('authenticate returns user on correct creds, null otherwise', async () => {
 		.run();
 	expect((await authenticate('A@B.c', 'correcthorse'))?.email).toBe('a@b.c');
 	expect(await authenticate('a@b.c', 'wrong')).toBeNull();
+});
+
+test('login action returns 429 when rate limited', async () => {
+	resetRateLimit();
+	const ip = '9.9.9.9';
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit(ip, 'login');
+	const result = (await actions.default({
+		request: { formData: async () => new Map() },
+		getClientAddress: () => ip,
+		cookies: { set: vi.fn() }
+	} as any)) as { status: number; data: { error: string; retryAfter?: number } };
+	expect(result.status).toBe(429);
+	expect(result.data.error).toMatch(/too many/i);
+	expect(result.data.retryAfter).toBeGreaterThan(0);
 });

@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
+import { checkRateLimit } from '$lib/server/rateLimit';
 
 function gate() {
 	const s = getSettings();
@@ -16,20 +17,30 @@ export const load: PageServerLoad = () => {
 };
 
 export async function _registerUser(email: string, password: string, displayName: string) {
+	const defaults = getSettings();
 	return db
 		.insert(users)
 		.values({
 			email: email.trim().toLowerCase(),
 			passwordHash: await hashPassword(password),
 			displayName,
-			role: 'user'
+			role: 'user',
+			timezone: defaults.defaultTimezone,
+			flightCheckinLeadHours: defaults.defaultFlightCheckinLeadHours,
+			documentExpiryLeadDays: defaults.defaultDocumentExpiryLeadDays
 		})
 		.returning()
 		.get();
 }
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, getClientAddress }) => {
+		const limit = checkRateLimit(getClientAddress(), 'register');
+		if (!limit.allowed)
+			return fail(429, {
+				error: 'Too many attempts. Try again later.',
+				retryAfter: limit.retryAfter
+			});
 		gate();
 		const f = await request.formData();
 		const email = String(f.get('email') ?? ''),

@@ -12,13 +12,18 @@ type Reminder = typeof reminders.$inferSelect;
 export function computeFireAt(
 	kind: 'flight_checkin' | 'document_expiry',
 	ref: string,
-	tz = 'UTC'
+	opts: {
+		tz?: string;
+		flightCheckinLeadHours?: number;
+		documentExpiryLeadDays?: number;
+	} = {}
 ): string {
+	const { tz = 'UTC', flightCheckinLeadHours = 24, documentExpiryLeadDays = 90 } = opts;
 	if (kind === 'flight_checkin')
-		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ hours: 24 }).toUTC().toISO()!;
+		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ hours: flightCheckinLeadHours }).toUTC().toISO()!;
 	return DateTime.fromISO(ref, { zone: tz })
 		.set({ hour: 9, minute: 0, second: 0, millisecond: 0 })
-		.minus({ days: 90 })
+		.minus({ days: documentExpiryLeadDays })
 		.toUTC()
 		.toISO()!;
 }
@@ -56,7 +61,18 @@ export function upsertRemindersForSegment(seg: Seg) {
 		.from(trips)
 		.where(eq(trips.id, seg.tripId))
 		.get()!;
-	arm(owner.ownerId, 'flight_checkin', 'segment', seg.id, computeFireAt('flight_checkin', seg.startAt));
+	const user = db
+		.select({ flightCheckinLeadHours: users.flightCheckinLeadHours })
+		.from(users)
+		.where(eq(users.id, owner.ownerId))
+		.get()!;
+	arm(
+		owner.ownerId,
+		'flight_checkin',
+		'segment',
+		seg.id,
+		computeFireAt('flight_checkin', seg.startAt, { flightCheckinLeadHours: user.flightCheckinLeadHours })
+	);
 }
 
 export function upsertRemindersForDocument(doc: Doc) {
@@ -64,10 +80,20 @@ export function upsertRemindersForDocument(doc: Doc) {
 		cancelRemindersFor('document', doc.id);
 		return;
 	}
-	const tz =
-		db.select({ timezone: users.timezone }).from(users).where(eq(users.id, doc.userId)).get()
-			?.timezone ?? 'UTC';
-	arm(doc.userId, 'document_expiry', 'document', doc.id, computeFireAt('document_expiry', doc.expiresOn, tz));
+	const user = db
+		.select({ timezone: users.timezone, documentExpiryLeadDays: users.documentExpiryLeadDays })
+		.from(users)
+		.where(eq(users.id, doc.userId))
+		.get();
+	const tz = user?.timezone ?? 'UTC';
+	const leadDays = user?.documentExpiryLeadDays ?? 90;
+	arm(
+		doc.userId,
+		'document_expiry',
+		'document',
+		doc.id,
+		computeFireAt('document_expiry', doc.expiresOn, { tz, documentExpiryLeadDays: leadDays })
+	);
 }
 
 export function cancelRemindersFor(refType: 'segment' | 'document', refId: number) {

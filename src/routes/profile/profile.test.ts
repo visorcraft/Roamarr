@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
@@ -16,10 +17,10 @@ import { _addDocument as addDocument } from './documents/+page.server';
 import { _updateProgram as updateProgram } from './loyalty/+page.server';
 import { _updateProfile, _updatePassword } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
-import { users, travelDocuments, loyaltyPrograms } from '$lib/server/db/schema';
+import { users, travelDocuments, loyaltyPrograms, sessions } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';
-import { hashPassword, verifyPassword } from '$lib/server/auth';
+import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
 
 test('document number is encrypted at rest and arms a reminder', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -80,17 +81,24 @@ test('updateProgram edits a loyalty program and is user-scoped', () => {
 	expect(unchanged.programName).toBe('United MileagePlus');
 });
 
-test('update profile changes display name and timezone', () => {
+test('update profile changes display name, timezone and reminder leads', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db
 		.insert(users)
 		.values({ email: 'p1@x.c', passwordHash: 'x', displayName: 'P1', timezone: 'UTC' })
 		.returning()
 		.get();
-	_updateProfile(u.id, { displayName: 'Ada', timezone: 'America/New_York' });
+	_updateProfile(u.id, {
+		displayName: 'Ada',
+		timezone: 'America/New_York',
+		flightCheckinLeadHours: 48,
+		documentExpiryLeadDays: 60
+	});
 	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
 	expect(row.displayName).toBe('Ada');
 	expect(row.timezone).toBe('America/New_York');
+	expect(row.flightCheckinLeadHours).toBe(48);
+	expect(row.documentExpiryLeadDays).toBe(60);
 });
 
 test('update profile rejects invalid timezone', () => {
@@ -100,9 +108,39 @@ test('update profile rejects invalid timezone', () => {
 		.values({ email: 'p2@x.c', passwordHash: 'x', displayName: 'P2', timezone: 'UTC' })
 		.returning()
 		.get();
-	expect(() => _updateProfile(u.id, { displayName: 'P2', timezone: 'Mars/Colony' })).toThrow(
-		'Invalid timezone'
-	);
+	expect(() =>
+		_updateProfile(u.id, {
+			displayName: 'P2',
+			timezone: 'Mars/Colony',
+			flightCheckinLeadHours: 24,
+			documentExpiryLeadDays: 90
+		})
+	).toThrow('Invalid timezone');
+});
+
+test('update profile rejects negative or fractional reminder leads', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p-lead@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' })
+		.returning()
+		.get();
+	expect(() =>
+		_updateProfile(u.id, {
+			displayName: 'P',
+			timezone: 'UTC',
+			flightCheckinLeadHours: -1,
+			documentExpiryLeadDays: 90
+		})
+	).toThrow('Flight check-in lead must be a non-negative integer');
+	expect(() =>
+		_updateProfile(u.id, {
+			displayName: 'P',
+			timezone: 'UTC',
+			flightCheckinLeadHours: 24,
+			documentExpiryLeadDays: 1.5
+		})
+	).toThrow('Document expiry lead must be a non-negative integer');
 });
 
 test('update password requires old password and hashes new password', async () => {
@@ -118,7 +156,7 @@ test('update password requires old password and hashes new password', async () =
 		})
 		.returning()
 		.get();
-	await _updatePassword(u.id, {
+	await _updatePassword(u.id, 'current-token', {
 		oldPassword: 'oldsecret',
 		newPassword: 'newsecret1',
 		confirmPassword: 'newsecret1'
@@ -142,7 +180,7 @@ test('update password rejects wrong old password', async () => {
 		.returning()
 		.get();
 	await expect(
-		_updatePassword(u.id, {
+		_updatePassword(u.id, 'current-token', {
 			oldPassword: 'wrong',
 			newPassword: 'newsecret1',
 			confirmPassword: 'newsecret1'
@@ -164,7 +202,7 @@ test('update password rejects mismatched confirmation', async () => {
 		.returning()
 		.get();
 	await expect(
-		_updatePassword(u.id, {
+		_updatePassword(u.id, 'current-token', {
 			oldPassword: 'oldsecret',
 			newPassword: 'newsecret1',
 			confirmPassword: 'different'
@@ -186,6 +224,37 @@ test('update password enforces password policy', async () => {
 		.returning()
 		.get();
 	await expect(
-		_updatePassword(u.id, { oldPassword: 'oldsecret', newPassword: 'short', confirmPassword: 'short' })
+		_updatePassword(u.id, 'current-token', { oldPassword: 'oldsecret', newPassword: 'short', confirmPassword: 'short' })
 	).rejects.toThrow();
+});
+
+test('update password invalidates all other sessions for the user', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({
+			email: 'p7@x.c',
+			passwordHash: initialHash,
+			displayName: 'P7',
+			timezone: 'UTC'
+		})
+		.returning()
+		.get();
+	const currentToken = createSession(u.id);
+	createSession(u.id);
+	createSession(u.id);
+	expect(db.select().from(sessions).where(eq(sessions.userId, u.id)).all()).toHaveLength(3);
+
+	await _updatePassword(u.id, currentToken, {
+		oldPassword: 'oldsecret',
+		newPassword: 'newsecret1',
+		confirmPassword: 'newsecret1'
+	});
+
+	const remaining = db.select().from(sessions).where(eq(sessions.userId, u.id)).all();
+	expect(remaining).toHaveLength(1);
+	expect(remaining[0].tokenHash).toBe(
+		createHash('sha256').update(currentToken).digest('hex')
+	);
 });

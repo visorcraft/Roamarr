@@ -11,6 +11,10 @@ import { createTrip, loadTripFor } from './shared';
 import { load } from './+page.server';
 import { users, trips, groups, groupMembers, tripShares } from '$lib/server/db/schema';
 
+function event(user: { id: number }, search = '') {
+	return { locals: { user } as App.Locals, url: new URL(`http://localhost/trips${search}`) } as any;
+}
+
 test('owner sees full trip; non-owner without share is blocked', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db
@@ -57,21 +61,81 @@ test('trip list includes shared trips and labels them shared', () => {
 	db.insert(groupMembers).values({ groupId: g.id, userId: c.id }).run();
 	db.insert(tripShares).values({ tripId: groupTrip.id, sharedWithGroupId: g.id }).run();
 
-	function locals(user: { id: number }) {
-		return { user } as App.Locals;
-	}
-
-	const forB = load({ locals: locals(b) } as any) as any;
+	const forB = load(event(b)) as any;
 	expect(forB.trips.map((t: any) => t.name)).toEqual(['Shared Trip']);
 	expect(forB.trips[0].isShared).toBe(true);
 	expect(JSON.stringify(forB.trips)).not.toContain('SECRET');
 
-	const forC = load({ locals: locals(c) } as any) as any;
+	const forC = load(event(c)) as any;
 	expect(forC.trips.map((t: any) => t.name)).toEqual(['Group Trip']);
 	expect(forC.trips[0].isShared).toBe(true);
 
-	const forA = load({ locals: locals(a) } as any) as any;
+	const forA = load(event(a)) as any;
 	expect(forA.trips.map((t: any) => t.name).sort()).toEqual(['Group Trip', 'Owned Trip', 'Shared Trip']);
 	expect(forA.trips.find((t: any) => t.name === 'Owned Trip')?.isShared).toBe(false);
 	expect(forA.trips.find((t: any) => t.name === 'Owned Trip')?.defaultVisibility).toBe('private');
+});
+
+test('trip list defaults to startDate ascending', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'sort-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+
+	db.insert(trips).values({ ownerId: a.id, name: 'Zulu', destination: 'Z', startDate: '2026-09-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Alpha', destination: 'A', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Mike', destination: 'M', startDate: '2026-08-01' }).run();
+
+	const result = load(event(a)) as any;
+	expect(result.trips.map((t: any) => t.name)).toEqual(['Alpha', 'Mike', 'Zulu']);
+	expect(result.sort).toBe('startDate');
+	expect(result.order).toBe('asc');
+});
+
+test('trip list filters by query on name and destination', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'q-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const b = db.insert(users).values({ email: 'q-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+
+	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destination: 'Paris', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destination: 'Tokyo', startDate: '2026-08-01' }).run();
+	const shared = db.insert(trips).values({ ownerId: a.id, name: 'Berlin Trip', destination: 'Berlin', startDate: '2026-09-01', notes: 'SECRET' }).returning().get();
+	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: b.id }).run();
+
+	const byName = load(event(a, '?q=tokyo')) as any;
+	expect(byName.trips.map((t: any) => t.name)).toEqual(['Tokyo Trip']);
+
+	const byDest = load(event(a, '?q=paris')) as any;
+	expect(byDest.trips.map((t: any) => t.name)).toEqual(['Paris Trip']);
+
+	const sharedFilter = load(event(b, '?q=berlin')) as any;
+	expect(sharedFilter.trips.map((t: any) => t.name)).toEqual(['Berlin Trip']);
+	expect(JSON.stringify(sharedFilter.trips)).not.toContain('SECRET');
+});
+
+test('trip list sorts by name and order', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'name-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+
+	db.insert(trips).values({ ownerId: a.id, name: 'Zebra', destination: 'Z', startDate: '2026-09-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Apple', destination: 'A', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Mango', destination: 'M', startDate: '2026-08-01' }).run();
+
+	const asc = load(event(a, '?sort=name&order=asc')) as any;
+	expect(asc.trips.map((t: any) => t.name)).toEqual(['Apple', 'Mango', 'Zebra']);
+
+	const desc = load(event(a, '?sort=name&order=desc')) as any;
+	expect(desc.trips.map((t: any) => t.name)).toEqual(['Zebra', 'Mango', 'Apple']);
+});
+
+test('trip list rejects invalid sort and order values', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	db.insert(trips).values({ ownerId: a.id, name: 'Only', destination: 'O', startDate: '2026-07-01' }).run();
+
+	const badSort = load(event(a, '?sort=ownerId&order=asc')) as any;
+	expect(badSort.trips.map((t: any) => t.name)).toEqual(['Only']);
+	expect(badSort.sort).toBe('startDate');
+
+	const badOrder = load(event(a, '?sort=name&order=side')) as any;
+	expect(badOrder.trips.map((t: any) => t.name)).toEqual(['Only']);
+	expect(badOrder.order).toBe('asc');
 });

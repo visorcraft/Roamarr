@@ -11,7 +11,8 @@ import {
 	_addCard as addCard,
 	_addBenefit as addBenefit,
 	_updateCard as updateCard,
-	_updateBenefit as updateBenefit
+	_updateBenefit as updateBenefit,
+	_deleteBenefit as deleteBenefit
 } from './+page.server';
 import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
 import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/schema';
@@ -116,6 +117,29 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
 	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
 	expect(() => updateBenefit(u.id, otherBenefit.id, otherCard.id, { benefitType: 'other' })).toThrow();
+});
+
+test('deleteBenefit removes a benefit and enforces card ownership', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'benefit-delete@x.c', passwordHash: 'x', displayName: 'D' })
+		.returning()
+		.get();
+	const other = db
+		.insert(users)
+		.values({ email: 'benefit-delete-other@x.c', passwordHash: 'x', displayName: 'E' })
+		.returning()
+		.get();
+	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
+	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay' });
+	deleteBenefit(u.id, benefit.id, card.id);
+	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, benefit.id)).get()).toBeUndefined();
+
+	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
+	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
+	expect(() => deleteBenefit(u.id, otherBenefit.id, otherCard.id)).toThrow();
+	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, otherBenefit.id)).get()).toBeDefined();
 });
 
 test('updatePolicy edits a policy and rejects a foreign trip', () => {

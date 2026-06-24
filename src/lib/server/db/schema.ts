@@ -12,10 +12,14 @@ export const users = sqliteTable(
 		displayName: text('display_name').notNull(),
 		role: text('role').notNull().default('user'),
 		timezone: text('timezone').notNull().default('UTC'),
+		flightCheckinLeadHours: integer('flight_checkin_lead_hours').notNull().default(24),
+		documentExpiryLeadDays: integer('document_expiry_lead_days').notNull().default(90),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		roleCk: check('users_role_ck', sql`${t.role} in ('admin','user')`)
+		roleCk: check('users_role_ck', sql`${t.role} in ('admin','user')`),
+		flightLeadCk: check('users_flight_lead_ck', sql`${t.flightCheckinLeadHours} >= 0`),
+		docLeadCk: check('users_doc_lead_ck', sql`${t.documentExpiryLeadDays} >= 0`)
 	})
 );
 
@@ -35,6 +39,8 @@ export const settings = sqliteTable('settings', {
 	setupComplete: integer('setup_complete', { mode: 'boolean' }).notNull().default(false),
 	allowRegistration: integer('allow_registration', { mode: 'boolean' }).notNull().default(false),
 	defaultTimezone: text('default_timezone').notNull().default('UTC'),
+	defaultFlightCheckinLeadHours: integer('default_flight_checkin_lead_hours').notNull().default(24),
+	defaultDocumentExpiryLeadDays: integer('default_document_expiry_lead_days').notNull().default(90),
 	smtpHost: text('smtp_host'),
 	smtpPort: integer('smtp_port'),
 	smtpUser: text('smtp_user'),
@@ -66,6 +72,9 @@ export const trips = sqliteTable(
 	})
 );
 
+export const SEGMENT_TYPES = ['flight', 'lodging', 'car', 'rail', 'activity', 'cruise'] as const;
+export type SegmentType = (typeof SEGMENT_TYPES)[number];
+
 export const segments = sqliteTable(
 	'segments',
 	{
@@ -86,7 +95,10 @@ export const segments = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(now)
 	},
 	(t) => ({
-		typeCk: check('segments_type_ck', sql`${t.type} in ('flight','lodging')`),
+		typeCk: check(
+			'segments_type_ck',
+			sql`${t.type} in ('flight','lodging','car','rail','activity','cruise')`
+		),
 		tripIdx: index('segments_trip_idx').on(t.tripId),
 		startIdx: index('segments_start_idx').on(t.startAt)
 	})

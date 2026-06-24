@@ -49,6 +49,7 @@
 			</p>
 		</div>
 		<div class="flex gap-2">
+			<a href={`/trips/${data.trip.id}/calendar`} class="btn btn-ghost btn-sm">Calendar</a>
 			<a href={`/trips/${data.trip.id}/edit`} class="btn btn-ghost btn-sm">Edit</a>
 			<a href={`/trips/${data.trip.id}/share`} class="btn btn-ghost btn-sm">Share</a>
 		</div>
@@ -225,15 +226,20 @@
 		</section>
 	{/if}
 {:else}
-	<header>
-		<span class="badge badge-brand">Shared view</span>
-		<h1 class="mt-2 text-3xl font-extrabold text-white">{data.trip.name}</h1>
-		<p class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-muted">
-			{#if data.trip.destination}<span>{data.trip.destination}</span>{/if}
-			{#if data.trip.startDate || data.trip.endDate}
-				<span class="font-mono text-xs text-slate-500">{data.trip.startDate || '—'} → {data.trip.endDate || '—'}</span>
-			{/if}
-		</p>
+	<header class="flex flex-wrap items-end justify-between gap-4">
+		<div class="min-w-0">
+			<span class="badge badge-brand">Shared view</span>
+			<h1 class="mt-2 text-3xl font-extrabold text-white">{data.trip.name}</h1>
+			<p class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-muted">
+				{#if data.trip.destination}<span>{data.trip.destination}</span>{/if}
+				{#if data.trip.startDate || data.trip.endDate}
+					<span class="font-mono text-xs text-slate-500">{data.trip.startDate || '—'} → {data.trip.endDate || '—'}</span>
+				{/if}
+			</p>
+		</div>
+		<div class="flex gap-2">
+			<a href={`/trips/${data.trip.id}/calendar`} class="btn btn-ghost btn-sm">Calendar</a>
+		</div>
 	</header>
 
 	<section class="card mt-6 p-5">

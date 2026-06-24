@@ -28,7 +28,7 @@
 				<input id="defaultTimezone" name="defaultTimezone" value={s.defaultTimezone} class="input" />
 			</div>
 
-			<div class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
+			<div class="grid gap-3 border-b border-white/5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
 				<div>
 					<label class="label" for="allowRegistration">Allow self-registration</label>
 					<p class="text-xs text-slate-500">Let new users create their own accounts.</p>
@@ -42,6 +42,38 @@
 						class="h-5 w-5 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
 					/>
 				</div>
+			</div>
+
+			<div class="grid gap-3 border-b border-white/5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
+				<div>
+					<label class="label" for="defaultFlightCheckinLeadHours">Default flight check-in lead (hours)</label>
+					<p class="text-xs text-slate-500">Default notice period for flight check-in reminders.</p>
+				</div>
+				<input
+					id="defaultFlightCheckinLeadHours"
+					name="defaultFlightCheckinLeadHours"
+					type="number"
+					min="0"
+					step="1"
+					value={s.defaultFlightCheckinLeadHours}
+					class="input"
+				/>
+			</div>
+
+			<div class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] sm:items-center">
+				<div>
+					<label class="label" for="defaultDocumentExpiryLeadDays">Default document expiry lead (days)</label>
+					<p class="text-xs text-slate-500">Default notice period for travel-document expiry reminders.</p>
+				</div>
+				<input
+					id="defaultDocumentExpiryLeadDays"
+					name="defaultDocumentExpiryLeadDays"
+					type="number"
+					min="0"
+					step="1"
+					value={s.defaultDocumentExpiryLeadDays}
+					class="input"
+				/>
 			</div>
 		</div>
 	</section>

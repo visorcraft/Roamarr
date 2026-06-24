@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('./db', async () => {
@@ -11,8 +12,13 @@ vi.mock('./notify', () => ({
 	deliver: async (uid: number, m: any) => delivered.push({ uid, m })
 }));
 
-import { upsertRemindersForSegment, cancelRemindersFor, runDueReminders } from './reminders';
-import { users, trips, segments, reminders } from './db/schema';
+import {
+	upsertRemindersForSegment,
+	upsertRemindersForDocument,
+	cancelRemindersFor,
+	runDueReminders
+} from './reminders';
+import { users, trips, segments, reminders, travelDocuments } from './db/schema';
 
 let owner: any;
 let trip: any;
@@ -108,4 +114,83 @@ test('cancel removes the reminder', () => {
 	upsertRemindersForSegment(seg);
 	cancelRemindersFor('segment', seg.id);
 	expect(db.select().from(reminders).all().length).toBe(0);
+});
+
+test('non-flight segments do not arm reminders', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	for (const type of ['lodging', 'car', 'rail', 'activity', 'cruise'] as const) {
+		const seg = db
+			.insert(segments)
+			.values({
+				tripId: trip.id,
+				type,
+				title: type,
+				startAt: '2099-01-02T00:00:00.000Z',
+				startTz: 'UTC'
+			})
+			.returning()
+			.get();
+		upsertRemindersForSegment(seg);
+	}
+	expect(db.select().from(reminders).all().length).toBe(0);
+});
+
+test('changing a flight to a non-flight cancels its reminder', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const seg = db
+		.insert(segments)
+		.values({
+			tripId: trip.id,
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2099-01-02T00:00:00.000Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+	upsertRemindersForSegment(seg);
+	expect(db.select().from(reminders).all().length).toBe(1);
+
+	const lodging = { ...seg, type: 'lodging' as const };
+	upsertRemindersForSegment(lodging);
+	expect(db.select().from(reminders).all().length).toBe(0);
+});
+
+test('arms a reminder using the owners configured flight check-in lead', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	db.update(users).set({ flightCheckinLeadHours: 48 }).where(eq(users.id, owner.id)).run();
+	const seg = db
+		.insert(segments)
+		.values({
+			tripId: trip.id,
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2099-01-02T00:00:00.000Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+	upsertRemindersForSegment(seg);
+	const r = db.select().from(reminders).get();
+	expect(r!.fireAt).toBe('2098-12-31T00:00:00.000Z');
+});
+
+test('arms a reminder using the owners configured document expiry lead', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	db.update(users)
+		.set({ timezone: 'America/New_York', documentExpiryLeadDays: 30 })
+		.where(eq(users.id, owner.id))
+		.run();
+	const doc = db
+		.insert(travelDocuments)
+		.values({
+			userId: owner.id,
+			type: 'passport',
+			expiresOn: '2026-12-30'
+		})
+		.returning()
+		.get();
+	upsertRemindersForDocument(doc);
+	const r = db.select().from(reminders).get();
+	expect(r!.fireAt).toBe('2026-11-30T14:00:00.000Z');
 });

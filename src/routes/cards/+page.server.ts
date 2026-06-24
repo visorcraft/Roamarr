@@ -95,6 +95,11 @@ export function _updateBenefit(
 		.run();
 }
 
+export function _deleteBenefit(userId: number, id: number, cardId: number) {
+	assertOwnedRefs(userId, { cardId });
+	db.delete(cardBenefits).where(and(eq(cardBenefits.id, id), eq(cardBenefits.cardId, cardId))).run();
+}
+
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const mine = db.select().from(cards).where(eq(cards.userId, u.id)).all();
@@ -148,6 +153,12 @@ export const actions: Actions = {
 			currency: String(f.get('currency') || '') || undefined,
 			notes: String(f.get('notes') || '') || undefined
 		});
+		throw redirect(303, '/cards');
+	},
+	deleteBenefit: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		_deleteBenefit(u.id, Number(f.get('id')), Number(f.get('cardId')));
 		throw redirect(303, '/cards');
 	},
 	deleteCard: async ({ request, locals }) => {

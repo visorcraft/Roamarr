@@ -1,6 +1,6 @@
 import { hash, verify } from '@node-rs/argon2';
 import { randomBytes, createHash } from 'node:crypto';
-import { eq, lt } from 'drizzle-orm';
+import { and, eq, lt, ne } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
@@ -36,6 +36,12 @@ export async function validateSession(token?: string) {
 
 export function invalidateSession(token: string) {
 	db.delete(sessions).where(eq(sessions.tokenHash, th(token))).run();
+}
+
+export function invalidateOtherSessions(userId: number, token: string) {
+	db.delete(sessions)
+		.where(and(eq(sessions.userId, userId), ne(sessions.tokenHash, th(token))))
+		.run();
 }
 
 export function purgeExpiredSessions() {

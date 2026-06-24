@@ -20,6 +20,29 @@
 	</a>
 </header>
 
+<form method="GET" action="/trips" class="mt-6 flex flex-wrap items-end gap-3">
+	<label class="field flex-1 min-w-[12rem]">
+		<span class="label">Search</span>
+		<input type="search" name="q" value={data.q ?? ''} placeholder="Trip name or destination" class="input" />
+	</label>
+	<label class="field min-w-[8rem]">
+		<span class="label">Sort by</span>
+		<select name="sort" value={data.sort} class="input">
+			<option value="startDate">Start date</option>
+			<option value="name">Name</option>
+			<option value="createdAt">Created</option>
+		</select>
+	</label>
+	<label class="field min-w-[7rem]">
+		<span class="label">Order</span>
+		<select name="order" value={data.order} class="input">
+			<option value="asc">Ascending</option>
+			<option value="desc">Descending</option>
+		</select>
+	</label>
+	<button type="submit" class="btn btn-ghost">Apply</button>
+</form>
+
 {#if data.trips.length}
 	<div class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 		{#each data.trips as t (t.id)}

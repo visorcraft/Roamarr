@@ -64,7 +64,7 @@
 		</main>
 	</div>
 {:else}
-	<div class="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+	<div class="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
 		<!-- Backdrop (mobile) -->
 		{#if open}
 			<button
@@ -76,7 +76,7 @@
 
 		<!-- Sidebar -->
 		<aside
-			class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/10 bg-surface/80 backdrop-blur-xl transition-transform duration-200 lg:static lg:translate-x-0 {open
+			class="fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col border-r border-white/10 bg-surface/80 backdrop-blur-xl transition-transform duration-200 lg:sticky lg:top-0 lg:translate-x-0 {open
 				? 'translate-x-0'
 				: '-translate-x-full'}"
 		>
@@ -155,7 +155,7 @@
 		</aside>
 
 		<!-- Main column -->
-		<div class="flex min-h-screen min-w-0 flex-col">
+		<div class="flex min-h-dvh min-w-0 flex-col">
 			<!-- Mobile top bar -->
 			<header
 				class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/10 bg-canvas/70 px-4 backdrop-blur-xl lg:hidden"

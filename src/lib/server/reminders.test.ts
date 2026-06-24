@@ -277,3 +277,20 @@ test('cancelReminder deletes only the users own reminder', () => {
 		expect(e.status).toBe(404);
 	}
 });
+
+
+test('delivered notification copy is generic and links to documents for expiry', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	db.update(users).set({ timezone: 'UTC', documentExpiryLeadDays: 90 }).where(eq(users.id, owner.id)).run();
+	const doc = db
+		.insert(travelDocuments)
+		.values({ userId: owner.id, type: 'passport', expiresOn: '2000-01-01' })
+		.returning()
+		.get();
+	upsertRemindersForDocument(doc);
+	db.update(reminders).set({ status: 'pending' }).run();
+	await runDueReminders(new Date('2000-02-01T00:00:00Z'));
+	expect(delivered.length).toBe(1);
+	expect(delivered[0].m.body).toBe('A travel document is expiring soon.');
+	expect(delivered[0].m.link).toBe('/profile/documents');
+});

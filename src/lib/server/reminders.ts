@@ -167,14 +167,14 @@ function messageFor(r: Reminder): { title: string; body: string; link: string } 
 	if (r.kind === 'flight_checkin') {
 		return {
 			title: 'Check-in reminder',
-			body: 'A flight departs in about 24 hours.',
+			body: 'A flight you track is departing soon.',
 			link: `/trips`
 		};
 	}
 	if (r.kind === 'document_expiry') {
 		return {
 			title: 'Document expiring',
-			body: 'A travel document expires in 90 days.',
+			body: 'A travel document is expiring soon.',
 			link: `/profile/documents`
 		};
 	}

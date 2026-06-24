@@ -10,7 +10,7 @@
 	<p class="mt-1 text-sm text-muted">Configure your Roamarr instance and outgoing email.</p>
 </header>
 
-<form method="POST" class="mt-8 grid max-w-4xl gap-6">
+<form method="POST" class="mt-8 grid gap-6">
 	<section class="card p-5 sm:p-6">
 		<h2 class="section-title">General</h2>
 		<div class="settings-rows">

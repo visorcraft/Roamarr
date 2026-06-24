@@ -123,6 +123,9 @@
 	.settings-row {
 		@apply grid gap-3 py-4 sm:grid-cols-2 sm:items-center sm:gap-x-8 lg:gap-x-12;
 	}
+	.settings-row > :last-child {
+		@apply w-full max-w-md justify-self-start;
+	}
 	.input,
 	.select,
 	.textarea {

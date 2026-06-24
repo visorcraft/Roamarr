@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { formatDateTime } from '$lib/dateFormat';
+
 	let { data } = $props();
 
 	const kindLabel: Record<string, string> = {
@@ -6,18 +8,6 @@
 		document_expiry: 'Document expiry',
 		custom: 'Custom'
 	};
-
-	function fmt(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', {
-				dateStyle: 'medium',
-				timeStyle: 'short'
-			}).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	}
 </script>
 
 <header class="flex flex-wrap items-end justify-between gap-4">
@@ -36,7 +26,7 @@
 						<span class="badge badge-slate">{kindLabel[r.kind] ?? r.kind}</span>
 						<span class="badge {r.status === 'pending' ? 'badge-brand' : 'badge-slate'}">{r.status}</span>
 					</div>
-					<p class="mt-1 font-mono text-xs text-slate-400">{fmt(r.fireAt)}</p>
+					<p class="mt-1 font-mono text-xs text-slate-400">{formatDateTime(r.fireAt)}</p>
 				</div>
 				{#if r.status === 'pending'}
 					<form method="POST" action="?/cancel">

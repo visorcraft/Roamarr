@@ -84,8 +84,9 @@ See `.env.example`. SMTP and webhook settings are configured via `/settings` in 
 
 ## Features
 
-- **Trips & segments** — itinerary builder with 15 segment types (flight, hotel, rental car, train, event, and more).
-- **Sharing** — share trips with users or groups, with read/edit/detail visibility controls; public token shares and calendar feeds.
+- **Trips & segments** — itinerary builder with 15 segment types (flight, hotel, rental car, train, event, and more); segment overlap warnings; per-trip comments.
+- **Sharing** — share trips with users or groups, with read/edit/detail visibility controls; public token shares and calendar feeds with optional token expiry.
+- **Dashboard** — at-a-glance summary cards for upcoming trips, unread notifications, expiring documents, and active fare watches.
 - **Organization** — trip tags with quick-filter chips, archive/favorite flags, bulk actions (favorite/archive/unfavorite/unarchive/delete), and full-text search across trips and segments.
 - **Export & import** — export owned trips as JSON or CSV; import JSON/CSV with a dry-run preview.
 - **Reminders** — automatic flight check-in and document-expiry reminders, plus per-trip and per-segment custom reminders you can list and cancel.
@@ -93,7 +94,8 @@ See `.env.example`. SMTP and webhook settings are configured via `/settings` in 
 - **Travel documents & loyalty** — passport/driver's license/global entry/visa tracking and loyalty-program balances.
 - **Cards & insurance** — credit-card tracking (last four + network only) with global benefit templates; attach cards to segments; attach insurance policies to trips.
 - **Notifications** — in-app inbox with clickable links, optional SMTP and signed webhook delivery, and per-user channel toggles.
-- **Admin** — user management, audit-log viewer with filters, scheduled-job history with manual run, database backup, instance stats, and a recent-activity summary on settings.
+- **Admin** — user management, audit-log viewer with filters and CSV export, scheduled-job history with manual run, database backup/restore, instance stats, demo-data seeder, and a recent-activity summary on settings.
+- **PWA** — installable web app manifest and icons.
 - **Security** — argon2id passwords, session metadata, password-change session invalidation, rate-limited auth and public feeds, CSP + security headers, and audit logging.
 
 ## Architecture

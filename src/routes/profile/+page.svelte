@@ -1,16 +1,8 @@
 <script lang="ts">
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data, form } = $props();
-
-	function fmt(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	}
 </script>
 
 <header class="flex flex-wrap items-end justify-between gap-4">
@@ -110,7 +102,7 @@
 							{#if s.current}<span class="badge badge-brand ml-2">Current</span>{/if}
 						</p>
 						<p class="text-slate-400">
-							Created {fmt(s.createdAt)} · Expires {fmt(s.expiresAt)}
+							Created {formatDateTime(s.createdAt)} · Expires {formatDateTime(s.expiresAt)}
 							{#if s.lastIp || s.userAgent}<span class="block text-xs text-slate-500">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
 						</p>
 					</div>

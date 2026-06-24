@@ -1,16 +1,9 @@
 <script lang="ts">
+	import { formatDateTime } from '$lib/dateFormat';
+
 	let { data } = $props();
 
 	const unread = $derived(data.notifications.filter((n) => !n.readAt).length);
-
-	function fmt(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	}
 </script>
 
 <header class="flex flex-wrap items-end justify-between gap-4">
@@ -54,7 +47,7 @@
 						{#if !n.readAt}<span class="badge badge-brand">New</span>{/if}
 					</div>
 					{#if n.body}<p class="mt-0.5 text-sm text-slate-400">{n.body}</p>{/if}
-					{#if n.createdAt}<p class="mt-1 font-mono text-xs text-slate-500">{fmt(n.createdAt)}</p>{/if}
+					{#if n.createdAt}<p class="mt-1 font-mono text-xs text-slate-500">{formatDateTime(n.createdAt)}</p>{/if}
 				</div>
 				{#if n.readAt}
 					<form method="POST" action="?/markUnread" class="shrink-0">

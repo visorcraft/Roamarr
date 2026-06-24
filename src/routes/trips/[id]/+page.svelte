@@ -6,6 +6,7 @@
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
 	import { renderMarkdown } from '$lib/markdown';
+	import { formatDateTime } from '$lib/dateFormat';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
@@ -38,19 +39,6 @@
 	};
 
 	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
-
-	function fmt(iso: string | null | undefined, tz = 'UTC') {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', {
-				dateStyle: 'medium',
-				timeStyle: 'short',
-				timeZone: tz
-			}).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	}
 
 	function fmtTime(iso: string | null | undefined, tz = 'UTC') {
 		if (!iso) return '';
@@ -449,7 +437,7 @@
 											<p class="mt-1 text-xs text-slate-400">{last.summary}</p>
 										{/if}
 										{#if w.lastCheckedAt}
-											<p class="mt-0.5 text-xs text-slate-500">Last checked: {fmt(w.lastCheckedAt)}</p>
+											<p class="mt-0.5 text-xs text-slate-500">Last checked: {formatDateTime(w.lastCheckedAt, { timeZone: 'UTC' })}</p>
 										{/if}
 									</div>
 									<div class="flex items-center gap-1">

@@ -1,16 +1,7 @@
 <script lang="ts">
-	let { data } = $props();
+	import { formatDateTime } from '$lib/dateFormat';
 
-	function fmt(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'medium' }).format(
-				new Date(iso)
-			);
-		} catch {
-			return iso;
-		}
-	}
+	let { data } = $props();
 
 	function durationMs(startedAt: string, finishedAt: string | null | undefined) {
 		if (!finishedAt) return '';
@@ -44,7 +35,7 @@
 			<tbody>
 				{#each data.runs as run (run.id)}
 					<tr>
-						<td class="whitespace-nowrap text-slate-400">{fmt(run.startedAt)}</td>
+						<td class="whitespace-nowrap text-slate-400">{formatDateTime(run.startedAt, { timeStyle: 'medium' })}</td>
 						<td class="whitespace-nowrap text-slate-400">{durationMs(run.startedAt, run.finishedAt)}</td>
 						<td class="whitespace-nowrap">
 							{#if run.finishedAt}

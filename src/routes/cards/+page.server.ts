@@ -5,6 +5,7 @@ import { assertOwnedRefs } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
 import { cards, cardBenefits } from '$lib/server/db/schema';
 import { listBenefitTemplates, getBenefitTemplate } from '$lib/server/benefitTemplates';
+import { sanitizeLast4 } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export function _addCard(
@@ -13,14 +14,13 @@ export function _addCard(
 ) {
 	// Never persist a full PAN: keep digits only and store at most the last four,
 	// whatever the form submits (spec: cards store last4 + network only).
-	const last4 = i.last4 ? i.last4.replace(/\D/g, '').slice(-4) || null : null;
 	return db
 		.insert(cards)
 		.values({
 			userId,
 			nickname: i.nickname,
 			network: i.network,
-			last4,
+			last4: sanitizeLast4(i.last4),
 			notes: i.notes
 		})
 		.returning()
@@ -74,12 +74,11 @@ export function _updateCard(
 		notes?: string;
 	}
 ) {
-	const last4 = i.last4 ? i.last4.replace(/\D/g, '').slice(-4) || null : null;
 	db.update(cards)
 		.set({
 			nickname: i.nickname,
 			network: i.network,
-			last4,
+			last4: sanitizeLast4(i.last4),
 			notes: i.notes || null
 		})
 		.where(and(eq(cards.id, id), eq(cards.userId, userId)))

@@ -1,20 +1,8 @@
 <script lang="ts">
 	import { SEG } from '$lib/segmentLabels';
+	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data } = $props();
-
-	function fmt(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', {
-				dateStyle: 'medium',
-				timeStyle: 'short',
-				timeZone: 'UTC'
-			}).format(new Date(iso));
-		} catch {
-			return iso;
-		}
-	}
 </script>
 
 <div class="card w-full max-w-3xl p-7 sm:p-8">
@@ -46,7 +34,7 @@
 							<span class="truncate font-semibold text-white">{s.title}</span>
 						</div>
 						<div class="mt-1 font-mono text-xs text-slate-400">
-							{fmt(s.startAt)}{#if s.endAt} → {fmt(s.endAt)}{/if}
+							{formatDateTime(s.startAt, { timeZone: 'UTC' })}{#if s.endAt} → {formatDateTime(s.endAt, { timeZone: 'UTC' })}{/if}
 						</div>
 						{#if s.location}<div class="mt-0.5 text-xs text-slate-500">{s.location}</div>{/if}
 					</div>

@@ -1,20 +1,11 @@
 <script lang="ts">
-	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string; filter: string }; form?: { error?: string } } = $props();
+	import { parseTags } from '$lib/tags';
 
-	function tags(t: (typeof data.trips)[number]): string[] {
-		if (t.isShared) return (t.tags as string[]) ?? [];
-		try {
-			const parsed = JSON.parse(t.tags as string);
-			if (Array.isArray(parsed)) return parsed.filter((x) => typeof x === 'string');
-		} catch {
-			// ignore
-		}
-		return [];
-	}
+	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string; filter: string }; form?: { error?: string } } = $props();
 
 	const allTags = $derived(
 		Array.from(
-			new Set(data.trips.flatMap((t) => tags(t).map((x) => x.toLowerCase())))
+			new Set(data.trips.flatMap((t) => parseTags(t.tags).map((x) => x.toLowerCase())))
 		).sort()
 	);
 
@@ -134,9 +125,9 @@
 								{t.destination}
 							</p>
 						{/if}
-						{#if tags(t).length}
+						{#if parseTags(t.tags).length}
 							<div class="flex flex-wrap gap-1.5">
-								{#each tags(t) as tag}
+								{#each parseTags(t.tags) as tag}
 									<span class="badge badge-slate text-xs">{tag}</span>
 								{/each}
 							</div>

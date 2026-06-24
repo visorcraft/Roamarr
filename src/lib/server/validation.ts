@@ -2,6 +2,12 @@ import { DateTime } from 'luxon';
 
 type FieldErrors = Record<string, string>;
 
+export function sanitizeLast4(raw?: string): string | null {
+	if (!raw) return null;
+	const digits = raw.replace(/\D/g, '').slice(-4);
+	return digits || null;
+}
+
 export class Validator {
 	errors: FieldErrors = {};
 

@@ -3,10 +3,16 @@ import { validateSession } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp } from '$lib/server/boot';
 
+// Run one-time boot (secret guard → migrations → settings row → scheduler) at process
+// start: adapter-node imports this module on `node build`, so a missing ROAMARR_SECRET
+// or a failed migration fails the container now rather than on the first HTTP request.
+// Idempotent; safe under Vite HMR (the `booted` flag short-circuits re-runs) and build
+// (vite bundles without executing, and there are no prerender entries that would).
+bootApp();
+
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/share\//];
 
 export const handle: Handle = async ({ event, resolve }) => {
-	bootApp();
 	event.locals.user = await validateSession(event.cookies.get('session'));
 	const path = event.url.pathname;
 

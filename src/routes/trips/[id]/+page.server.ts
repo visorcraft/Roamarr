@@ -16,7 +16,11 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const view = loadTripFor(u.id, Number(params.id));
 	if (view.owner) {
 		const providers = db
-			.select({ id: fareProviders.id, providerKey: fareProviders.providerKey })
+			.select({
+				id: fareProviders.id,
+				providerKey: fareProviders.providerKey,
+				label: fareProviders.label
+			})
 			.from(fareProviders)
 			.where(and(eq(fareProviders.userId, u.id), eq(fareProviders.enabled, true)))
 			.all();
@@ -25,6 +29,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 				id: fareWatches.id,
 				status: fareWatches.status,
 				providerKey: fareProviders.providerKey,
+				label: fareProviders.label,
 				lastCheckedAt: fareWatches.lastCheckedAt,
 				lastResultJson: fareWatches.lastResultJson
 			})
@@ -36,7 +41,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
 			: null;
 		return { ...view, providers, watches, feedUrl } as TripView & {
-			providers: { id: number; providerKey: string }[];
+			providers: { id: number; providerKey: string; label: string }[];
 			watches: typeof watches;
 			feedUrl: string | null;
 		};

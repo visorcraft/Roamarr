@@ -1,6 +1,7 @@
 import { redirect, type Actions } from '@sveltejs/kit';
 import { and, eq, isNull } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
+import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { notifications } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
@@ -49,9 +50,10 @@ export const actions: Actions = {
 		_markUnread(u.id, Number((await request.formData()).get('id')));
 		throw redirect(303, '/notifications');
 	},
-	markAllRead: async ({ locals }) => {
+	markAllRead: async ({ cookies, locals }) => {
 		const u = requireUser(locals);
 		_markAllRead(u.id);
+		setFlash(cookies, 'All notifications marked read.');
 		throw redirect(303, '/notifications');
 	}
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
@@ -14,9 +15,9 @@
 	</div>
 </header>
 
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Your programs</h2>
-	{#if data.programs.length}
+{#if data.programs.length}
+	<section class="card mt-6 p-5">
+		<h2 class="section-title mb-3">Your programs</h2>
 		<ul class="space-y-2">
 			{#each data.programs as p (p.id)}
 				<li class="flex items-start gap-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
@@ -69,10 +70,14 @@
 				</li>
 			{/each}
 		</ul>
-	{:else}
-		<p class="py-6 text-center text-sm text-slate-500">No loyalty programs yet. Add one below.</p>
-	{/if}
-</section>
+	</section>
+{:else}
+	<EmptyState message="No loyalty programs yet — add one below.">
+		{#snippet icon()}
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M12 2 15 8.5 22 9.3l-5 4.6L18.5 21 12 17.3 5.5 21 7 13.9l-5-4.6L9 8.5Z" /></svg>
+		{/snippet}
+	</EmptyState>
+{/if}
 
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Add program</h2>

@@ -120,4 +120,8 @@ export class Validator {
 			this.errors[startField] = `${startField} must be on or before ${endField}`;
 		}
 	}
+
+	addError(field: string, message: string): void {
+		this.errors[field] = message;
+	}
 }

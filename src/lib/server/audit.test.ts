@@ -7,9 +7,15 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { logAudit } from './audit';
+import { logAudit, listAuditLogs } from './audit';
 import { users, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { beforeEach } from 'vitest';
+
+beforeEach(() => {
+	(ctx as any).sqlite.exec('delete from audit_logs;');
+	(ctx as any).sqlite.exec('delete from users;');
+});
 
 test('logAudit writes a row with serialized metadata', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -34,4 +40,45 @@ test('logAudit defaults meta to empty object', () => {
 
 	const row = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).get()!;
 	expect(JSON.parse(row.metaJson)).toEqual({});
+});
+
+
+test('listAuditLogs returns recent logs with user details in descending order', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'Alice' }).returning().get();
+	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'Bob' }).returning().get();
+
+	logAudit(a.id, 'trip_delete', 'trip', 1, { name: 'Old' });
+	logAudit(b.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+
+	const logs = listAuditLogs(10);
+	expect(logs).toHaveLength(2);
+	expect(logs[0].action).toBe('settings_update');
+	expect(logs[0].user.email).toBe('b@x.c');
+	expect(logs[0].user.displayName).toBe('Bob');
+	expect(logs[0].meta).toEqual({ changed: ['instanceName'] });
+	expect(logs[1].action).toBe('trip_delete');
+	expect(logs[1].user.email).toBe('a@x.c');
+});
+
+test('listAuditLogs respects the limit', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'limit@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
+
+	for (let i = 0; i < 5; i++) {
+		logAudit(u.id, 'action', 'trip', i);
+	}
+
+	expect(listAuditLogs(2)).toHaveLength(2);
+	expect(listAuditLogs(100)).toHaveLength(5);
+});
+
+test('listAuditLogs never exposes passwordHash', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'safe@x.c', passwordHash: 'secret-hash', displayName: 'S' }).returning().get();
+	logAudit(u.id, 'plain', 'settings', 1);
+
+	const logs = listAuditLogs(1);
+	expect(logs[0].user).not.toHaveProperty('passwordHash');
+	expect(Object.keys(logs[0].user).sort()).toEqual(['displayName', 'email', 'id']);
 });

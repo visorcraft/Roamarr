@@ -81,3 +81,20 @@ test('rejects invalid visibility enum', async () => {
 	expect(result.status).toBe(400);
 	expect(result.data.errors.defaultVisibility).toContain('private');
 });
+
+import { render } from 'svelte/server';
+import NewTripPage from './+page.svelte';
+
+test('new trip form highlights invalid fields and shows per-field errors', () => {
+	const { body } = render(NewTripPage, {
+		props: {
+			form: {
+				error: 'Please fix the highlighted fields.',
+				errors: { name: 'name is required', startDate: 'startDate must be on or before endDate' }
+			}
+		}
+	});
+	expect(body).toContain('input-error');
+	expect(body).toContain('name is required');
+	expect(body).toContain('startDate must be on or before endDate');
+});

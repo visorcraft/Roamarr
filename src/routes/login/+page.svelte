@@ -17,7 +17,10 @@
 			<label class="label" for="password">Password</label>
 			<input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" class="input" required />
 		</div>
-		<button class="btn btn-primary mt-1 w-full">Sign in</button>
+		<div class="flex items-center justify-between">
+			<a href="/forgot-password" class="text-sm link">Forgot password?</a>
+			<button class="btn btn-primary">Sign in</button>
+		</div>
 	</form>
 
 	<p class="mt-5 text-center text-sm text-muted">

@@ -7,7 +7,8 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { canView, canEdit, viewerProjection } from './sharing';
+import { eq } from 'drizzle-orm';
+import { canView, canEdit, canViewDetails, viewerProjection } from './sharing';
 import { users, trips, groups, groupMembers, tripShares } from './db/schema';
 
 test('view matrix + projection omits sensitive fields', () => {
@@ -100,4 +101,58 @@ test('edit shares grant canEdit via user and group', () => {
 	expect(canEdit(reader.id, t)).toBe(false);
 	expect(canEdit(999, t)).toBe(false);
 	expect(canView(reader.id, t)).toBe(true);
+});
+
+test('showDetails gate exposes confirmation numbers and details only when enabled', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const owner = db
+		.insert(users)
+		.values({ email: 'details-owner@x.c', passwordHash: 'x', displayName: 'O' })
+		.returning()
+		.get();
+	const reader = db
+		.insert(users)
+		.values({ email: 'details-reader@x.c', passwordHash: 'x', displayName: 'R' })
+		.returning()
+		.get();
+	const groupMember = db
+		.insert(users)
+		.values({ email: 'details-member@x.c', passwordHash: 'x', displayName: 'M' })
+		.returning()
+		.get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+
+	const seg = {
+		type: 'flight',
+		title: 'UA1',
+		startAt: '2026-07-01T15:00:00Z',
+		endAt: null,
+		location: 'JFK',
+		confirmationNumber: 'CONF123',
+		detailsJson: '{"seat":"12A"}'
+	} as any;
+
+	const withoutDetails = viewerProjection(t, [seg]);
+	expect(JSON.stringify(withoutDetails)).not.toContain('CONF123');
+	expect(JSON.stringify(withoutDetails)).not.toContain('12A');
+
+	const withDetails = viewerProjection(t, [seg], true);
+	expect(JSON.stringify(withDetails)).toContain('CONF123');
+	expect(JSON.stringify(withDetails)).toContain('12A');
+
+	expect(canViewDetails(owner.id, t)).toBe(true);
+
+	db.insert(tripShares)
+		.values({ tripId: t.id, sharedWithUserId: reader.id, showDetails: false })
+		.run();
+	expect(canViewDetails(reader.id, t)).toBe(false);
+	db.update(tripShares).set({ showDetails: true }).where(eq(tripShares.tripId, t.id)).run();
+	expect(canViewDetails(reader.id, t)).toBe(true);
+
+	const g = db.insert(groups).values({ ownerId: owner.id, name: 'details-fam' }).returning().get();
+	db.insert(groupMembers).values({ groupId: g.id, userId: groupMember.id }).run();
+	db.insert(tripShares)
+		.values({ tripId: t.id, sharedWithGroupId: g.id, showDetails: true })
+		.run();
+	expect(canViewDetails(groupMember.id, t)).toBe(true);
 });

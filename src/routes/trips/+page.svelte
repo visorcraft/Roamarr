@@ -14,10 +14,16 @@
 			{data.trips.length} trip{data.trips.length === 1 ? '' : 's'} planned
 		</p>
 	</div>
-	<a href="/trips/new" class="btn btn-primary">
-		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
-		New trip
-	</a>
+	<div class="flex flex-wrap gap-2">
+		<a href="/trips/import" class="btn btn-ghost">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 11l5 5 5-5" /><path d="M12 4v12" /></svg>
+			Import
+		</a>
+		<a href="/trips/new" class="btn btn-primary">
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+			New trip
+		</a>
+	</div>
 </header>
 
 <form method="GET" action="/trips" class="mt-6 flex flex-wrap items-end gap-3">

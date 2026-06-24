@@ -109,3 +109,10 @@ test('validator collects multiple errors', () => {
 	expect(v.ok()).toBe(false);
 	expect(Object.keys(v.errors)).toHaveLength(3);
 });
+
+test('addError attaches custom field errors', () => {
+	const v = new Validator();
+	v.addError('detailsJson', 'Invalid JSON');
+	expect(v.ok()).toBe(false);
+	expect(v.errors.detailsJson).toBe('Invalid JSON');
+});

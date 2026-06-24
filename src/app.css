@@ -104,6 +104,12 @@
 	.textarea {
 		@apply min-h-20 resize-y;
 	}
+	.input-error {
+		@apply ring-red-400/70 focus:ring-red-400/70;
+	}
+	.field-error {
+		@apply text-xs text-red-300;
+	}
 
 	/* Badges */
 	.badge {

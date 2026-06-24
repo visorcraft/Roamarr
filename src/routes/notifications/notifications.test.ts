@@ -11,7 +11,8 @@ vi.mock('$lib/server/db', async () => {
 import {
 	_markRead as markRead,
 	_markUnread as markUnread,
-	_markAllRead as markAllRead
+	_markAllRead as markAllRead,
+	actions
 } from './+page.server';
 import { users, notifications } from '$lib/server/db/schema';
 
@@ -65,4 +66,17 @@ test('markAllRead only affects the caller’s unread notifications', () => {
 	expect(rows.find((r) => r.id === nA1.id)!.readAt).not.toBeNull();
 	expect(rows.find((r) => r.id === nA2.id)!.readAt).not.toBeNull();
 	expect(rows.find((r) => r.id === nB.id)!.readAt).toBeNull();
+});
+
+test('markAllRead action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = makeUser('a-action@x.c', 'A');
+	insertNotification(a.id, 'n1');
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const locals = { user: a } as App.Locals;
+	await expect(actions.markAllRead({ locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/notifications'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'All notifications marked read.', expect.any(Object));
 });

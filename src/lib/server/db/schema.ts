@@ -1,6 +1,20 @@
 import { sqliteTable, integer, text, primaryKey, unique, uniqueIndex, index, check } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
+export const schedulerRuns = sqliteTable(
+	'scheduler_runs',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		startedAt: text('started_at').notNull(),
+		finishedAt: text('finished_at'),
+		success: integer('success', { mode: 'boolean' }).notNull().default(false),
+		errorMessage: text('error_message')
+	},
+	(t) => ({
+		startedIdx: index('scheduler_runs_started_idx').on(t.startedAt)
+	})
+);
+
 const now = sql`(datetime('now'))`;
 
 export const users = sqliteTable(
@@ -25,6 +39,16 @@ export const users = sqliteTable(
 );
 
 export const sessions = sqliteTable('sessions', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tokenHash: text('token_hash').notNull().unique(),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	expiresAt: text('expires_at').notNull(),
+	createdAt: text('created_at').notNull().default(now)
+});
+
+export const passwordResetTokens = sqliteTable('password_reset_tokens', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	tokenHash: text('token_hash').notNull().unique(),
 	userId: integer('user_id')
@@ -182,6 +206,7 @@ export const tripShares = sqliteTable(
 			onDelete: 'cascade'
 		}),
 		permission: text('permission').notNull().default('read'),
+		showDetails: integer('show_details', { mode: 'boolean' }).notNull().default(false),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
@@ -278,22 +303,17 @@ export const insurancePolicies = sqliteTable(
 	})
 );
 
-export const fareProviders = sqliteTable(
-	'fare_providers',
-	{
-		id: integer('id').primaryKey({ autoIncrement: true }),
-		userId: integer('user_id')
-			.notNull()
-			.references(() => users.id, { onDelete: 'cascade' }),
-		providerKey: text('provider_key').notNull(),
-		apiKey: text('api_key'),
-		enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-		configJson: text('config_json')
-	},
-	(t) => ({
-		uq: unique('fare_provider_uq').on(t.userId, t.providerKey)
-	})
-);
+export const fareProviders = sqliteTable('fare_providers', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	providerKey: text('provider_key').notNull(),
+	label: text('label').notNull().default(''),
+	apiKey: text('api_key'),
+	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+	configJson: text('config_json')
+});
 
 export const fareWatches = sqliteTable(
 	'fare_watches',

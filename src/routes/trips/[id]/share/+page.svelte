@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import CopyButton from '$lib/components/CopyButton.svelte';
 
 	let { data } = $props();
 	const userShares = $derived(data.shares.filter((s) => s.email));
@@ -27,10 +28,17 @@
 						<span class="truncate text-sm text-slate-200">{s.email}</span>
 						<span class="badge badge-slate text-[10px] uppercase">{s.permission}</span>
 					</div>
-					<form method="POST" action="?/unshareUser">
-						<input type="hidden" name="shareId" value={s.id} />
-						<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove share" message="Remove this share?">Remove</ConfirmButton>
-					</form>
+					<div class="flex items-center gap-2">
+						<form method="POST" action="?/setShowDetails">
+							<input type="hidden" name="shareId" value={s.id} />
+							<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
+							<button class="btn btn-ghost btn-xs">{s.showDetails ? 'Hide details' : 'Show details'}</button>
+						</form>
+						<form method="POST" action="?/unshareUser">
+							<input type="hidden" name="shareId" value={s.id} />
+							<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove share" message="Remove this share?">Remove</ConfirmButton>
+						</form>
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -68,10 +76,17 @@
 							<span class="truncate text-sm text-slate-200">{s.groupName}</span>
 							<span class="badge badge-slate text-[10px] uppercase">{s.permission}</span>
 						</div>
-						<form method="POST" action="?/unshareGroup">
-							<input type="hidden" name="shareId" value={s.id} />
-							<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove group share" message="Remove this group share?">Remove</ConfirmButton>
-						</form>
+						<div class="flex items-center gap-2">
+							<form method="POST" action="?/setShowDetails">
+								<input type="hidden" name="shareId" value={s.id} />
+								<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
+								<button class="btn btn-ghost btn-xs">{s.showDetails ? 'Hide details' : 'Show details'}</button>
+							</form>
+							<form method="POST" action="?/unshareGroup">
+								<input type="hidden" name="shareId" value={s.id} />
+								<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove group share" message="Remove this group share?">Remove</ConfirmButton>
+							</form>
+						</div>
 					</li>
 				{/each}
 			</ul>
@@ -104,9 +119,12 @@
 
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Public link</h2>
-	{#if data.trip.publicToken}
+	{#if data.publicShareUrl}
 		<p class="text-sm text-slate-400">Anyone with this link can view the trip.</p>
-		<p class="mt-2 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">/share/{data.trip.publicToken}</p>
+		<div class="mt-2 flex items-center gap-2">
+			<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">/share/{data.trip.publicToken}</p>
+			<CopyButton text={data.publicShareUrl} class="btn btn-ghost btn-sm shrink-0" label="Copy link" />
+		</div>
 		<form method="POST" action="?/revokePublic" class="mt-3">
 			<ConfirmButton class="btn btn-danger btn-sm" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
 		</form>

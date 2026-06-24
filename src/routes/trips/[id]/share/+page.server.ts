@@ -104,7 +104,21 @@ export function _unshareGroup(ownerId: number, tripId: number, shareId: number) 
 	logAudit(ownerId, 'trip_unshare_group', 'trip', tripId, { shareId, sharedWithGroupId: share?.sharedWithGroupId });
 }
 
-export const load: PageServerLoad = ({ locals, params }) => {
+export function _setShowDetails(
+	ownerId: number,
+	tripId: number,
+	shareId: number,
+	showDetails: boolean
+) {
+	requireOwnedTrip(ownerId, tripId);
+	db.update(tripShares)
+		.set({ showDetails })
+		.where(and(eq(tripShares.id, shareId), eq(tripShares.tripId, tripId)))
+		.run();
+	logAudit(ownerId, 'trip_share_set_show_details', 'trip', tripId, { shareId, showDetails });
+}
+
+export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const t = requireOwnedTrip(u.id, Number(params.id));
 	const shares = db
@@ -112,7 +126,8 @@ export const load: PageServerLoad = ({ locals, params }) => {
 			id: tripShares.id,
 			email: users.email,
 			groupName: groups.name,
-			permission: tripShares.permission
+			permission: tripShares.permission,
+			showDetails: tripShares.showDetails
 		})
 		.from(tripShares)
 		.leftJoin(users, eq(tripShares.sharedWithUserId, users.id))
@@ -120,7 +135,10 @@ export const load: PageServerLoad = ({ locals, params }) => {
 		.where(eq(tripShares.tripId, t.id))
 		.all();
 	const myGroups = db.select().from(groups).where(eq(groups.ownerId, u.id)).all();
-	return { trip: t, shares, groups: myGroups };
+	const publicShareUrl = t.publicToken
+		? `${url.origin}/share/${encodeURIComponent(t.publicToken)}`
+		: null;
+	return { trip: t, shares, groups: myGroups, publicShareUrl };
 };
 
 export const actions: Actions = {
@@ -171,6 +189,15 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const shareId = Number((await request.formData()).get('shareId'));
 		_unshareGroup(u.id, Number(params.id), shareId);
+		throw redirect(303, `/trips/${params.id}/share`);
+	},
+	setShowDetails: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const shareId = Number(f.get('shareId'));
+		const showDetails = String(f.get('showDetails')) === '1';
+		if (!Number.isFinite(shareId)) return fail(400, { error: 'Invalid share' });
+		_setShowDetails(u.id, Number(params.id), shareId, showDetails);
 		throw redirect(303, `/trips/${params.id}/share`);
 	}
 };

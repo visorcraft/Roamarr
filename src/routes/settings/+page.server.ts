@@ -3,6 +3,7 @@ import { requireAdmin } from '$lib/server/auth';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
 import { logAudit } from '$lib/server/audit';
+import { setFlash } from '$lib/server/flash';
 import type { PageServerLoad } from './$types';
 
 function validDefaultLead(n: number) {
@@ -61,7 +62,7 @@ function parseLead(value: FormDataEntryValue | null, fallback: number): number {
 }
 
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
+	default: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
 		const pass = String(f.get('smtpPass') || '');
@@ -78,6 +79,7 @@ export const actions: Actions = {
 			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
 			webhookUrl: String(f.get('webhookUrl') || '') || undefined
 		});
+		setFlash(cookies, 'Settings saved.');
 		throw redirect(303, '/settings');
 	}
 };

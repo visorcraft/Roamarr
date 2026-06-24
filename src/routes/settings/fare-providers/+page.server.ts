@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { fareProviders } from '$lib/server/db/schema';
-import { registry, saveProvider } from '$lib/server/fareproviders';
+import { createProvider, updateProvider, deleteProvider, registry } from '$lib/server/fareproviders';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -12,6 +12,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		.select({
 			id: fareProviders.id,
 			providerKey: fareProviders.providerKey,
+			label: fareProviders.label,
 			enabled: fareProviders.enabled,
 			apiKey: fareProviders.apiKey
 		})
@@ -24,6 +25,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		saved: saved.map((s) => ({
 			id: s.id,
 			providerKey: s.providerKey,
+			label: s.label,
 			enabled: s.enabled,
 			hasKey: !!s.apiKey
 		}))
@@ -31,15 +33,34 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	save: async ({ request, locals }) => {
+	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		saveProvider(
+		createProvider(
 			u.id,
 			String(f.get('providerKey')),
+			String(f.get('label') || ''),
 			String(f.get('apiKey') || ''),
 			f.get('enabled') === 'on'
 		);
+		throw redirect(303, '/settings/fare-providers');
+	},
+	update: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		updateProvider(
+			u.id,
+			Number(f.get('id')),
+			String(f.get('label') || ''),
+			String(f.get('apiKey') || ''),
+			f.get('enabled') === 'on'
+		);
+		throw redirect(303, '/settings/fare-providers');
+	},
+	delete: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		deleteProvider(u.id, Number(f.get('id')));
 		throw redirect(303, '/settings/fare-providers');
 	}
 };

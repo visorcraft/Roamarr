@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
@@ -18,9 +19,9 @@
 	</div>
 </header>
 
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Your policies</h2>
-	{#if data.policies.length}
+{#if data.policies.length}
+	<section class="card mt-6 p-5">
+		<h2 class="section-title mb-3">Your policies</h2>
 		<ul class="space-y-2">
 			{#each data.policies as p (p.id)}
 				<li class="flex items-start gap-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
@@ -99,10 +100,14 @@
 				</li>
 			{/each}
 		</ul>
-	{:else}
-		<p class="py-6 text-center text-sm text-slate-500">No policies yet. Add one below.</p>
-	{/if}
-</section>
+	</section>
+{:else}
+	<EmptyState message="No insurance policies yet — add one below.">
+		{#snippet icon()}
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" /></svg>
+		{/snippet}
+	</EmptyState>
+{/if}
 
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Add policy</h2>

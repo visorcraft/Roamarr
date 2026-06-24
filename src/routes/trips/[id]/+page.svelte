@@ -1,10 +1,11 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import CopyButton from '$lib/components/CopyButton.svelte';
 	import { DateTime } from 'luxon';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import type { PageData } from './$types';
 
-	let { data, form }: { data: PageData; form?: { error?: string } } = $props();
+	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let editingId = $state<number | null>(null);
 
 	const SEG = {
@@ -44,6 +45,8 @@
 		startAt: string | null;
 		endAt: string | null;
 		location: string | null;
+		confirmationNumber?: string | null;
+		detailsJson?: string | null;
 	};
 </script>
 
@@ -74,7 +77,10 @@
 			<h2 class="section-title mb-3">Calendar feed</h2>
 			{#if data.feedUrl}
 				<p class="text-sm text-slate-400">Subscribe to this trip with any calendar app.</p>
-				<p class="mt-2 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">{data.feedUrl}</p>
+				<div class="mt-2 flex items-center gap-2">
+					<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">{data.feedUrl}</p>
+					<CopyButton text={data.feedUrl} class="btn btn-ghost btn-sm shrink-0" label="Copy URL" />
+				</div>
 				<div class="mt-3 flex flex-wrap gap-2">
 					<form method="POST" action="?/regenerateCalendarFeed">
 						<button class="btn btn-primary btn-sm">Regenerate feed URL</button>
@@ -103,31 +109,38 @@
 								<input type="hidden" name="segmentId" value={s.id} />
 								<div class="field">
 									<label class="label" for={`title-${s.id}`}>Title</label>
-									<input id={`title-${s.id}`} name="title" value={s.title} class="input" required />
+									<input id={`title-${s.id}`} name="title" value={s.title} class="input {form?.errors?.title ? 'input-error' : ''}" required />
+									{#if form?.errors?.title}<p class="field-error">{form.errors.title}</p>{/if}
 								</div>
 								<div class="field">
 									<label class="label" for={`localStart-${s.id}`}>Starts</label>
-									<input id={`localStart-${s.id}`} name="localStart" type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} class="input" required />
+									<input id={`localStart-${s.id}`} name="localStart" type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} class="input {form?.errors?.localStart ? 'input-error' : ''}" required />
+									{#if form?.errors?.localStart}<p class="field-error">{form.errors.localStart}</p>{/if}
 								</div>
 								<div class="field">
 									<label class="label" for={`startTz-${s.id}`}>Timezone</label>
-									<TimezoneSelect id={`startTz-${s.id}`} name="startTz" value={s.startTz} class="input" />
+									<TimezoneSelect id={`startTz-${s.id}`} name="startTz" value={s.startTz} class="input {form?.errors?.startTz ? 'input-error' : ''}" />
+									{#if form?.errors?.startTz}<p class="field-error">{form.errors.startTz}</p>{/if}
 								</div>
 								<div class="field">
 									<label class="label" for={`endAt-${s.id}`}>Ends</label>
-									<input id={`endAt-${s.id}`} name="endAt" type="datetime-local" value={toDatetimeLocal(s.endAt, s.startTz)} class="input" />
+									<input id={`endAt-${s.id}`} name="endAt" type="datetime-local" value={toDatetimeLocal(s.endAt, s.startTz)} class="input {form?.errors?.endAt ? 'input-error' : ''}" />
+									{#if form?.errors?.endAt}<p class="field-error">{form.errors.endAt}</p>{/if}
 								</div>
 								<div class="field">
 									<label class="label" for={`location-${s.id}`}>Location</label>
-									<input id={`location-${s.id}`} name="location" value={s.location ?? ''} class="input" />
+									<input id={`location-${s.id}`} name="location" value={s.location ?? ''} class="input {form?.errors?.location ? 'input-error' : ''}" />
+									{#if form?.errors?.location}<p class="field-error">{form.errors.location}</p>{/if}
 								</div>
 								<div class="field">
 									<label class="label" for={`confirmationNumber-${s.id}`}>Confirmation #</label>
-									<input id={`confirmationNumber-${s.id}`} name="confirmationNumber" value={s.confirmationNumber ?? ''} class="input" />
+									<input id={`confirmationNumber-${s.id}`} name="confirmationNumber" value={s.confirmationNumber ?? ''} class="input {form?.errors?.confirmationNumber ? 'input-error' : ''}" />
+									{#if form?.errors?.confirmationNumber}<p class="field-error">{form.errors.confirmationNumber}</p>{/if}
 								</div>
 								<div class="field sm:col-span-2">
 									<label class="label" for={`detailsJson-${s.id}`}>Details (JSON)</label>
-									<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs">{s.detailsJson ?? ''}</textarea>
+									<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs {form?.errors?.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
+									{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
 								</div>
 								<div class="flex gap-2 sm:col-span-2">
 									<button class="btn btn-primary">Save</button>
@@ -172,30 +185,36 @@
 		<form method="POST" action={`/trips/${data.trip.id}/segments?/add`} class="grid gap-4 sm:grid-cols-2">
 			<div class="field">
 				<label class="label" for="type">Type</label>
-				<select id="type" name="type" class="select">
+				<select id="type" name="type" class="select {form?.errors?.type ? 'input-error' : ''}">
 					<option value="flight">Flight</option>
 					<option value="lodging">Lodging</option>
 				</select>
+				{#if form?.errors?.type}<p class="field-error">{form.errors.type}</p>{/if}
 			</div>
 			<div class="field">
 				<label class="label" for="title">Title</label>
-				<input id="title" name="title" placeholder="UA123 / Grand Hotel" class="input" required />
+				<input id="title" name="title" placeholder="UA123 / Grand Hotel" class="input {form?.errors?.title ? 'input-error' : ''}" required />
+				{#if form?.errors?.title}<p class="field-error">{form.errors.title}</p>{/if}
 			</div>
 			<div class="field">
 				<label class="label" for="localStart">Starts</label>
-				<input id="localStart" name="localStart" type="datetime-local" class="input" required />
+				<input id="localStart" name="localStart" type="datetime-local" class="input {form?.errors?.localStart ? 'input-error' : ''}" required />
+				{#if form?.errors?.localStart}<p class="field-error">{form.errors.localStart}</p>{/if}
 			</div>
 			<div class="field">
 				<label class="label" for="startTz">Timezone</label>
-				<TimezoneSelect id="startTz" name="startTz" value="UTC" class="input" />
+				<TimezoneSelect id="startTz" name="startTz" value="UTC" class="input {form?.errors?.startTz ? 'input-error' : ''}" />
+				{#if form?.errors?.startTz}<p class="field-error">{form.errors.startTz}</p>{/if}
 			</div>
 			<div class="field">
 				<label class="label" for="location">Location</label>
-				<input id="location" name="location" placeholder="JFK → LHR" class="input" />
+				<input id="location" name="location" placeholder="JFK → LHR" class="input {form?.errors?.location ? 'input-error' : ''}" />
+				{#if form?.errors?.location}<p class="field-error">{form.errors.location}</p>{/if}
 			</div>
 			<div class="field">
 				<label class="label" for="confirmationNumber">Confirmation #</label>
-				<input id="confirmationNumber" name="confirmationNumber" placeholder="ABC123" class="input" />
+				<input id="confirmationNumber" name="confirmationNumber" placeholder="ABC123" class="input {form?.errors?.confirmationNumber ? 'input-error' : ''}" />
+				{#if form?.errors?.confirmationNumber}<p class="field-error">{form.errors.confirmationNumber}</p>{/if}
 			</div>
 			<div class="sm:col-span-2">
 				<button class="btn btn-primary">Add segment</button>
@@ -211,7 +230,7 @@
 					<form method="POST" action={`/trips/${data.trip.id}/fare-watch?/enable`} class="flex items-center gap-2">
 						<select name="providerId" class="select w-auto">
 							{#each data.providers as p (p.id)}
-								<option value={p.id}>{p.providerKey}</option>
+								<option value={p.id}>{p.label || p.providerKey}</option>
 							{/each}
 						</select>
 						<button class="btn btn-ghost">Enable</button>
@@ -225,7 +244,7 @@
 						<li class="flex items-center gap-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
 							<div class="min-w-0 flex-1">
 								<div class="flex flex-wrap items-center gap-2">
-									<span class="badge badge-slate">{w.providerKey}</span>
+									<span class="badge badge-slate">{w.label || w.providerKey}</span>
 									<span class="badge {w.status === 'active' ? 'badge-brand' : 'badge-slate'}">{w.status}</span>
 								</div>
 								{#if last?.summary}
@@ -295,6 +314,12 @@
 								{fmt(s.startAt)}{#if s.endAt} → {fmt(s.endAt)}{/if}
 							</div>
 							{#if s.location}<div class="mt-0.5 text-xs text-slate-500">{s.location}</div>{/if}
+							{#if s.confirmationNumber}<div class="mt-0.5 font-mono text-xs text-slate-500">conf {s.confirmationNumber}</div>{/if}
+							{#if s.detailsJson}
+								<div class="mt-2 rounded-lg bg-white/[0.03] p-2 ring-1 ring-white/5">
+									<pre class="whitespace-pre-wrap font-mono text-[10px] text-slate-400">{s.detailsJson}</pre>
+								</div>
+							{/if}
 						</div>
 					</li>
 				{/each}

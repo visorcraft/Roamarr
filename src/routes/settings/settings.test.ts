@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { _saveAdminSettings as saveAdminSettings } from './+page.server';
+import { _saveAdminSettings as saveAdminSettings, actions } from './+page.server';
 import { settings, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { makeUser } from '../../../tests/helpers';
@@ -102,4 +102,26 @@ test('saves empty webhookUrl as null', () => {
 	});
 	const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
 	expect(s.webhookUrl).toBeNull();
+});
+
+test('default action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = makeUser(db, { email: 'admin@x.c', role: 'admin' });
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/settings', {
+		method: 'POST',
+		body: new URLSearchParams({
+			instanceName: 'R',
+			allowRegistration: 'on',
+			defaultTimezone: 'UTC',
+			defaultFlightCheckinLeadHours: '24',
+			defaultDocumentExpiryLeadDays: '90'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.default({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/settings'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Settings saved.', expect.any(Object));
 });

@@ -4,6 +4,7 @@ import { DateTime } from 'luxon';
 import { hashPassword, invalidateOtherSessions, requireUser, verifyPassword } from '$lib/server/auth';
 import { requireOwnedUser } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
+import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -68,7 +69,7 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	updateProfile: async ({ request, locals }) => {
+	updateProfile: async ({ request, locals, cookies }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		const displayName = String(f.get('displayName') ?? '');
@@ -85,6 +86,7 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });
 		}
+		setFlash(cookies, 'Profile updated.');
 		throw redirect(303, '/profile');
 	},
 	updatePassword: async ({ cookies, request, locals }) => {
@@ -100,6 +102,7 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Password update failed' });
 		}
+		setFlash(cookies, 'Password changed.');
 		throw redirect(303, '/profile');
 	}
 };

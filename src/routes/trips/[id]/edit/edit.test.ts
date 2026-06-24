@@ -183,3 +183,22 @@ test('edit action rejects invalid data and enforces ownership', async () => {
 		status: 404
 	});
 });
+
+import { render } from 'svelte/server';
+import EditTripPage from './+page.svelte';
+
+test('edit trip form highlights invalid fields and shows per-field errors', () => {
+	const trip = {
+		id: 1,
+		name: 'Trip',
+		destination: '',
+		startDate: '',
+		endDate: '',
+		notes: null
+	};
+	const { body } = render(EditTripPage, {
+		props: { data: { trip, owner: true }, form: { errors: { name: 'name is required' } } }
+	});
+	expect(body).toContain('input-error');
+	expect(body).toContain('name is required');
+});

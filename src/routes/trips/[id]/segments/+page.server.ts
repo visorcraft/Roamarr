@@ -137,14 +137,14 @@ export const actions: Actions = {
 		const f = await request.formData();
 		let details: object | undefined;
 		const detailsRaw = String(f.get('detailsJson') || '');
+		const v = new Validator();
 		if (detailsRaw) {
 			try {
 				details = JSON.parse(detailsRaw);
 			} catch {
-				return fail(400, { error: 'Invalid details JSON' });
+				v.addError('detailsJson', 'Invalid details JSON');
 			}
 		}
-		const v = new Validator();
 		const segmentId = v.positiveId(f.get('segmentId'), 'segmentId');
 		const title = v.requiredString(f.get('title'), 'title', { max: 200 });
 		const localStart = v.requiredDateTime(f.get('localStart'), 'localStart');

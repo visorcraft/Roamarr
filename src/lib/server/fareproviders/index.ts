@@ -16,20 +16,63 @@ export interface FareProvider {
 
 export const registry: Record<string, FareProvider> = { [stub.key]: stub };
 
-export function saveProvider(userId: number, providerKey: string, apiKey: string, enabled: boolean) {
+export function createProvider(
+	userId: number,
+	providerKey: string,
+	label: string,
+	apiKey: string,
+	enabled: boolean
+) {
 	if (!registry[providerKey]) throw error(400, 'Unknown provider');
-	// A blank apiKey means "keep the stored key" — the settings form never echoes the
-	// secret back, so an unrelated save (e.g. just toggling `enabled`) must not wipe it.
-	// Mirrors the smtp_pass preserve pattern.
-	const enc = apiKey ? encrypt(apiKey) : null;
-	const set: Partial<typeof fareProviders.$inferInsert> = { enabled };
-	if (apiKey) set.apiKey = enc;
 	return db
 		.insert(fareProviders)
-		.values({ userId, providerKey, apiKey: enc, enabled })
-		.onConflictDoUpdate({ target: [fareProviders.userId, fareProviders.providerKey], set })
+		.values({
+			userId,
+			providerKey,
+			label: label.trim(),
+			apiKey: apiKey ? encrypt(apiKey) : null,
+			enabled
+		})
 		.returning()
 		.get();
+}
+
+function requireOwnedProvider(userId: number, providerId: number) {
+	const p = db
+		.select()
+		.from(fareProviders)
+		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
+		.get();
+	if (!p) throw error(404, 'Not found');
+	return p;
+}
+
+export function updateProvider(
+	userId: number,
+	providerId: number,
+	label: string,
+	apiKey: string,
+	enabled: boolean
+) {
+	requireOwnedProvider(userId, providerId);
+	const set: Partial<typeof fareProviders.$inferInsert> = {
+		label: label.trim(),
+		enabled
+	};
+	if (apiKey) set.apiKey = encrypt(apiKey);
+	return db
+		.update(fareProviders)
+		.set(set)
+		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
+		.returning()
+		.get();
+}
+
+export function deleteProvider(userId: number, providerId: number) {
+	requireOwnedProvider(userId, providerId);
+	db.delete(fareProviders)
+		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
+		.run();
 }
 
 export function toggleWatch(

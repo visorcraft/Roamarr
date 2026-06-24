@@ -52,7 +52,36 @@ export function canView(userId: number, trip: Trip) {
 	return !!viaGroup;
 }
 
-export function viewerProjection(trip: Trip, segs: Segment[]) {
+export function canViewDetails(userId: number, trip: Trip) {
+	if (trip.ownerId === userId) return true;
+	const direct = db
+		.select({ id: tripShares.id })
+		.from(tripShares)
+		.where(
+			and(
+				eq(tripShares.tripId, trip.id),
+				eq(tripShares.sharedWithUserId, userId),
+				eq(tripShares.showDetails, true)
+			)
+		)
+		.get();
+	if (direct) return true;
+	const viaGroup = db
+		.select({ id: tripShares.id })
+		.from(tripShares)
+		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
+		.where(
+			and(
+				eq(tripShares.tripId, trip.id),
+				eq(groupMembers.userId, userId),
+				eq(tripShares.showDetails, true)
+			)
+		)
+		.get();
+	return !!viaGroup;
+}
+
+export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = false) {
 	return {
 		id: trip.id,
 		name: trip.name,
@@ -65,7 +94,11 @@ export function viewerProjection(trip: Trip, segs: Segment[]) {
 			title: s.title,
 			startAt: s.startAt,
 			endAt: s.endAt,
-			location: s.location
+			location: s.location,
+			...(includeDetails && {
+				confirmationNumber: s.confirmationNumber,
+				detailsJson: s.detailsJson
+			})
 		}))
 	};
 }

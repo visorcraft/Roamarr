@@ -86,3 +86,26 @@ test('/health is public and not redirected after setup', async () => {
 	const res = (await run('/health')) as Response;
 	expect(res.status).toBe(200);
 });
+
+test('reads a flash cookie into locals and clears it', async () => {
+	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	const cookies = {
+		get: (name: string) => (name === 'flash' ? 'Saved.' : undefined),
+		set: vi.fn()
+	};
+	const ev = (path: string) => ({
+		url: new URL('http://x' + path),
+		cookies,
+		locals: {} as App.Locals,
+		request: new Request('http://x' + path)
+	});
+	const res = (await handle({
+		event: ev('/login') as any,
+		resolve: async (e: any) => {
+			expect(e.locals.flash).toBe('Saved.');
+			return new Response('ok');
+		}
+	})) as Response;
+	expect(res.status).toBe(200);
+	expect(cookies.set).toHaveBeenCalledWith('flash', '', { path: '/', maxAge: 0 });
+});

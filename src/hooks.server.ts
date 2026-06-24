@@ -11,7 +11,7 @@ import { bootApp } from '$lib/server/boot';
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
 
-const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/health$/];
+const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/health$/];
 
 const CSP_DIRECTIVES: Record<string, string[]> = {
 	'default-src': ["'self'"],
@@ -34,6 +34,13 @@ function contentSecurityPolicy() {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = await validateSession(event.cookies.get('session'));
+
+	const flash = event.cookies.get('flash');
+	if (flash) {
+		event.locals.flash = flash;
+		event.cookies.set('flash', '', { path: '/', maxAge: 0 });
+	}
+
 	const path = event.url.pathname;
 
 	if (!isSetupComplete() && path !== '/setup' && path !== '/health') throw redirect(302, '/setup');

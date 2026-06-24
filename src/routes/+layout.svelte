@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
+	import Toast from '$lib/components/Toast.svelte';
 
 	let { data, children } = $props();
 	let open = $state(false);
@@ -48,6 +49,10 @@
 		</span>
 	</a>
 {/snippet}
+
+{#key data.flash}
+	<Toast message={data.flash ?? ''} />
+{/key}
 
 {#if standalone}
 	<div class="flex min-h-screen flex-col">

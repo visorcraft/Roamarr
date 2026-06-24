@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 
@@ -21,9 +22,9 @@
 	</div>
 </header>
 
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Your documents</h2>
-	{#if data.documents.length}
+{#if data.documents.length}
+	<section class="card mt-6 p-5">
+		<h2 class="section-title mb-3">Your documents</h2>
 		<ul class="space-y-2">
 			{#each data.documents as d (d.id)}
 				<li class="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
@@ -87,10 +88,14 @@
 				</li>
 			{/each}
 		</ul>
-	{:else}
-		<p class="py-6 text-center text-sm text-slate-500">No documents yet. Add one below.</p>
-	{/if}
-</section>
+	</section>
+{:else}
+	<EmptyState message="No documents yet — add one below.">
+		{#snippet icon()}
+			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M5 22h14a2 2 0 0 0 2-2V7l-5-5H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></svg>
+		{/snippet}
+	</EmptyState>
+{/if}
 
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Add document</h2>

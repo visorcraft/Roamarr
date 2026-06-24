@@ -15,7 +15,7 @@ vi.mock('$lib/server/reminders', () => remindersMock);
 
 import { _addDocument as addDocument } from './documents/+page.server';
 import { _updateProgram as updateProgram } from './loyalty/+page.server';
-import { _updateProfile, _updatePassword } from './+page.server';
+import { _updateProfile, _updatePassword, actions } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
 import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
@@ -267,4 +267,54 @@ test('update password invalidates all other sessions for the user', async () => 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('password_change');
+});
+
+test('updateProfile action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p-action@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({
+			displayName: 'Ada',
+			timezone: 'UTC',
+			flightCheckinLeadHours: '24',
+			documentExpiryLeadDays: '90'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.updateProfile({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Profile updated.', expect.any(Object));
+});
+
+test('updatePassword action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({ email: 'p-pw-action@x.c', passwordHash: initialHash, displayName: 'P', timezone: 'UTC' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: () => 'current-token' };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({
+			oldPassword: 'oldsecret',
+			newPassword: 'newsecret1',
+			confirmPassword: 'newsecret1'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.updatePassword({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Password changed.', expect.any(Object));
 });

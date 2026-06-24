@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import type { trips as tripsTable, segments as segmentsTable } from '$lib/server/db/schema';
-import { canView, canEdit, viewerProjection } from '$lib/server/sharing';
+import { canView, canEdit, canViewDetails, viewerProjection } from '$lib/server/sharing';
 import { requireOwnedTrip } from '$lib/server/ownership';
 
 type Trip = typeof tripsTable.$inferSelect;
@@ -63,7 +63,7 @@ export function loadTripFor(userId: number, tripId: number): TripView {
 	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 	const editable = canEdit(userId, t);
 	if (editable) return { owner: t.ownerId === userId, editor: true, trip: t, segments: segs };
-	return { owner: false, editor: false, trip: viewerProjection(t, segs) };
+	return { owner: false, editor: false, trip: viewerProjection(t, segs, canViewDetails(userId, t)) };
 }
 
 

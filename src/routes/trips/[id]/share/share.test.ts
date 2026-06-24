@@ -12,7 +12,8 @@ import {
 	_shareWithGroup as shareWithGroup,
 	_unshareUser as unshareUser,
 	_unshareGroup as unshareGroup,
-	_mintPublicToken as mintPublicToken
+	_mintPublicToken as mintPublicToken,
+	_setShowDetails as setShowDetails
 } from './+page.server';
 import { canView, canEdit } from '$lib/server/sharing';
 import { users, trips, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
@@ -147,4 +148,24 @@ test('group share can be created with edit permission', () => {
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	expect(share.permission).toBe('edit');
 	expect(canEdit(member.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+});
+
+test('owner can toggle showDetails on a share; non-owner cannot', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'details-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const friend = db.insert(users).values({ email: 'details-f@x.c', passwordHash: 'x', displayName: 'F' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	shareWithUserEmail(owner.id, t.id, friend.email);
+	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	expect(share.showDetails).toBe(false);
+
+	setShowDetails(owner.id, t.id, share.id, true);
+	const updated = db.select().from(tripShares).where(eq(tripShares.id, share.id)).get()!;
+	expect(updated.showDetails).toBe(true);
+
+	expect(() => setShowDetails(friend.id, t.id, share.id, false)).toThrow();
+	expect(db.select().from(tripShares).where(eq(tripShares.id, share.id)).get()!.showDetails).toBe(true);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	expect(logs.some((l) => l.action === 'trip_share_set_show_details')).toBe(true);
 });

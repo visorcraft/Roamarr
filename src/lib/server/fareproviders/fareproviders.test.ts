@@ -31,3 +31,32 @@ test('registry has the stub; key stored encrypted; checks active, skips paused',
 	expect(w.lastResultJson).toBeTruthy();
 	expect(w.lastCheckedAt).toBeTruthy();
 });
+
+test('saving with a blank apiKey preserves the stored key', () => {
+	const db = (ctx as { db: import('../db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'k@x.c', passwordHash: 'x', displayName: 'K' })
+		.returning()
+		.get();
+	saveProvider(u.id, 'stub', 'ORIGINAL-KEY', true);
+	saveProvider(u.id, 'stub', '', false); // toggle enabled off without re-entering the key
+	const row = db.select().from(fareProviders).where(eq(fareProviders.userId, u.id)).get()!;
+	expect(row.enabled).toBe(false);
+	expect(decrypt(row.apiKey!)).toBe('ORIGINAL-KEY');
+});
+
+test('toggleWatch is idempotent — no duplicate watches', () => {
+	const db = (ctx as { db: import('../db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'w@x.c', passwordHash: 'x', displayName: 'W' })
+		.returning()
+		.get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
+	const p = saveProvider(u.id, 'stub', 'KEY', true);
+	const w1 = toggleWatch(u.id, t.id, p.id);
+	const w2 = toggleWatch(u.id, t.id, p.id);
+	expect(w2.id).toBe(w1.id);
+	expect(db.select().from(fareWatches).where(eq(fareWatches.tripId, t.id)).all().length).toBe(1);
+});

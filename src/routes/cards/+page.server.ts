@@ -10,13 +10,16 @@ export function _addCard(
 	userId: number,
 	i: { nickname: string; network: string; last4?: string; notes?: string }
 ) {
+	// Never persist a full PAN: keep digits only and store at most the last four,
+	// whatever the form submits (spec: cards store last4 + network only).
+	const last4 = i.last4 ? i.last4.replace(/\D/g, '').slice(-4) || null : null;
 	return db
 		.insert(cards)
 		.values({
 			userId,
 			nickname: i.nickname,
 			network: i.network,
-			last4: i.last4,
+			last4,
 			notes: i.notes
 		})
 		.returning()

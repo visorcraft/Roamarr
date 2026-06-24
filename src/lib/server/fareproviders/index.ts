@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from '../db';
 import { fareProviders, fareWatches } from '../db/schema';
@@ -18,13 +18,16 @@ export const registry: Record<string, FareProvider> = { [stub.key]: stub };
 
 export function saveProvider(userId: number, providerKey: string, apiKey: string, enabled: boolean) {
 	if (!registry[providerKey]) throw error(400, 'Unknown provider');
+	// A blank apiKey means "keep the stored key" — the settings form never echoes the
+	// secret back, so an unrelated save (e.g. just toggling `enabled`) must not wipe it.
+	// Mirrors the smtp_pass preserve pattern.
+	const enc = apiKey ? encrypt(apiKey) : null;
+	const set: Partial<typeof fareProviders.$inferInsert> = { enabled };
+	if (apiKey) set.apiKey = enc;
 	return db
 		.insert(fareProviders)
-		.values({ userId, providerKey, apiKey: apiKey ? encrypt(apiKey) : null, enabled })
-		.onConflictDoUpdate({
-			target: [fareProviders.userId, fareProviders.providerKey],
-			set: { apiKey: apiKey ? encrypt(apiKey) : null, enabled }
-		})
+		.values({ userId, providerKey, apiKey: enc, enabled })
+		.onConflictDoUpdate({ target: [fareProviders.userId, fareProviders.providerKey], set })
 		.returning()
 		.get();
 }
@@ -37,9 +40,24 @@ export function toggleWatch(
 ) {
 	requireOwnedTrip(userId, tripId);
 	assertOwnedRefs(userId, { providerId, segmentId: segmentId ?? null });
+	const sid = segmentId ?? null;
+	// Idempotent: re-enabling an already-watched (trip, provider, segment) returns the
+	// existing row instead of stacking duplicate watches (and duplicate provider calls).
+	const existing = db
+		.select()
+		.from(fareWatches)
+		.where(
+			and(
+				eq(fareWatches.tripId, tripId),
+				eq(fareWatches.providerId, providerId),
+				sid == null ? isNull(fareWatches.segmentId) : eq(fareWatches.segmentId, sid)
+			)
+		)
+		.get();
+	if (existing) return existing;
 	return db
 		.insert(fareWatches)
-		.values({ tripId, providerId, segmentId: segmentId ?? null, status: 'active' })
+		.values({ tripId, providerId, segmentId: sid, status: 'active' })
 		.returning()
 		.get();
 }

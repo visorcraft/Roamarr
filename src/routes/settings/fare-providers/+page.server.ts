@@ -9,13 +9,24 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const saved = db
-		.select({ id: fareProviders.id, providerKey: fareProviders.providerKey, enabled: fareProviders.enabled })
+		.select({
+			id: fareProviders.id,
+			providerKey: fareProviders.providerKey,
+			enabled: fareProviders.enabled,
+			apiKey: fareProviders.apiKey
+		})
 		.from(fareProviders)
 		.where(eq(fareProviders.userId, u.id))
 		.all();
 	return {
 		providers: Object.values(registry).map((p) => ({ key: p.key, label: p.label })),
-		saved
+		// Expose only whether a key is set — never ship the ciphertext to the client.
+		saved: saved.map((s) => ({
+			id: s.id,
+			providerKey: s.providerKey,
+			enabled: s.enabled,
+			hasKey: !!s.apiKey
+		}))
 	};
 };
 

@@ -38,7 +38,7 @@
 			<option value="amex">Amex</option><option value="disc">Discover</option>
 			<option value="other">Other</option>
 		</select>
-		<input name="last4" placeholder="Last 4" class="border p-2" />
+		<input name="last4" placeholder="Last 4" maxlength="4" inputmode="numeric" class="border p-2" />
 		<input name="notes" placeholder="Notes" class="border p-2" />
 		<button class="bg-blue-600 text-white p-2 rounded">Add card</button>
 	</form>

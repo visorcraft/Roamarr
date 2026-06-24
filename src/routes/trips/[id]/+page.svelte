@@ -594,19 +594,37 @@
 						{#if data.owner === true}
 							<a href={`/trips/${trip.id}/share`} class="rounded-lg px-2.5 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Sharing settings</a>
 						{/if}
-				{#if isEditor && data.policies?.length}
+				{#if isEditor && (data.policies?.length || data.availablePolicies?.length)}
 					<div class="trip-sidebar-card">
 						<h2 class="mb-3 text-sm font-semibold text-white">Insurance</h2>
+						{#if data.policies?.length}
 						<ul class="space-y-2">
 							{#each data.policies as p (p.id)}
 							<li class="rounded-lg bg-white/[0.03] p-2.5 ring-1 ring-white/5">
-							<p class="text-sm font-medium text-white">{p.provider}</p>
-							{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
-							{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
-							{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
+								<p class="text-sm font-medium text-white">{p.provider}</p>
+								{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
+								{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
+								{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
+								{#if data.owner === true}
+								<form method="POST" action="?/detachPolicy" class="mt-2">
+									<input type="hidden" name="policyId" value={p.id} />
+									<button class="btn btn-ghost btn-ghost-danger btn-sm">Detach</button>
+								</form>
+								{/if}
 							</li>
 							{/each}
 						</ul>
+						{/if}
+						{#if data.owner === true && data.availablePolicies?.length}
+						<form method="POST" action="?/attachPolicy" class="mt-3 flex flex-col gap-2">
+							<select name="policyId" class="input text-sm">
+								{#each data.availablePolicies as p}
+								<option value={p.id}>{p.provider}{#if p.policyNumber} — {p.policyNumber}{/if}</option>
+								{/each}
+							</select>
+							<button class="btn btn-primary btn-sm">Attach policy</button>
+						</form>
+						{/if}
 					</div>
 				{/if}
 					</nav>

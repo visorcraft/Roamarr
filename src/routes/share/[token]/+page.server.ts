@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
 import { getSettings } from '$lib/server/settings';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
 export function _loadByToken(token: string) {
@@ -14,4 +15,9 @@ export function _loadByToken(token: string) {
 	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs) };
 }
 
-export const load: PageServerLoad = ({ params }) => _loadByToken(params.token);
+export const load: PageServerLoad = ({ params, getClientAddress }) => {
+	const ip = getClientAddress();
+	const limit = checkRateLimit(ip, 'share:token', { maxAttempts: 20, windowMs: 60_000 });
+	if (!limit.allowed) throw error(429, 'Too many requests');
+	return _loadByToken(params.token);
+};

@@ -4,6 +4,11 @@ import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { cards, fareProviders, fareWatches, insurancePolicies, segments, trips } from '$lib/server/db/schema';
 import {
+	attachPolicyToTrip,
+	detachPolicyFromTrip,
+	listPoliciesForUser
+} from '$lib/server/insurance';
+import {
 	duplicateTrip,
 	loadTripFor,
 	regenerateCalendarToken,
@@ -54,16 +59,15 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			.from(cards)
 			.where(eq(cards.userId, u.id))
 			.all();
-		const policies = db
-			.select()
-			.from(insurancePolicies)
-			.where(eq(insurancePolicies.tripId, view.trip.id))
-			.all();
-		return { ...view, providers, watches, cards: userCards, policies, feedUrl, publicShareUrl } as TripView & {
+		const allPolicies = listPoliciesForUser(u.id);
+		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
+		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
+		return { ...view, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl } as TripView & {
 			providers: { id: number; providerKey: string; label: string }[];
 			watches: typeof watches;
 			cards: typeof userCards;
 			policies: typeof policies;
+			availablePolicies: typeof allPolicies;
 			feedUrl: string | null;
 			publicShareUrl: string | null;
 		};
@@ -139,6 +143,26 @@ export const actions: Actions = {
 			.get();
 		if (!seg) throw error(404, 'Segment not found');
 		upsertCustomReminder(u.id, 'segment', segmentId, seg.startAt, offset);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	attachPolicy: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		requireOwnedTrip(u.id, tripId);
+		const policyId = Number((await request.formData()).get('policyId'));
+		if (!Number.isFinite(policyId) || policyId <= 0) throw error(400, 'Invalid policy');
+		attachPolicyToTrip(u.id, policyId, tripId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	detachPolicy: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		requireOwnedTrip(u.id, tripId);
+		const policyId = Number((await request.formData()).get('policyId'));
+		if (!Number.isFinite(policyId) || policyId <= 0) throw error(400, 'Invalid policy');
+		detachPolicyFromTrip(u.id, policyId);
 		throw redirect(303, `/trips/${tripId}`);
 	}
 };

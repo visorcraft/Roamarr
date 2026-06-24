@@ -3,7 +3,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
-import { logAudit } from '$lib/server/audit';
+import { listAuditLogs, logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
 import { db } from '$lib/server/db';
@@ -64,7 +64,8 @@ export const load: PageServerLoad = ({ locals }) => {
 		groups: db.select({ count: count() }).from(groups).get()?.count ?? 0,
 		notifications: db.select({ count: count() }).from(notifications).get()?.count ?? 0
 	};
-	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats };
+	const recentLogs = listAuditLogs({ limit: 5 }).logs;
+	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats, recentLogs };
 };
 
 function parseLead(value: FormDataEntryValue | null, fallback: number): number {

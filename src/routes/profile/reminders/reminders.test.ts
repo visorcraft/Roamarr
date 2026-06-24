@@ -11,7 +11,7 @@ import { load, actions } from './+page.server';
 import { users, reminders } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
-test('load returns the users reminders', () => {
+test('load returns the users reminders', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const other = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
@@ -30,7 +30,7 @@ test('load returns the users reminders', () => {
 		fireAt: '2026-01-02T00:00:00Z'
 	}).run();
 
-	const data = load({ locals: { user: u } } as any);
+	const data = (await load({ locals: { user: u } } as any)) as { reminders: { userId: number }[] };
 	expect(data.reminders).toHaveLength(1);
 	expect(data.reminders[0].userId).toBe(u.id);
 });
@@ -47,10 +47,10 @@ test('cancel action deletes the users own reminder', async () => {
 	}).returning().get();
 
 	await expect(
-		actions.cancel(
-			{ request: new Request('http://x', { method: 'POST', body: new URLSearchParams({ id: String(r.id) }) }), locals: { user: u } } as any,
-			{ params: {} } as any
-		)
+		actions.cancel({
+			request: new Request('http://x', { method: 'POST', body: new URLSearchParams({ id: String(r.id) }) }),
+			locals: { user: u }
+		} as any)
 	).rejects.toSatisfy((e: any) => e.status === 303 && e.location === '/profile/reminders');
 
 	expect(db.select().from(reminders).where(eq(reminders.id, r.id)).get()).toBeUndefined();

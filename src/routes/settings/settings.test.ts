@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { _saveAdminSettings as saveAdminSettings, actions } from './+page.server';
+import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
 import { settings, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { makeUser } from '../../../tests/helpers';
@@ -102,6 +102,22 @@ test('saves empty webhookUrl as null', () => {
 	});
 	const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
 	expect(s.webhookUrl).toBeNull();
+});
+
+test('load includes recent audit log entries for admins', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = makeUser(db, { email: 'audit-admin@x.c', role: 'admin' });
+	saveAdminSettings(u.id, {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90
+	});
+
+	const data = load({ locals: { user: u } as App.Locals } as any) as { recentLogs: { action: string }[] };
+	expect(data.recentLogs).toHaveLength(1);
+	expect(data.recentLogs[0].action).toBe('settings_update');
 });
 
 test('default action sets a flash cookie and redirects', async () => {

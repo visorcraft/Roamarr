@@ -43,6 +43,29 @@
 	</form>
 </section>
 
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Recent activity</h2>
+	{#if data.recentLogs.length === 0}
+		<p class="mt-2 text-sm text-slate-400">No audit log entries yet.</p>
+	{:else}
+		<ul class="mt-3 divide-y divide-white/10">
+			{#each data.recentLogs as log}
+				<li class="py-3 text-sm">
+					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+						<span class="font-medium text-white">{log.action}</span>
+						<span class="text-slate-400">{log.entityType}:{log.entityId}</span>
+						<span class="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString()}</span>
+					</div>
+					<p class="mt-1 text-slate-400">{log.user.displayName ?? log.user.email}</p>
+				</li>
+			{/each}
+		</ul>
+		<div class="mt-4">
+			<a href="/settings/audit-logs" class="btn btn-secondary">View full audit log</a>
+		</div>
+	{/if}
+</section>
+
 <form method="POST" class="mt-6 grid gap-6">
 	<section class="card p-5 sm:p-6">
 		<h2 class="section-title">General</h2>

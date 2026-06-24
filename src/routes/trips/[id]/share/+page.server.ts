@@ -6,7 +6,7 @@ import { requireOwnedTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
-import { users, trips, tripShares } from '$lib/server/db/schema';
+import { users, trips, tripShares, groups as groupsTable } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
 const SHARE_PERMISSIONS = ['read', 'edit'] as const;
@@ -121,13 +121,13 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		.select({
 			id: tripShares.id,
 			email: users.email,
-			groupName: groups.name,
+			groupName: groupsTable.name,
 			permission: tripShares.permission,
 			showDetails: tripShares.showDetails
 		})
 		.from(tripShares)
 		.leftJoin(users, eq(tripShares.sharedWithUserId, users.id))
-		.leftJoin(groups, eq(tripShares.sharedWithGroupId, groups.id))
+		.leftJoin(groupsTable, eq(tripShares.sharedWithGroupId, groupsTable.id))
 		.where(eq(tripShares.tripId, t.id))
 		.all();
 	const myGroups = listGroupsForUser(u.id);

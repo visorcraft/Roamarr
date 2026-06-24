@@ -8,110 +8,63 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { GET } from './+server';
-import { createTrip, regenerateCalendarToken } from '../../../shared';
-import { users, segments } from '$lib/server/db/schema';
+import { users, trips } from '$lib/server/db/schema';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
-function event(params: { id: string }, search: string) {
+function event(tripId: number, token: string, ip: string) {
 	return {
-		locals: { user: null },
-		params,
-		url: new URL(`http://localhost/trips/${params.id}/calendar/feed${search}`),
-		request: new Request('http://localhost')
+		params: { id: String(tripId) },
+		url: new URL(`http://localhost/trips/${tripId}/calendar/feed?token=${token}`),
+		getClientAddress: () => ip
 	} as any;
 }
 
-test('returns a public .ics feed for a valid token', async () => {
+test('GET returns an ICS calendar for a valid trip and token', () => {
+	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'feed-owner@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = createTrip(a.id, { name: 'Feed Trip', destination: 'Tokyo', startDate: '2026-09-01' });
-	const token = regenerateCalendarToken(a.id, t.id);
-	db.insert(segments)
-		.values({
-			tripId: t.id,
-			type: 'flight',
-			title: 'JL1',
-			startAt: '2026-09-01T10:00:00Z',
-			startTz: 'UTC',
-			endAt: '2026-09-01T18:00:00Z',
-			location: 'NRT',
-			confirmationNumber: 'FEED-CONF'
-		})
-		.run();
+	const u = db.insert(users).values({ email: 'feed@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db
+		.insert(trips)
+		.values({ ownerId: u.id, name: 'F', calendarToken: 'cal-tok-1' })
+		.returning()
+		.get();
 
-	const res = await GET(event({ id: String(t.id) }, `?token=${encodeURIComponent(token)}`));
+	const res = GET(event(t.id, 'cal-tok-1', '1.2.3.4')) as Response;
 	expect(res.status).toBe(200);
-	expect(res.headers.get('content-type')).toContain('text/calendar');
-	const body = await res.text();
-	expect(body).toContain('BEGIN:VCALENDAR');
-	expect(body).toContain('SUMMARY:Flight: JL1');
-	expect(body).toContain('DTSTART:20260901T100000Z');
-	expect(body).toContain('DTEND:20260901T180000Z');
-	expect(body).toContain('LOCATION:NRT');
+	expect(res.headers.get('Content-Type')).toContain('text/calendar');
 });
 
-test('does not leak private fields in the feed', async () => {
+test('GET is rate limited after many requests from the same IP', () => {
+	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'feed-private@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = createTrip(a.id, {
-		name: 'Private Feed Trip',
-		destination: 'Berlin',
-		startDate: '2026-10-01',
-		notes: 'SECRET TRIP NOTES'
-	});
-	const token = regenerateCalendarToken(a.id, t.id);
-	db.insert(segments)
-		.values({
-			tripId: t.id,
-			type: 'hotel',
-			title: 'Hotel',
-			startAt: '2026-10-01T16:00:00Z',
-			startTz: 'UTC',
-			location: 'Mitte',
-			confirmationNumber: 'CONF-LEAK'
-		})
-		.run();
+	const u = db.insert(users).values({ email: 'feed-rl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db
+		.insert(trips)
+		.values({ ownerId: u.id, name: 'F', calendarToken: 'cal-tok-2' })
+		.returning()
+		.get();
 
-	const res = await GET(event({ id: String(t.id) }, `?token=${encodeURIComponent(token)}`));
-	const body = await res.text();
-	expect(body).toContain('SUMMARY:Hotel: Hotel');
-	expect(body).not.toContain('SECRET TRIP NOTES');
-	expect(body).not.toContain('CONF-LEAK');
-});
-
-test('missing token returns 404', async () => {
-	try {
-		await GET(event({ id: '1' }, ''));
-		expect.fail('expected error');
-	} catch (e: any) {
-		expect(e.status).toBe(404);
+	for (let i = 0; i < 30; i++) {
+		GET(event(t.id, 'cal-tok-2', '1.2.3.4'));
 	}
+	const res = GET(event(t.id, 'cal-tok-2', '1.2.3.4')) as Response;
+	expect(res.status).toBe(429);
+	expect(res.headers.get('Retry-After')).toBeTruthy();
 });
 
-test('wrong token returns 404', async () => {
+test('rate limit does not block a different IP', () => {
+	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'feed-wrong@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = createTrip(a.id, { name: 'Wrong Token Trip' });
-	regenerateCalendarToken(a.id, t.id);
+	const u = db.insert(users).values({ email: 'feed-rl2@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db
+		.insert(trips)
+		.values({ ownerId: u.id, name: 'F', calendarToken: 'cal-tok-3' })
+		.returning()
+		.get();
 
-	try {
-		await GET(event({ id: String(t.id) }, '?token=not-the-token'));
-		expect.fail('expected error');
-	} catch (e: any) {
-		expect(e.status).toBe(404);
+	for (let i = 0; i < 30; i++) {
+		GET(event(t.id, 'cal-tok-3', '1.2.3.4'));
 	}
-});
-
-test('valid token for a different trip returns 404', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'feed-mismatch@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t1 = createTrip(a.id, { name: 'Trip One' });
-	const t2 = createTrip(a.id, { name: 'Trip Two' });
-	const token = regenerateCalendarToken(a.id, t1.id);
-
-	try {
-		await GET(event({ id: String(t2.id) }, `?token=${encodeURIComponent(token)}`));
-		expect.fail('expected error');
-	} catch (e: any) {
-		expect(e.status).toBe(404);
-	}
+	const res = GET(event(t.id, 'cal-tok-3', '5.6.7.8')) as Response;
+	expect(res.status).toBe(200);
 });

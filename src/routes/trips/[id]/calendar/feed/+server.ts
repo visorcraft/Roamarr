@@ -4,9 +4,19 @@ import { buildCalendar, type CalendarSegment } from '$lib/server/ical';
 import { db } from '$lib/server/db';
 import { segments, trips } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = ({ params, url }) => {
+export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
+	const ip = getClientAddress();
+	const limit = checkRateLimit(ip, 'calendar:feed', { maxAttempts: 30, windowMs: 60_000 });
+	if (!limit.allowed) {
+		return new Response('Too many requests', {
+			status: 429,
+			headers: { 'Retry-After': String(limit.retryAfter ?? 60) }
+		});
+	}
+
 	const tripId = Number(params.id);
 	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
 

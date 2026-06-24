@@ -69,3 +69,16 @@ test('load returns empty logs when no events exist', () => {
 	};
 	expect(result.logs).toEqual([]);
 });
+
+test('load returns CSV export when export=csv', () => {
+	const admin = adminLocals();
+	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+
+	const result = load({
+		locals: admin,
+		url: new URL('http://localhost/settings/audit-logs?export=csv')
+	} as any) as Response;
+
+	expect(result instanceof Response).toBe(true);
+	expect(result.headers.get('Content-Type')).toBe('text/csv');
+});

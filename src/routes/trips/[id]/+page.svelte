@@ -481,6 +481,41 @@
 					{/if}
 				</section>
 			{/if}
+
+			<section class="card p-5">
+				<h2 class="section-title mb-3">Activity</h2>
+				{#if data.comments?.length}
+					<ul class="space-y-3">
+						{#each data.comments as c (c.id)}
+							<li class="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
+								<div class="flex items-center justify-between gap-3">
+									<span class="text-sm font-semibold text-white">{c.displayName}</span>
+									<span class="text-xs text-slate-500">{new Date(c.createdAt).toLocaleString()}</span>
+								</div>
+								<p class="mt-1 text-sm text-slate-300 whitespace-pre-wrap">{c.body}</p>
+								{#if c.userId === data.user?.id}
+									<form method="POST" action="?/deleteComment" class="mt-2">
+										<input type="hidden" name="commentId" value={c.id} />
+										<button class="text-xs text-red-300 hover:text-red-200">Delete</button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="py-4 text-center text-sm text-slate-500">No activity yet.</p>
+				{/if}
+
+				{#if isEditor}
+					<form method="POST" action="?/addComment" class="mt-4 flex flex-col gap-2">
+						<label for="commentBody" class="text-xs text-slate-400">Add a comment</label>
+						<textarea id="commentBody" name="body" rows="2" class="input text-sm" placeholder="Write a note..." required></textarea>
+						<div class="flex justify-end">
+							<button class="btn btn-primary btn-sm">Post comment</button>
+						</div>
+					</form>
+				{/if}
+			</section>
 		</div>
 
 		<!-- Sidebar -->
@@ -552,7 +587,9 @@
 							<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 						</div>
 						<div class="mt-3 flex flex-col gap-2">
-							<form method="POST" action="?/regenerateCalendarFeed">
+							<form method="POST" action="?/regenerateCalendarFeed" class="flex flex-col gap-2">
+								<label for="calendarExpiresAt" class="text-xs text-slate-400">New URL expires (optional)</label>
+								<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
 								<button class="btn btn-primary w-full">Regenerate URL</button>
 							</form>
 							<form method="POST" action="?/revokeCalendarFeed">
@@ -560,10 +597,12 @@
 							</form>
 						</div>
 					{:else}
-						<p class="text-xs text-slate-400">Generate a public .ics feed URL for this trip.</p>
-						<form method="POST" action="?/regenerateCalendarFeed" class="mt-3">
-							<button class="btn btn-primary w-full">Generate feed URL</button>
-						</form>
+						<p class="text-xs text-slate-400">Generate a public .ics feed URL for this trip. You can optionally set an expiry.</p>
+						<form method="POST" action="?/regenerateCalendarFeed" class="mt-3 flex flex-col gap-2">
+								<label for="calendarExpiresAt" class="text-xs text-slate-400">Expires (optional)</label>
+								<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
+								<button class="btn btn-primary w-full">Generate feed URL</button>
+							</form>
 					{/if}
 				</div>
 			{/if}

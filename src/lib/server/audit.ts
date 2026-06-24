@@ -103,3 +103,26 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	}));
 	return { logs, total };
 }
+
+function csvCell(value: unknown) {
+	return `"${String(value).replace(/"/g, '""')}"`;
+}
+
+export function exportAuditLogsCsv(filters: AuditFilters = {}): string {
+	const { logs } = listAuditLogs({ ...filters, limit: 10_000, offset: 0 });
+	const header = ['id', 'action', 'entityType', 'entityId', 'userId', 'userEmail', 'userDisplayName', 'createdAt', 'meta'];
+	const rows = logs.map((l) =>
+		[
+			l.id,
+			l.action,
+			l.entityType,
+			l.entityId,
+			l.user.id,
+			l.user.email,
+			l.user.displayName,
+			l.createdAt,
+			JSON.stringify(l.meta)
+		].map(csvCell).join(',')
+	);
+	return [header.join(','), ...rows].join('\n') + '\n';
+}

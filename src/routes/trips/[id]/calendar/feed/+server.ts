@@ -7,6 +7,10 @@ import { viewerProjection } from '$lib/server/sharing';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
 
+function isExpired(expiresAt: string | null | undefined) {
+	return expiresAt != null && new Date(expiresAt) <= new Date();
+}
+
 export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 	const ip = getClientAddress();
 	const limit = checkRateLimit(ip, 'calendar:feed', { maxAttempts: 30, windowMs: 60_000 });
@@ -28,7 +32,7 @@ export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 		.from(trips)
 		.where(and(eq(trips.id, tripId), eq(trips.calendarToken, token)))
 		.get();
-	if (!t) throw error(404, 'Not found');
+	if (!t || isExpired(t.calendarTokenExpiresAt)) throw error(404, 'Not found');
 
 	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 	const projection = viewerProjection(t, segs);

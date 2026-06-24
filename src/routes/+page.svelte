@@ -3,9 +3,10 @@
 	const firstName = $derived((data.user?.displayName ?? '').split(/\s+/)[0]);
 
 	const stats = $derived([
-		{ label: 'Upcoming trips', value: data.upcoming.length, href: '/trips', accent: 'text-indigo-300' },
-		{ label: 'Unread alerts', value: data.unread, href: '/notifications', accent: 'text-amber-300' },
-		{ label: 'Docs expiring', value: data.expiring.length, href: '/profile/documents', accent: 'text-emerald-300' }
+		{ label: 'Upcoming trips', value: data.stats.upcoming, href: '/trips', accent: 'text-indigo-300' },
+		{ label: 'Unread alerts', value: data.stats.unread, href: '/notifications', accent: 'text-amber-300' },
+		{ label: 'Docs expiring', value: data.stats.expiring, href: '/profile/documents', accent: 'text-emerald-300' },
+		{ label: 'Fare watches', value: data.stats.watches, href: '/settings/fare-providers', accent: 'text-fuchsia-300' }
 	]);
 </script>
 
@@ -13,8 +14,8 @@
 	<div>
 		<h1 class="text-3xl font-extrabold text-white">Welcome back, {firstName}</h1>
 		<p class="mt-1 text-sm text-muted">
-			{#if data.unread > 0}
-				You have <a href="/notifications" class="link">{data.unread} unread alert{data.unread === 1 ? '' : 's'}</a>.
+			{#if data.stats.unread > 0}
+				You have <a href="/notifications" class="link">{data.stats.unread} unread alert{data.stats.unread === 1 ? '' : 's'}</a>.
 			{:else}
 				You're all caught up. Safe travels.
 			{/if}
@@ -26,7 +27,7 @@
 	</a>
 </header>
 
-<section class="mt-8 grid gap-4 sm:grid-cols-3">
+<section class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 	{#each stats as s (s.label)}
 		<a href={s.href} class="card group p-5 transition hover:ring-white/20">
 			<div class="text-4xl font-extrabold tracking-tight {s.accent}">{s.value}</div>

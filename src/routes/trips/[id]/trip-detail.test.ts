@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
-import { users, trips, insurancePolicies, fareProviders, reminders } from '$lib/server/db/schema';
+import { users, trips, insurancePolicies, fareProviders, reminders, tripComments } from '$lib/server/db/schema';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { eq } from 'drizzle-orm';
 
@@ -123,6 +123,44 @@ test('detachPolicy action unlinks a policy from the trip', async () => {
 
 	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, pol.id)).get();
 	expect(row?.tripId).toBeNull();
+});
+
+test('addComment action creates a comment on the trip', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'cc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ body: 'Nice trip' })
+	});
+	await expect(actions.addComment({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const rows = db.select().from(tripComments).where(eq(tripComments.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].body).toBe('Nice trip');
+});
+
+test('deleteComment action removes the users own comment', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'dc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	db.insert(tripComments).values({ userId: u.id, tripId: t.id, body: 'X' }).run();
+	const c = db.select().from(tripComments).where(eq(tripComments.tripId, t.id)).get()!;
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ commentId: String(c.id) })
+	});
+	await expect(actions.deleteComment({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	expect(db.select().from(tripComments).where(eq(tripComments.id, c.id)).get()).toBeUndefined();
 });
 
 test('delete action removes trip-level reminders', () => {

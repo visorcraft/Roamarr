@@ -8,7 +8,9 @@
 		{ href: '/settings/users', label: 'Users' },
 		{ href: '/settings/fare-providers', label: 'Fare providers' },
 		{ href: '/settings/jobs', label: 'Jobs' },
-		{ href: '/settings/audit-logs', label: 'Audit log' }
+		{ href: '/settings/audit-logs', label: 'Audit log' },
+		{ href: '/settings/backup', label: 'Backup' },
+		{ href: '/settings/seed', label: 'Seed' }
 	];
 
 	const path = $derived(page.url.pathname);

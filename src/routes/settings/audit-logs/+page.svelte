@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { data } = $props();
+	let { data }: { data: { filters: { userId?: number; action?: string; entityType?: string; from?: string; to?: string }; page: number; pageSize: number; total: number; users: { id: number; email: string; displayName: string }[]; logs: { id: number; createdAt: string; action: string; entityType: string; entityId: number; meta: unknown; user: { displayName: string; email: string } }[] } } = $props();
 
 	const totalPages = $derived(Math.ceil(data.total / data.pageSize));
 	const hasPrev = $derived(data.page > 1);
@@ -13,6 +13,17 @@
 		if (data.filters.from) params.set('from', data.filters.from);
 		if (data.filters.to) params.set('to', data.filters.to);
 		params.set('page', String(page));
+		return '?' + params.toString();
+	}
+
+	function exportQuery() {
+		const params = new URLSearchParams();
+		if (data.filters.userId) params.set('userId', String(data.filters.userId));
+		if (data.filters.action) params.set('action', data.filters.action);
+		if (data.filters.entityType) params.set('entityType', data.filters.entityType);
+		if (data.filters.from) params.set('from', data.filters.from);
+		if (data.filters.to) params.set('to', data.filters.to);
+		params.set('export', 'csv');
 		return '?' + params.toString();
 	}
 </script>
@@ -58,6 +69,7 @@
 	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 		<p class="text-sm text-muted">{data.total} event{data.total === 1 ? '' : 's'} · page {data.page} of {totalPages || 1}</p>
 		<div class="flex gap-2">
+			<a href={exportQuery()} class="btn btn-sm btn-ghost">Export CSV</a>
 			<a href={queryFor(data.page - 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasPrev} aria-disabled={!hasPrev}>Previous</a>
 			<a href={queryFor(data.page + 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasNext} aria-disabled={!hasNext}>Next</a>
 		</div>

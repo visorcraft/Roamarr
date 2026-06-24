@@ -8,6 +8,7 @@ import {
 	detachPolicyFromTrip,
 	listPoliciesForUser
 } from '$lib/server/insurance';
+import { addComment, deleteComment, listComments } from '$lib/server/tripComments';
 import {
 	duplicateTrip,
 	loadTripFor,
@@ -62,7 +63,8 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const allPolicies = listPoliciesForUser(u.id);
 		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
-		return { ...view, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl } as TripView & {
+		const comments = listComments(view.trip.id);
+		return { ...view, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments } as TripView & {
 			providers: { id: number; providerKey: string; label: string }[];
 			watches: typeof watches;
 			cards: typeof userCards;
@@ -70,17 +72,20 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 			availablePolicies: typeof allPolicies;
 			feedUrl: string | null;
 			publicShareUrl: string | null;
+			comments: typeof comments;
 		};
 	}
-	return view;
+	return { ...view, comments: listComments(view.trip.id) };
 };
 
 export const actions: Actions = {
-	regenerateCalendarFeed: async ({ locals, params }) => {
+	regenerateCalendarFeed: async ({ locals, params, request }) => {
 		const u = requireUser(locals);
 		const tripId = Number(params.id);
 		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		regenerateCalendarToken(u.id, tripId);
+		const f = await request.formData();
+		const expiresAt = String(f.get('calendarExpiresAt') || '');
+		regenerateCalendarToken(u.id, tripId, expiresAt || null);
 		throw redirect(303, `/trips/${tripId}`);
 	},
 	revokeCalendarFeed: async ({ locals, params }) => {
@@ -163,6 +168,25 @@ export const actions: Actions = {
 		const policyId = Number((await request.formData()).get('policyId'));
 		if (!Number.isFinite(policyId) || policyId <= 0) throw error(400, 'Invalid policy');
 		detachPolicyFromTrip(u.id, policyId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addComment: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		requireEditableTrip(u.id, tripId);
+		const body = String((await request.formData()).get('body') || '');
+		if (!body.trim()) throw error(400, 'Comment is required');
+		addComment(u.id, tripId, body);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteComment: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const commentId = Number((await request.formData()).get('commentId'));
+		if (!Number.isFinite(commentId) || commentId <= 0) throw error(400, 'Invalid comment');
+		deleteComment(u.id, commentId);
 		throw redirect(303, `/trips/${tripId}`);
 	}
 };

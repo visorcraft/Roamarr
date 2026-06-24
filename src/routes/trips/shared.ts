@@ -56,16 +56,19 @@ export function createTrip(
 		.get();
 }
 
-export function regenerateCalendarToken(ownerId: number, tripId: number) {
+export function regenerateCalendarToken(ownerId: number, tripId: number, expiresAt?: string | null) {
 	requireOwnedTrip(ownerId, tripId);
 	const token = randomBytes(24).toString('base64url');
-	db.update(trips).set({ calendarToken: token }).where(eq(trips.id, tripId)).run();
+	db.update(trips)
+		.set({ calendarToken: token, calendarTokenExpiresAt: expiresAt ?? null })
+		.where(eq(trips.id, tripId))
+		.run();
 	return token;
 }
 
 export function revokeCalendarToken(ownerId: number, tripId: number) {
 	requireOwnedTrip(ownerId, tripId);
-	db.update(trips).set({ calendarToken: null }).where(eq(trips.id, tripId)).run();
+	db.update(trips).set({ calendarToken: null, calendarTokenExpiresAt: null }).where(eq(trips.id, tripId)).run();
 }
 
 export function duplicateTrip(ownerId: number, tripId: number) {

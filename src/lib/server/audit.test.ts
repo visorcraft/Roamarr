@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { logAudit, listAuditLogs } from './audit';
+import { logAudit, listAuditLogs, exportAuditLogsCsv } from './audit';
 import { users, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
@@ -81,4 +81,17 @@ test('listAuditLogs never exposes passwordHash', () => {
 	const { logs } = listAuditLogs({ limit: 1 });
 	expect(logs[0].user).not.toHaveProperty('passwordHash');
 	expect(Object.keys(logs[0].user).sort()).toEqual(['displayName', 'email', 'id']);
+});
+
+test('exportAuditLogsCsv returns header and rows', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'csv@x.c', passwordHash: 'x', displayName: 'CSV' }).returning().get();
+	logAudit(u.id, 'csv_action', 'trip', 7, { note: 'hello' });
+
+	const csv = exportAuditLogsCsv();
+	const lines = csv.trim().split('\n');
+	expect(lines[0]).toContain('id,action,entityType,entityId,userId,userEmail,userDisplayName,createdAt,meta');
+	expect(lines[1]).toContain('csv_action');
+	expect(lines[1]).toContain('csv@x.c');
+	expect(lines[1]).toContain('CSV');
 });

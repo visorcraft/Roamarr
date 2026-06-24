@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
 import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
@@ -41,6 +41,27 @@ export function addSegment(
 		.get();
 	upsertRemindersForSegment(seg);
 	return seg;
+}
+
+export function hasOverlappingSegment(
+	tripId: number,
+	excludeSegmentId: number | undefined,
+	startAt: string,
+	endAt: string | null | undefined
+) {
+	if (!endAt) return false;
+	const conditions = [
+		eq(segments.tripId, tripId),
+		sql`${segments.startAt} < ${endAt}`,
+		sql`${segments.endAt} > ${startAt}`
+	];
+	if (excludeSegmentId != null) conditions.push(ne(segments.id, excludeSegmentId));
+	const row = db
+		.select({ count: sql<number>`count(*)` })
+		.from(segments)
+		.where(and(...conditions))
+		.get();
+	return (row?.count ?? 0) > 0;
 }
 
 export function deleteSegment(userId: number, tripId: number, segId: number) {

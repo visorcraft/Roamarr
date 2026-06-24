@@ -71,3 +71,22 @@ test('rate limit does not block a different IP', () => {
 	};
 	expect(data.trip.name).toBe('T');
 });
+
+test('expired public token returns 404', () => {
+	resetRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'exp@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	db.insert(trips).values({
+		ownerId: a.id,
+		name: 'T',
+		publicToken: 'expired',
+		publicTokenExpiresAt: '2020-01-01T00:00:00Z'
+	}).run();
+
+	try {
+		loadByToken('expired');
+		expect.fail('expected 404');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});

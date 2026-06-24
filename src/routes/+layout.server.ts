@@ -17,7 +17,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 	}
 	return {
 		user: locals.user
-			? { displayName: locals.user.displayName, role: locals.user.role }
+			? { id: locals.user.id, displayName: locals.user.displayName, role: locals.user.role }
 			: null,
 		instanceName: s.instanceName,
 		allowRegistration: s.allowRegistration,

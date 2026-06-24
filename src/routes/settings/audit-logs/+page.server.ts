@@ -1,5 +1,5 @@
 import { requireAdmin } from '$lib/server/auth';
-import { listAuditLogs } from '$lib/server/audit';
+import { exportAuditLogsCsv, listAuditLogs } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -13,9 +13,20 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const entityType = url.searchParams.get('entityType') ?? undefined;
 	const from = url.searchParams.get('from') ?? undefined;
 	const to = url.searchParams.get('to') ?? undefined;
+	const userId = userIdRaw ? Number(userIdRaw) : undefined;
+
+	if (url.searchParams.get('export') === 'csv') {
+		const csv = exportAuditLogsCsv({ userId, action, entityType, from, to });
+		return new Response(csv, {
+			headers: {
+				'Content-Type': 'text/csv',
+				'Content-Disposition': 'attachment; filename="audit-logs.csv"'
+			}
+		});
+	}
+
 	const pageRaw = Number(url.searchParams.get('page') ?? 1);
 	const page = Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1;
-	const userId = userIdRaw ? Number(userIdRaw) : undefined;
 	const { logs, total } = listAuditLogs({
 		userId,
 		action,

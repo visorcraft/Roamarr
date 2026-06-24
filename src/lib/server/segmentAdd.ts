@@ -3,7 +3,9 @@ import { requireUser } from '$lib/server/auth';
 import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
 import type { SegmentType } from '$lib/server/db/schema';
-import { addSegment } from '$lib/server/segments';
+import { addSegment, hasOverlappingSegment } from '$lib/server/segments';
+import { localToUtc } from '$lib/server/tz';
+import { setFlash } from '$lib/server/flash';
 
 function readLocalStart(v: Validator, f: FormData, optional = false): string | undefined {
 	const direct = f.get('localStart');
@@ -54,6 +56,12 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		return fail(400, { error: v.failMessage(), errors: v.errors, type });
 	}
 
+	const overlap = hasOverlappingSegment(
+		tripId,
+		undefined,
+		localToUtc(localStart!, startTz!),
+		endAt ?? null
+	);
 	addSegment(u.id, tripId, {
 		type,
 		title: title!,
@@ -65,5 +73,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		cardId,
 		details
 	});
+	if (overlap) {
+		setFlash(event.cookies, 'Warning: this segment overlaps an existing one.');
+	}
 	throw redirect(303, `/trips/${tripId}`);
 }

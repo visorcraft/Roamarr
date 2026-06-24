@@ -129,8 +129,12 @@
 			<ConfirmButton class="btn btn-danger" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
 		</form>
 	{:else}
-		<p class="text-sm text-slate-400">Generate a link that lets anyone view this trip without an account.</p>
-		<form method="POST" action="?/makePublic" class="mt-3">
+		<p class="text-sm text-slate-400">Generate a link that lets anyone view this trip without an account. You can optionally set an expiry.</p>
+		<form method="POST" action="?/makePublic" class="mt-3 flex flex-wrap items-end gap-3">
+			<div class="field">
+				<label class="label" for="publicExpiresAt">Expires (optional)</label>
+				<input id="publicExpiresAt" name="publicExpiresAt" type="datetime-local" class="input" />
+			</div>
 			<button class="btn btn-primary">Create public link</button>
 		</form>
 	{/if}

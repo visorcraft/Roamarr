@@ -7,10 +7,14 @@ import { getSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
+function isExpired(expiresAt: string | null | undefined) {
+	return expiresAt != null && new Date(expiresAt) <= new Date();
+}
+
 export function _loadByToken(token: string) {
 	if (!token) throw error(404, 'Not found');
 	const t = db.select().from(trips).where(eq(trips.publicToken, token)).get();
-	if (!t) throw error(404, 'Not found');
+	if (!t || isExpired(t.publicTokenExpiresAt)) throw error(404, 'Not found');
 	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs) };
 }

@@ -68,3 +68,26 @@ test('rate limit does not block a different IP', () => {
 	const res = GET(event(t.id, 'cal-tok-3', '5.6.7.8')) as Response;
 	expect(res.status).toBe(200);
 });
+
+test('expired calendar token returns 404', () => {
+	resetRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'feed-exp@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db
+		.insert(trips)
+		.values({
+			ownerId: u.id,
+			name: 'F',
+			calendarToken: 'cal-expired',
+			calendarTokenExpiresAt: '2020-01-01T00:00:00Z'
+		})
+		.returning()
+		.get();
+
+	try {
+		GET(event(t.id, 'cal-expired', '1.2.3.4'));
+		expect.fail('expected 404');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});

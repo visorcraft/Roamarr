@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, trips, groups, groupMembers, tripShares, travelDocuments } from '$lib/server/db/schema';
+import { users, trips, groups, groupMembers, tripShares, travelDocuments, notifications, fareProviders, fareWatches } from '$lib/server/db/schema';
 
 function locals(user: { id: number }) {
 	return { user } as App.Locals;
@@ -78,4 +78,21 @@ test('dashboard uses user document expiry lead', () => {
 	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-08-24' }).run();
 	const data = load({ locals: locals(u) } as any) as any;
 	expect(data.expiring).toHaveLength(0);
+});
+
+test('dashboard stats reflect unread notifications, expiring docs and fare watches', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'stats@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	db.insert(notifications).values({ userId: u.id, title: 'A', body: 'B' }).run();
+	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-06-25' }).run();
+
+	const fp = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'S' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T', startDate: '2026-07-01' }).returning().get();
+	db.insert(fareWatches).values({ tripId: t.id, providerId: fp.id }).run();
+
+	const data = load({ locals: locals(u) } as any) as any;
+	expect(data.stats.upcoming).toBe(1);
+	expect(data.stats.unread).toBe(1);
+	expect(data.stats.expiring).toBe(1);
+	expect(data.stats.watches).toBe(1);
 });

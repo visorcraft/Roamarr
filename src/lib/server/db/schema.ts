@@ -96,7 +96,9 @@ export const trips = sqliteTable(
 		favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
 		defaultVisibility: text('default_visibility').notNull().default('private'),
 		publicToken: text('public_token').unique(),
+		publicTokenExpiresAt: text('public_token_expires_at'),
 		calendarToken: text('calendar_token').unique(),
+		calendarTokenExpiresAt: text('calendar_token_expires_at'),
 		createdAt: text('created_at').notNull().default(now),
 		updatedAt: text('updated_at').notNull().default(now)
 	},
@@ -104,6 +106,24 @@ export const trips = sqliteTable(
 		visCk: check('trips_vis_ck', sql`${t.defaultVisibility} in ('private','groups','public')`),
 		ownerIdx: index('trips_owner_idx').on(t.ownerId),
 		startIdx: index('trips_start_idx').on(t.startDate)
+	})
+);
+
+export const tripComments = sqliteTable(
+	'trip_comments',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		body: text('body').notNull(),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		tripIdx: index('trip_comments_trip_idx').on(t.tripId)
 	})
 );
 

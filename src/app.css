@@ -1,1 +1,143 @@
 @import 'tailwindcss';
+
+@theme {
+	--font-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+	--font-display: 'Bricolage Grotesque', 'Hanken Grotesk', ui-sans-serif, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
+
+	--color-canvas: #0a0e1a;
+	--color-surface: #121829;
+	--color-surface2: #1a2236;
+	--color-line: #ffffff14;
+	--color-ink: #e7ecf5;
+	--color-muted: #94a3b8;
+	--color-brand: #6366f1;
+}
+
+@layer base {
+	html {
+		color-scheme: dark;
+	}
+	body {
+		background-color: var(--color-canvas);
+		color: var(--color-ink);
+		font-family: var(--font-sans);
+		min-height: 100vh;
+		-webkit-font-smoothing: antialiased;
+		background-image:
+			radial-gradient(55rem 55rem at 100% -10%, rgba(99, 102, 241, 0.16), transparent 60%),
+			radial-gradient(45rem 45rem at -10% 5%, rgba(139, 92, 246, 0.12), transparent 55%);
+		background-attachment: fixed;
+	}
+	h1,
+	h2,
+	h3 {
+		font-family: var(--font-display);
+		letter-spacing: -0.02em;
+	}
+	[type='checkbox'],
+	[type='radio'] {
+		accent-color: var(--color-brand);
+	}
+	::selection {
+		background: rgba(99, 102, 241, 0.35);
+	}
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+	}
+}
+
+@layer components {
+	/* Surfaces */
+	.card {
+		@apply rounded-2xl bg-surface/80 ring-1 ring-white/10 shadow-xl shadow-black/30 backdrop-blur-sm;
+	}
+	.section-title {
+		@apply font-display text-lg font-semibold text-ink;
+	}
+	.muted {
+		@apply text-muted;
+	}
+
+	/* Buttons — use as `btn btn-primary` */
+	.btn {
+		@apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
+	}
+	.btn-primary {
+		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
+	}
+	.btn-ghost {
+		@apply bg-white/5 text-slate-200 ring-1 ring-white/10 ring-inset hover:bg-white/10 hover:text-white;
+	}
+	.btn-danger {
+		@apply bg-red-500/90 text-white hover:bg-red-500 active:translate-y-px;
+	}
+	.btn-warn {
+		@apply bg-amber-400 text-amber-950 hover:bg-amber-300 active:translate-y-px;
+	}
+	.btn-sm {
+		@apply rounded-md px-2.5 py-1 text-xs;
+	}
+	.link {
+		@apply font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
+	}
+
+	/* Form controls */
+	.field {
+		@apply grid gap-1.5;
+	}
+	.label {
+		@apply text-sm font-medium text-slate-300;
+	}
+	.input,
+	.select,
+	.textarea {
+		@apply w-full rounded-lg bg-slate-950/40 px-3 py-2 text-sm text-ink ring-1 ring-white/10 ring-inset transition placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-400/70 focus:outline-none;
+	}
+	.textarea {
+		@apply min-h-20 resize-y;
+	}
+
+	/* Badges */
+	.badge {
+		@apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
+	}
+	.badge-brand {
+		@apply bg-indigo-500/15 text-indigo-300 ring-indigo-400/30;
+	}
+	.badge-green {
+		@apply bg-emerald-500/15 text-emerald-300 ring-emerald-400/30;
+	}
+	.badge-amber {
+		@apply bg-amber-500/15 text-amber-300 ring-amber-400/30;
+	}
+	.badge-red {
+		@apply bg-red-500/15 text-red-300 ring-red-400/30;
+	}
+	.badge-slate {
+		@apply bg-slate-500/15 text-slate-300 ring-slate-400/30;
+	}
+
+	/* Data tables */
+	.table {
+		@apply w-full text-left text-sm;
+	}
+	.table thead th {
+		@apply border-b border-white/10 px-4 py-3 text-xs font-semibold tracking-wider text-slate-400 uppercase;
+	}
+	.table tbody td {
+		@apply border-b border-white/5 px-4 py-3 align-middle text-slate-200;
+	}
+	.table tbody tr {
+		@apply transition hover:bg-white/[0.03];
+	}
+
+	/* Inline notice/error */
+	.notice {
+		@apply rounded-lg px-3 py-2 text-sm ring-1 ring-inset;
+	}
+	.notice-error {
+		@apply bg-red-500/10 text-red-300 ring-red-400/30;
+	}
+}

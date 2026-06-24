@@ -2,12 +2,38 @@
 	let { data } = $props();
 </script>
 
-<form method="POST" class="grid gap-3 max-w-md p-4">
-	<h1 class="text-xl font-bold">Edit trip</h1>
-	<input name="name" value={data.trip.name} class="border p-2" required />
-	<input name="destination" value={data.trip.destination ?? ''} placeholder="Destination" class="border p-2" />
-	<input name="startDate" type="date" value={data.trip.startDate ?? ''} class="border p-2" />
-	<input name="endDate" type="date" value={data.trip.endDate ?? ''} class="border p-2" />
-	<textarea name="notes" placeholder="Notes" class="border p-2">{data.trip.notes ?? ''}</textarea>
-	<button class="bg-blue-600 text-white p-2 rounded">Save</button>
-</form>
+<header class="flex flex-wrap items-end justify-between gap-4">
+	<div class="min-w-0">
+		<h1 class="truncate text-3xl font-extrabold text-white">Edit trip</h1>
+		<p class="mt-1 text-sm text-muted">Update the details for {data.trip.name}.</p>
+	</div>
+	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost btn-sm">Cancel</a>
+</header>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<form method="POST" class="grid gap-4 sm:grid-cols-2">
+		<div class="field sm:col-span-2">
+			<label class="label" for="name">Trip name</label>
+			<input id="name" name="name" value={data.trip.name} class="input" required />
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="destination">Destination</label>
+			<input id="destination" name="destination" value={data.trip.destination ?? ''} placeholder="Lisbon, Portugal" class="input" />
+		</div>
+		<div class="field">
+			<label class="label" for="startDate">Start date</label>
+			<input id="startDate" name="startDate" type="date" value={data.trip.startDate ?? ''} class="input" />
+		</div>
+		<div class="field">
+			<label class="label" for="endDate">End date</label>
+			<input id="endDate" name="endDate" type="date" value={data.trip.endDate ?? ''} class="input" />
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="notes">Notes</label>
+			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea">{data.trip.notes ?? ''}</textarea>
+		</div>
+		<div class="sm:col-span-2">
+			<button class="btn btn-primary">Save changes</button>
+		</div>
+	</form>
+</section>

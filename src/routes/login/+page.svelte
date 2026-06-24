@@ -2,11 +2,25 @@
 	let { form } = $props();
 </script>
 
-<form method="POST" class="grid gap-3 max-w-sm p-4">
-	<h1 class="text-xl font-bold">Sign in</h1>
-	{#if form?.error}<p class="text-red-600">{form.error}</p>{/if}
-	<input name="email" type="email" placeholder="Email" class="border p-2" required />
-	<input name="password" type="password" placeholder="Password" class="border p-2" required />
-	<button class="bg-blue-600 text-white p-2 rounded">Sign in</button>
-	<a href="/register" class="text-blue-600 text-sm">Create an account</a>
-</form>
+<div class="card w-full max-w-md p-7 sm:p-8">
+	<h1 class="text-2xl font-extrabold text-white">Sign in</h1>
+	<p class="mt-1 text-sm text-muted">Welcome back to your travel HQ.</p>
+
+	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
+
+	<form method="POST" class="mt-6 grid gap-4">
+		<div class="field">
+			<label class="label" for="email">Email</label>
+			<input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="input" required />
+		</div>
+		<div class="field">
+			<label class="label" for="password">Password</label>
+			<input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" class="input" required />
+		</div>
+		<button class="btn btn-primary mt-1 w-full">Sign in</button>
+	</form>
+
+	<p class="mt-5 text-center text-sm text-muted">
+		Need an account? <a href="/register" class="link">Create one</a>
+	</p>
+</div>

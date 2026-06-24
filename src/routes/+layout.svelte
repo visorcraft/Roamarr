@@ -59,7 +59,7 @@
 		</main>
 	</div>
 {:else}
-	<div class="min-h-screen lg:grid lg:grid-cols-[16rem_1fr]">
+	<div class="min-h-screen lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
 		<!-- Backdrop (mobile) -->
 		{#if open}
 			<button
@@ -144,7 +144,7 @@
 		</aside>
 
 		<!-- Main column -->
-		<div class="flex min-h-screen flex-col">
+		<div class="flex min-h-screen min-w-0 flex-col">
 			<!-- Mobile top bar -->
 			<header
 				class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/10 bg-canvas/70 px-4 backdrop-blur-xl lg:hidden"
@@ -166,7 +166,7 @@
 				{@render brand('sm')}
 			</header>
 
-			<main class="w-full flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+			<main class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
 				{@render children()}
 			</main>
 		</div>

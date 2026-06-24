@@ -101,6 +101,35 @@
 	.textarea {
 		@apply w-full rounded-lg bg-slate-950/40 px-3 py-2 text-sm text-ink ring-1 ring-white/10 ring-inset transition placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-400/70 focus:outline-none;
 	}
+	select.input,
+	select.select {
+		appearance: none;
+		padding-right: 2.75rem;
+		color-scheme: dark;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+		background-repeat: no-repeat;
+		background-position: right 0.75rem center;
+		background-size: 1rem 1rem;
+	}
+	select.input option,
+	select.select option {
+		background-color: var(--color-surface2) !important;
+		color: var(--color-ink) !important;
+	}
+	select.input option:checked,
+	select.input option:focus,
+	select.input option:hover,
+	select.select option:checked,
+	select.select option:focus,
+	select.select option:hover {
+		background-color: var(--color-brand) !important;
+		box-shadow: 0 0 0 100vmax var(--color-brand) inset !important;
+		color: white !important;
+	}
+	select.input option:disabled,
+	select.select option:disabled {
+		color: var(--color-muted) !important;
+	}
 	.textarea {
 		@apply min-h-20 resize-y;
 	}

@@ -9,7 +9,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const today = DateTime.utc().toISODate()!;
-	const soon = DateTime.utc().plus({ days: 120 }).toISODate()!;
+	const soon = DateTime.utc().plus({ days: u.documentExpiryLeadDays }).toISODate()!;
 	return {
 		upcoming: listViewableTrips(u.id, { startDateGte: today }),
 		unread: db

@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, trips, groups, groupMembers, tripShares } from '$lib/server/db/schema';
+import { users, trips, groups, groupMembers, tripShares, travelDocuments } from '$lib/server/db/schema';
 
 function locals(user: { id: number }) {
 	return { user } as App.Locals;
@@ -65,4 +65,18 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 	const forA = load({ locals: locals(a) } as any) as any;
 	expect(forA.upcoming.map((t: any) => t.name).sort()).toEqual(['Group Trip', 'Private Trip', 'Shared Trip']);
 	expect(forA.upcoming.every((t: any) => t.isShared === false)).toBe(true);
+});
+
+
+test('dashboard uses user document expiry lead', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'lead@x.c', passwordHash: 'x', displayName: 'U', documentExpiryLeadDays: 30 })
+		.returning()
+		.get();
+	// Expires in 60 days, outside the 30-day lead window
+	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-08-24' }).run();
+	const data = load({ locals: locals(u) } as any) as any;
+	expect(data.expiring).toHaveLength(0);
 });

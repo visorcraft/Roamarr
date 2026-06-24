@@ -75,30 +75,36 @@ export function exportTripsCsv(userId: number): string {
 		'endDate',
 		'notes',
 		'tags',
-		'segmentCount',
+		'defaultVisibility',
 		'segmentType',
 		'segmentTitle',
 		'segmentLocalStart',
+		'segmentStartTz',
 		'segmentEndAt',
-		'segmentLocation'
+		'segmentLocation',
+		'segmentConfirmationNumber'
 	];
 	const lines: string[][] = [headers];
 	for (const t of rows) {
-		const first = t.segments?.[0];
-		lines.push([
-			csvEscape(t.name),
-			csvEscape(t.destination),
-			csvEscape(t.startDate),
-			csvEscape(t.endDate),
-			csvEscape(t.notes),
-			csvEscape((t.tags ?? []).join(',')),
-			csvEscape(t.segments?.length ?? 0),
-			csvEscape(first?.type),
-			csvEscape(first?.title),
-			csvEscape(first?.localStart),
-			csvEscape(first?.endAt),
-			csvEscape(first?.location)
-		]);
+		const segs = t.segments?.length ? t.segments : [undefined];
+		for (const s of segs) {
+			lines.push([
+				csvEscape(t.name),
+				csvEscape(t.destination),
+				csvEscape(t.startDate),
+				csvEscape(t.endDate),
+				csvEscape(t.notes),
+				csvEscape((t.tags ?? []).join(',')),
+				csvEscape(t.defaultVisibility),
+				csvEscape(s?.type),
+				csvEscape(s?.title),
+				csvEscape(s?.localStart),
+				csvEscape(s?.startTz),
+				csvEscape(s?.endAt),
+				csvEscape(s?.location),
+				csvEscape(s?.confirmationNumber)
+			]);
+		}
 	}
 	return lines.map((r) => r.join(',')).join('\n') + '\n';
 }

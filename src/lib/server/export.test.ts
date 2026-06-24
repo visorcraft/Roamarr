@@ -58,3 +58,25 @@ test('exportTripsCsv includes header and trip row', () => {
 	expect(lines[0]).toContain('name');
 	expect(lines[1]).toContain('CSV trip');
 });
+
+
+test('exportTripsCsv emits one row per segment and round-trips', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const owner = db.insert(users).values({ email: 'rt@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const t = db
+		.insert(trips)
+		.values({ ownerId: owner.id, name: 'RT', startDate: '2026-08-01', endDate: '2026-08-10', defaultVisibility: 'private' })
+		.returning()
+		.get();
+	db.insert(segments)
+		.values({ tripId: t.id, type: 'flight', title: 'Out', startAt: '2026-08-01T10:00:00Z', startTz: 'UTC' })
+		.run();
+	db.insert(segments)
+		.values({ tripId: t.id, type: 'hotel', title: 'Stay', startAt: '2026-08-01T16:00:00Z', startTz: 'UTC' })
+		.run();
+
+	const csv = exportTripsCsv(owner.id);
+	const lines = csv.trim().split('\n');
+	expect(lines).toHaveLength(3); // header + 2 segments
+	expect(lines.filter((l) => l.includes('RT'))).toHaveLength(2);
+});

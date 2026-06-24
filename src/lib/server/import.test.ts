@@ -9,6 +9,7 @@ vi.mock('./db', async () => {
 });
 
 import { parseJson, parseCsv, importTrips } from './import';
+import { exportTripsCsv } from './export';
 import { users, trips, segments, reminders, auditLogs } from './db/schema';
 
 beforeEach(() => {
@@ -149,4 +150,40 @@ test('importTrips dryRun validates and previews without writing', () => {
 	expect(result.preview![0].name).toBe('Dry');
 	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all().length).toBe(beforeTrips);
 	expect(db.select().from(segments).all().length).toBe(0);
+});
+
+
+test('parseCsv groups multi-segment rows into one trip', () => {
+	const csv = [
+		'name,destination,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz',
+		'Tokyo,Japan,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC',
+		'Tokyo,Japan,2026-08-01,2026-08-10,hotel,Stay,2026-08-05T16:00,UTC'
+	].join('\n');
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0].segments).toHaveLength(2);
+	expect(parsed.trips[0].segments![0].type).toBe('flight');
+	expect(parsed.trips[0].segments![1].type).toBe('hotel');
+});
+
+test('csv round-trip preserves multi-segment trips', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = makeUser('round@x.c');
+	db.insert(trips)
+		.values({ ownerId: u.id, name: 'RT', startDate: '2026-08-01', endDate: '2026-08-10' })
+		.returning()
+		.get();
+	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get()!;
+	db.insert(segments)
+		.values({ tripId: t.id, type: 'flight', title: 'Out', startAt: '2026-08-01T10:00:00Z', startTz: 'UTC' })
+		.run();
+	db.insert(segments)
+		.values({ tripId: t.id, type: 'hotel', title: 'Stay', startAt: '2026-08-05T16:00:00Z', startTz: 'UTC' })
+		.run();
+
+	const csv = exportTripsCsv(u.id);
+	const result = importTrips(u.id, parseCsv(csv));
+	expect(result.imported).toBe(1);
+	expect(result.segmentCount).toBe(2);
+	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all()).toHaveLength(2);
 });

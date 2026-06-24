@@ -92,37 +92,40 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 	const lines = text.split(/\r?\n/).filter((l) => l.trim());
 	if (lines.length < 2) throw new Error('CSV must have a header and at least one data row');
 	const headers = parseCsvLine(lines[0]!);
-	const parsedTrips: ImportTrip[] = [];
+	const groups = new Map<string, ImportTrip>();
 	for (let i = 1; i < lines.length; i++) {
 		const row = parseCsvLine(lines[i]!);
 		const obj: Record<string, string> = {};
 		for (let j = 0; j < headers.length; j++) {
 			obj[headers[j]!] = row[j] ?? '';
 		}
-		const trip: ImportTrip = {
-			name: obj.name || '',
-			destination: obj.destination || undefined,
-			startDate: obj.startDate || undefined,
-			endDate: obj.endDate || undefined,
-			notes: obj.notes || undefined,
-			defaultVisibility: obj.defaultVisibility || 'private'
-		};
-		if (obj.segmentType) {
-			trip.segments = [
-				{
-					type: obj.segmentType as SegmentType,
-					title: obj.segmentTitle || obj.segmentType,
-					localStart: obj.segmentLocalStart || '',
-					startTz: obj.segmentStartTz || 'UTC',
-					endAt: obj.segmentEndAt || undefined,
-					location: obj.segmentLocation || undefined,
-					confirmationNumber: obj.segmentConfirmationNumber || undefined
-				}
-			];
+		const key = `${obj.name}|${obj.startDate}|${obj.endDate}`;
+		let trip = groups.get(key);
+		if (!trip) {
+			trip = {
+				name: obj.name || '',
+				destination: obj.destination || undefined,
+				startDate: obj.startDate || undefined,
+				endDate: obj.endDate || undefined,
+				notes: obj.notes || undefined,
+				defaultVisibility: obj.defaultVisibility || 'private'
+			};
+			groups.set(key, trip);
 		}
-		parsedTrips.push(trip);
+		if (obj.segmentType) {
+			if (!trip.segments) trip.segments = [];
+			trip.segments.push({
+				type: obj.segmentType as SegmentType,
+				title: obj.segmentTitle || obj.segmentType,
+				localStart: obj.segmentLocalStart || '',
+				startTz: obj.segmentStartTz || 'UTC',
+				endAt: obj.segmentEndAt || undefined,
+				location: obj.segmentLocation || undefined,
+				confirmationNumber: obj.segmentConfirmationNumber || undefined
+			});
+		}
 	}
-	return { trips: parsedTrips };
+	return { trips: Array.from(groups.values()) };
 }
 
 function validateTrip(input: ImportTrip): ImportError[] {

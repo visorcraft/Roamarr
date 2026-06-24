@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import { db } from '../db';
 import { fareProviders, fareWatches } from '../db/schema';
 import { encrypt, decrypt } from '../crypto';
+import { deliver } from '../notify';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
 import { stub } from './stub';
 
@@ -155,6 +156,35 @@ export function deleteWatch(userId: number, watchId: number) {
 	db.delete(fareWatches).where(eq(fareWatches.id, watchId)).run();
 }
 
+function previousSummary(watch: typeof fareWatches.$inferSelect): string | null {
+	if (!watch.lastResultJson) return null;
+	try {
+		return (JSON.parse(watch.lastResultJson) as FareResult).summary ?? null;
+	} catch {
+		return null;
+	}
+}
+
+async function applyResult(
+	watch: typeof fareWatches.$inferSelect,
+	providerRow: typeof fareProviders.$inferSelect,
+	result: FareResult,
+	now: Date
+) {
+	const prior = previousSummary(watch);
+	db.update(fareWatches)
+		.set({ lastResultJson: JSON.stringify(result), lastCheckedAt: now.toISOString() })
+		.where(eq(fareWatches.id, watch.id))
+		.run();
+	if (prior !== null && result.summary !== prior) {
+		await deliver(providerRow.userId, {
+			title: 'Fare watch update',
+			body: 'A fare watch result changed.',
+			link: `/trips/${watch.tripId}`
+		});
+	}
+}
+
 export async function checkWatch(userId: number, watchId: number): Promise<FareResult> {
 	const w = requireOwnedWatch(userId, watchId);
 	const p = db.select().from(fareProviders).where(eq(fareProviders.id, w.providerId)).get();
@@ -168,10 +198,7 @@ export async function checkWatch(userId: number, watchId: number): Promise<FareR
 	} catch (e) {
 		res = { ok: false, summary: String(e) };
 	}
-	db.update(fareWatches)
-		.set({ lastResultJson: JSON.stringify(res), lastCheckedAt: now.toISOString() })
-		.where(eq(fareWatches.id, w.id))
-		.run();
+	await applyResult(w, p, res, now);
 	return res;
 }
 
@@ -189,18 +216,10 @@ export async function runFareChecks(now: Date) {
 		if (!provider) continue;
 		try {
 			const res = await provider.check(w, p.apiKey ? decrypt(p.apiKey) : '');
-			db.update(fareWatches)
-				.set({ lastResultJson: JSON.stringify(res), lastCheckedAt: now.toISOString() })
-				.where(eq(fareWatches.id, w.id))
-				.run();
+			await applyResult(w, p, res, now);
 		} catch (e) {
-			db.update(fareWatches)
-				.set({
-					lastResultJson: JSON.stringify({ ok: false, summary: String(e) }),
-					lastCheckedAt: now.toISOString()
-				})
-				.where(eq(fareWatches.id, w.id))
-				.run();
+			const res = { ok: false, summary: String(e) };
+			await applyResult(w, p, res, now);
 		}
 	}
 }

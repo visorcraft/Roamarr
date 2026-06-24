@@ -1,10 +1,21 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('../db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
+});
+const delivered = vi.hoisted(() => [] as Array<{ uid: number; m: any }>);
+vi.mock('../notify', () => ({
+	deliver: async (uid: number, m: any) => delivered.push({ uid, m })
+}));
+
+beforeEach(() => {
+	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+		'delete from fare_watches; delete from fare_providers; delete from trips; delete from users;'
+	);
+	delivered.length = 0;
 });
 
 import {
@@ -172,4 +183,39 @@ test('testProvider returns the stub result for an owned account', async () => {
 	const res = await testProvider(a.id, p.id);
 	expect(res.ok).toBe(true);
 	expect(res.summary).toContain('stub provider');
+});
+
+
+test('runFareChecks notifies the provider owner when the summary changes', async () => {
+	const db = (ctx as { db: import('../db').DB }).db;
+	const u = db.insert(users).values({ email: 'fare-change@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'Change' }).returning().get();
+	const p = createProvider(u.id, 'stub', 'A', 'K', true);
+	toggleWatch(u.id, t.id, p.id);
+	db.update(fareWatches)
+		.set({ lastResultJson: JSON.stringify({ ok: true, summary: 'old summary' }) })
+		.where(eq(fareWatches.tripId, t.id))
+		.run();
+	delivered.length = 0;
+
+	const original = registry.stub.check;
+	registry.stub.check = async () => ({ ok: true, summary: 'new summary' });
+	await runFareChecks(new Date());
+	registry.stub.check = original;
+
+	expect(delivered.length).toBe(1);
+	expect(delivered[0].uid).toBe(u.id);
+	expect(delivered[0].m.title).toBe('Fare watch update');
+	expect(delivered[0].m.link).toBe(`/trips/${t.id}`);
+});
+
+test('runFareChecks does not notify on the first check', async () => {
+	const db = (ctx as { db: import('../db').DB }).db;
+	const u = db.insert(users).values({ email: 'fare-first@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'First' }).returning().get();
+	const p = createProvider(u.id, 'stub', 'A', 'K', true);
+	toggleWatch(u.id, t.id, p.id);
+	delivered.length = 0;
+	await runFareChecks(new Date());
+	expect(delivered.length).toBe(0);
 });

@@ -1,5 +1,5 @@
 import { error, redirect, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
@@ -23,6 +23,14 @@ export function _shareWithUserEmail(ownerId: number, tripId: number, email: stri
 
 export function _shareWithGroup(ownerId: number, tripId: number, groupId: number) {
 	requireOwnedTrip(ownerId, tripId);
+	// The group must belong to the sharer — otherwise an owner could expose their trip
+	// to an arbitrary group they don't control.
+	const g = db
+		.select({ id: groups.id })
+		.from(groups)
+		.where(and(eq(groups.id, groupId), eq(groups.ownerId, ownerId)))
+		.get();
+	if (!g) throw error(404, 'No such group');
 	db.insert(tripShares).values({ tripId, sharedWithGroupId: groupId }).onConflictDoNothing().run();
 }
 

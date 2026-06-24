@@ -71,6 +71,27 @@ test('atomic run delivers due, marks sent, no double-deliver on re-run', async (
 	expect(db.select().from(reminders).get()!.status).toBe('sent');
 });
 
+test('reclaims a reminder orphaned in "sending" by a prior crash', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const seg = db
+		.insert(segments)
+		.values({
+			tripId: trip.id,
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2000-01-02T00:00:00.000Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+	upsertRemindersForSegment(seg);
+	// Simulate a crash mid-delivery: the row is stuck in 'sending', never sent.
+	db.update(reminders).set({ status: 'sending' }).run();
+	await runDueReminders(new Date('2000-02-01T00:00:00Z'));
+	expect(delivered.length).toBe(1);
+	expect(db.select().from(reminders).get()!.status).toBe('sent');
+});
+
 test('cancel removes the reminder', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const seg = db

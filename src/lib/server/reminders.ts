@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { and, eq, lte, sql } from 'drizzle-orm';
+import { and, eq, inArray, lte, sql } from 'drizzle-orm';
 import { db } from './db';
 import { reminders, segments, travelDocuments, trips, users } from './db/schema';
 import { deliver } from './notify';
@@ -77,10 +77,15 @@ export function cancelRemindersFor(refType: 'segment' | 'document', refId: numbe
 }
 
 export async function runDueReminders(now: Date) {
+	// Claim both fresh 'pending' rows and any 'sending' rows orphaned by a prior crash.
+	// Ticks never overlap (single process + scheduler running-guard), so any due
+	// 'sending' row at tick start is stale and safe to re-grab — at-least-once delivery.
 	const claimed = db
 		.update(reminders)
 		.set({ status: 'sending' })
-		.where(and(eq(reminders.status, 'pending'), lte(reminders.fireAt, now.toISOString())))
+		.where(
+			and(inArray(reminders.status, ['pending', 'sending']), lte(reminders.fireAt, now.toISOString()))
+		)
 		.returning()
 		.all();
 	for (const r of claimed) {

@@ -3,6 +3,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { eq, lt } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { error } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import { db } from './db';
 import { users, sessions } from './db/schema';
 
@@ -50,4 +51,22 @@ export function requireAdmin(locals: App.Locals) {
 	const u = requireUser(locals);
 	if (u.role !== 'admin') throw error(403, 'Admin only');
 	return u;
+}
+
+/**
+ * Session cookie attributes. `secure` follows the deployment's real transport:
+ * never set in dev; in production set unless ORIGIN is explicitly `http://` (e.g. the
+ * documented local-trial quickstart). A blanket `secure: true` would make the cookie
+ * unsendable over HTTP, silently breaking login behind any non-TLS origin.
+ */
+export function sessionCookieOptions() {
+	const origin = process.env.ORIGIN;
+	const secure = dev ? false : !(origin && origin.startsWith('http://'));
+	return {
+		path: '/',
+		httpOnly: true,
+		secure,
+		sameSite: 'lax' as const,
+		maxAge: 60 * 60 * 24 * 30
+	};
 }

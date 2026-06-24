@@ -2,7 +2,7 @@ import { error, fail, redirect, type Actions, type Load } from '@sveltejs/kit';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
-import { hashPassword, createSession } from '$lib/server/auth';
+import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 
 function gate() {
 	const s = getSettings();
@@ -42,13 +42,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(409, { error: 'Email already registered.' });
 		}
-		cookies.set('session', await createSession(u.id), {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		cookies.set('session', await createSession(u.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

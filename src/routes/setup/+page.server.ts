@@ -1,5 +1,5 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { hashPassword, createSession } from '$lib/server/auth';
+import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { db, sqlite } from '$lib/server/db';
 import { users, settings } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
@@ -52,13 +52,7 @@ export const actions: Actions = {
 		} catch {
 			return fail(409, { error: 'Setup is already complete.' });
 		}
-		cookies.set('session', await createSession(user.id), {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		cookies.set('session', await createSession(user.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

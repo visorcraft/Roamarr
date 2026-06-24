@@ -2,7 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
-import { verifyPassword, createSession } from '$lib/server/auth';
+import { verifyPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 
 export async function _authenticate(email: string, password: string) {
 	const u = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
@@ -15,13 +15,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const u = await _authenticate(String(f.get('email') ?? ''), String(f.get('password') ?? ''));
 		if (!u) return fail(401, { error: 'Invalid email or password.' });
-		cookies.set('session', await createSession(u.id), {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: 60 * 60 * 24 * 30
-		});
+		cookies.set('session', await createSession(u.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

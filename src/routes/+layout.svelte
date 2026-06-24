@@ -167,7 +167,9 @@
 			</header>
 
 			<main class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
-				{@render children()}
+				<div class="mx-auto w-full max-w-[96rem]">
+					{@render children()}
+				</div>
 			</main>
 		</div>
 	</div>

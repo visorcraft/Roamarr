@@ -12,6 +12,12 @@
 	--color-ink: #e7ecf5;
 	--color-muted: #94a3b8;
 	--color-brand: #6366f1;
+
+	/* Fluid display type — scales smoothly from phone → ultrawide, then holds. */
+	--text-3xl: clamp(1.75rem, 1.35rem + 1.6vw, 2.5rem);
+	--text-3xl--line-height: 1.15;
+	--text-4xl: clamp(2.25rem, 1.75rem + 2vw, 3rem);
+	--text-4xl--line-height: 1.1;
 }
 
 @layer base {

@@ -99,7 +99,28 @@ export const trips = sqliteTable(
 	})
 );
 
-export const SEGMENT_TYPES = ['flight', 'lodging', 'car', 'rail', 'activity', 'cruise'] as const;
+export const SEGMENT_TYPES = [
+	'flight',
+	'lodging',
+	'car',
+	'rail',
+	'activity',
+	'cruise',
+	'event',
+	'hotel',
+	'rental_car',
+	'note',
+	'todo',
+	'parking',
+	'boat',
+	'train',
+	'directions',
+	'food',
+	'poi',
+	'meetup',
+	'rideshare',
+	'shuttle'
+] as const;
 export type SegmentType = (typeof SEGMENT_TYPES)[number];
 
 export const segments = sqliteTable(
@@ -124,7 +145,7 @@ export const segments = sqliteTable(
 	(t) => ({
 		typeCk: check(
 			'segments_type_ck',
-			sql`${t.type} in ('flight','lodging','car','rail','activity','cruise')`
+			sql`${t.type} in ('flight','lodging','car','rail','activity','cruise','event','hotel','rental_car','note','todo','parking','boat','train','directions','food','poi','meetup','rideshare','shuttle')`
 		),
 		tripIdx: index('segments_trip_idx').on(t.tripId),
 		startIdx: index('segments_start_idx').on(t.startAt)

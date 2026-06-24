@@ -13,7 +13,7 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="POST" class="grid gap-4 sm:grid-cols-2">
+	<form method="POST" action="?/save" class="grid gap-4 sm:grid-cols-2">
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
 		<div class="field sm:col-span-2">

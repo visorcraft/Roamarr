@@ -77,10 +77,10 @@
 								</div>
 							</div>
 							<div class="flex gap-1">
-								<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-white/5 hover:text-slate-200" onclick={() => (editingId = d.id)}>Edit</button>
+								<button type="button" class="action-btn text-slate-400 transition hover:bg-white/5 hover:text-slate-200" onclick={() => (editingId = d.id)}>Edit</button>
 								<form method="POST" action="?/delete">
 									<input type="hidden" name="id" value={d.id} />
-									<ConfirmButton class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this travel document?">Delete</ConfirmButton>
+									<ConfirmButton class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this travel document?">Delete</ConfirmButton>
 								</form>
 							</div>
 						</div>

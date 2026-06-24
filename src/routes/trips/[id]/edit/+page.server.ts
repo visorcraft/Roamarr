@@ -26,7 +26,7 @@ export function _deleteTrip(userId: number, tripId: number) {
 }
 
 export const actions: Actions = {
-	default: async ({ request, locals, params }) => {
+	save: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const tripId = Number(params.id);
 		requireEditableTrip(u.id, tripId);

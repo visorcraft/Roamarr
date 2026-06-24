@@ -45,7 +45,7 @@ function makeData(errors: Record<string, string> = {}): any {
 			watches: [],
 			feedUrl: null
 		},
-		form: { errors }
+		form: { errors, type: 'flight' }
 	};
 }
 

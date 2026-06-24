@@ -6,7 +6,32 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
 import { segments, SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
+import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
+
+function readLocalStart(v: Validator, f: FormData, optional = false): string | undefined {
+	const direct = f.get('localStart');
+	if (typeof direct === 'string' && direct.trim()) {
+		return optional ? v.dateTime(direct, 'localStart') : v.requiredDateTime(direct, 'localStart');
+	}
+
+	const startDate = optional ? v.date(f.get('startDate'), 'startDate') : v.requiredDate(f.get('startDate'), 'startDate');
+	const startTime = typeof f.get('startTime') === 'string' ? f.get('startTime').trim() : '';
+	if (!startDate) return undefined;
+
+	const combined = combineDateTime(startDate, startTime);
+	return optional ? v.dateTime(combined, 'localStart') : v.requiredDateTime(combined!, 'localStart');
+}
+
+function readEndAt(v: Validator, f: FormData): string | undefined {
+	const direct = f.get('endAt');
+	if (typeof direct === 'string' && direct.trim()) return v.dateTime(direct, 'endAt');
+
+	const endDate = v.date(f.get('endDate'), 'endDate');
+	const endTime = typeof f.get('endTime') === 'string' ? f.get('endTime').trim() : '';
+	if (!endDate) return undefined;
+	return v.dateTime(combineDateTime(endDate, endTime), 'endAt');
+}
 
 export function _addSegment(
 	userId: number,
@@ -98,9 +123,9 @@ export const actions: Actions = {
 
 		const type = v.enumValue(f.get('type'), SEGMENT_TYPES, 'type');
 		const title = v.requiredString(f.get('title'), 'title', { max: 200 });
-		const localStart = v.requiredDateTime(f.get('localStart'), 'localStart');
+		const localStart = readLocalStart(v, f);
 		const startTz = v.timezone(f.get('startTz') || u.timezone, 'startTz');
-		const endAt = v.dateTime(f.get('endAt'), 'endAt');
+		const endAt = readEndAt(v, f);
 		const location = v.optionalString(f.get('location'), 'location', { max: 200 });
 		const confirmationNumber = v.optionalString(
 			f.get('confirmationNumber'),
@@ -108,8 +133,15 @@ export const actions: Actions = {
 			{ max: 100 }
 		);
 		const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
+		const details = parseSegmentDetails(f);
 
-		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
+		if (!v.ok()) {
+			return fail(400, {
+				error: v.failMessage(),
+				errors: v.errors,
+				type: typeof f.get('type') === 'string' ? f.get('type') : undefined
+			});
+		}
 
 		_addSegment(u.id, Number(params.id), {
 			type: type!,
@@ -119,7 +151,8 @@ export const actions: Actions = {
 			endAt: endAt ?? undefined,
 			location,
 			confirmationNumber,
-			cardId
+			cardId,
+			details
 		});
 		throw redirect(303, `/trips/${params.id}`);
 	},

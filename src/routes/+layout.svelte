@@ -1,10 +1,14 @@
 <script lang="ts">
 	import '../app.css';
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import Toast from '$lib/components/Toast.svelte';
+	import { installPickerInputs } from '$lib/pickerInput';
 
 	let { data, children } = $props();
 	let open = $state(false);
+
+	onMount(() => installPickerInputs());
 
 	const NAV = [
 		{ href: '/', label: 'Dashboard', icon: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>' },

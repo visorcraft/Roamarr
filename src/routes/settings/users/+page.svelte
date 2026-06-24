@@ -37,9 +37,9 @@
 						<td class="py-3 pr-4 capitalize">{user.role}</td>
 						<td class="py-3 pr-4">
 							{#if user.disabled}
-								<span class="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-300">Disabled</span>
+								<span class="badge badge-red">Disabled</span>
 							{:else}
-								<span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">Active</span>
+								<span class="badge badge-green">Active</span>
 							{/if}
 						</td>
 						<td class="py-3 pr-4 text-slate-400">{user.createdAt}</td>
@@ -64,7 +64,7 @@
 									/>
 									Disabled
 								</label>
-								<button class="btn btn-primary py-1 text-xs">Save</button>
+								<button class="btn btn-primary btn-sm">Save</button>
 							</form>
 						</td>
 					</tr>

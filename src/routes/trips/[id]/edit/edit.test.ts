@@ -123,7 +123,7 @@ test('edit action updates a trip with valid data', async () => {
 		endDate: '2026-08-10',
 		notes: 'new notes'
 	});
-	await expect(actions.default(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
@@ -148,14 +148,14 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 		endDate: '2026-08-10',
 		notes: 'editor notes'
 	});
-	await expect(actions.default(makeEvent(form, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
 	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
 	expect(updated.name).toBe('Editor Updated');
 
-	await expect(actions.default(makeEvent(form, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
 		status: 404
 	});
 });
@@ -171,7 +171,7 @@ test('edit action rejects invalid data and enforces ownership', async () => {
 		startDate: '2026-08-10',
 		endDate: '2026-08-01'
 	});
-	const result = (await actions.default(makeEvent(form, { id: String(t.id) }, a.id))) as {
+	const result = (await actions.save(makeEvent(form, { id: String(t.id) }, a.id))) as {
 		status: number;
 		data: { errors: Record<string, string> };
 	};
@@ -179,7 +179,7 @@ test('edit action rejects invalid data and enforces ownership', async () => {
 	expect(result.data.errors.name).toBe('name is required');
 	expect(result.data.errors.startDate).toBe('startDate must be on or before endDate');
 
-	await expect(actions.default(makeEvent(form, { id: String(t.id) }, b.id))).rejects.toMatchObject({
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, b.id))).rejects.toMatchObject({
 		status: 404
 	});
 });

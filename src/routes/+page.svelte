@@ -49,7 +49,7 @@
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
 									<span class="block truncate font-semibold text-white">{t.name}</span>
-									{#if t.isShared}<span class="badge badge-brand text-[10px]">Shared</span>{/if}
+									{#if t.isShared}<span class="badge badge-brand">Shared</span>{/if}
 								</span>
 								{#if t.destination}<span class="block truncate text-sm text-slate-400">{t.destination}</span>{/if}
 							</span>

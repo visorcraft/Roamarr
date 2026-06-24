@@ -59,6 +59,11 @@
 	.card {
 		@apply rounded-2xl bg-surface/80 ring-1 ring-white/10 shadow-xl shadow-black/30 backdrop-blur-sm;
 	}
+	a.card,
+	button.card,
+	.card.group {
+		@apply cursor-pointer;
+	}
 	.section-title {
 		@apply font-display text-lg font-semibold text-ink;
 	}
@@ -66,9 +71,9 @@
 		@apply text-muted;
 	}
 
-	/* Buttons — use as `btn btn-primary` */
+	/* Buttons — use as `btn btn-primary` (+25% vs prior sizing) */
 	.btn {
-		@apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
+		@apply inline-flex cursor-pointer items-center justify-center gap-2.5 rounded-lg px-[1.094rem] py-2.5 text-[1.094rem] font-semibold leading-snug transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
 	}
 	.btn-primary {
 		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
@@ -83,10 +88,16 @@
 		@apply bg-amber-400 text-amber-950 hover:bg-amber-300 active:translate-y-px;
 	}
 	.btn-sm {
-		@apply rounded-md px-2.5 py-1 text-xs;
+		@apply rounded-md px-3 py-1.5 text-[0.938rem];
+	}
+	.btn-xs {
+		@apply rounded-md px-2.5 py-1 text-[0.8125rem];
 	}
 	.link {
-		@apply font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
+		@apply text-[1.094rem] font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
+	}
+	.action-btn {
+		@apply inline-flex cursor-pointer items-center rounded-md px-[0.625rem] py-[0.3125rem] text-[0.938rem] font-medium transition select-none;
 	}
 
 	/* Form controls */
@@ -133,6 +144,24 @@
 	.textarea {
 		@apply min-h-20 resize-y;
 	}
+	.input[type='date'],
+	.input[type='datetime-local'],
+	.input[type='time'] {
+		@apply cursor-pointer;
+		position: relative;
+	}
+	.input[type='date']::-webkit-calendar-picker-indicator,
+	.input[type='datetime-local']::-webkit-calendar-picker-indicator,
+	.input[type='time']::-webkit-calendar-picker-indicator {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		opacity: 0;
+		cursor: pointer;
+	}
 	.input-error {
 		@apply ring-red-400/70 focus:ring-red-400/70;
 	}
@@ -140,9 +169,9 @@
 		@apply text-xs text-red-300;
 	}
 
-	/* Badges */
+	/* Badges (+25% vs prior sizing) */
 	.badge {
-		@apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
+		@apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.938rem] font-semibold leading-snug ring-1 ring-inset;
 	}
 	.badge-brand {
 		@apply bg-indigo-500/15 text-indigo-300 ring-indigo-400/30;
@@ -158,6 +187,9 @@
 	}
 	.badge-slate {
 		@apply bg-slate-500/15 text-slate-300 ring-slate-400/30;
+	}
+	.tag {
+		@apply inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-[0.781rem] py-[0.3125rem] text-[0.938rem] text-slate-300 ring-1 ring-white/10 ring-inset;
 	}
 
 	/* Data tables */
@@ -180,5 +212,79 @@
 	}
 	.notice-error {
 		@apply bg-red-500/10 text-red-300 ring-red-400/30;
+	}
+
+	/* Trip detail — Seerr-inspired hero + TripIt timeline */
+	.trip-detail {
+		@apply -mx-4 -mt-6 sm:-mx-6 lg:-mx-10 lg:-mt-10;
+	}
+	.trip-detail-body {
+		@apply px-4 pb-6 sm:px-6 lg:px-10 lg:pb-10;
+	}
+	.trip-hero {
+		@apply relative overflow-hidden border-b border-white/10;
+	}
+	.trip-hero-backdrop {
+		@apply pointer-events-none absolute inset-0 bg-cover bg-center opacity-40;
+	}
+	.trip-hero-scrim {
+		@apply pointer-events-none absolute inset-0 bg-gradient-to-t from-canvas via-canvas/90 to-canvas/55;
+	}
+	.trip-poster {
+		@apply relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-surface2 shadow-2xl shadow-black/50 ring-1 ring-white/15 sm:w-36;
+	}
+	.trip-meta-pill {
+		@apply inline-flex items-center gap-2 rounded-md bg-white/5 px-3 py-1.5 text-[0.938rem] font-medium leading-snug text-slate-300 ring-1 ring-white/10 ring-inset;
+	}
+	.trip-meta-pill-arrow {
+		@apply h-[0.9375rem] w-[0.9375rem] shrink-0 -translate-y-px text-slate-500;
+	}
+	.trip-sidebar-card {
+		@apply rounded-xl bg-surface/60 p-4 ring-1 ring-white/10;
+	}
+	.trip-sidebar-dl dt {
+		@apply text-xs font-medium tracking-wide text-slate-500 uppercase;
+	}
+	.trip-sidebar-dl dd {
+		@apply mt-0.5 text-sm text-slate-200;
+	}
+	.trip-sidebar-dl > div + div {
+		@apply mt-3 border-t border-white/5 pt-3;
+	}
+	.trip-timeline-day {
+		@apply sticky top-0 z-10 -mx-1 mb-3 flex items-center justify-between gap-3 rounded-lg bg-surface2/90 px-[0.938rem] py-2.5 ring-1 ring-white/10 backdrop-blur-sm;
+	}
+	.trip-timeline-track {
+		@apply relative pl-10;
+	}
+	.trip-timeline-track::before {
+		content: '';
+		@apply absolute top-2 bottom-2 left-[1.125rem] w-px bg-indigo-500/25;
+	}
+	.trip-timeline-node {
+		@apply absolute top-3 left-0 grid h-9 w-9 place-items-center rounded-full bg-surface2 text-indigo-300 ring-2 ring-indigo-500/30;
+	}
+	.trip-timeline-card {
+		@apply rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5 transition hover:bg-white/[0.05] hover:ring-white/10;
+	}
+
+	.modal-backdrop {
+		@apply fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm;
+	}
+	.modal-panel {
+		@apply w-full max-w-lg rounded-2xl bg-surface p-6 shadow-2xl shadow-black/50 ring-1 ring-white/10;
+	}
+	.modal-panel-wide {
+		@apply max-w-4xl;
+	}
+
+	.segment-form-section {
+		@apply border-t border-white/10 pt-4;
+	}
+	.segment-form-section-toggle {
+		@apply flex w-full items-center justify-between gap-3 py-1.5 text-left text-[1.094rem];
+	}
+	.segment-form-section-body {
+		@apply mt-4;
 	}
 }

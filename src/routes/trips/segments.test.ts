@@ -9,10 +9,12 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import {
-	_addSegment as addSegment,
-	_updateSegment as updateSegment,
+	addSegment,
+	deleteSegment,
+	updateSegment,
 	actions
 } from './[id]/segments/+page.server';
+import { newSegmentPage } from '$lib/server/segmentNewPage';
 import { users, trips, cards, segments, reminders, tripShares } from '$lib/server/db/schema';
 
 beforeEach(() => {
@@ -176,6 +178,20 @@ function formData(obj: Record<string, string>) {
 	return f;
 }
 
+const addSegmentAction = newSegmentPage('flight').actions.default;
+
+function makeAddEvent(form: FormData, params: Record<string, string>, userId: number) {
+	return {
+		request: new Request(`http://localhost/trips/${params.id}/segments/new/flight`, {
+			method: 'POST',
+			body: form
+		}),
+		params,
+		locals: locals({ id: userId }),
+		url: new URL(`http://localhost/trips/${params.id}/segments/new/flight`)
+	} as any;
+}
+
 function makeEvent(form: FormData, params: Record<string, string>, userId: number) {
 	return {
 		request: new Request('http://localhost/trips/1/segments', { method: 'POST', body: form }),
@@ -191,12 +207,11 @@ test('add action validates required fields and timezone', async () => {
 	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
 
 	const form = formData({
-		type: 'flight',
 		title: '',
 		localStart: 'not-a-datetime',
 		startTz: 'Mars/Colony'
 	});
-	const result = (await actions.add(makeEvent(form, { id: String(t.id) }, a.id))) as {
+	const result = (await addSegmentAction!(makeAddEvent(form, { id: String(t.id) }, a.id))) as {
 		status: number;
 		data: { errors: Record<string, string> };
 	};
@@ -212,12 +227,11 @@ test('add action creates a segment with valid data', async () => {
 	const a = db.insert(users).values({ email: 'act-b@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
 	const form = formData({
-		type: 'flight',
 		title: 'UA1',
 		localStart: '2026-07-01T15:00',
 		startTz: 'America/New_York'
 	});
-	await expect(actions.add(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+	await expect(addSegmentAction!(makeAddEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
@@ -271,19 +285,18 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
 
 	const addForm = formData({
-		type: 'flight',
 		title: 'UA1',
 		localStart: '2026-07-01T15:00',
 		startTz: 'UTC'
 	});
-	await expect(actions.add(makeEvent(addForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
+	await expect(addSegmentAction!(makeAddEvent(addForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
 	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
 	expect(seg.title).toBe('UA1');
 
-	await expect(actions.add(makeEvent(addForm, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
+	await expect(addSegmentAction!(makeAddEvent(addForm, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
 		status: 404
 	});
 

@@ -12,7 +12,7 @@
 		<h1 class="truncate text-3xl font-extrabold text-white">Share trip</h1>
 		<p class="mt-1 text-sm text-muted">Control who can see {data.trip.name}.</p>
 	</div>
-	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost btn-sm">Back to trip</a>
+	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Back to trip</a>
 </header>
 
 <section class="card mt-6 p-5">
@@ -32,11 +32,11 @@
 						<form method="POST" action="?/setShowDetails">
 							<input type="hidden" name="shareId" value={s.id} />
 							<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
-							<button class="btn btn-ghost btn-xs">{s.showDetails ? 'Hide details' : 'Show details'}</button>
+							<button class="btn btn-ghost">{s.showDetails ? 'Hide details' : 'Show details'}</button>
 						</form>
 						<form method="POST" action="?/unshareUser">
 							<input type="hidden" name="shareId" value={s.id} />
-							<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove share" message="Remove this share?">Remove</ConfirmButton>
+							<ConfirmButton class="btn btn-danger" aria-label="Remove share" message="Remove this share?">Remove</ConfirmButton>
 						</form>
 					</div>
 				</li>
@@ -80,11 +80,11 @@
 							<form method="POST" action="?/setShowDetails">
 								<input type="hidden" name="shareId" value={s.id} />
 								<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
-								<button class="btn btn-ghost btn-xs">{s.showDetails ? 'Hide details' : 'Show details'}</button>
+								<button class="btn btn-ghost">{s.showDetails ? 'Hide details' : 'Show details'}</button>
 							</form>
 							<form method="POST" action="?/unshareGroup">
 								<input type="hidden" name="shareId" value={s.id} />
-								<ConfirmButton class="btn btn-danger btn-sm" aria-label="Remove group share" message="Remove this group share?">Remove</ConfirmButton>
+								<ConfirmButton class="btn btn-danger" aria-label="Remove group share" message="Remove this group share?">Remove</ConfirmButton>
 							</form>
 						</div>
 					</li>
@@ -123,15 +123,15 @@
 		<p class="text-sm text-slate-400">Anyone with this link can view the trip.</p>
 		<div class="mt-2 flex items-center gap-2">
 			<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">/share/{data.trip.publicToken}</p>
-			<CopyButton text={data.publicShareUrl} class="btn btn-ghost btn-sm shrink-0" label="Copy link" />
+			<CopyButton text={data.publicShareUrl} class="btn btn-ghost shrink-0" label="Copy link" />
 		</div>
 		<form method="POST" action="?/revokePublic" class="mt-3">
-			<ConfirmButton class="btn btn-danger btn-sm" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
+			<ConfirmButton class="btn btn-danger" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
 		</form>
 	{:else}
 		<p class="text-sm text-slate-400">Generate a link that lets anyone view this trip without an account.</p>
 		<form method="POST" action="?/makePublic" class="mt-3">
-			<button class="btn btn-primary btn-sm">Create public link</button>
+			<button class="btn btn-primary">Create public link</button>
 		</form>
 	{/if}
 </section>

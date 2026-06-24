@@ -71,9 +71,9 @@
 		@apply text-muted;
 	}
 
-	/* Buttons — use as `btn btn-primary` (+25% vs prior sizing) */
+	/* Buttons — always use `.btn` + one variant (`.btn-primary` | `.btn-ghost` | `.btn-danger` | `.btn-warn`). */
 	.btn {
-		@apply inline-flex cursor-pointer items-center justify-center gap-2.5 rounded-lg px-[1.094rem] py-2.5 text-[1.094rem] font-semibold leading-snug transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
+		@apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
 	}
 	.btn-primary {
 		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
@@ -87,17 +87,23 @@
 	.btn-warn {
 		@apply bg-amber-400 text-amber-950 hover:bg-amber-300 active:translate-y-px;
 	}
-	.btn-sm {
-		@apply rounded-md px-3 py-1.5 text-[0.938rem];
+	.btn-ghost-muted {
+		@apply text-slate-400 hover:bg-white/5 hover:text-slate-200;
 	}
-	.btn-xs {
-		@apply rounded-md px-2.5 py-1 text-[0.8125rem];
+	.btn-ghost-indigo {
+		@apply text-slate-400 hover:bg-indigo-500/10 hover:text-indigo-300;
+	}
+	.btn-ghost-danger {
+		@apply text-slate-400 hover:bg-red-500/10 hover:text-red-300;
+	}
+	.btn-ghost-amber {
+		@apply text-slate-400 hover:bg-amber-500/10 hover:text-amber-300;
+	}
+	.btn-ghost-success {
+		@apply text-slate-400 hover:bg-emerald-500/10 hover:text-emerald-300;
 	}
 	.link {
-		@apply text-[1.094rem] font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
-	}
-	.action-btn {
-		@apply inline-flex cursor-pointer items-center rounded-md px-[0.625rem] py-[0.3125rem] text-[0.938rem] font-medium transition select-none;
+		@apply font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
 	}
 
 	/* Form controls */
@@ -106,6 +112,16 @@
 	}
 	.label {
 		@apply text-sm font-medium text-slate-300;
+	}
+	.field-help {
+		@apply text-sm text-muted;
+	}
+
+	.settings-rows {
+		@apply mt-2 divide-y divide-white/5;
+	}
+	.settings-row {
+		@apply grid gap-3 py-4 sm:grid-cols-2 sm:items-center sm:gap-x-8 lg:gap-x-12;
 	}
 	.input,
 	.select,
@@ -233,6 +249,9 @@
 	.trip-poster {
 		@apply relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-xl bg-surface2 shadow-2xl shadow-black/50 ring-1 ring-white/15 sm:w-36;
 	}
+	.badge-compact {
+		@apply gap-1 px-2 py-0.5 text-xs;
+	}
 	.trip-meta-pill {
 		@apply inline-flex items-center gap-2 rounded-md bg-white/5 px-3 py-1.5 text-[0.938rem] font-medium leading-snug text-slate-300 ring-1 ring-white/10 ring-inset;
 	}
@@ -282,7 +301,7 @@
 		@apply border-t border-white/10 pt-4;
 	}
 	.segment-form-section-toggle {
-		@apply flex w-full items-center justify-between gap-3 py-1.5 text-left text-[1.094rem];
+		@apply flex w-full items-center justify-between gap-3 py-1 text-left;
 	}
 	.segment-form-section-body {
 		@apply mt-4;

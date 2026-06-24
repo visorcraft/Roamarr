@@ -4,12 +4,11 @@
 	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header>
 	<div class="min-w-0">
 		<h1 class="truncate text-3xl font-extrabold text-white">Edit trip</h1>
 		<p class="mt-1 text-sm text-muted">Update the details for {data.trip.name}.</p>
 	</div>
-	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost btn-sm">Cancel</a>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
@@ -41,7 +40,8 @@
 			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}">{data.trip.notes ?? ''}</textarea>
 			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex flex-wrap gap-2 sm:col-span-2">
+			<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>
 			<button class="btn btn-primary">Save changes</button>
 		</div>
 	</form>

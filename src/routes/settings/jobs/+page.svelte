@@ -20,31 +20,28 @@
 	}
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
-	<div>
-		<h1 class="text-3xl font-extrabold text-white">Scheduled job runs</h1>
-		<p class="mt-1 text-sm text-muted">Recent scheduler ticks for reminders, fare checks and session cleanup.</p>
-	</div>
-	<a href="/settings" class="btn btn-ghost btn-sm">← Back to settings</a>
+<header>
+	<h1 class="text-3xl font-extrabold text-white">Scheduled job runs</h1>
+	<p class="mt-1 text-sm text-muted">Recent scheduler ticks for reminders, fare checks and session cleanup.</p>
 </header>
 
-{#if data.runs.length}
-	<section class="card mt-8 overflow-hidden p-0">
+<section class="card mt-8 p-5 sm:p-6">
+	<div class="overflow-x-auto">
 		<table class="table">
 			<thead>
 				<tr>
 					<th>Started</th>
 					<th>Duration</th>
 					<th>Status</th>
-					<th>Error</th>
+					<th class="w-full">Error</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each data.runs as run (run.id)}
 					<tr>
-						<td class="font-mono text-xs">{fmt(run.startedAt)}</td>
-						<td class="font-mono text-xs">{durationMs(run.startedAt, run.finishedAt)}</td>
-						<td>
+						<td class="whitespace-nowrap text-slate-400">{fmt(run.startedAt)}</td>
+						<td class="whitespace-nowrap text-slate-400">{durationMs(run.startedAt, run.finishedAt)}</td>
+						<td class="whitespace-nowrap">
 							{#if run.finishedAt}
 								{#if run.success}
 									<span class="badge badge-green">OK</span>
@@ -55,31 +52,18 @@
 								<span class="badge badge-amber">Running</span>
 							{/if}
 						</td>
-						<td class="max-w-xs truncate text-xs text-red-300">{run.errorMessage ?? ''}</td>
+						<td>
+							{#if run.errorMessage}
+								<code class="rounded bg-slate-950/50 px-2 py-1 text-xs text-red-300">{run.errorMessage}</code>
+							{/if}
+						</td>
+					</tr>
+				{:else}
+					<tr>
+						<td colspan="4" class="py-8 text-center text-slate-500">No scheduler runs recorded yet.</td>
 					</tr>
 				{/each}
 			</tbody>
 		</table>
-	</section>
-{:else}
-	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
-		<div
-			class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20"
-		>
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="h-6 w-6"
-			>
-				<path d="M12 8v4l3 3" />
-				<circle cx="12" cy="12" r="10" />
-			</svg>
-		</div>
-		<p class="text-slate-300">No scheduler runs recorded yet.</p>
-		<p class="text-xs text-slate-500">The scheduler records a row every 60 seconds once the app is running.</p>
 	</div>
-{/if}
+</section>

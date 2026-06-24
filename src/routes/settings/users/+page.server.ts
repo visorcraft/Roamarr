@@ -1,8 +1,10 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq, sql } from 'drizzle-orm';
 import { requireAdmin } from '$lib/server/auth';
+import { logAudit } from '$lib/server/audit';
+import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
+import { adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -14,6 +16,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			displayName: users.displayName,
 			role: users.role,
 			disabled: users.disabled,
+			mustResetPassword: users.mustResetPassword,
 			createdAt: users.createdAt
 		})
 		.from(users)
@@ -22,43 +25,60 @@ export const load: PageServerLoad = ({ locals }) => {
 	return { users: allUsers };
 };
 
-function parseAction(formData: FormData) {
+function parseUpdate(formData: FormData) {
 	const userId = Number(formData.get('userId'));
+	const displayName = String(formData.get('displayName') ?? '');
+	const email = String(formData.get('email') ?? '');
 	const role = String(formData.get('role') ?? '');
-	const disabled = formData.get('disabled') === 'on';
-	if (!Number.isInteger(userId) || userId <= 0) return { error: 'Invalid user.' };
-	if (role && role !== 'admin' && role !== 'user') return { error: 'Invalid role.' };
-	return { userId, role: role as 'admin' | 'user' | '', disabled };
-}
+	const disabled = formData.get('enabled') !== 'on';
+	const mustResetPassword = formData.get('mustResetPassword') === 'on';
+	const newPassword = String(formData.get('newPassword') ?? '');
+	const confirmPassword = String(formData.get('confirmPassword') ?? '');
 
-function countAdmins() {
-	return db.select({ c: sql<number>`count(*)` }).from(users).where(eq(users.role, 'admin')).get()!.c;
+	if (!Number.isInteger(userId) || userId <= 0) return { error: 'Invalid user.' };
+	if (role !== 'admin' && role !== 'user') return { error: 'Invalid role.' };
+
+	return {
+		userId,
+		displayName,
+		email,
+		role: role as 'admin' | 'user',
+		disabled,
+		mustResetPassword,
+		newPassword,
+		confirmPassword
+	};
 }
 
 export const actions: Actions = {
-	default: async ({ request, locals }) => {
-		requireAdmin(locals);
-		const f = await request.formData();
-		const parsed = parseAction(f);
+	update: async ({ request, locals, cookies }) => {
+		const admin = requireAdmin(locals);
+		const parsed = parseUpdate(await request.formData());
 		if ('error' in parsed) return fail(400, { error: parsed.error });
-		const { userId, role, disabled } = parsed;
 
-		const target = db.select().from(users).where(eq(users.id, userId)).get();
-		if (!target) return fail(404, { error: 'User not found.' });
-
-		// Prevent locking out the last admin: if this change would remove the only
-		// admin's access, reject it.
-		const adminsBefore = countAdmins();
-		const demotingSelf = target.id === locals.user!.id && role === 'user';
-		const disablingSelf = target.id === locals.user!.id && disabled;
-		if ((demotingSelf || disablingSelf) && adminsBefore <= 1) {
-			return fail(400, { error: 'Cannot remove the last admin.' });
+		try {
+			await adminUpdateUser(admin.id, parsed.userId, parsed);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Update failed.' });
 		}
 
-		const patch: Partial<typeof users.$inferInsert> = {};
-		if (role) patch.role = role;
-		patch.disabled = disabled;
-		db.update(users).set(patch).where(eq(users.id, userId)).run();
+		setFlash(cookies, 'User updated.');
+		throw redirect(303, '/settings/users');
+	},
+
+	sendReset: async ({ request, locals, cookies, url }) => {
+		const admin = requireAdmin(locals);
+		const userId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(userId) || userId <= 0) return fail(400, { error: 'Invalid user.' });
+
+		try {
+			await adminSendPasswordReset(userId, url.origin);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Could not send reset link.' });
+		}
+
+		logAudit(admin.id, 'user_password_reset_sent', 'user', userId);
+		setFlash(cookies, 'Password reset link sent.');
 		throw redirect(303, '/settings/users');
 	}
 };

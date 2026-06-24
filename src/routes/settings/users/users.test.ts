@@ -7,13 +7,19 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
+vi.mock('$lib/server/notify', () => ({
+	deliver: vi.fn(async () => {})
+}));
+
 import { load, actions } from './+page.server';
 import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
+import { deliver } from '$lib/server/notify';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from users;');
+	vi.mocked(deliver).mockClear();
 });
 
 function adminLocals() {
@@ -32,6 +38,19 @@ function userLocals() {
 		.returning()
 		.get();
 	return { user: u };
+}
+
+function updateForm(overrides: Record<string, string> = {}) {
+	const form = new FormData();
+	form.set('userId', overrides.userId ?? '0');
+	form.set('displayName', overrides.displayName ?? 'T');
+	form.set('email', overrides.email ?? 'target@x.c');
+	form.set('role', overrides.role ?? 'user');
+	if (overrides.enabled === 'on') form.set('enabled', 'on');
+	if (overrides.mustResetPassword === 'on') form.set('mustResetPassword', 'on');
+	if (overrides.newPassword) form.set('newPassword', overrides.newPassword);
+	if (overrides.confirmPassword) form.set('confirmPassword', overrides.confirmPassword);
+	return form;
 }
 
 test('load returns all users for admin', () => {
@@ -53,7 +72,109 @@ test('load rejects non-admin', () => {
 	}
 });
 
-test('action toggles role and disabled', async () => {
+test('update toggles role and disabled', async () => {
+	const db = (ctx as any).db;
+	const admin = adminLocals();
+	const target = db
+		.insert(users)
+		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
+		.returning()
+		.get();
+
+	const form = updateForm({
+		userId: String(target.id),
+		role: 'admin',
+		mustResetPassword: 'on'
+	});
+	try {
+		await actions.update({ request: { formData: async () => form }, locals: admin, cookies: { set: vi.fn() } } as any);
+		expect.fail('should have redirected');
+	} catch (e: any) {
+		expect(e.status).toBe(303);
+	}
+
+	const updated = db.select().from(users).where(eq(users.id, target.id)).get()!;
+	expect(updated.role).toBe('admin');
+	expect(updated.disabled).toBe(true);
+	expect(updated.mustResetPassword).toBe(true);
+});
+
+test('update changes display name and email', async () => {
+	const db = (ctx as any).db;
+	const admin = adminLocals();
+	const target = db
+		.insert(users)
+		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
+		.returning()
+		.get();
+
+	const form = updateForm({
+		userId: String(target.id),
+		displayName: 'Target User',
+		email: 'new@x.c',
+		enabled: 'on'
+	});
+	try {
+		await actions.update({ request: { formData: async () => form }, locals: admin, cookies: { set: vi.fn() } } as any);
+	} catch (e: any) {
+		expect(e.status).toBe(303);
+	}
+
+	const updated = db.select().from(users).where(eq(users.id, target.id)).get()!;
+	expect(updated.displayName).toBe('Target User');
+	expect(updated.email).toBe('new@x.c');
+	expect(updated.disabled).toBe(false);
+});
+
+test('update prevents demoting the last admin', async () => {
+	const admin = adminLocals();
+	const form = updateForm({
+		userId: String(admin.user.id),
+		displayName: 'Admin',
+		email: 'admin@x.c',
+		role: 'user',
+		enabled: 'on'
+	});
+	const result = (await actions.update({
+		request: { formData: async () => form },
+		locals: admin
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/last admin/i);
+});
+
+test('update prevents disabling the last admin', async () => {
+	const admin = adminLocals();
+	const form = updateForm({
+		userId: String(admin.user.id),
+		displayName: 'Admin',
+		email: 'admin@x.c',
+		role: 'admin'
+	});
+	const result = (await actions.update({
+		request: { formData: async () => form },
+		locals: admin
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/last admin/i);
+});
+
+test('update rejects invalid role', async () => {
+	const admin = adminLocals();
+	const target = (ctx as any).db
+		.insert(users)
+		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
+		.returning()
+		.get();
+	const form = updateForm({ userId: String(target.id), role: 'superuser' });
+	const result = (await actions.update({
+		request: { formData: async () => form },
+		locals: admin
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+});
+
+test('sendReset delivers a reset link', async () => {
 	const db = (ctx as any).db;
 	const admin = adminLocals();
 	const target = db
@@ -64,60 +185,17 @@ test('action toggles role and disabled', async () => {
 
 	const form = new FormData();
 	form.set('userId', String(target.id));
-	form.set('role', 'admin');
-	form.set('disabled', 'on');
 	try {
-		await actions.default({ request: { formData: async () => form }, locals: admin } as any);
-		expect.fail('should have redirected');
+		await actions.sendReset({
+			request: { formData: async () => form },
+			locals: admin,
+			cookies: { set: vi.fn() },
+			url: new URL('https://roamarr.test/settings/users')
+		} as any);
 	} catch (e: any) {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = db.select().from(users).where(eq(users.id, target.id)).get()!;
-	expect(updated.role).toBe('admin');
-	expect(updated.disabled).toBe(true);
-});
-
-test('action prevents demoting the last admin', async () => {
-	const admin = adminLocals();
-	const form = new FormData();
-	form.set('userId', String(admin.user.id));
-	form.set('role', 'user');
-	const result = (await actions.default({
-		request: { formData: async () => form },
-		locals: admin
-	} as any)) as { status: number; data: { error: string } };
-	expect(result.status).toBe(400);
-	expect(result.data.error).toMatch(/last admin/i);
-});
-
-test('action prevents disabling the last admin', async () => {
-	const admin = adminLocals();
-	const form = new FormData();
-	form.set('userId', String(admin.user.id));
-	form.set('role', 'admin');
-	form.set('disabled', 'on');
-	const result = (await actions.default({
-		request: { formData: async () => form },
-		locals: admin
-	} as any)) as { status: number; data: { error: string } };
-	expect(result.status).toBe(400);
-	expect(result.data.error).toMatch(/last admin/i);
-});
-
-test('action rejects invalid role', async () => {
-	const admin = adminLocals();
-	const target = (ctx as any).db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
-		.returning()
-		.get();
-	const form = new FormData();
-	form.set('userId', String(target.id));
-	form.set('role', 'superuser');
-	const result = (await actions.default({
-		request: { formData: async () => form },
-		locals: admin
-	} as any)) as { status: number; data: { error: string } };
-	expect(result.status).toBe(400);
+	expect(vi.mocked(deliver)).toHaveBeenCalledOnce();
+	expect(vi.mocked(deliver).mock.calls[0][1].link).toMatch(/^https:\/\/roamarr\.test\/reset-password\//);
 });

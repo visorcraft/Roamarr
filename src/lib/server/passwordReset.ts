@@ -36,7 +36,7 @@ export async function consumePasswordResetToken(token: string, newPassword: stri
 	if (!row) return false;
 	await db
 		.update(users)
-		.set({ passwordHash: await hashPassword(newPassword) })
+		.set({ passwordHash: await hashPassword(newPassword), mustResetPassword: false })
 		.where(eq(users.id, row.userId))
 		.run();
 	db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, row.userId)).run();

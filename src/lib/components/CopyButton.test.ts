@@ -16,9 +16,9 @@ test('renders custom labels and classes', () => {
 			text: 'https://example.com/share',
 			label: 'Copy link',
 			copiedLabel: 'Link copied!',
-			class: 'btn btn-ghost btn-sm'
+			class: 'btn btn-ghost'
 		}
 	});
 	expect(body).toContain('Copy link');
-	expect(body).toContain('btn btn-ghost btn-sm');
+	expect(body).toContain('btn btn-ghost');
 });

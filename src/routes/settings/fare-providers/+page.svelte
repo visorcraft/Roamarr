@@ -33,10 +33,10 @@
 							</div>
 						</div>
 						<div class="flex gap-1">
-							<button type="button" class="action-btn text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => editingId = s.id}>Edit</button>
+							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => editingId = s.id}>Edit</button>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={s.id} />
-								<ConfirmButton class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this provider account and its watches?">Delete</ConfirmButton>
+								<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
 							</form>
 						</div>
 					</div>
@@ -68,8 +68,8 @@
 								/>
 							</div>
 							<div class="flex gap-2 sm:col-span-2">
-								<button class="btn btn-primary btn-sm">Save</button>
-								<button type="button" class="btn btn-ghost btn-sm" onclick={() => editingId = null}>Cancel</button>
+								<button type="button" class="btn btn-ghost" onclick={() => editingId = null}>Cancel</button>
+								<button class="btn btn-primary">Save</button>
 							</div>
 						</form>
 					{/if}

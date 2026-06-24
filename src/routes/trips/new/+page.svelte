@@ -2,12 +2,11 @@
 	let { form }: { form?: { error?: string; errors?: Record<string, string> } } = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header>
 	<div>
 		<h1 class="text-3xl font-extrabold text-white">New trip</h1>
 		<p class="mt-1 text-sm text-muted">Plan a new journey and set who can see it.</p>
 	</div>
-	<a href="/trips" class="btn btn-ghost btn-sm">Cancel</a>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
@@ -48,7 +47,8 @@
 			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}"></textarea>
 			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex flex-wrap gap-2 sm:col-span-2">
+			<a href="/trips" class="btn btn-ghost">Cancel</a>
 			<button class="btn btn-primary">Create trip</button>
 		</div>
 	</form>

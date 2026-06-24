@@ -56,8 +56,8 @@
 								<input id="notes-{d.id}" name="notes" value={d.notes ?? ''} placeholder="Optional notes" class="input" />
 							</div>
 							<div class="flex items-center gap-2 sm:col-span-2">
+								<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
 								<button class="btn btn-primary">Save</button>
-								<button type="button" class="btn" onclick={() => (editingId = null)}>Cancel</button>
 							</div>
 						</form>
 					{:else}
@@ -77,10 +77,10 @@
 								</div>
 							</div>
 							<div class="flex gap-1">
-								<button type="button" class="action-btn text-slate-400 transition hover:bg-white/5 hover:text-slate-200" onclick={() => (editingId = d.id)}>Edit</button>
+								<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = d.id)}>Edit</button>
 								<form method="POST" action="?/delete">
 									<input type="hidden" name="id" value={d.id} />
-									<ConfirmButton class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this travel document?">Delete</ConfirmButton>
+									<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this travel document?">Delete</ConfirmButton>
 								</form>
 							</div>
 						</div>

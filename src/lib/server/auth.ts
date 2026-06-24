@@ -40,6 +40,10 @@ export function invalidateSession(token: string) {
 	db.delete(sessions).where(eq(sessions.tokenHash, th(token))).run();
 }
 
+export function invalidateAllSessions(userId: number) {
+	db.delete(sessions).where(eq(sessions.userId, userId)).run();
+}
+
 export function invalidateOtherSessions(userId: number, token: string) {
 	db.delete(sessions)
 		.where(and(eq(sessions.userId, userId), ne(sessions.tokenHash, th(token))))

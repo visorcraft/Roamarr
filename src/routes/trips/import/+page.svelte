@@ -9,7 +9,7 @@
 		<h1 class="text-3xl font-extrabold text-white">Import trips</h1>
 		<p class="mt-1 text-sm text-muted">Upload a JSON or CSV file to create trips in bulk.</p>
 	</div>
-	<a href="/trips" class="btn btn-ghost btn-sm">Back</a>
+	<a href="/trips" class="btn btn-ghost">Back</a>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">

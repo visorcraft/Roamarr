@@ -26,6 +26,7 @@ export const users = sqliteTable(
 		displayName: text('display_name').notNull(),
 		role: text('role').notNull().default('user'),
 		disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),
+		mustResetPassword: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
 		timezone: text('timezone').notNull().default('UTC'),
 		flightCheckinLeadHours: integer('flight_checkin_lead_hours').notNull().default(24),
 		documentExpiryLeadDays: integer('document_expiry_lead_days').notNull().default(90),

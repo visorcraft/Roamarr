@@ -8,7 +8,8 @@ vi.mock('./lib/server/db', async () => {
 });
 
 import { handle } from './hooks.server';
-import { settings } from './lib/server/db/schema';
+import { createSession } from './lib/server/auth';
+import { settings, users } from './lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 const ev = (path: string) => ({
@@ -108,4 +109,26 @@ test('reads a flash cookie into locals and clears it', async () => {
 	})) as Response;
 	expect(res.status).toBe(200);
 	expect(cookies.set).toHaveBeenCalledWith('flash', '', { path: '/', maxAge: 0 });
+});
+
+test('redirects users who must reset password', async () => {
+	const db = (ctx as any).db;
+	db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	const u = db
+		.insert(users)
+		.values({ email: 'reset@x.c', passwordHash: 'x', displayName: 'Reset', mustResetPassword: true })
+		.returning()
+		.get();
+	const token = createSession(u.id);
+	const res: any = await handle({
+		event: {
+			url: new URL('http://x/trips'),
+			cookies: { get: (name: string) => (name === 'session' ? token : undefined) },
+			locals: {} as App.Locals,
+			request: new Request('http://x/trips')
+		} as any,
+		resolve: async () => new Response('ok')
+	}).catch((e: any) => e);
+	expect(res.status).toBe(302);
+	expect(res.location).toBe('/profile/change-password');
 });

@@ -26,7 +26,7 @@
 	</div>
 	{#if unread > 0}
 		<form method="POST" action="?/markAllRead">
-			<button class="btn btn-brand btn-sm">Mark all read</button>
+			<button class="btn btn-primary">Mark all read</button>
 		</form>
 	{/if}
 </header>
@@ -55,12 +55,12 @@
 				{#if n.readAt}
 					<form method="POST" action="?/markUnread" class="shrink-0">
 						<input type="hidden" name="id" value={n.id} />
-						<button class="btn btn-ghost btn-sm">Mark unread</button>
+						<button class="btn btn-ghost">Mark unread</button>
 					</form>
 				{:else}
 					<form method="POST" action="?/markRead" class="shrink-0">
 						<input type="hidden" name="id" value={n.id} />
-						<button class="btn btn-ghost btn-sm">Mark read</button>
+						<button class="btn btn-ghost">Mark read</button>
 					</form>
 				{/if}
 			</li>

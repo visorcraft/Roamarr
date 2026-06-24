@@ -48,10 +48,10 @@
 						{#if c.last4}<div class="mt-1 font-mono text-xs text-slate-400">…{c.last4}</div>{/if}
 					</div>
 					<div class="flex gap-1">
-						<button type="button" class="action-btn text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingCardId = c.id)}>Edit</button>
+						<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingCardId = c.id)}>Edit</button>
 						<form method="POST" action="?/deleteCard">
 							<input type="hidden" name="id" value={c.id} />
-							<ConfirmButton class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this card and all its benefits?">Delete</ConfirmButton>
+							<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this card and all its benefits?">Delete</ConfirmButton>
 						</form>
 					</div>
 				</div>
@@ -82,8 +82,8 @@
 							<input id={`notes-${c.id}`} name="notes" value={c.notes ?? ''} placeholder="Optional notes" class="input" />
 						</div>
 						<div class="flex gap-2 sm:col-span-2">
-							<button class="btn btn-primary btn-sm">Update card</button>
-							<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingCardId = null)}>Cancel</button>
+							<button type="button" class="btn btn-ghost" onclick={() => (editingCardId = null)}>Cancel</button>
+							<button class="btn btn-primary">Update card</button>
 						</div>
 					</form>
 				{/if}
@@ -118,8 +118,8 @@
 											<input id={`benefitNotes-${b.id}`} name="notes" value={b.notes ?? ''} placeholder="Optional" class="input" />
 										</div>
 										<div class="flex gap-2">
-											<button class="btn btn-primary btn-sm">Update</button>
-											<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingBenefitId = null)}>Cancel</button>
+											<button type="button" class="btn btn-ghost" onclick={() => (editingBenefitId = null)}>Cancel</button>
+											<button class="btn btn-primary">Update</button>
 										</div>
 									</form>
 								{:else}
@@ -127,11 +127,11 @@
 									<div class="flex items-center gap-3">
 										<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
 										<div class="flex gap-1">
-											<button type="button" class="action-btn text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingBenefitId = b.id)}>Edit</button>
+											<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingBenefitId = b.id)}>Edit</button>
 											<form method="POST" action="?/deleteBenefit">
 												<input type="hidden" name="id" value={b.id} />
 												<input type="hidden" name="cardId" value={c.id} />
-												<ConfirmButton class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300" message="Delete this benefit?">Delete</ConfirmButton>
+												<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this benefit?">Delete</ConfirmButton>
 											</form>
 										</div>
 									</div>
@@ -170,7 +170,7 @@
 						<label class="label" for={`coverageAmount-${c.id}`}>Coverage (cents)</label>
 						<input id={`coverageAmount-${c.id}`} name="coverageAmount" type="number" placeholder="0" class="input" disabled={!!selectedTemplate} />
 					</div>
-					<button class="btn btn-ghost btn-sm">Add benefit</button>
+					<button class="btn btn-ghost">Add benefit</button>
 				</form>
 			</section>
 		{/each}

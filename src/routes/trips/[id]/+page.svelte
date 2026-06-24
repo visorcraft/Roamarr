@@ -1,27 +1,13 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
-	import AddSegmentModal from '$lib/components/AddSegmentModal.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { PageData } from './$types';
 
-	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string>; type?: string } } = $props();
+	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let editingId = $state<number | null>(null);
-	let showAddSegment = $state(false);
-
-	const addSegmentOpen = $derived(
-		showAddSegment ||
-			!!(
-				form?.errors &&
-				(form.errors.title ||
-					form.errors.localStart ||
-					form.errors.type ||
-					form.errors.startTz ||
-					form.errors.location)
-			)
-	);
 
 	type SharedSegment = {
 		type: string;
@@ -189,11 +175,11 @@
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						{#if !isEditor}
-							<span class="badge badge-brand">Shared view</span>
+							<span class="badge badge-brand badge-compact">Shared view</span>
 						{/if}
-						<span class="badge {statusBadge[status].class}">{statusBadge[status].label}</span>
+						<span class="badge badge-compact {statusBadge[status].class}">{statusBadge[status].label}</span>
 						{#if isEditor && data.owner === true}
-							<span class="badge {visBadge[trip.defaultVisibility] ?? 'badge-slate'} capitalize">{trip.defaultVisibility}</span>
+							<span class="badge badge-compact {visBadge[trip.defaultVisibility] ?? 'badge-slate'} capitalize">{trip.defaultVisibility}</span>
 						{/if}
 					</div>
 
@@ -221,14 +207,14 @@
 				</div>
 
 				<div class="flex flex-wrap gap-2 sm:justify-end">
-					<a href={`/trips/${trip.id}/calendar`} class="btn btn-ghost btn-sm">
+					<a href={`/trips/${trip.id}/calendar`} class="btn btn-ghost">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
 						Calendar
 					</a>
 					{#if isEditor}
-						<a href={`/trips/${trip.id}/edit`} class="btn btn-ghost btn-sm">Edit trip</a>
+						<a href={`/trips/${trip.id}/edit`} class="btn btn-ghost">Edit trip</a>
 						{#if data.owner === true}
-							<a href={`/trips/${trip.id}/share`} class="btn btn-primary btn-sm">
+							<a href={`/trips/${trip.id}/share`} class="btn btn-primary">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" x2="12" y1="2" y2="15" /></svg>
 								Share
 							</a>
@@ -255,10 +241,10 @@
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h2 class="section-title">Itinerary</h2>
 					{#if isEditor}
-						<button type="button" class="btn btn-ghost btn-sm" onclick={() => (showAddSegment = true)}>
+						<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
 							Add segment
-						</button>
+						</a>
 					{/if}
 				</div>
 
@@ -317,8 +303,8 @@
 														{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
 													</div>
 													<div class="flex gap-2 sm:col-span-2">
-														<button class="btn btn-primary">Save</button>
 														<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+														<button class="btn btn-primary">Save</button>
 													</div>
 												</form>
 											{:else}
@@ -353,10 +339,10 @@
 														</div>
 														{#if isEditor && s.id}
 															<div class="flex shrink-0 gap-1">
-																<button type="button" class="action-btn text-slate-400 transition hover:bg-slate-500/10 hover:text-slate-200" onclick={() => (editingId = s.id ?? null)}>Edit</button>
+																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
 																<form method="POST" action={`/trips/${trip.id}/segments?/delete`}>
 																	<input type="hidden" name="segmentId" value={s.id} />
-																	<button class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+																	<button class="btn btn-ghost btn-ghost-danger">Delete</button>
 																</form>
 															</div>
 														{/if}
@@ -376,15 +362,11 @@
 						</div>
 						<p class="text-slate-300">{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}</p>
 						{#if isEditor}
-							<button type="button" class="btn btn-primary btn-sm" onclick={() => (showAddSegment = true)}>Add segment</button>
+							<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary">Add segment</a>
 						{/if}
 					</div>
 				{/if}
 			</section>
-
-			{#if isEditor}
-				<AddSegmentModal open={addSegmentOpen} tripId={trip.id} {form} onclose={() => (showAddSegment = false)} />
-			{/if}
 
 			{#if isEditor && data.owner === true && (data.providers?.length || data.watches?.length)}
 				<section class="card p-5">
@@ -422,17 +404,17 @@
 										{#if w.status === 'active'}
 											<form method="POST" action={`/trips/${trip.id}/fare-watch?/pause`}>
 												<input type="hidden" name="watchId" value={w.id} />
-												<button class="action-btn text-slate-400 transition hover:bg-amber-500/10 hover:text-amber-300">Pause</button>
+												<button class="btn btn-ghost btn-ghost-amber">Pause</button>
 											</form>
 										{:else}
 											<form method="POST" action={`/trips/${trip.id}/fare-watch?/resume`}>
 												<input type="hidden" name="watchId" value={w.id} />
-												<button class="action-btn text-slate-400 transition hover:bg-emerald-500/10 hover:text-emerald-300">Resume</button>
+												<button class="btn btn-ghost btn-ghost-success">Resume</button>
 											</form>
 										{/if}
 										<form method="POST" action={`/trips/${trip.id}/fare-watch?/delete`}>
 											<input type="hidden" name="watchId" value={w.id} />
-											<button class="action-btn text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+											<button class="btn btn-ghost btn-ghost-danger">Delete</button>
 										</form>
 									</div>
 								</li>
@@ -452,7 +434,7 @@
 				<dl class="trip-sidebar-dl">
 					<div>
 						<dt>Status</dt>
-						<dd><span class="badge {statusBadge[status].class}">{statusBadge[status].label}</span></dd>
+						<dd><span class="badge badge-compact {statusBadge[status].class}">{statusBadge[status].label}</span></dd>
 					</div>
 					{#if trip.startDate}
 						<div>
@@ -508,23 +490,23 @@
 				<div class="trip-sidebar-card">
 					<h2 class="mb-3 text-sm font-semibold text-white">Calendar feed</h2>
 					{#if data.feedUrl}
-						<p class="text-xs leading-relaxed text-slate-400">Subscribe to this trip with any calendar app.</p>
+						<p class="text-sm leading-relaxed text-slate-400">Subscribe to this trip with any calendar app.</p>
 						<div class="mt-2 flex items-start gap-2">
 							<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-2.5 py-2 font-mono text-[10px] leading-relaxed text-slate-300 ring-1 ring-white/5">{data.feedUrl}</p>
-							<CopyButton text={data.feedUrl} class="btn btn-ghost btn-sm shrink-0" label="Copy" />
+							<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 						</div>
 						<div class="mt-3 flex flex-col gap-2">
 							<form method="POST" action="?/regenerateCalendarFeed">
-								<button class="btn btn-primary btn-sm w-full">Regenerate URL</button>
+								<button class="btn btn-primary w-full">Regenerate URL</button>
 							</form>
 							<form method="POST" action="?/revokeCalendarFeed">
-								<button class="btn btn-danger btn-sm w-full">Revoke feed</button>
+								<button class="btn btn-danger w-full">Revoke feed</button>
 							</form>
 						</div>
 					{:else}
 						<p class="text-xs text-slate-400">Generate a public .ics feed URL for this trip.</p>
 						<form method="POST" action="?/regenerateCalendarFeed" class="mt-3">
-							<button class="btn btn-primary btn-sm w-full">Generate feed URL</button>
+							<button class="btn btn-primary w-full">Generate feed URL</button>
 						</form>
 					{/if}
 				</div>

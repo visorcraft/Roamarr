@@ -49,6 +49,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isPublic = PUBLIC.some((re) => re.test(path));
 	if (!isPublic && !event.locals.user && isSetupComplete()) throw redirect(302, '/login');
 
+	if (event.locals.user?.mustResetPassword) {
+		const allowed = path === '/profile/change-password' || path === '/logout';
+		if (!allowed) throw redirect(302, '/profile/change-password');
+	}
+
 	const response = await resolve(event);
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');

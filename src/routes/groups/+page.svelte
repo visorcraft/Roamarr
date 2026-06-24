@@ -62,12 +62,12 @@
 						<label class="label" for={`email-${g.id}`}>Add member</label>
 						<input id={`email-${g.id}`} name="email" type="email" placeholder="member@example.com" class="input" />
 					</div>
-					<button class="btn btn-ghost btn-sm">Add</button>
+					<button class="btn btn-ghost">Add</button>
 				</form>
 
 				<form method="POST" action="?/deleteGroup" class="mt-2 flex justify-end">
 					<input type="hidden" name="groupId" value={g.id} />
-					<ConfirmButton class="btn btn-ghost btn-sm text-red-300 hover:text-red-200" message="Delete this group? This cannot be undone.">Delete group</ConfirmButton>
+					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this group? This cannot be undone.">Delete group</ConfirmButton>
 				</form>
 			</section>
 		{/each}

@@ -15,7 +15,7 @@ import {
 	_mintPublicToken as mintPublicToken,
 	_setShowDetails as setShowDetails
 } from './+page.server';
-import { canView, canEdit } from '$lib/server/sharing';
+import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
 import { users, trips, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -168,4 +168,45 @@ test('owner can toggle showDetails on a share; non-owner cannot', () => {
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
 	expect(logs.some((l) => l.action === 'trip_share_set_show_details')).toBe(true);
+});
+
+
+test('member can share their own trip into a group they belong to', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'mem-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const member = db.insert(users).values({ email: 'mem-m@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const other = db.insert(users).values({ email: 'mem-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const g = db.insert(groups).values({ ownerId: owner.id, name: 'fam' }).returning().get();
+	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
+	db.insert(groupMembers).values({ groupId: g.id, userId: other.id }).run();
+	const t = db.insert(trips).values({ ownerId: member.id, name: 'Member Trip' }).returning().get();
+
+	shareWithGroup(member.id, t.id, g.id);
+	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	expect(share.sharedWithGroupId).toBe(g.id);
+	expect(canView(other.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+});
+
+test('user cannot share into a group they do not belong to', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'no-mem-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const b = db.insert(users).values({ email: 'no-mem-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const g = db.insert(groups).values({ ownerId: a.id, name: 'private' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: b.id, name: 'B Trip' }).returning().get();
+
+	expect(() => shareWithGroup(b.id, t.id, g.id)).toThrow();
+	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all()).toHaveLength(0);
+});
+
+test('listGroupsForUser returns owned and member groups', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'lg-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const b = db.insert(users).values({ email: 'lg-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const owned = db.insert(groups).values({ ownerId: a.id, name: 'Owned' }).returning().get();
+	const memberGroup = db.insert(groups).values({ ownerId: b.id, name: 'Member' }).returning().get();
+	db.insert(groupMembers).values({ groupId: memberGroup.id, userId: a.id }).run();
+	db.insert(groups).values({ ownerId: b.id, name: 'Other' }).run();
+
+	const list = listGroupsForUser(a.id);
+	expect(list.map((g) => g.name).sort()).toEqual(['Member', 'Owned']);
 });

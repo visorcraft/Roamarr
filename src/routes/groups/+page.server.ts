@@ -2,15 +2,16 @@ import { redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedGroup } from '$lib/server/ownership';
+import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
 import { users, groups, groupMembers } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	const mine = db.select().from(groups).where(eq(groups.ownerId, u.id)).all();
+	const all = listGroupsForUser(u.id);
 	return {
-		groups: mine.map((g) => ({
+		groups: all.map((g) => ({
 			...g,
 			members: db
 				.select({ id: users.id, email: users.email })

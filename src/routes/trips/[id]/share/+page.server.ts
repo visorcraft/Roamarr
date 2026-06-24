@@ -4,8 +4,9 @@ import { randomBytes } from 'node:crypto';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
+import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
-import { users, trips, tripShares, groups } from '$lib/server/db/schema';
+import { users, trips, tripShares } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
 
 const SHARE_PERMISSIONS = ['read', 'edit'] as const;
@@ -43,14 +44,9 @@ export function _shareWithGroup(
 	permission: SharePermission = 'read'
 ) {
 	requireOwnedTrip(ownerId, tripId);
-	// The group must belong to the sharer — otherwise an owner could expose their trip
-	// to an arbitrary group they don't control.
-	const g = db
-		.select({ id: groups.id })
-		.from(groups)
-		.where(and(eq(groups.id, groupId), eq(groups.ownerId, ownerId)))
-		.get();
-	if (!g) throw error(404, 'No such group');
+	// The group must be one the sharer owns or belongs to.
+	const allowed = listGroupsForUser(ownerId).some((g) => g.id === groupId);
+	if (!allowed) throw error(404, 'No such group');
 	db.insert(tripShares)
 		.values({ tripId, sharedWithGroupId: groupId, permission })
 		.onConflictDoNothing()
@@ -134,7 +130,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		.leftJoin(groups, eq(tripShares.sharedWithGroupId, groups.id))
 		.where(eq(tripShares.tripId, t.id))
 		.all();
-	const myGroups = db.select().from(groups).where(eq(groups.ownerId, u.id)).all();
+	const myGroups = listGroupsForUser(u.id);
 	const publicShareUrl = t.publicToken
 		? `${url.origin}/share/${encodeURIComponent(t.publicToken)}`
 		: null;

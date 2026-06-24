@@ -1,6 +1,6 @@
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 import { db } from './db';
-import { trips, tripShares, groupMembers, segments } from './db/schema';
+import { trips, tripShares, groups, groupMembers, segments } from './db/schema';
 import type { trips as tripsTable } from './db/schema';
 
 type Trip = typeof tripsTable.$inferSelect;
@@ -94,6 +94,18 @@ export function canViewDetails(userId: number, trip: Trip) {
 		)
 		.get();
 	return !!viaGroup;
+}
+
+export function listGroupsForUser(userId: number) {
+	const owned = db.select({ id: groups.id }).from(groups).where(eq(groups.ownerId, userId)).all();
+	const member = db
+		.select({ groupId: groupMembers.groupId })
+		.from(groupMembers)
+		.where(eq(groupMembers.userId, userId))
+		.all();
+	const ids = Array.from(new Set([...owned.map((g) => g.id), ...member.map((m) => m.groupId)]));
+	if (ids.length === 0) return [];
+	return db.select().from(groups).where(inArray(groups.id, ids)).all();
 }
 
 export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = false) {

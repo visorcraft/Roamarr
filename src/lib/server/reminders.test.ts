@@ -17,6 +17,8 @@ import {
 	upsertRemindersForDocument,
 	upsertCustomReminder,
 	cancelRemindersFor,
+	listRemindersForUser,
+	cancelReminder,
 	runDueReminders
 } from './reminders';
 import { users, trips, segments, reminders, travelDocuments } from './db/schema';
@@ -208,4 +210,70 @@ test('custom reminder arms before a trip start', () => {
 	expect(rows).toHaveLength(1);
 	expect(rows[0].kind).toBe('custom');
 	expect(rows[0].fireAt).toBe('2099-05-31T09:00:00.000Z');
+});
+
+
+test('listRemindersForUser returns user reminders sorted by fireAt desc', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	db.insert(reminders)
+		.values({
+			userId: owner.id,
+			kind: 'custom',
+			refType: 'trip',
+			refId: 1,
+			fireAt: '2026-01-02T00:00:00Z'
+		})
+		.run();
+	db.insert(reminders)
+		.values({
+			userId: owner.id,
+			kind: 'custom',
+			refType: 'trip',
+			refId: 2,
+			fireAt: '2026-01-01T00:00:00Z'
+		})
+		.run();
+	const list = listRemindersForUser(owner.id);
+	expect(list.length).toBe(2);
+	expect(list[0].fireAt).toBe('2026-01-02T00:00:00Z');
+});
+
+test('cancelReminder deletes only the users own reminder', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const other = db
+		.insert(users)
+		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
+		.returning()
+		.get();
+	const r1 = db
+		.insert(reminders)
+		.values({
+			userId: owner.id,
+			kind: 'custom',
+			refType: 'trip',
+			refId: 1,
+			fireAt: '2026-01-01T00:00:00Z'
+		})
+		.returning()
+		.get();
+	const r2 = db
+		.insert(reminders)
+		.values({
+			userId: other.id,
+			kind: 'custom',
+			refType: 'trip',
+			refId: 2,
+			fireAt: '2026-01-01T00:00:00Z'
+		})
+		.returning()
+		.get();
+	cancelReminder(owner.id, r1.id);
+	expect(db.select().from(reminders).where(eq(reminders.id, r1.id)).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.id, r2.id)).get()).toBeDefined();
+	try {
+		cancelReminder(owner.id, r2.id);
+		expect.fail('should have thrown');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
 });

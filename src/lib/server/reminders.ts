@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
-import { and, eq, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { reminders, segments, travelDocuments, trips, users } from './db/schema';
 import { deliver } from './notify';
@@ -116,6 +117,21 @@ export function cancelRemindersFor(refType: 'segment' | 'document' | 'trip', ref
 	db.delete(reminders)
 		.where(and(eq(reminders.refType, refType), eq(reminders.refId, refId)))
 		.run();
+}
+
+export function listRemindersForUser(userId: number) {
+	return db
+		.select()
+		.from(reminders)
+		.where(eq(reminders.userId, userId))
+		.orderBy(desc(reminders.fireAt))
+		.all();
+}
+
+export function cancelReminder(userId: number, reminderId: number) {
+	const r = db.select().from(reminders).where(eq(reminders.id, reminderId)).get();
+	if (!r || r.userId !== userId) throw error(404, 'Not found');
+	db.delete(reminders).where(eq(reminders.id, reminderId)).run();
 }
 
 export async function runDueReminders(now: Date) {

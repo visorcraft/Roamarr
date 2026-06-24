@@ -37,3 +37,11 @@
 		</div>
 	</form>
 </section>
+
+<section class="card mt-6 border-l-4 border-red-500 p-5 sm:p-6">
+	<h2 class="section-title">Danger zone</h2>
+	<p class="mt-1 text-sm text-muted">Deleting this trip cannot be undone.</p>
+	<form method="POST" action="?/delete" class="mt-4">
+		<button class="btn btn-danger" type="submit">Delete trip</button>
+	</form>
+</section>

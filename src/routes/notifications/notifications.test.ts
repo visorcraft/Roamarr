@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -7,28 +8,61 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { _markRead as markRead } from './+page.server';
+import {
+	_markRead as markRead,
+	_markUnread as markUnread,
+	_markAllRead as markAllRead
+} from './+page.server';
 import { users, notifications } from '$lib/server/db/schema';
+
+function makeUser(email: string, name: string) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	return db
+		.insert(users)
+		.values({ email, passwordHash: 'x', displayName: name })
+		.returning()
+		.get();
+}
+
+function insertNotification(userId: number, title: string) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	return db.insert(notifications).values({ userId, title, body: 'b' }).returning().get();
+}
 
 test('markRead only affects the caller’s own notification', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const nB = db
-		.insert(notifications)
-		.values({ userId: b.id, title: 't', body: 'b' })
-		.returning()
-		.get();
+	const a = makeUser('a1@x.c', 'A');
+	const b = makeUser('b1@x.c', 'B');
+	const nB = insertNotification(b.id, 't');
 	markRead(a.id, nB.id);
 	expect(db.select().from(notifications).get()!.readAt).toBeNull();
 	markRead(b.id, nB.id);
 	expect(db.select().from(notifications).get()!.readAt).not.toBeNull();
+});
+
+test('markUnread clears readAt for the caller’s own notification', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = makeUser('a2@x.c', 'A');
+	const b = makeUser('b2@x.c', 'B');
+	const nB = insertNotification(b.id, 't');
+	markRead(b.id, nB.id);
+	markUnread(a.id, nB.id);
+	expect(db.select().from(notifications).where(eq(notifications.id, nB.id)).get()!.readAt).not.toBeNull();
+	markUnread(b.id, nB.id);
+	expect(db.select().from(notifications).where(eq(notifications.id, nB.id)).get()!.readAt).toBeNull();
+});
+
+test('markAllRead only affects the caller’s unread notifications', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = makeUser('a3@x.c', 'A');
+	const b = makeUser('b3@x.c', 'B');
+	const nA1 = insertNotification(a.id, 'a1');
+	const nA2 = insertNotification(a.id, 'a2');
+	const nB = insertNotification(b.id, 'b1');
+	markRead(a.id, nA1.id);
+	markAllRead(a.id);
+	const rows = db.select().from(notifications).all();
+	expect(rows.find((r) => r.id === nA1.id)!.readAt).not.toBeNull();
+	expect(rows.find((r) => r.id === nA2.id)!.readAt).not.toBeNull();
+	expect(rows.find((r) => r.id === nB.id)!.readAt).toBeNull();
 });

@@ -62,6 +62,39 @@ export function toggleWatch(
 		.get();
 }
 
+function requireOwnedWatch(userId: number, watchId: number) {
+	const w = db.select().from(fareWatches).where(eq(fareWatches.id, watchId)).get();
+	if (!w) throw error(404, 'Not found');
+	requireOwnedTrip(userId, w.tripId);
+	assertOwnedRefs(userId, { providerId: w.providerId });
+	return w;
+}
+
+export function pauseWatch(userId: number, watchId: number) {
+	requireOwnedWatch(userId, watchId);
+	return db
+		.update(fareWatches)
+		.set({ status: 'paused' })
+		.where(eq(fareWatches.id, watchId))
+		.returning()
+		.get();
+}
+
+export function resumeWatch(userId: number, watchId: number) {
+	requireOwnedWatch(userId, watchId);
+	return db
+		.update(fareWatches)
+		.set({ status: 'active' })
+		.where(eq(fareWatches.id, watchId))
+		.returning()
+		.get();
+}
+
+export function deleteWatch(userId: number, watchId: number) {
+	requireOwnedWatch(userId, watchId);
+	db.delete(fareWatches).where(eq(fareWatches.id, watchId)).run();
+}
+
 export async function runFareChecks(now: Date) {
 	const rows = db
 		.select()

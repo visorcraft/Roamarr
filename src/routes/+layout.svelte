@@ -109,14 +109,20 @@
 			<!-- User footer -->
 			<div class="border-t border-white/10 p-3">
 				<div class="flex items-center gap-3 rounded-lg px-2 py-2">
-					<span
-						class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-xs font-bold text-white ring-1 ring-white/10"
-						>{initials}</span
+					<a
+						href="/profile"
+						class="flex min-w-0 flex-1 items-center gap-3 rounded-md transition hover:bg-white/5"
+						title="Your profile"
 					>
-					<div class="min-w-0 flex-1">
-						<div class="truncate text-sm font-semibold text-white">{data.user?.displayName}</div>
-						<div class="text-xs text-slate-500 capitalize">{data.user?.role}</div>
-					</div>
+						<span
+							class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-xs font-bold text-white ring-1 ring-white/10"
+							>{initials}</span
+						>
+						<div class="min-w-0 flex-1">
+							<div class="truncate text-sm font-semibold text-white">{data.user?.displayName}</div>
+							<div class="text-xs text-slate-500 capitalize">{data.user?.role}</div>
+						</div>
+					</a>
 					<form method="POST" action="/logout">
 						<button
 							class="grid h-8 w-8 place-items-center rounded-md text-slate-400 transition hover:bg-white/5 hover:text-red-300"

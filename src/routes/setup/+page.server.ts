@@ -49,10 +49,13 @@ export const actions: Actions = {
 				{ email, password, displayName, instanceName, timezone },
 				await hashPassword(password)
 			);
-		} catch {
-			return fail(409, { error: 'Setup is already complete.' });
+		} catch (e) {
+			if (e instanceof Error && e.message === 'already set up') {
+				return fail(409, { error: 'Setup is already complete.' });
+			}
+			throw e;
 		}
-		cookies.set('session', await createSession(user.id), sessionCookieOptions());
+		cookies.set('session', createSession(user.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

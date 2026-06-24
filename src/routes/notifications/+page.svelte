@@ -24,6 +24,11 @@
 			{/if}
 		</p>
 	</div>
+	{#if unread > 0}
+		<form method="POST" action="?/markAllRead">
+			<button class="btn btn-brand btn-sm">Mark all read</button>
+		</form>
+	{/if}
 </header>
 
 {#if data.notifications.length}
@@ -47,7 +52,12 @@
 					{#if n.body}<p class="mt-0.5 text-sm text-slate-400">{n.body}</p>{/if}
 					{#if n.createdAt}<p class="mt-1 font-mono text-xs text-slate-500">{fmt(n.createdAt)}</p>{/if}
 				</div>
-				{#if !n.readAt}
+				{#if n.readAt}
+					<form method="POST" action="?/markUnread" class="shrink-0">
+						<input type="hidden" name="id" value={n.id} />
+						<button class="btn btn-ghost btn-sm">Mark unread</button>
+					</form>
+				{:else}
 					<form method="POST" action="?/markRead" class="shrink-0">
 						<input type="hidden" name="id" value={n.id} />
 						<button class="btn btn-ghost btn-sm">Mark read</button>

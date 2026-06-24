@@ -1,6 +1,7 @@
 import { redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
+import { requireOwnedGroup } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
 import { users, groups, groupMembers } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -12,7 +13,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		groups: mine.map((g) => ({
 			...g,
 			members: db
-				.select({ email: users.email })
+				.select({ id: users.id, email: users.email })
 				.from(groupMembers)
 				.innerJoin(users, eq(groupMembers.userId, users.id))
 				.where(eq(groupMembers.groupId, g.id))
@@ -20,6 +21,24 @@ export const load: PageServerLoad = ({ locals }) => {
 		}))
 	};
 };
+
+export function _addMember(ownerId: number, groupId: number, email: string) {
+	requireOwnedGroup(ownerId, groupId);
+	const m = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+	if (m) db.insert(groupMembers).values({ groupId, userId: m.id }).onConflictDoNothing().run();
+}
+
+export function _removeMember(ownerId: number, groupId: number, userId: number) {
+	requireOwnedGroup(ownerId, groupId);
+	db.delete(groupMembers)
+		.where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
+		.run();
+}
+
+export function _deleteGroup(ownerId: number, groupId: number) {
+	requireOwnedGroup(ownerId, groupId);
+	db.delete(groups).where(eq(groups.id, groupId)).run();
+}
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
@@ -32,18 +51,19 @@ export const actions: Actions = {
 	addMember: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		const g = db
-			.select()
-			.from(groups)
-			.where(and(eq(groups.id, Number(f.get('groupId'))), eq(groups.ownerId, u.id)))
-			.get();
-		if (!g) throw redirect(303, '/groups');
-		const m = db
-			.select()
-			.from(users)
-			.where(eq(users.email, String(f.get('email')).trim().toLowerCase()))
-			.get();
-		if (m) db.insert(groupMembers).values({ groupId: g.id, userId: m.id }).onConflictDoNothing().run();
+		_addMember(u.id, Number(f.get('groupId')), String(f.get('email')));
+		throw redirect(303, '/groups');
+	},
+	removeMember: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		_removeMember(u.id, Number(f.get('groupId')), Number(f.get('userId')));
+		throw redirect(303, '/groups');
+	},
+	deleteGroup: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		_deleteGroup(u.id, Number(f.get('groupId')));
 		throw redirect(303, '/groups');
 	}
 };

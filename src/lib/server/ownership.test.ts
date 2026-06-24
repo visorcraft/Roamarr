@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { requireOwnedTrip, assertOwnedRefs } from './ownership';
+import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs } from './ownership';
 import { users, trips, cards } from './db/schema';
 
 test('blocks cross-owner trip and card access', () => {
@@ -32,4 +32,15 @@ test('blocks cross-owner trip and card access', () => {
 	expect(() => requireOwnedTrip(b.id, tA.id)).toThrow();
 	expect(() => assertOwnedRefs(b.id, { cardId: cA.id })).toThrow();
 	expect(() => assertOwnedRefs(a.id, { cardId: cA.id })).not.toThrow();
+});
+
+test('requireOwnedUser returns the user row or throws', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const a = db
+		.insert(users)
+		.values({ email: 'u@x.c', passwordHash: 'x', displayName: 'U' })
+		.returning()
+		.get();
+	expect(requireOwnedUser(a.id).id).toBe(a.id);
+	expect(() => requireOwnedUser(999999)).toThrow();
 });

@@ -15,7 +15,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const u = await _authenticate(String(f.get('email') ?? ''), String(f.get('password') ?? ''));
 		if (!u) return fail(401, { error: 'Invalid email or password.' });
-		cookies.set('session', await createSession(u.id), sessionCookieOptions());
+		cookies.set('session', createSession(u.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

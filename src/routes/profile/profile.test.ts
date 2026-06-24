@@ -13,9 +13,13 @@ const remindersMock = vi.hoisted(() => ({
 vi.mock('$lib/server/reminders', () => remindersMock);
 
 import { _addDocument as addDocument } from './documents/+page.server';
+import { _updateProgram as updateProgram } from './loyalty/+page.server';
+import { _updateProfile, _updatePassword } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
-import { users, travelDocuments } from '$lib/server/db/schema';
+import { users, travelDocuments, loyaltyPrograms } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
+import { eq } from 'drizzle-orm';
+import { hashPassword, verifyPassword } from '$lib/server/auth';
 
 test('document number is encrypted at rest and arms a reminder', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -34,4 +38,154 @@ test('document number is encrypted at rest and arms a reminder', () => {
 	expect(row.number).not.toBe('X1234567');
 	expect(decrypt(row.number!)).toBe('X1234567');
 	expect(upsertRemindersForDocument).toHaveBeenCalled();
+});
+
+test('updateProgram edits a loyalty program and is user-scoped', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db
+		.insert(users)
+		.values({ email: 'loyal-a@x.c', passwordHash: 'x', displayName: 'A' })
+		.returning()
+		.get();
+	const b = db
+		.insert(users)
+		.values({ email: 'loyal-b@x.c', passwordHash: 'x', displayName: 'B' })
+		.returning()
+		.get();
+	const program = db
+		.insert(loyaltyPrograms)
+		.values({
+			userId: a.id,
+			programName: 'Old',
+			membershipNumber: '123',
+			balance: 1000,
+			notes: 'old note'
+		})
+		.returning()
+		.get();
+	updateProgram(a.id, program.id, {
+		programName: 'United MileagePlus',
+		membershipNumber: 'UA999',
+		balance: 5000,
+		notes: 'new note'
+	});
+	const row = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, program.id)).get()!;
+	expect(row.programName).toBe('United MileagePlus');
+	expect(row.membershipNumber).toBe('UA999');
+	expect(row.balance).toBe(5000);
+	expect(row.notes).toBe('new note');
+
+	updateProgram(b.id, program.id, { programName: 'Hacked' });
+	const unchanged = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, program.id)).get()!;
+	expect(unchanged.programName).toBe('United MileagePlus');
+});
+
+test('update profile changes display name and timezone', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p1@x.c', passwordHash: 'x', displayName: 'P1', timezone: 'UTC' })
+		.returning()
+		.get();
+	_updateProfile(u.id, { displayName: 'Ada', timezone: 'America/New_York' });
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(row.displayName).toBe('Ada');
+	expect(row.timezone).toBe('America/New_York');
+});
+
+test('update profile rejects invalid timezone', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p2@x.c', passwordHash: 'x', displayName: 'P2', timezone: 'UTC' })
+		.returning()
+		.get();
+	expect(() => _updateProfile(u.id, { displayName: 'P2', timezone: 'Mars/Colony' })).toThrow(
+		'Invalid timezone'
+	);
+});
+
+test('update password requires old password and hashes new password', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({
+			email: 'p3@x.c',
+			passwordHash: initialHash,
+			displayName: 'P3',
+			timezone: 'UTC'
+		})
+		.returning()
+		.get();
+	await _updatePassword(u.id, {
+		oldPassword: 'oldsecret',
+		newPassword: 'newsecret1',
+		confirmPassword: 'newsecret1'
+	});
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(await verifyPassword(row.passwordHash, 'newsecret1')).toBe(true);
+	expect(await verifyPassword(row.passwordHash, 'oldsecret')).toBe(false);
+});
+
+test('update password rejects wrong old password', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({
+			email: 'p4@x.c',
+			passwordHash: initialHash,
+			displayName: 'P4',
+			timezone: 'UTC'
+		})
+		.returning()
+		.get();
+	await expect(
+		_updatePassword(u.id, {
+			oldPassword: 'wrong',
+			newPassword: 'newsecret1',
+			confirmPassword: 'newsecret1'
+		})
+	).rejects.toThrow('Current password is incorrect');
+});
+
+test('update password rejects mismatched confirmation', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({
+			email: 'p5@x.c',
+			passwordHash: initialHash,
+			displayName: 'P5',
+			timezone: 'UTC'
+		})
+		.returning()
+		.get();
+	await expect(
+		_updatePassword(u.id, {
+			oldPassword: 'oldsecret',
+			newPassword: 'newsecret1',
+			confirmPassword: 'different'
+		})
+	).rejects.toThrow('New passwords do not match');
+});
+
+test('update password enforces password policy', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({
+			email: 'p6@x.c',
+			passwordHash: initialHash,
+			displayName: 'P6',
+			timezone: 'UTC'
+		})
+		.returning()
+		.get();
+	await expect(
+		_updatePassword(u.id, { oldPassword: 'oldsecret', newPassword: 'short', confirmPassword: 'short' })
+	).rejects.toThrow();
 });

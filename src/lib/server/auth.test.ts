@@ -33,7 +33,7 @@ test('session: raw token never stored; validates then invalidates', async () => 
 		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
 		.returning()
 		.get();
-	const token = await createSession(u.id);
+	const token = createSession(u.id);
 	const row = db.select().from(sessions).get();
 	expect(row!.tokenHash).not.toBe(token);
 	expect((await validateSession(token))?.id).toBe(u.id);

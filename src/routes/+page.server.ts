@@ -1,7 +1,8 @@
 import { and, eq, gte, isNotNull, lte } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { trips, notifications, travelDocuments } from '$lib/server/db/schema';
+import { notifications, travelDocuments } from '$lib/server/db/schema';
+import { listViewableTrips } from '$lib/server/sharing';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
 
@@ -10,11 +11,7 @@ export const load: PageServerLoad = ({ locals }) => {
 	const today = DateTime.utc().toISODate()!;
 	const soon = DateTime.utc().plus({ days: 120 }).toISODate()!;
 	return {
-		upcoming: db
-			.select()
-			.from(trips)
-			.where(and(eq(trips.ownerId, u.id), gte(trips.startDate, today)))
-			.all(),
+		upcoming: listViewableTrips(u.id, { startDateGte: today }),
 		unread: db
 			.select()
 			.from(notifications)

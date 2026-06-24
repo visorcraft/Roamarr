@@ -1,7 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
-import { trips, cards, fareProviders, segments } from './db/schema';
+import { trips, cards, fareProviders, segments, groups, travelDocuments, users } from './db/schema';
+
+export function requireOwnedUser(userId: number) {
+	const u = db.select().from(users).where(eq(users.id, userId)).get();
+	if (!u) throw error(404, 'Not found');
+	return u;
+}
 
 export function requireOwnedTrip(userId: number, tripId: number) {
 	const t = db
@@ -11,6 +17,26 @@ export function requireOwnedTrip(userId: number, tripId: number) {
 		.get();
 	if (!t) throw error(404, 'Not found');
 	return t;
+}
+
+export function requireOwnedGroup(userId: number, groupId: number) {
+	const g = db
+		.select()
+		.from(groups)
+		.where(and(eq(groups.id, groupId), eq(groups.ownerId, userId)))
+		.get();
+	if (!g) throw error(404, 'Not found');
+	return g;
+}
+
+export function requireOwnedDocument(userId: number, documentId: number) {
+	const d = db
+		.select()
+		.from(travelDocuments)
+		.where(and(eq(travelDocuments.id, documentId), eq(travelDocuments.userId, userId)))
+		.get();
+	if (!d) throw error(404, 'Not found');
+	return d;
 }
 
 export function assertOwnedRefs(
@@ -29,7 +55,7 @@ export function assertOwnedRefs(
 			.from(cards)
 			.where(and(eq(cards.id, refs.cardId), eq(cards.userId, userId)))
 			.get();
-		if (!c) throw error(403, 'Forbidden');
+		if (!c) throw error(404, 'Not found');
 	}
 	if (refs.providerId != null) {
 		const p = db
@@ -37,7 +63,7 @@ export function assertOwnedRefs(
 			.from(fareProviders)
 			.where(and(eq(fareProviders.id, refs.providerId), eq(fareProviders.userId, userId)))
 			.get();
-		if (!p) throw error(403, 'Forbidden');
+		if (!p) throw error(404, 'Not found');
 	}
 	if (refs.segmentId != null) {
 		const s = db

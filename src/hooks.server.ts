@@ -22,5 +22,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const isPublic = PUBLIC.some((re) => re.test(path));
 	if (!isPublic && !event.locals.user && isSetupComplete()) throw redirect(302, '/login');
 
-	return resolve(event);
+	const response = await resolve(event);
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	return response;
 };

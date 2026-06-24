@@ -47,7 +47,10 @@
 					<li>
 						<a href={`/trips/${t.id}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
 							<span class="min-w-0">
-								<span class="block truncate font-semibold text-white">{t.name}</span>
+								<span class="flex items-center gap-2">
+									<span class="block truncate font-semibold text-white">{t.name}</span>
+									{#if t.isShared}<span class="badge badge-brand text-[10px]">Shared</span>{/if}
+								</span>
 								{#if t.destination}<span class="block truncate text-sm text-slate-400">{t.destination}</span>{/if}
 							</span>
 							{#if t.startDate}<span class="ml-3 shrink-0 font-mono text-xs text-slate-400">{t.startDate}</span>{/if}

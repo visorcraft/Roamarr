@@ -52,4 +52,4 @@ export function loadTripFor(userId: number, tripId: number): TripView {
 	return { owner: false, trip: viewerProjection(t, segs) };
 }
 
-export const ownTrip = (userId: number, tripId: number) => requireOwnedTrip(userId, tripId);
+

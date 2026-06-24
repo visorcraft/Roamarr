@@ -37,6 +37,37 @@ export function _addPolicy(
 		.get();
 }
 
+export function _updatePolicy(
+	userId: number,
+	id: number,
+	i: {
+		provider: string;
+		policyNumber?: string;
+		coverageSummary?: string;
+		coverageAmount?: number;
+		startDate?: string;
+		endDate?: string;
+		tripId?: number;
+		notes?: string;
+	}
+) {
+	if (i.tripId != null) requireOwnedTrip(userId, i.tripId);
+	db.update(insurancePolicies)
+		.set({
+			provider: i.provider,
+			policyNumber: i.policyNumber || null,
+			coverageSummary: i.coverageSummary || null,
+			coverageAmount: i.coverageAmount ?? null,
+			startDate: i.startDate || null,
+			endDate: i.endDate || null,
+			tripId: i.tripId ?? null,
+			notes: i.notes || null
+		})
+		.where(and(eq(insurancePolicies.id, id), eq(insurancePolicies.userId, userId)))
+		.run();
+}
+
+
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	return {
@@ -61,6 +92,21 @@ export const actions: Actions = {
 			startDate: String(f.get('startDate') || '') || undefined,
 			endDate: String(f.get('endDate') || '') || undefined,
 			tripId: f.get('tripId') ? Number(f.get('tripId')) : undefined
+		});
+		throw redirect(303, '/insurance');
+	},
+	update: async ({ request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		_updatePolicy(u.id, Number(f.get('id')), {
+			provider: String(f.get('provider')),
+			policyNumber: String(f.get('policyNumber') || '') || undefined,
+			coverageSummary: String(f.get('coverageSummary') || '') || undefined,
+			coverageAmount: f.get('coverageAmount') ? Number(f.get('coverageAmount')) : undefined,
+			startDate: String(f.get('startDate') || '') || undefined,
+			endDate: String(f.get('endDate') || '') || undefined,
+			tripId: f.get('tripId') ? Number(f.get('tripId')) : undefined,
+			notes: String(f.get('notes') || '') || undefined
 		});
 		throw redirect(303, '/insurance');
 	},

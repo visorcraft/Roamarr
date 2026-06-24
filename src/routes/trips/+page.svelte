@@ -29,9 +29,13 @@
 			>
 				<div class="flex items-start justify-between gap-3">
 					<h2 class="font-display text-lg leading-tight font-bold text-white">{t.name}</h2>
-					<span class="badge {visBadge[t.defaultVisibility] ?? 'badge-slate'} shrink-0 capitalize"
-						>{t.defaultVisibility}</span
-					>
+					{#if t.isShared}
+						<span class="badge badge-brand shrink-0">Shared</span>
+					{:else}
+						<span class="badge {visBadge[t.defaultVisibility] ?? 'badge-slate'} shrink-0 capitalize"
+							>{t.defaultVisibility}</span
+						>
+					{/if}
 				</div>
 				{#if t.destination}
 					<p class="flex items-center gap-1.5 text-sm text-slate-400">

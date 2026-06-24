@@ -1,5 +1,6 @@
 <script lang="ts">
 	let { data } = $props();
+	let editingId = $state<number | null>(null);
 
 	const tripName: Record<number, string> = $derived(
 		Object.fromEntries(data.trips.map((t) => [t.id, t.name]))
@@ -24,22 +25,75 @@
 					<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4.5 w-4.5"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z" /></svg>
 					</span>
-					<div class="min-w-0 flex-1">
-						<div class="flex items-center gap-2">
-							<span class="truncate font-semibold text-white">{p.provider}</span>
-							{#if p.tripId != null}<span class="badge badge-brand">{tripName[p.tripId] ?? `Trip ${p.tripId}`}</span>{/if}
+					{#if editingId === p.id}
+						<form method="POST" action="?/update" class="min-w-0 flex-1">
+							<input type="hidden" name="id" value={p.id} />
+							<div class="grid gap-4 sm:grid-cols-2">
+								<div class="field">
+									<label class="label" for={`provider-${p.id}`}>Provider</label>
+									<input id={`provider-${p.id}`} name="provider" value={p.provider} class="input" required />
+								</div>
+								<div class="field">
+									<label class="label" for={`policyNumber-${p.id}`}>Policy #</label>
+									<input id={`policyNumber-${p.id}`} name="policyNumber" value={p.policyNumber ?? ''} class="input" />
+								</div>
+								<div class="field sm:col-span-2">
+									<label class="label" for={`coverageSummary-${p.id}`}>Coverage summary</label>
+									<textarea id={`coverageSummary-${p.id}`} name="coverageSummary" class="textarea">{p.coverageSummary ?? ''}</textarea>
+								</div>
+								<div class="field">
+									<label class="label" for={`coverageAmount-${p.id}`}>Coverage (cents)</label>
+									<input id={`coverageAmount-${p.id}`} name="coverageAmount" type="number" value={p.coverageAmount ?? ''} class="input" />
+								</div>
+								<div class="field">
+									<label class="label" for={`tripId-${p.id}`}>Trip</label>
+									<select id={`tripId-${p.id}`} name="tripId" class="select">
+										<option value="" selected={p.tripId == null}>No trip</option>
+										{#each data.trips as t (t.id)}
+											<option value={t.id} selected={p.tripId === t.id}>{t.name}</option>
+										{/each}
+									</select>
+								</div>
+								<div class="field">
+									<label class="label" for={`startDate-${p.id}`}>Start date</label>
+									<input id={`startDate-${p.id}`} name="startDate" type="date" value={p.startDate ?? ''} class="input" />
+								</div>
+								<div class="field">
+									<label class="label" for={`endDate-${p.id}`}>End date</label>
+									<input id={`endDate-${p.id}`} name="endDate" type="date" value={p.endDate ?? ''} class="input" />
+								</div>
+								<div class="field sm:col-span-2">
+									<label class="label" for={`notes-${p.id}`}>Notes</label>
+									<input id={`notes-${p.id}`} name="notes" value={p.notes ?? ''} class="input" />
+								</div>
+							</div>
+							<div class="mt-3 flex gap-2">
+								<button class="btn btn-primary btn-sm">Update</button>
+								<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingId = null)}>Cancel</button>
+							</div>
+						</form>
+					{:else}
+						<div class="min-w-0 flex-1">
+							<div class="flex items-center gap-2">
+								<span class="truncate font-semibold text-white">{p.provider}</span>
+								{#if p.tripId != null}<span class="badge badge-brand">{tripName[p.tripId] ?? `Trip ${p.tripId}`}</span>{/if}
+							</div>
+							{#if p.coverageSummary}<div class="mt-1 text-sm text-slate-400">{p.coverageSummary}</div>{/if}
+							<div class="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
+								{#if p.policyNumber}<span class="font-mono text-slate-400">{p.policyNumber}</span>{/if}
+								{#if p.coverageAmount != null}<span>Coverage <span class="font-mono text-slate-300">{p.coverageAmount} {p.currency}</span></span>{/if}
+								{#if p.startDate || p.endDate}<span class="font-mono text-slate-400">{p.startDate || '—'} → {p.endDate || '—'}</span>{/if}
+							</div>
+							{#if p.notes}<div class="mt-0.5 truncate text-xs text-slate-500">{p.notes}</div>{/if}
 						</div>
-						{#if p.coverageSummary}<div class="mt-1 text-sm text-slate-400">{p.coverageSummary}</div>{/if}
-						<div class="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
-							{#if p.policyNumber}<span class="font-mono text-slate-400">{p.policyNumber}</span>{/if}
-							{#if p.coverageAmount != null}<span>Coverage <span class="font-mono text-slate-300">{p.coverageAmount} {p.currency}</span></span>{/if}
-							{#if p.startDate || p.endDate}<span class="font-mono text-slate-400">{p.startDate || '—'} → {p.endDate || '—'}</span>{/if}
+						<div class="flex gap-1">
+							<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingId = p.id)}>Edit</button>
+							<form method="POST" action="?/delete">
+								<input type="hidden" name="id" value={p.id} />
+								<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+							</form>
 						</div>
-					</div>
-					<form method="POST" action="?/delete">
-						<input type="hidden" name="id" value={p.id} />
-						<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
-					</form>
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -83,6 +137,10 @@
 		<div class="field">
 			<label class="label" for="endDate">End date</label>
 			<input id="endDate" name="endDate" type="date" class="input" />
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="notes">Notes</label>
+			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
 		</div>
 		<div class="sm:col-span-2">
 			<button class="btn btn-primary">Add policy</button>

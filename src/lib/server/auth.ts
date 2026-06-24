@@ -20,7 +20,7 @@ export async function verifyPassword(h: string, pw: string) {
 	return verify(h, pw, ARGON).catch(() => false);
 }
 
-export async function createSession(userId: number) {
+export function createSession(userId: number) {
 	const token = randomBytes(32).toString('base64url');
 	const expiresAt = DateTime.utc().plus({ days: 30 }).toISO()!;
 	db.insert(sessions).values({ tokenHash: th(token), userId, expiresAt }).run();

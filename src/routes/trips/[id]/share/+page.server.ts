@@ -1,5 +1,5 @@
 import { error, redirect, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
@@ -41,13 +41,44 @@ export function _mintPublicToken(ownerId: number, tripId: number) {
 	return token;
 }
 
+export function _unshareUser(ownerId: number, tripId: number, shareId: number) {
+	requireOwnedTrip(ownerId, tripId);
+	db.delete(tripShares)
+		.where(
+			and(
+				eq(tripShares.id, shareId),
+				eq(tripShares.tripId, tripId),
+				isNotNull(tripShares.sharedWithUserId)
+			)
+		)
+		.run();
+}
+
+export function _unshareGroup(ownerId: number, tripId: number, shareId: number) {
+	requireOwnedTrip(ownerId, tripId);
+	db.delete(tripShares)
+		.where(
+			and(
+				eq(tripShares.id, shareId),
+				eq(tripShares.tripId, tripId),
+				isNotNull(tripShares.sharedWithGroupId)
+			)
+		)
+		.run();
+}
+
 export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
 	const t = requireOwnedTrip(u.id, Number(params.id));
 	const shares = db
-		.select({ id: tripShares.id, email: users.email })
+		.select({
+			id: tripShares.id,
+			email: users.email,
+			groupName: groups.name
+		})
 		.from(tripShares)
 		.leftJoin(users, eq(tripShares.sharedWithUserId, users.id))
+		.leftJoin(groups, eq(tripShares.sharedWithGroupId, groups.id))
 		.where(eq(tripShares.tripId, t.id))
 		.all();
 	const myGroups = db.select().from(groups).where(eq(groups.ownerId, u.id)).all();
@@ -78,5 +109,17 @@ export const actions: Actions = {
 			.where(eq(trips.id, Number(params.id)))
 			.run();
 		throw redirect(303, `/trips/${params.id}`);
+	},
+	unshareUser: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const shareId = Number((await request.formData()).get('shareId'));
+		_unshareUser(u.id, Number(params.id), shareId);
+		throw redirect(303, `/trips/${params.id}/share`);
+	},
+	unshareGroup: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const shareId = Number((await request.formData()).get('shareId'));
+		_unshareGroup(u.id, Number(params.id), shareId);
+		throw redirect(303, `/trips/${params.id}/share`);
 	}
 };

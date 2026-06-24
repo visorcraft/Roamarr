@@ -1,4 +1,5 @@
-import { error, fail, redirect, type Actions, type Load } from '@sveltejs/kit';
+import { error, fail, redirect, type Actions } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
@@ -9,7 +10,7 @@ function gate() {
 	if (!s.setupComplete || !s.allowRegistration) throw error(404, 'Not found');
 }
 
-export const load: Load = () => {
+export const load: PageServerLoad = () => {
 	gate();
 	return {};
 };
@@ -39,10 +40,13 @@ export const actions: Actions = {
 		let u;
 		try {
 			u = await _registerUser(email, password, displayName);
-		} catch {
-			return fail(409, { error: 'Email already registered.' });
+		} catch (e) {
+			if (e instanceof Error && e.message.includes('UNIQUE constraint failed')) {
+				return fail(409, { error: 'Email already registered.' });
+			}
+			throw e;
 		}
-		cookies.set('session', await createSession(u.id), sessionCookieOptions());
+		cookies.set('session', createSession(u.id), sessionCookieOptions());
 		throw redirect(303, '/');
 	}
 };

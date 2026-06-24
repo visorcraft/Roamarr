@@ -1,5 +1,7 @@
 <script lang="ts">
 	let { data } = $props();
+	let editingCardId = $state<number | null>(null);
+	let editingBenefitId = $state<number | null>(null);
 
 	const networkLabel: Record<string, string> = {
 		visa: 'Visa',
@@ -38,18 +40,88 @@
 						</div>
 						{#if c.last4}<div class="mt-1 font-mono text-xs text-slate-400">…{c.last4}</div>{/if}
 					</div>
-					<form method="POST" action="?/deleteCard">
-						<input type="hidden" name="id" value={c.id} />
-						<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
-					</form>
+					<div class="flex gap-1">
+						<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingCardId = c.id)}>Edit</button>
+						<form method="POST" action="?/deleteCard">
+							<input type="hidden" name="id" value={c.id} />
+							<button class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-red-500/10 hover:text-red-300">Delete</button>
+						</form>
+					</div>
 				</div>
+
+				{#if editingCardId === c.id}
+					<form method="POST" action="?/updateCard" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2">
+						<input type="hidden" name="id" value={c.id} />
+						<div class="field">
+							<label class="label" for={`nickname-${c.id}`}>Nickname</label>
+							<input id={`nickname-${c.id}`} name="nickname" value={c.nickname} class="input" required />
+						</div>
+						<div class="field">
+							<label class="label" for={`network-${c.id}`}>Network</label>
+							<select id={`network-${c.id}`} name="network" class="select">
+								<option value="visa" selected={c.network === 'visa'}>Visa</option>
+								<option value="mc" selected={c.network === 'mc'}>Mastercard</option>
+								<option value="amex" selected={c.network === 'amex'}>Amex</option>
+								<option value="disc" selected={c.network === 'disc'}>Discover</option>
+								<option value="other" selected={c.network === 'other'}>Other</option>
+							</select>
+						</div>
+						<div class="field">
+							<label class="label" for={`last4-${c.id}`}>Last 4</label>
+							<input id={`last4-${c.id}`} name="last4" value={c.last4 ?? ''} placeholder="1234" maxlength="4" inputmode="numeric" class="input" />
+						</div>
+						<div class="field">
+							<label class="label" for={`notes-${c.id}`}>Notes</label>
+							<input id={`notes-${c.id}`} name="notes" value={c.notes ?? ''} placeholder="Optional notes" class="input" />
+						</div>
+						<div class="flex gap-2 sm:col-span-2">
+							<button class="btn btn-primary btn-sm">Update card</button>
+							<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingCardId = null)}>Cancel</button>
+						</div>
+					</form>
+				{/if}
 
 				{#if c.benefits.length}
 					<ul class="mt-3 space-y-1.5">
 						{#each c.benefits as b (b.id)}
 							<li class="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 ring-1 ring-white/5">
-								<span class="text-sm text-slate-300">{benefitLabel[b.benefitType] ?? b.benefitType}</span>
-								<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
+								{#if editingBenefitId === b.id}
+									<form method="POST" action="?/updateBenefit" class="flex flex-1 flex-wrap items-end gap-3">
+										<input type="hidden" name="id" value={b.id} />
+										<input type="hidden" name="cardId" value={c.id} />
+										<div class="field">
+											<label class="label" for={`benefitType-${b.id}`}>Benefit</label>
+											<select id={`benefitType-${b.id}`} name="benefitType" class="select">
+												<option value="trip_delay" selected={b.benefitType === 'trip_delay'}>Trip delay</option>
+												<option value="baggage_delay" selected={b.benefitType === 'baggage_delay'}>Baggage delay</option>
+												<option value="trip_cancellation" selected={b.benefitType === 'trip_cancellation'}>Trip cancellation</option>
+												<option value="other" selected={b.benefitType === 'other'}>Other</option>
+											</select>
+										</div>
+										<div class="field">
+											<label class="label" for={`coverageAmount-${b.id}`}>Coverage</label>
+											<input id={`coverageAmount-${b.id}`} name="coverageAmount" type="number" value={b.coverageAmount ?? ''} placeholder="0" class="input" />
+										</div>
+										<div class="field">
+											<label class="label" for={`currency-${b.id}`}>Currency</label>
+											<input id={`currency-${b.id}`} name="currency" value={b.currency} class="input" />
+										</div>
+										<div class="field">
+											<label class="label" for={`benefitNotes-${b.id}`}>Notes</label>
+											<input id={`benefitNotes-${b.id}`} name="notes" value={b.notes ?? ''} placeholder="Optional" class="input" />
+										</div>
+										<div class="flex gap-2">
+											<button class="btn btn-primary btn-sm">Update</button>
+											<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingBenefitId = null)}>Cancel</button>
+										</div>
+									</form>
+								{:else}
+									<span class="text-sm text-slate-300">{benefitLabel[b.benefitType] ?? b.benefitType}</span>
+									<div class="flex items-center gap-3">
+										<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
+										<button type="button" class="rounded-md px-2 py-1 text-xs text-slate-400 transition hover:bg-indigo-500/10 hover:text-indigo-300" onclick={() => (editingBenefitId = b.id)}>Edit</button>
+									</div>
+								{/if}
 							</li>
 						{/each}
 					</ul>

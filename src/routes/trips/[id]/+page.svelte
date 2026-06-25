@@ -7,7 +7,12 @@
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
 	import { renderMarkdown } from '$lib/markdown';
-	import { formatDateTime } from '$lib/dateFormat';
+	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
+	import { formatCents } from '$lib/money';
+	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
+	import { SEGMENT_STATUS_META, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
+	import { tripStatusBadge } from '$lib/tripStatus';
+	import { visibilityBadgeClass } from '$lib/visibility';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
@@ -43,57 +48,10 @@
 
 	const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 
-	const segmentStatusMeta: Record<string, { label: string; class: string }> = {
-		planned: { label: 'Planned', class: 'badge-slate' },
-		checked_in: { label: 'Checked in', class: 'badge-brand' },
-		boarded: { label: 'Boarded', class: 'badge-amber' },
-		arrived: { label: 'Arrived', class: 'badge-green' },
-		completed: { label: 'Completed', class: 'badge-green' }
-	};
-
-	function segmentStatusLabel(status: string) {
-		return segmentStatusMeta[status]?.label ?? status.replace('_', ' ');
-	}
-
-	function segmentStatusClass(status: string) {
-		return segmentStatusMeta[status]?.class ?? 'badge-slate';
-	}
-
-	const visBadge: Record<string, string> = {
-		private: 'badge-slate',
-		groups: 'badge-brand',
-		public: 'badge-green'
-	};
-
-	const statusBadge: Record<string, { label: string; class: string }> = {
-		upcoming: { label: 'Upcoming', class: 'badge-brand' },
-		active: { label: 'In progress', class: 'badge-green' },
-		past: { label: 'Completed', class: 'badge-slate' },
-		unknown: { label: 'Planned', class: 'badge-slate' }
-	};
-
 	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
 	const companionNameMap = $derived(new Map((data.companions ?? []).map((c) => [c.id, c.name])));
 	function settlementName(id: 'owner' | number) {
 		return id === 'owner' ? 'You' : (companionNameMap.get(id) ?? 'Unknown');
-	}
-
-	function fmtTime(iso: string | null | undefined, tz = 'UTC') {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { timeStyle: 'short', timeZone: tz }).format(new Date(iso));
-		} catch {
-			return '';
-		}
-	}
-
-	function fmtDateOnly(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(`${iso}T12:00:00`));
-		} catch {
-			return iso;
-		}
 	}
 
 	function toDatetimeLocal(iso: string | null | undefined, tz = 'UTC') {
@@ -101,10 +59,6 @@
 		const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(tz);
 		if (!dt.isValid) return iso;
 		return dt.toFormat("yyyy-MM-dd'T'HH:mm");
-	}
-
-	function fmtMoney(cents: number) {
-		return `USD ${(cents / 100).toFixed(2)}`;
 	}
 
 	function tripDays(start: string | null | undefined, end: string | null | undefined) {
@@ -212,9 +166,9 @@
 						{#if !isEditor}
 							<span class="badge badge-brand badge-compact">Shared view</span>
 						{/if}
-						<span class="badge badge-compact {statusBadge[status].class}">{statusBadge[status].label}</span>
+						<span class="badge badge-compact {tripStatusBadge(status).class}">{tripStatusBadge(status).label}</span>
 						{#if ownerTrip}
-							<span class="badge badge-compact {visBadge[ownerTrip.defaultVisibility] ?? 'badge-slate'} capitalize">{ownerTrip.defaultVisibility}</span>
+							<span class="badge badge-compact {visibilityBadgeClass(ownerTrip.defaultVisibility)} capitalize">{ownerTrip.defaultVisibility}</span>
 						{/if}
 					</div>
 
@@ -397,7 +351,7 @@
 													<div class="flex items-start gap-3">
 														{#if s.startAt}
 															<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">
-																{fmtTime(s.startAt, s.startTz ?? 'UTC')}
+																{formatTime(s.startAt, s.startTz ?? 'UTC')}
 															</div>
 														{/if}
 														<div class="min-w-0 flex-1">
@@ -426,7 +380,7 @@
 															</div>
 															{#if s.endAt}
 																<p class="mt-1 font-mono text-xs text-slate-500">
-																	Until {fmtTime(s.endAt, s.endTz ?? s.startTz ?? 'UTC')}
+																	Until {formatTime(s.endAt, s.endTz ?? s.startTz ?? 'UTC')}
 																</p>
 															{/if}
 															{#if s.location}
@@ -440,7 +394,7 @@
 																	<Icon name="location" class="inline h-3.5 w-3.5 mr-1" />
 																	{#if s.meetingPoint}<span class="font-medium">{s.meetingPoint}</span>{/if}
 																	{#if s.meetingPoint && s.meetingAt}<span class="mx-1 text-slate-500">·</span>{/if}
-																	{#if s.meetingAt}Meet at {fmtTime(s.meetingAt, s.startTz ?? 'UTC')}{/if}
+																	{#if s.meetingAt}Meet at {formatTime(s.meetingAt, s.startTz ?? 'UTC')}{/if}
 																</p>
 															{/if}
 												{#if s.cardId}
@@ -485,10 +439,9 @@
 																<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="flex items-center gap-1">
 																	<input type="hidden" name="segmentId" value={s.id} />
 																	<select name="offsetMinutes" class="input h-8 py-0 text-xs">
-																		<option value="15">15m</option>
-																		<option value="60">1h</option>
-																		<option value="180">3h</option>
-																		<option value="1440">1d</option>
+																		{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}
+																			<option value={offset.minutes}>{offset.shortLabel}</option>
+																		{/each}
 																	</select>
 																	<button class="btn btn-ghost btn-sm">Remind</button>
 																</form>
@@ -782,8 +735,8 @@
 								{#if budget.amount != null}
 									<div class="mt-2">
 										<div class="mb-1 flex items-center justify-between text-xs text-slate-400">
-											<span>Spent {fmtMoney(budget.spent)} / {fmtMoney(budget.amount)}</span>
-											<span>{budget.remaining != null ? `${fmtMoney(budget.remaining)} remaining` : ''}</span>
+											<span>Spent {formatCents(budget.spent)} / {formatCents(budget.amount)}</span>
+											<span>{budget.remaining != null ? `${formatCents(budget.remaining)} remaining` : ''}</span>
 										</div>
 										<div class="h-2 w-full overflow-hidden rounded-full bg-surface2">
 											<div
@@ -1241,18 +1194,18 @@
 				<dl class="trip-sidebar-dl">
 					<div>
 						<dt>Status</dt>
-						<dd><span class="badge badge-compact {statusBadge[status].class}">{statusBadge[status].label}</span></dd>
+						<dd><span class="badge badge-compact {tripStatusBadge(status).class}">{tripStatusBadge(status).label}</span></dd>
 					</div>
 					{#if trip.startDate}
 						<div>
 							<dt>Start date</dt>
-							<dd>{fmtDateOnly(trip.startDate)}</dd>
+							<dd>{formatDate(trip.startDate)}</dd>
 						</div>
 					{/if}
 					{#if trip.endDate}
 						<div>
 							<dt>End date</dt>
-							<dd>{fmtDateOnly(trip.endDate)}</dd>
+							<dd>{formatDate(trip.endDate)}</dd>
 						</div>
 					{/if}
 					{#if days}
@@ -1506,11 +1459,9 @@
 						<form method="POST" action="?/customReminder" class="flex flex-col gap-2">
 							<label for="customReminderOffset" class="text-xs text-slate-400">Remind me before start</label>
 							<select id="customReminderOffset" name="offsetMinutes" class="input text-sm">
-								<option value="15">15 minutes</option>
-								<option value="60">1 hour</option>
-								<option value="180">3 hours</option>
-								<option value="1440">1 day</option>
-								<option value="10080">1 week</option>
+								{#each REMINDER_OFFSETS as offset}
+									<option value={offset.minutes}>{offset.label}</option>
+								{/each}
 							</select>
 							<button class="btn btn-ghost btn-sm">Set reminder</button>
 						</form>

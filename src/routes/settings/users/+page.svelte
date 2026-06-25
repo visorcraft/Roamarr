@@ -12,7 +12,7 @@
 </header>
 
 {#if form?.error}
-	<div class="mt-6 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+	<div class="notice notice-error mt-6">
 		{form.error}
 	</div>
 {/if}
@@ -137,7 +137,7 @@
 					</tr>
 					{#if editingId === user.id}
 						<tr>
-							<td colspan="5" class="bg-white/[0.02] px-4 py-4">
+							<td colspan="5" class="table-expanded-cell">
 								<form
 									method="POST"
 									action="?/update"

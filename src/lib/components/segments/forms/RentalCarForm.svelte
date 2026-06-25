@@ -209,7 +209,7 @@
 </div>
 
 <div class="segment-form-section sm:col-span-2">
-	<div class="mb-3 flex items-center justify-between gap-3">
+	<div class="panel-header">
 		<h3 class="section-title">More details</h3>
 		<button type="button" class="link text-sm no-underline" onclick={expandAll}>Expand all</button>
 	</div>

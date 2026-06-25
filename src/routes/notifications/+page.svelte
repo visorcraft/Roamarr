@@ -42,7 +42,7 @@
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						{#if n.link}
-							<a href={n.link} class="font-semibold text-white hover:underline">{n.title}</a>
+							<a href={n.link} class="link font-semibold no-underline hover:underline">{n.title}</a>
 						{:else}
 							<span class="font-semibold text-white">{n.title}</span>
 						{/if}

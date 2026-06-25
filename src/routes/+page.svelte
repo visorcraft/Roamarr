@@ -32,7 +32,7 @@
 
 <section class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 	{#each stats as s (s.label)}
-		<a href={s.href} class="metric-card group transition hover:ring-white/20">
+		<a href={s.href} class="metric-card group">
 			<div class="text-4xl font-extrabold {s.accent}">{s.value}</div>
 			<div class="metric-label group-hover:text-slate-300">{s.label}</div>
 		</a>
@@ -40,36 +40,36 @@
 </section>
 
 <section class="card mt-6 p-5">
-	<div class="mb-3 flex items-center justify-between">
+	<div class="panel-header">
 		<h2 class="section-title">Today</h2>
-		<span class="text-sm text-slate-400">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+		<span class="meta">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
 	</div>
 	{#if data.agenda.length}
-		<ul class="divide-y divide-white/5">
+		<ul class="panel-list">
 			{#each data.agenda as item (`${item.kind}:${item.id}`)}
 				<li>
 					{#if item.kind === 'trip'}
-						<a href={`/trips/${item.id}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
+						<a href={`/trips/${item.id}`} class="row-link">
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
-									<span class="block truncate font-semibold text-white">{item.name}</span>
+									<span class="row-title">{item.name}</span>
 									{#if item.isShared}<span class="badge badge-brand">Shared</span>{/if}
 									<span class="badge badge-slate">Trip</span>
 								</span>
-								{#if item.destination}<span class="block truncate text-sm text-slate-400">{item.destination}</span>{/if}
+								{#if item.destination}<span class="row-subtitle">{item.destination}</span>{/if}
 							</span>
 						</a>
 					{:else}
-						<a href={`/trips/${item.tripId}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
+						<a href={`/trips/${item.tripId}`} class="row-link">
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
-									<span class="block truncate font-semibold text-white">{item.title}</span>
+									<span class="row-title">{item.title}</span>
 									<span class="badge badge-slate">{SEG[item.type as keyof typeof SEG]?.label ?? item.type}</span>
 									<span class="badge badge-amber">{item.kind === 'segment-start' ? 'Start' : 'End'}</span>
 								</span>
-								<span class="block truncate text-sm text-slate-400">{item.tripName}</span>
+								<span class="row-subtitle">{item.tripName}</span>
 							</span>
-							<span class="ml-3 shrink-0 font-mono text-xs text-slate-400">{item.time}</span>
+							<span class="row-meta">{item.time}</span>
 						</a>
 					{/if}
 				</li>
@@ -82,23 +82,23 @@
 
 <div class="mt-6 grid gap-6 lg:grid-cols-2">
 	<section class="card p-5">
-		<div class="mb-3 flex items-center justify-between">
+		<div class="panel-header">
 			<h2 class="section-title">Upcoming trips</h2>
 			<a href="/trips" class="link text-sm">All trips</a>
 		</div>
 		{#if data.upcoming.length}
-			<ul class="divide-y divide-white/5">
+			<ul class="panel-list">
 				{#each data.upcoming as t (t.id)}
 					<li>
-						<a href={`/trips/${t.id}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
+						<a href={`/trips/${t.id}`} class="row-link">
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
-									<span class="block truncate font-semibold text-white">{t.name}</span>
+									<span class="row-title">{t.name}</span>
 									{#if t.isShared}<span class="badge badge-brand">Shared</span>{/if}
 								</span>
-								{#if t.destination}<span class="block truncate text-sm text-slate-400">{t.destination}</span>{/if}
+								{#if t.destination}<span class="row-subtitle">{t.destination}</span>{/if}
 							</span>
-							{#if t.startDate}<span class="ml-3 shrink-0 font-mono text-xs text-slate-400">{t.startDate}</span>{/if}
+							{#if t.startDate}<span class="row-meta">{t.startDate}</span>{/if}
 						</a>
 					</li>
 				{/each}
@@ -109,15 +109,15 @@
 	</section>
 
 	<section class="card p-5">
-		<div class="mb-3 flex items-center justify-between">
+		<div class="panel-header">
 			<h2 class="section-title">Documents expiring soon</h2>
 			<a href="/profile/documents" class="link text-sm">Manage</a>
 		</div>
 		{#if data.expiring.length}
-			<ul class="divide-y divide-white/5">
+			<ul class="panel-list">
 				{#each data.expiring as d (d.id)}
-					<li class="flex items-center justify-between py-3">
-						<span class="text-sm font-medium text-slate-200 capitalize">{d.type.replace('_', ' ')}</span>
+					<li class="row-static">
+						<span class="text-sm font-medium capitalize">{d.type.replace('_', ' ')}</span>
 						<span class="badge badge-amber font-mono">{d.expiresOn}</span>
 					</li>
 				{/each}

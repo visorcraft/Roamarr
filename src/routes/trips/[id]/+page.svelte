@@ -143,7 +143,7 @@
 		<div class="trip-hero-scrim"></div>
 
 		<div class="relative px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
-			<a href="/trips" class="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white">
+			<a href="/trips" class="back-link">
 				<Icon name="back" class="h-4 w-4" />
 				Back to trips
 			</a>
@@ -405,7 +405,7 @@
 													{/if}
 												{/if}
 															{#if !isEditor && s.detailsJson}
-																<div class="mt-2 rounded-lg bg-white/[0.03] p-2 ring-1 ring-white/5">
+																<div class="subpanel-compact mt-2">
 																	<pre class="whitespace-pre-wrap font-mono text-[10px] text-slate-400">{s.detailsJson}</pre>
 																</div>
 															{/if}
@@ -497,7 +497,7 @@
 
 			{#if data.checklist?.items?.length || isEditor}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">Packing checklist</h2>
 						{#if data.checklist?.items?.length}
 							{@const packed = data.checklist.items.filter((i) => i.packed).length}
@@ -510,11 +510,11 @@
 								<li class="list-item-compact flex items-center justify-between gap-3">
 									<form method="POST" action="?/toggleChecklistItem" class="flex items-center gap-3">
 										<input type="hidden" name="itemId" value={item.id} />
-										<button type="submit" class="flex items-center gap-3 text-left">
-											<span class="grid h-5 w-5 shrink-0 place-items-center rounded border {item.packed ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300' : 'border-slate-600 text-transparent'}">
+										<button type="submit" class="check-toggle">
+											<span class="check-marker {item.packed ? 'check-marker-active' : ''}">
 												{#if item.packed}<Icon name="check" class="h-3.5 w-3.5" />{/if}
 											</span>
-											<span class="text-sm {item.packed ? 'text-slate-500 line-through' : 'text-slate-200'}">{item.text}</span>
+											<span class="check-label {item.packed ? 'check-label-done' : ''}">{item.text}</span>
 										</button>
 									</form>
 									<div class="flex items-center gap-2">
@@ -522,7 +522,7 @@
 										{#if isEditor}
 											<form method="POST" action="?/deleteChecklistItem">
 												<input type="hidden" name="itemId" value={item.id} />
-												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete item">
+												<button class="icon-button icon-button-sm" aria-label="Delete item">
 													<Icon name="close" class="h-3.5 w-3.5" />
 												</button>
 											</form>
@@ -569,7 +569,7 @@
 
 			{#if data.expenses?.length || isEditor}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">Expenses</h2>
 						{#if Object.keys(data.expenseSummary?.totalsByCurrency ?? {}).length}
 							<div class="flex flex-wrap gap-2">
@@ -592,11 +592,11 @@
 											Paid by {e.paidBy === 'owner' ? 'you' : data.companions?.find((c) => c.id === e.paidBy)?.name ?? 'unknown'}
 											{#if e.splitAmong.length}> · Split {e.splitAmong.length} way{e.splitAmong.length === 1 ? '' : 's'}{/if}
 										</p>
-										{#if e.attachments?.length}}
+										{#if e.attachments?.length}
 											<div class="mt-1 flex flex-wrap items-center gap-2">
 												<Icon name="attachment" class="h-3.5 w-3.5 text-slate-500" />
 												{#each e.attachments as a (a.id)}
-													<a href="/trips/{trip.id}/expenses/{e.id}/attachments/{a.id}" target="_blank" class="text-xs text-indigo-300/90 hover:underline">{a.filename}</a>
+													<a href="/trips/{trip.id}/expenses/{e.id}/attachments/{a.id}" target="_blank" class="link text-xs no-underline hover:underline">{a.filename}</a>
 												{/each}
 											</div>
 										{/if}
@@ -606,7 +606,7 @@
 										{#if isEditor}
 											<form method="POST" action="?/deleteExpense">
 												<input type="hidden" name="expenseId" value={e.id} />
-												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete expense">
+												<button class="icon-button icon-button-sm" aria-label="Delete expense">
 													<Icon name="close" class="h-3.5 w-3.5" />
 												</button>
 											</form>
@@ -641,11 +641,11 @@
 								<p class="mb-1 text-xs text-slate-400">Split among</p>
 								<div class="flex flex-wrap gap-2">
 									<label class="checkbox-label text-xs">
-										<input type="checkbox" name="splitAmong" value="owner" /> You
+										<input type="checkbox" name="splitAmong" value="owner" class="checkbox" /> You
 									</label>
 									{#each data.companions ?? [] as c (c.id)}
 										<label class="checkbox-label text-xs">
-											<input type="checkbox" name="splitAmong" value={c.id} /> {c.name}
+											<input type="checkbox" name="splitAmong" value={c.id} class="checkbox" /> {c.name}
 										</label>
 									{/each}
 								</div>
@@ -666,7 +666,7 @@
 						<div class="mt-5 space-y-4">
 							<h3 class="subsection-title">Settlement</h3>
 							{#each Object.entries(data.expenseSettlement) as [currency, settlement]}
-								<div class="rounded-lg bg-white/[0.03] p-3 ring-1 ring-white/5">
+								<div class="subpanel">
 									<div class="mb-2 flex items-center justify-between">
 										<span class="font-mono text-xs text-slate-400">{currency}</span>
 									</div>
@@ -703,7 +703,7 @@
 
 			{#if isEditor || data.budgets?.some((b) => b.amount != null)}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">
 							<Icon name="budget" class="inline h-4 w-4 mr-1.5" />
 							Budget
@@ -722,7 +722,7 @@
 											{#if isEditor}
 												<form method="POST" action="?/deleteBudget">
 													<input type="hidden" name="category" value={budget.category} />
-													<button class="icon-button h-6 w-6 text-slate-500" aria-label="Remove budget">
+													<button class="icon-button icon-button-sm" aria-label="Remove budget">
 														<Icon name="close" class="h-3.5 w-3.5" />
 													</button>
 												</form>
@@ -736,9 +736,9 @@
 											<span>Spent {formatCents(budget.spent)} / {formatCents(budget.amount)}</span>
 											<span>{budget.remaining != null ? `${formatCents(budget.remaining)} remaining` : ''}</span>
 										</div>
-										<div class="h-2 w-full overflow-hidden rounded-full bg-surface2">
+										<div class="progress-track">
 											<div
-												class="h-full rounded-full {budget.alert === 'over' ? 'bg-red-500' : budget.alert === 'near' ? 'bg-amber-500' : 'bg-brand'}"
+												class="progress-fill {budget.alert === 'over' ? 'bg-red-500' : budget.alert === 'near' ? 'bg-amber-500' : ''}"
 												style="width: {percent}%;"
 											></div>
 										</div>
@@ -758,7 +758,7 @@
 
 			{#if data.journalEntries?.length || isEditor}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">Journal</h2>
 					</div>
 					{#if data.journalEntries?.length}
@@ -795,7 +795,7 @@
 
 			{#if data.polls?.length || isEditor}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">
 							<Icon name="poll" class="inline h-4 w-4 mr-1.5" />
 							Polls
@@ -812,13 +812,13 @@
 								{@const currentVote = selectedCompanion
 									? poll.votes.find((v) => v.companionId === Number(selectedCompanion))
 									: undefined}
-								<div class="rounded-lg bg-white/[0.03] p-3 ring-1 ring-white/5">
+								<div class="subpanel">
 									<div class="flex items-start justify-between gap-3">
 										<h3 class="subsection-title">{poll.question}</h3>
 										{#if isEditor}
 											<form method="POST" action="?/deletePoll">
 												<input type="hidden" name="pollId" value={poll.id} />
-												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete poll">
+												<button class="icon-button icon-button-sm" aria-label="Delete poll">
 													<Icon name="close" class="h-3.5 w-3.5" />
 												</button>
 											</form>
@@ -958,7 +958,7 @@
 				</section>
 			{/if}
 
-			{#if isEditor && data.owner === true}}
+			{#if isEditor && data.owner === true}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Save as template</h2>
 					<form method="POST" action="?/saveTripTemplate" class="flex flex-wrap items-end gap-2">
@@ -968,9 +968,9 @@
 				</section>
 			{/if}
 
-			{#if data.homeTasks?.length || isEditor}}
+			{#if data.homeTasks?.length || isEditor}
 				<section class="card p-5">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="section-title">Home prep</h2>
 						{#if data.homeTasks?.length}<span class="font-mono text-xs text-slate-500">{data.homeTasks.filter((t) => t.done).length}/{data.homeTasks.length}</span>{/if}
 					</div>
@@ -980,11 +980,11 @@
 							<li class="list-item-compact flex items-center justify-between gap-3">
 								<form method="POST" action="?/toggleHomeTask" class="flex items-center gap-3">
 									<input type="hidden" name="taskId" value={task.id} />
-									<button type="submit" class="flex items-center gap-3 text-left">
-										<span class="grid h-5 w-5 shrink-0 place-items-center rounded border {task.done ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300' : 'border-slate-600 text-transparent'}">
+									<button type="submit" class="check-toggle">
+										<span class="check-marker {task.done ? 'check-marker-active' : ''}">
 											{#if task.done}<Icon name="check" class="h-3.5 w-3.5" />{/if}
 										</span>
-										<span class="text-sm {task.done ? 'text-slate-500 line-through' : 'text-slate-200'}">{task.text}</span>
+										<span class="check-label {task.done ? 'check-label-done' : ''}">{task.text}</span>
 									</button>
 								</form>
 								<div class="flex items-center gap-2">
@@ -992,7 +992,7 @@
 									{#if isEditor}
 										<form method="POST" action="?/deleteHomeTask">
 											<input type="hidden" name="taskId" value={task.id} />
-											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete task"><Icon name="close" class="h-3.5 w-3.5" /></button>
+											<button class="icon-button icon-button-sm" aria-label="Delete task"><Icon name="close" class="h-3.5 w-3.5" /></button>
 										</form>
 									{/if}
 								</div>
@@ -1012,7 +1012,7 @@
 				</section>
 			{/if}
 
-			{#if data.medications?.length || isEditor}}
+			{#if data.medications?.length || isEditor}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Medications</h2>
 				{#if data.medications?.length}
@@ -1024,7 +1024,7 @@
 									{#if isEditor}
 										<form method="POST" action="?/deleteMedication">
 											<input type="hidden" name="medicationId" value={med.id} />
-											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete medication"><Icon name="close" class="h-3.5 w-3.5" /></button>
+											<button class="icon-button icon-button-sm" aria-label="Delete medication"><Icon name="close" class="h-3.5 w-3.5" /></button>
 										</form>
 									{/if}
 								</div>
@@ -1055,7 +1055,7 @@
 				</section>
 			{/if}
 
-			{#if data.entryRequirements?.length || isEditor}}
+			{#if data.entryRequirements?.length || isEditor}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Entry requirements</h2>
 				{#if data.entryRequirements?.length}
@@ -1080,7 +1080,7 @@
 										</form>
 										<form method="POST" action="?/deleteEntryRequirement">
 											<input type="hidden" name="requirementId" value={req.id} />
-											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete requirement"><Icon name="close" class="h-3.5 w-3.5" /></button>
+											<button class="icon-button icon-button-sm" aria-label="Delete requirement"><Icon name="close" class="h-3.5 w-3.5" /></button>
 										</form>
 									{:else}
 										<span class="badge badge-compact badge-slate capitalize">{req.status.replace('_', ' ')}</span>
@@ -1108,7 +1108,7 @@
 				</section>
 			{/if}
 
-			{#if data.importantItems?.length || isEditor}}
+			{#if data.importantItems?.length || isEditor}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Important items</h2>
 				{#if data.importantItems?.length}
@@ -1124,7 +1124,7 @@
 								{#if isEditor}
 									<form method="POST" action="?/deleteImportantItem">
 										<input type="hidden" name="itemId" value={item.id} />
-										<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete item"><Icon name="close" class="h-3.5 w-3.5" /></button>
+										<button class="icon-button icon-button-sm" aria-label="Delete item"><Icon name="close" class="h-3.5 w-3.5" /></button>
 									</form>
 								{/if}
 							</li>
@@ -1246,7 +1246,7 @@
 
 			{#if data.companions?.length}
 				<div class="trip-sidebar-card">
-					<div class="mb-3 flex items-center justify-between">
+					<div class="panel-header">
 						<h2 class="subsection-title">Travelers</h2>
 						<span class="font-mono text-xs text-slate-500">{data.companions.length}</span>
 					</div>
@@ -1276,12 +1276,12 @@
 											<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" value={c.dietary ?? ''} />
 											<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" value={c.allergies ?? ''} />
 											<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2">{c.medicalNotes ?? ''}</textarea>
-											{#if c.category === 'child'}}
+											{#if c.category === 'child'}
 												<div class="flex flex-wrap gap-3 text-xs">
-													<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" checked={c.needsCarSeat} /> Car seat</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" checked={c.needsStroller} /> Stroller</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" checked={c.needsCrib} /> Crib</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" checked={c.needsKidsMeal} /> Kids meal</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" checked={c.needsCarSeat} class="checkbox" /> Car seat</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" checked={c.needsStroller} class="checkbox" /> Stroller</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" checked={c.needsCrib} class="checkbox" /> Crib</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" checked={c.needsKidsMeal} class="checkbox" /> Kids meal</label>
 												</div>
 												<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" value={c.childTicketDiscount ?? ''} />
 											{/if}
@@ -1320,7 +1320,7 @@
 											{#if isEditor}
 												<button
 													type="button"
-													class="icon-button h-6 w-6 text-slate-500"
+													class="icon-button icon-button-sm"
 													aria-label="Edit companion"
 													onclick={() => (editingCompanionId = c.id)}
 												>
@@ -1352,15 +1352,15 @@
 											{#if c.notes}
 												<span class="badge badge-compact badge-slate" title={c.notes}>Notes</span>
 											{/if}
-																					{#if c.category === 'child' && (c.needsCarSeat || c.needsStroller || c.needsCrib || c.needsKidsMeal)}}
+											{#if c.category === 'child' && (c.needsCarSeat || c.needsStroller || c.needsCrib || c.needsKidsMeal)}
 												<span class="badge badge-compact badge-brand" title="Kid gear">
 													{#if c.needsCarSeat}car seat{/if}{#if c.needsStroller}{#if c.needsCarSeat}, {/if}stroller{/if}{#if c.needsCrib}{#if c.needsCarSeat || c.needsStroller}, {/if}crib{/if}{#if c.needsKidsMeal}{#if c.needsCarSeat || c.needsStroller || c.needsCrib}, {/if}kids meal{/if}
 												</span>
 											{/if}
-											{#if c.seatPreference}}
+											{#if c.seatPreference}
 												<span class="badge badge-compact badge-slate" title="Seat preference">{c.seatPreference}</span>
 											{/if}
-											{#if c.bedPreference}}
+											{#if c.bedPreference}
 												<span class="badge badge-compact badge-slate" title="Bed preference">{c.bedPreference.replace('_', ' ')}</span>
 											{/if}</div>
 									{/if}
@@ -1392,10 +1392,10 @@
 								<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" />
 								<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2"></textarea>
 								<div class="flex flex-wrap gap-3 text-xs">
-									<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" /> Car seat</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" /> Stroller</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" /> Crib</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" /> Kids meal</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" class="checkbox" /> Car seat</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" class="checkbox" /> Stroller</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" class="checkbox" /> Crib</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" class="checkbox" /> Kids meal</label>
 								</div>
 								<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" />
 								<select name="seatPreference" class="input text-sm">

@@ -32,13 +32,13 @@
 	</form>
 
 	{#if form?.error}
-		<div class="mt-4 rounded-lg bg-red-500/10 p-4 text-red-200 ring-1 ring-red-400/20">
+		<div class="notice notice-error mt-4">
 			{form.error}
 		</div>
 	{/if}
 
 	{#if form?.success && form?.result}
-		<div class="mt-4 rounded-lg {form.dryRun ? 'bg-indigo-500/10 ring-indigo-400/20' : 'bg-green-500/10 ring-green-400/20'} p-4 {form.dryRun ? 'text-indigo-200' : 'text-green-200'} ring-1">
+		<div class="notice mt-4 {form.dryRun ? 'notice-info' : 'notice-success'}">
 			<p>
 				{form.dryRun ? 'Would import' : 'Imported'} {form.result.imported} trip{form.result.imported === 1 ? '' : 's'} with
 				{form.result.segmentCount} segment{form.result.segmentCount === 1 ? '' : 's'}.

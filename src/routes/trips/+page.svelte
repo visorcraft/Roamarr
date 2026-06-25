@@ -132,7 +132,7 @@
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.trips as t (t.id)}
-				<div class="card group relative flex flex-col gap-3 p-5 transition hover:-translate-y-0.5 hover:ring-white/20">
+				<div class="card group relative flex flex-col gap-3 p-5">
 					{#if !t.isShared}
 						<input
 							type="checkbox"

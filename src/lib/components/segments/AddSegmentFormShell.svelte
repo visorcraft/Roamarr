@@ -19,7 +19,7 @@
 
 <header class="page-header">
 	<div>
-		<a href={`/trips/${trip.id}`} class="mb-2 inline-flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white">
+		<a href={`/trips/${trip.id}`} class="back-link">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
 			Back to {trip.name}
 		</a>
@@ -39,7 +39,7 @@
 			<CardSelect {cards} name="cardId" errors={form?.errors} />
 		{/if}
 
-		<div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4 sm:col-span-2">
+		<div class="form-actions sm:col-span-2">
 			<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>
 			<div class="flex flex-wrap gap-2">
 				<a href={`/trips/${trip.id}`} class="btn btn-ghost">Cancel</a>

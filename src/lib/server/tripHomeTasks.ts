@@ -1,39 +1,31 @@
 import { redirect, type RequestEvent } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, asc } from 'drizzle-orm';
 import { db } from './db';
 import { tripHomeTasks } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
 import { Validator, formFail } from './validation';
 import { withTripAction } from './actions';
+import { tripCrudFactory } from './crud';
 
-export function listHomeTasks(tripId: number) {
-	return db
-		.select()
-		.from(tripHomeTasks)
-		.where(eq(tripHomeTasks.tripId, tripId))
-		.orderBy(tripHomeTasks.sortOrder, tripHomeTasks.createdAt)
-		.all();
-}
+const homeTaskCrud = tripCrudFactory({
+	table: tripHomeTasks,
+	auditEntity: 'trip_home_task',
+	orderBy: [asc(tripHomeTasks.sortOrder), asc(tripHomeTasks.createdAt)],
+	validate(input: { text: string; dueDate?: string | null }) {
+		const v = new Validator();
+		v.requiredString(input.text, 'text', { max: 200 });
+		v.date(input.dueDate, 'dueDate');
+		if (!v.ok()) throw formFail(v);
+	},
+	buildInsert(input, tripId) {
+		return { tripId, text: input.text, dueDate: input.dueDate ?? null };
+	}
+});
 
-export function addHomeTask(
-	userId: number,
-	tripId: number,
-	input: { text: string; dueDate?: string | null }
-) {
-	requireEditableTrip(userId, tripId);
-	const v = new Validator();
-	const text = v.requiredString(input.text, 'text', { max: 200 });
-	const dueDate = v.date(input.dueDate, 'dueDate');
-	if (!v.ok()) throw formFail(v);
-	const inserted = db
-		.insert(tripHomeTasks)
-		.values({ tripId, text: text!, dueDate: dueDate ?? null })
-		.returning()
-		.get();
-	logAudit(userId, 'create', 'trip_home_task', inserted.id, { tripId });
-	return inserted;
-}
+export const listHomeTasks = homeTaskCrud.list;
+export const addHomeTask = homeTaskCrud.add;
+export const deleteHomeTask = homeTaskCrud.remove;
 
 export function toggleHomeTask(userId: number, tripId: number, taskId: number) {
 	requireEditableTrip(userId, tripId);
@@ -46,13 +38,6 @@ export function toggleHomeTask(userId: number, tripId: number, taskId: number) {
 		.get();
 	logAudit(userId, 'toggle', 'trip_home_task', taskId, { tripId, done: updated.done });
 	return updated;
-}
-
-export function deleteHomeTask(userId: number, tripId: number, taskId: number) {
-	requireEditableTrip(userId, tripId);
-	requireOwnedTripRow(tripHomeTasks, tripId, taskId, 'Task not found');
-	db.delete(tripHomeTasks).where(eq(tripHomeTasks.id, taskId)).run();
-	logAudit(userId, 'delete', 'trip_home_task', taskId, { tripId });
 }
 
 export async function addHomeTaskAction(event: RequestEvent) {

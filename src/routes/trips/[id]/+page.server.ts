@@ -1,370 +1,93 @@
-import { error, redirect, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import { cards, fareProviders, fareWatches, segments, trips } from '$lib/server/db/schema';
-import {
-	attachPolicyToTrip,
-	detachPolicyFromTrip,
-	listPoliciesForUser
-} from '$lib/server/insurance';
-import { addComment, deleteComment, listComments } from '$lib/server/tripComments';
-import { duplicateSegment, setSegmentStatus } from '$lib/server/segments';
-import {
-	duplicateTrip,
-	loadTripFor,
-	regenerateCalendarToken,
-	revokeCalendarToken,
-	type TripView
-} from '../shared';
-import { requireOwnedTrip, requireEditableTrip } from '$lib/server/ownership';
-import { upsertCustomReminder } from '$lib/server/reminders';
+import { buildTripDetail } from '$lib/server/tripDetail';
+import { parseTripId } from '$lib/server/params';
 import {
 	addCompanion,
 	updateCompanion,
-	deleteCompanion,
-	listTripCompanions
+	deleteCompanion
 } from '$lib/server/tripCompanions';
 import {
 	addChecklistItem,
 	toggleChecklistItem,
-	deleteChecklistItem,
-	loadChecklist
+	deleteChecklistItem
 } from '$lib/server/tripChecklists';
-import { listTemplates, saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
-import {
-	addExpense,
-	deleteExpense,
-	listTripExpenses,
-	summarizeTripExpenses,
-	computeSettlement
-} from '$lib/server/tripExpenses';
-import {
-	setAttendeeStatus,
-	removeAttendee,
-	listAttendeesForSegments
-} from '$lib/server/segmentAttendees';
+import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
+import { setAttendeeStatus, removeAttendee } from '$lib/server/segmentAttendees';
 import {
 	addJournalEntry,
 	updateJournalEntry,
-	deleteJournalEntry,
-	listJournalEntries
+	deleteJournalEntry
 } from '$lib/server/tripJournal';
 import {
 	addDocumentLink,
 	updateDocumentLink,
-	deleteDocumentLink,
-	listDocumentLinks
+	deleteDocumentLink
 } from '$lib/server/tripDocumentLinks';
-import { createPoll, deletePoll, listPollsWithVotes, votePoll } from '$lib/server/tripPolls';
-import { listBudgetsWithSpent, setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
+import { createPoll, votePoll, deletePoll } from '$lib/server/tripPolls';
+import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
+import { listTemplates, saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
 import {
-	listEmergencyContacts,
-	shareItineraryWithContact
-} from '$lib/server/emergencyContacts';
-import {
-	addAttachment,
-	deleteAttachment,
-	listAttachments
-} from '$lib/server/tripExpenseAttachments';
-import {
-	listTripTemplates,
-	saveTripTemplate,
-	createTripFromTemplate
-} from '$lib/server/tripTemplates';
-import {
-	addHomeTask,
+	addHomeTaskAction,
 	toggleHomeTask,
-	deleteHomeTask,
-	listHomeTasks
+	deleteHomeTask
 } from '$lib/server/tripHomeTasks';
 import {
 	addMedication,
-	deleteMedication,
-	listMedications
+	deleteMedication
 } from '$lib/server/tripMedications';
 import {
 	addEntryRequirement,
 	updateEntryRequirementStatus,
-	deleteEntryRequirement,
-	listEntryRequirements
+	deleteEntryRequirement
 } from '$lib/server/tripEntryRequirements';
 import {
 	addImportantItem,
-	deleteImportantItem,
-	listImportantItems
+	deleteImportantItem
 } from '$lib/server/tripImportantItems';
+import {
+	regenerateCalendarFeed,
+	revokeCalendarFeed,
+	duplicate,
+	toggleArchive,
+	toggleFavorite,
+	customReminder,
+	segmentReminder,
+	duplicateSegmentAction,
+	setSegmentStatusAction,
+	attachPolicy,
+	detachPolicy,
+	addCommentAction,
+	deleteCommentAction,
+	shareItineraryWithContactAction,
+	addAttachmentAction,
+	deleteAttachmentAction,
+	saveTripTemplateAction
+} from '$lib/server/tripMetaActions';
+import { withTripAction } from '$lib/server/actions';
+import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
-	const view = loadTripFor(u.id, Number(params.id));
-	const baseCurrency = ((view.trip as typeof trips.$inferSelect).baseCurrency as string | undefined) ?? 'USD';
-	const companions = listTripCompanions(view.trip.id).map((c) =>
-		view.editor
-			? c
-			: {
-					...c,
-					notes: null,
-					dietary: null,
-					allergies: null,
-					medicalNotes: null,
-					needsCarSeat: null,
-					needsStroller: null,
-					needsCrib: null,
-					needsKidsMeal: null,
-					childTicketDiscount: null,
-					seatPreference: null,
-					bedPreference: null,
-					accessibilityNeeds: null,
-					roomNotes: null
-				}
-	);
-	const checklist = loadChecklist(view.trip.id);
-	const expenses = listTripExpenses(view.trip.id).map((e) => ({
-		...e,
-		attachments: listAttachments(e.id)
-	}));
-	const expenseSummary = summarizeTripExpenses(expenses, companions, baseCurrency);
-	const expenseSettlement = computeSettlement(expenses, companions);
-	const budgets = listBudgetsWithSpent(view.trip.id, expenses);
-	const journalEntries = listJournalEntries(view.trip.id);
-	const documentLinks = listDocumentLinks(view.trip.id);
-	const polls = listPollsWithVotes(view.trip.id);
-	const homeTasks = listHomeTasks(view.trip.id);
-	const medications = listMedications(view.trip.id);
-	const entryRequirements = listEntryRequirements(view.trip.id);
-	const importantItems = listImportantItems(view.trip.id);
-	let attendeesBySegment = new Map<number, ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never>();
-	if (view.editor) {
-		const segmentIds = view.segments.map((s) => s.id).filter((id): id is number => !!id);
-		attendeesBySegment = listAttendeesForSegments(segmentIds);
-	}
-	if (view.owner) {
-		const providers = db
-			.select({
-				id: fareProviders.id,
-				providerKey: fareProviders.providerKey,
-				label: fareProviders.label
-			})
-			.from(fareProviders)
-			.where(and(eq(fareProviders.userId, u.id), eq(fareProviders.enabled, true)))
-			.all();
-		const watches = db
-			.select({
-				id: fareWatches.id,
-				status: fareWatches.status,
-				segmentId: fareWatches.segmentId,
-				segmentTitle: segments.title,
-				providerKey: fareProviders.providerKey,
-				label: fareProviders.label,
-				lastCheckedAt: fareWatches.lastCheckedAt,
-				lastResultJson: fareWatches.lastResultJson
-			})
-			.from(fareWatches)
-			.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
-			.leftJoin(segments, eq(fareWatches.segmentId, segments.id))
-			.where(eq(fareWatches.tripId, view.trip.id))
-			.all();
-		const feedUrl = view.trip.calendarToken
-			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
-			: null;
-		const publicShareUrl = view.trip.publicToken
-			? `${url.origin}/share/${encodeURIComponent(view.trip.publicToken)}`
-			: null;
-		const userCards = db
-			.select({ id: cards.id, nickname: cards.nickname, network: cards.network, last4: cards.last4 })
-			.from(cards)
-			.where(eq(cards.userId, u.id))
-			.all();
-		const allPolicies = listPoliciesForUser(u.id);
-		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
-		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
-		const comments = listComments(view.trip.id);
-		const packingTemplates = listTemplates(u.id);
-		const tripTemplates = listTripTemplates(u.id);
-		const emergencyContacts = listEmergencyContacts(u.id);
-		return {
-			...view,
-			companions,
-			checklist,
-			expenses,
-			expenseSummary,
-			expenseSettlement,
-			budgets,
-			journalEntries,
-			documentLinks,
-			polls,
-			attendeesBySegment,
-			providers,
-			watches,
-			cards: userCards,
-			policies,
-			availablePolicies,
-			feedUrl,
-			publicShareUrl,
-			comments,
-			packingTemplates,
-			tripTemplates,
-			emergencyContacts,
-			homeTasks,
-			medications,
-			entryRequirements,
-			importantItems
-		};
-	}
-	return {
-		...view,
-		companions,
-		checklist,
-		expenses,
-		expenseSummary,
-		expenseSettlement,
-		budgets,
-		journalEntries,
-		documentLinks,
-		polls,
-		attendeesBySegment,
-		comments: listComments(view.trip.id),
-		homeTasks,
-		medications,
-		entryRequirements,
-		importantItems
-	};
+	const tripId = parseTripId(params);
+	return buildTripDetail(u, tripId, url);
 };
 
 export const actions: Actions = {
-	regenerateCalendarFeed: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const expiresAt = String(f.get('calendarExpiresAt') || '');
-		regenerateCalendarToken(u.id, tripId, expiresAt || null);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	revokeCalendarFeed: async ({ locals, params }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		revokeCalendarToken(u.id, tripId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	duplicate: async ({ locals, params }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const copy = duplicateTrip(u.id, tripId);
-		throw redirect(303, `/trips/${copy.id}`);
-	},
-	toggleArchive: async ({ locals, params }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const t = requireOwnedTrip(u.id, tripId);
-		db.update(trips).set({ archived: !t.archived }).where(eq(trips.id, tripId)).run();
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	toggleFavorite: async ({ locals, params }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const t = requireOwnedTrip(u.id, tripId);
-		db.update(trips).set({ favorite: !t.favorite }).where(eq(trips.id, tripId)).run();
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	customReminder: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const t = requireOwnedTrip(u.id, tripId);
-		const f = await request.formData();
-		const offset = Number(f.get('offsetMinutes') ?? 60);
-		if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
-		if (!t.startDate) throw error(400, 'Trip has no start date');
-		const startAt = `${t.startDate}T09:00:00Z`;
-		upsertCustomReminder(u.id, 'trip', tripId, startAt, offset);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	segmentReminder: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		requireEditableTrip(u.id, tripId);
-		const f = await request.formData();
-		const segmentId = Number(f.get('segmentId'));
-		const offset = Number(f.get('offsetMinutes') ?? 60);
-		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
-		if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
-		const seg = db
-			.select()
-			.from(segments)
-			.where(and(eq(segments.id, segmentId), eq(segments.tripId, tripId)))
-			.get();
-		if (!seg) throw error(404, 'Segment not found');
-		upsertCustomReminder(u.id, 'segment', segmentId, seg.startAt, offset);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	duplicateSegment: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const segmentId = Number((await request.formData()).get('segmentId'));
-		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
-		duplicateSegment(u.id, tripId, segmentId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	setSegmentStatus: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const segmentId = Number(f.get('segmentId'));
-		const status = String(f.get('status') || '');
-		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
-		if (!status) throw error(400, 'Invalid status');
-		setSegmentStatus(u.id, tripId, segmentId, status as import('$lib/server/db/schema').SegmentStatus);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	attachPolicy: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		requireOwnedTrip(u.id, tripId);
-		const policyId = Number((await request.formData()).get('policyId'));
-		if (!Number.isFinite(policyId) || policyId <= 0) throw error(400, 'Invalid policy');
-		attachPolicyToTrip(u.id, policyId, tripId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	detachPolicy: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		requireOwnedTrip(u.id, tripId);
-		const policyId = Number((await request.formData()).get('policyId'));
-		if (!Number.isFinite(policyId) || policyId <= 0) throw error(400, 'Invalid policy');
-		detachPolicyFromTrip(u.id, policyId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addComment: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		requireEditableTrip(u.id, tripId);
-		const body = String((await request.formData()).get('body') || '');
-		if (!body.trim()) throw error(400, 'Comment is required');
-		addComment(u.id, tripId, body);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteComment: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const commentId = Number((await request.formData()).get('commentId'));
-		if (!Number.isFinite(commentId) || commentId <= 0) throw error(400, 'Invalid comment');
-		deleteComment(u.id, commentId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
+	regenerateCalendarFeed,
+	revokeCalendarFeed,
+	duplicate,
+	toggleArchive,
+	toggleFavorite,
+	customReminder,
+	segmentReminder,
+	duplicateSegment: duplicateSegmentAction,
+	setSegmentStatus: setSegmentStatusAction,
+	attachPolicy,
+	detachPolicy,
+	addComment: addCommentAction,
+	deleteComment: deleteCommentAction,
 	addCompanion,
 	updateCompanion,
 	deleteCompanion,
@@ -388,92 +111,36 @@ export const actions: Actions = {
 	applyChecklistTemplate,
 	setBudget: setBudgetAction,
 	deleteBudget: deleteBudgetAction,
-	shareItineraryWithContact: async ({ locals, params, request, url }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const contactId = Number(f.get('contactId'));
-		if (!Number.isFinite(contactId) || contactId <= 0) throw error(400, 'Invalid contact');
-		await shareItineraryWithContact(u.id, tripId, contactId, url.origin);
+	shareItineraryWithContact: shareItineraryWithContactAction,
+	addAttachment: addAttachmentAction,
+	deleteAttachment: deleteAttachmentAction,
+	saveTripTemplate: saveTripTemplateAction,
+	addHomeTask: addHomeTaskAction,
+	toggleHomeTask: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
+		if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
+		toggleHomeTask(user.id, tripId, taskIdResult.value);
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	addAttachment: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const expenseId = Number(f.get('expenseId'));
-		const file = f.get('file');
-		if (!Number.isFinite(expenseId) || expenseId <= 0) throw error(400, 'Invalid expense');
-		if (!(file instanceof File)) throw error(400, 'File is required');
-		await addAttachment(u.id, expenseId, file);
+	deleteHomeTask: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
+		if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
+		deleteHomeTask(user.id, tripId, taskIdResult.value);
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	deleteAttachment: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const attachmentId = Number(f.get('attachmentId'));
-		if (!Number.isFinite(attachmentId) || attachmentId <= 0) throw error(400, 'Invalid attachment');
-		deleteAttachment(u.id, attachmentId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	saveTripTemplate: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const name = String(f.get('name') || '').trim();
-		if (!name) throw error(400, 'Template name is required');
-		saveTripTemplate(u.id, tripId, name);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addHomeTask: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const text = String(f.get('text') || '');
-		const dueDate = String(f.get('dueDate') || '') || null;
-		addHomeTask(u.id, tripId, { text, dueDate });
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	toggleHomeTask: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const taskId = Number(f.get('taskId'));
-		if (!Number.isFinite(taskId) || taskId <= 0) throw error(400, 'Invalid task');
-		toggleHomeTask(u.id, tripId, taskId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteHomeTask: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const taskId = Number(f.get('taskId'));
-		if (!Number.isFinite(taskId) || taskId <= 0) throw error(400, 'Invalid task');
-		deleteHomeTask(u.id, tripId, taskId);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addMedication: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const name = String(f.get('name') || '');
-		const companionIdRaw = f.get('companionId');
+	addMedication: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const name = String(formData.get('name') || '');
+		const companionIdRaw = formData.get('companionId');
 		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-		const dosage = String(f.get('dosage') || '');
-		const schedule = String(f.get('schedule') || '');
-		const startsAt = String(f.get('startsAt') || '');
-		const endsAt = String(f.get('endsAt') || '');
-		const notes = String(f.get('notes') || '');
-		addMedication(u.id, tripId, {
+		const dosage = String(formData.get('dosage') || '');
+		const schedule = String(formData.get('schedule') || '');
+		const startsAt = String(formData.get('startsAt') || '');
+		const endsAt = String(formData.get('endsAt') || '');
+		const notes = String(formData.get('notes') || '');
+		addMedication(user.id, tripId, {
 			name,
 			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
 			dosage,
@@ -484,62 +151,47 @@ export const actions: Actions = {
 		});
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	deleteMedication: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const medicationId = Number(f.get('medicationId'));
-		if (!Number.isFinite(medicationId) || medicationId <= 0) throw error(400, 'Invalid medication');
-		deleteMedication(u.id, tripId, medicationId);
+	deleteMedication: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const medicationIdResult = positiveIdFromForm(formData.get('medicationId'), 'medicationId');
+		if (!medicationIdResult.ok) return fail(400, { error: medicationIdResult.error });
+		deleteMedication(user.id, tripId, medicationIdResult.value);
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	addEntryRequirement: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const country = String(f.get('country') || '');
-		const requirementType = String(f.get('requirementType') || '');
-		const status = String(f.get('status') || 'needed');
-		const dueDate = String(f.get('dueDate') || '') || null;
-		const notes = String(f.get('notes') || '');
-		addEntryRequirement(u.id, tripId, { country, requirementType, status, dueDate, notes });
+	addEntryRequirement: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const country = String(formData.get('country') || '');
+		const requirementType = String(formData.get('requirementType') || '');
+		const status = String(formData.get('status') || 'needed');
+		const dueDate = String(formData.get('dueDate') || '') || null;
+		const notes = String(formData.get('notes') || '');
+		addEntryRequirement(user.id, tripId, { country, requirementType, status, dueDate, notes });
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	updateEntryRequirementStatus: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const requirementId = Number(f.get('requirementId'));
-		const status = String(f.get('status') || '');
-		if (!Number.isFinite(requirementId) || requirementId <= 0) throw error(400, 'Invalid requirement');
-		updateEntryRequirementStatus(u.id, tripId, requirementId, status);
+	updateEntryRequirementStatus: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const requirementIdResult = positiveIdFromForm(formData.get('requirementId'), 'requirementId');
+		if (!requirementIdResult.ok) return fail(400, { error: requirementIdResult.error });
+		const status = String(formData.get('status') || '');
+		updateEntryRequirementStatus(user.id, tripId, requirementIdResult.value, status);
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	deleteEntryRequirement: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const requirementId = Number(f.get('requirementId'));
-		if (!Number.isFinite(requirementId) || requirementId <= 0) throw error(400, 'Invalid requirement');
-		deleteEntryRequirement(u.id, tripId, requirementId);
+	deleteEntryRequirement: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const requirementIdResult = positiveIdFromForm(formData.get('requirementId'), 'requirementId');
+		if (!requirementIdResult.ok) return fail(400, { error: requirementIdResult.error });
+		deleteEntryRequirement(user.id, tripId, requirementIdResult.value);
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	addImportantItem: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const name = String(f.get('name') || '');
-		const companionIdRaw = f.get('companionId');
+	addImportantItem: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const name = String(formData.get('name') || '');
+		const companionIdRaw = formData.get('companionId');
 		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-		const serialNumber = String(f.get('serialNumber') || '');
-		const trackerId = String(f.get('trackerId') || '');
-		const notes = String(f.get('notes') || '');
-		addImportantItem(u.id, tripId, {
+		const serialNumber = String(formData.get('serialNumber') || '');
+		const trackerId = String(formData.get('trackerId') || '');
+		const notes = String(formData.get('notes') || '');
+		addImportantItem(user.id, tripId, {
 			name,
 			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
 			serialNumber,
@@ -548,14 +200,11 @@ export const actions: Actions = {
 		});
 		throw redirect(303, `/trips/${tripId}`);
 	},
-	deleteImportantItem: async ({ locals, params, request }) => {
-		const u = requireUser(locals);
-		const tripId = Number(params.id);
-		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-		const f = await request.formData();
-		const itemId = Number(f.get('itemId'));
-		if (!Number.isFinite(itemId) || itemId <= 0) throw error(400, 'Invalid item');
-		deleteImportantItem(u.id, tripId, itemId);
+	deleteImportantItem: async (event) => {
+		const { user, tripId, formData } = await withTripAction(event);
+		const itemIdResult = positiveIdFromForm(formData.get('itemId'), 'itemId');
+		if (!itemIdResult.ok) return fail(400, { error: itemIdResult.error });
+		deleteImportantItem(user.id, tripId, itemIdResult.value);
 		throw redirect(303, `/trips/${tripId}`);
 	}
 };

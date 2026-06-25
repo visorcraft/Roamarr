@@ -235,6 +235,29 @@ test('add action creates a segment with valid data', async () => {
 	expect(db.select().from(segments).all()).toHaveLength(1);
 });
 
+test('add action stores endTz and converts endAt to UTC', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'act-endtz@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const form = formData({
+		title: 'UA1',
+		localStart: '2026-07-01T08:00',
+		startTz: 'America/New_York',
+		endDate: '2026-07-01',
+		endTime: '16:00',
+		endTz: 'Asia/Tokyo'
+	});
+	await expect(addSegmentAction!(makeAddEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	expect(seg.startAt).toBe('2026-07-01T12:00:00.000Z');
+	expect(seg.startTz).toBe('America/New_York');
+	expect(seg.endAt).toBe('2026-07-01T07:00:00.000Z');
+	expect(seg.endTz).toBe('Asia/Tokyo');
+});
+
 test('delete action validates segmentId', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'act-c@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();

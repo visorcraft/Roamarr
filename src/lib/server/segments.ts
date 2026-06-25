@@ -17,6 +17,7 @@ export function addSegment(
 		localStart: string;
 		startTz: string;
 		endAt?: string;
+		endTz?: string;
 		location?: string;
 		confirmationNumber?: string;
 		cardId?: number;
@@ -25,6 +26,7 @@ export function addSegment(
 ) {
 	requireEditableTrip(userId, tripId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
+	const endTz = i.endTz ?? i.startTz;
 	const seg = db
 		.insert(segments)
 		.values({
@@ -33,7 +35,8 @@ export function addSegment(
 			title: i.title,
 			startAt: localToUtc(i.localStart, i.startTz),
 			startTz: i.startTz,
-			endAt: i.endAt ?? null,
+			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
+			endTz,
 			location: i.location ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
@@ -81,6 +84,7 @@ export function updateSegment(
 		localStart: string;
 		startTz: string;
 		endAt?: string;
+		endTz?: string;
 		location?: string;
 		confirmationNumber?: string;
 		cardId?: number;
@@ -95,13 +99,15 @@ export function updateSegment(
 		.get();
 	if (!existing) throw error(404, 'Not found');
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
+	const endTz = i.endTz ?? i.startTz;
 	const seg = db
 		.update(segments)
 		.set({
 			title: i.title,
 			startAt: localToUtc(i.localStart, i.startTz),
 			startTz: i.startTz,
-			endAt: i.endAt ?? null,
+			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
+			endTz,
 			location: i.location ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
@@ -138,6 +144,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 			startAt: shiftUtcBy24h(existing.startAt)!,
 			startTz: existing.startTz,
 			endAt: shiftUtcBy24h(existing.endAt),
+			endTz: existing.endTz ?? existing.startTz,
 			location: existing.location,
 			confirmationNumber: null,
 			cardId: existing.cardId,

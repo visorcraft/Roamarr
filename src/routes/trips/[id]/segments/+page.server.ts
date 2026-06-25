@@ -31,6 +31,7 @@ export const actions: Actions = {
 		const localStart = v.requiredDateTime(f.get('localStart'), 'localStart');
 		const startTz = v.timezone(f.get('startTz') || u.timezone, 'startTz');
 		const endAt = v.dateTime(f.get('endAt'), 'endAt');
+		const endTz = v.timezone(f.get('endTz') || startTz, 'endTz');
 		const location = v.optionalString(f.get('location'), 'location', { max: 200 });
 		const confirmationNumber = v.optionalString(
 			f.get('confirmationNumber'),
@@ -46,6 +47,7 @@ export const actions: Actions = {
 			localStart: localStart!,
 			startTz: startTz!,
 			endAt: endAt ?? undefined,
+			endTz: endTz ?? undefined,
 			location,
 			confirmationNumber,
 			cardId,

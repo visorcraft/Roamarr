@@ -73,8 +73,9 @@
 			<input id="endTime" name="endTime" type="time" class="input" />
 		</div>
 		<div class="field">
-			<label class="label" for="detail_endTz">Timezone</label>
-			<TimezoneSelect id="detail_endTz" name="detail_endTz" value="UTC" class="input" />
+			<label class="label" for="endTz">Drop-off timezone</label>
+			<TimezoneSelect id="endTz" name="endTz" value="UTC" class="input {errors.endTz ? 'input-error' : ''}" />
+				{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
 		</div>
 	</div>
 </section>

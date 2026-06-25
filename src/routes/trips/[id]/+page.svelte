@@ -26,9 +26,10 @@
 		confirmationNumber?: string | null;
 		detailsJson?: string | null;
 		startTz?: string;
+		endTz?: string | null;
 	};
 
-	type SegmentRow = SharedSegment & { id?: number; startTz: string; cardId?: number | null };
+	type SegmentRow = SharedSegment & { id?: number; startTz: string; endTz?: string | null; cardId?: number | null };
 
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
@@ -302,11 +303,16 @@
 													</div>
 													<div class="field">
 														<label class="label" for={`endAt-${s.id}`}>Ends</label>
-														<input id={`endAt-${s.id}`} name="endAt" type="datetime-local" value={toDatetimeLocal(s.endAt, s.startTz)} class="input {form?.errors?.endAt ? 'input-error' : ''}" />
+														<input id={`endAt-${s.id}`} name="endAt" type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} class="input {form?.errors?.endAt ? 'input-error' : ''}" />
 														{#if form?.errors?.endAt}<p class="field-error">{form.errors.endAt}</p>{/if}
 													</div>
 													<div class="field">
-														<label class="label" for={`location-${s.id}`}>Location</label>
+														<label class="label" for={`endTz-${s.id}`}>End timezone</label>
+													<TimezoneSelect id={`endTz-${s.id}`} name="endTz" value={s.endTz ?? s.startTz} class="input {form?.errors?.endTz ? 'input-error' : ''}" />
+													{#if form?.errors?.endTz}<p class="field-error">{form.errors.endTz}</p>{/if}
+												</div>
+												<div class="field">
+													<label class="label" for={`location-${s.id}`}>Location</label>
 														<input id={`location-${s.id}`} name="location" value={s.location ?? ''} class="input {form?.errors?.location ? 'input-error' : ''}" />
 														{#if form?.errors?.location}<p class="field-error">{form.errors.location}</p>{/if}
 													</div>
@@ -344,7 +350,7 @@
 															</div>
 															{#if s.endAt}
 																<p class="mt-1 font-mono text-xs text-slate-500">
-																	Until {fmtTime(s.endAt, s.startTz ?? 'UTC')}
+																	Until {fmtTime(s.endAt, s.endTz ?? s.startTz ?? 'UTC')}
 																</p>
 															{/if}
 															{#if s.location}

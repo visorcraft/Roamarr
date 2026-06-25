@@ -132,6 +132,11 @@
 					{#if errors.startTz}<p class="field-error">{errors.startTz}</p>{/if}
 				</div>
 				<div class="field sm:col-span-2">
+					<label class="label" for="endTz">Arrival timezone</label>
+					<TimezoneSelect id="endTz" name="endTz" value="UTC" class="input {errors.endTz ? 'input-error' : ''}" />
+					{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
+				</div>
+				<div class="field sm:col-span-2">
 					<label class="label" for="location">Route label</label>
 					<input id="location" name="location" placeholder="JFK → LHR" class="input {errors.location ? 'input-error' : ''}" />
 					{#if errors.location}<p class="field-error">{errors.location}</p>{/if}

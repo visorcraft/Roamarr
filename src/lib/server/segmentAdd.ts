@@ -45,6 +45,7 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 	const localStart = readLocalStart(v, f);
 	const startTz = v.timezone(f.get('startTz') || u.timezone, 'startTz');
 	const endAt = readEndAt(v, f);
+	const endTz = v.timezone(f.get('endTz') || startTz, 'endTz');
 	const location = v.optionalString(f.get('location'), 'location', { max: 200 });
 	const confirmationNumber = v.optionalString(f.get('confirmationNumber'), 'confirmationNumber', {
 		max: 100
@@ -56,11 +57,12 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		return fail(400, { error: v.failMessage(), errors: v.errors, type });
 	}
 
+	const effectiveEndTz = endTz ?? startTz!;
 	const overlap = hasOverlappingSegment(
 		tripId,
 		undefined,
 		localToUtc(localStart!, startTz!),
-		endAt ?? null
+		endAt ? localToUtc(endAt, effectiveEndTz) : null
 	);
 	addSegment(u.id, tripId, {
 		type,
@@ -68,6 +70,7 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		localStart: localStart!,
 		startTz: startTz!,
 		endAt: endAt ?? undefined,
+		endTz: endTz ?? undefined,
 		location,
 		confirmationNumber,
 		cardId,

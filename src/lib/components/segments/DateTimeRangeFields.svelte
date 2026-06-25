@@ -50,3 +50,13 @@
 	<input id="{idPrefix}-endTime" name="endTime" type="time" class="input {errors.endAt ? 'input-error' : ''}" />
 	{#if errors.endAt}<p class="field-error">{errors.endAt}</p>{/if}
 </div>
+<div class="field">
+	<label class="label" for="{idPrefix}-endTz">End timezone</label>
+	<TimezoneSelect
+		id="{idPrefix}-endTz"
+		name="endTz"
+		value="UTC"
+		class="input {errors.endTz ? 'input-error' : ''}"
+	/>
+	{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
+</div>

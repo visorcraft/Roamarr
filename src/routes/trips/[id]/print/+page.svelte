@@ -18,6 +18,7 @@
 		confirmationNumber?: string | null;
 		detailsJson?: string | null;
 		startTz?: string;
+		endTz?: string | null;
 	};
 
 	const segmentList = $derived(data.segments as SegmentRow[]);
@@ -155,7 +156,8 @@
 											<h4 class="print-segment-title font-semibold text-white" style="color: var(--theme-strong)">{s.title}</h4>
 										</div>
 										{#if s.endAt}
-											<p class="print-segment-meta mt-1 text-slate-400" style="color: var(--theme-readable-muted)">Until {fmtTime(s.endAt, s.startTz ?? 'UTC')}</p>
+											{@const endTz = s.endTz ?? s.startTz ?? 'UTC'}
+											<p class="print-segment-meta mt-1 text-slate-400" style="color: var(--theme-readable-muted)">Until {fmtTime(s.endAt, endTz)} ({endTz})</p>
 										{/if}
 										{#if s.location}
 											<p class="print-segment-meta mt-1 text-slate-400" style="color: var(--theme-readable-muted)">{s.location}</p>

@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { hasOverlappingSegment, duplicateSegment } from './segments';
+import { addSegment, hasOverlappingSegment, duplicateSegment } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -81,6 +81,7 @@ test('duplicateSegment copies a segment shifted 24 hours and clears confirmation
 	expect(copy.title).toBe(s.title);
 	expect(copy.location).toBe(s.location);
 	expect(copy.startTz).toBe(s.startTz);
+	expect(copy.endTz).toBe(s.startTz);
 	expect(copy.startAt).toBe('2026-07-02T09:00:00.000Z');
 	expect(copy.endAt).toBe('2026-07-02T10:00:00.000Z');
 	expect(copy.confirmationNumber).toBeNull();
@@ -116,4 +117,53 @@ test('duplicateSegment rejects a segment from another trip or non-editor', () =>
 
 	expect(() => duplicateSegment(owner.id, t2.id, s.id)).toThrow();
 	expect(() => duplicateSegment(other.id, t1.id, s.id)).toThrow();
+});
+
+test('addSegment stores endTz and defaults to startTz', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'endtz@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const withEndTz = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'Outbound',
+		localStart: '2026-09-01T08:00:00',
+		startTz: 'America/New_York',
+		endAt: '2026-09-01T16:00:00',
+		endTz: 'Asia/Tokyo'
+	});
+	expect(withEndTz.startTz).toBe('America/New_York');
+	expect(withEndTz.endTz).toBe('Asia/Tokyo');
+	expect(withEndTz.startAt).toBe('2026-09-01T12:00:00.000Z');
+	expect(withEndTz.endAt).toBe('2026-09-01T07:00:00.000Z');
+
+	const withoutEndTz = addSegment(u.id, t.id, {
+		type: 'train',
+		title: 'Local',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'America/New_York',
+		endAt: '2026-09-01T11:00:00'
+	});
+	expect(withoutEndTz.endTz).toBe('America/New_York');
+	expect(withoutEndTz.endAt).toBe('2026-09-01T15:00:00.000Z');
+});
+
+test('hasOverlappingSegment uses UTC endAt for comparison', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'overlap-tz@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	db.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'A',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC',
+			endAt: '2026-01-01T12:00:00Z',
+			endTz: 'UTC'
+		})
+		.run();
+
+	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T11:00:00Z', '2026-01-01T13:00:00Z')).toBe(true);
+	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T12:00:00Z', '2026-01-01T13:00:00Z')).toBe(false);
 });

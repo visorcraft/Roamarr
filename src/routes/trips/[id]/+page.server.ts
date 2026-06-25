@@ -58,6 +58,10 @@ import {
 } from '$lib/server/tripDocumentLinks';
 import { createPoll, deletePoll, listPollsWithVotes, votePoll } from '$lib/server/tripPolls';
 import { listBudgetsWithSpent, setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
+import {
+	listEmergencyContacts,
+	shareItineraryWithContact
+} from '$lib/server/emergencyContacts';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -123,7 +127,8 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
 		const templates = listTemplates(u.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
+		const emergencyContacts = listEmergencyContacts(u.id);
+		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates, emergencyContacts };
 	}
 	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, comments: listComments(view.trip.id) };
 };
@@ -282,5 +287,15 @@ export const actions: Actions = {
 	saveChecklistTemplate,
 	applyChecklistTemplate,
 	setBudget: setBudgetAction,
-	deleteBudget: deleteBudgetAction
+	deleteBudget: deleteBudgetAction,
+	shareItineraryWithContact: async ({ locals, params, request, url }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const contactId = Number(f.get('contactId'));
+		if (!Number.isFinite(contactId) || contactId <= 0) throw error(400, 'Invalid contact');
+		await shareItineraryWithContact(u.id, tripId, contactId, url.origin);
+		throw redirect(303, `/trips/${tripId}`);
+	}
 };

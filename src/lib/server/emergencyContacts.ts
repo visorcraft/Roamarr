@@ -1,8 +1,11 @@
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
+import { randomBytes } from 'node:crypto';
 import { db } from './db';
-import { emergencyContacts } from './db/schema';
+import { emergencyContacts, trips } from './db/schema';
 import { logAudit } from './audit';
+import { requireOwnedTrip } from './ownership';
+import { sendMail } from './notify';
 
 export interface EmergencyContactInput {
 	name: string;
@@ -111,4 +114,79 @@ export function deleteEmergencyContact(userId: number, contactId: number) {
 	requireOwnedContact(userId, contactId);
 	db.delete(emergencyContacts).where(eq(emergencyContacts.id, contactId)).run();
 	logAudit(userId, 'emergency_contact_delete', 'emergency_contact', contactId);
+}
+
+const SHARE_WINDOW_MS = 60_000;
+const SHARE_MAX_ATTEMPTS = 3;
+const shareWindow = new Map<string, { count: number; resetAt: number }>();
+
+function checkShareRateLimit(userId: number, tripId: number, contactId: number): boolean {
+	const key = `${userId}:${tripId}:${contactId}`;
+	const now = Date.now();
+	const entry = shareWindow.get(key);
+	if (!entry || now >= entry.resetAt) {
+		shareWindow.set(key, { count: 1, resetAt: now + SHARE_WINDOW_MS });
+		return true;
+	}
+	entry.count += 1;
+	return entry.count <= SHARE_MAX_ATTEMPTS;
+}
+
+export function resetEmergencyShareRateLimit(userId?: number, tripId?: number, contactId?: number) {
+	if (userId == null && tripId == null && contactId == null) {
+		shareWindow.clear();
+		return;
+	}
+	for (const key of shareWindow.keys()) {
+		const [kUser, kTrip, kContact] = key.split(':').map(Number);
+		if (
+			(userId == null || kUser === userId) &&
+			(tripId == null || kTrip === tripId) &&
+			(contactId == null || kContact === contactId)
+		) {
+			shareWindow.delete(key);
+		}
+	}
+}
+
+export async function shareItineraryWithContact(
+	userId: number,
+	tripId: number,
+	contactId: number,
+	origin: string
+) {
+	const contact = db
+		.select()
+		.from(emergencyContacts)
+		.where(and(eq(emergencyContacts.id, contactId), eq(emergencyContacts.userId, userId)))
+		.get();
+	if (!contact) throw error(404, 'Not found');
+	if (!contact.email?.trim()) throw error(400, 'Contact has no email address');
+
+	const trip = requireOwnedTrip(userId, tripId);
+
+	if (!checkShareRateLimit(userId, tripId, contactId)) {
+		throw error(429, 'Please wait before sharing this itinerary again');
+	}
+
+	let token = trip.publicToken;
+	if (!token) {
+		token = randomBytes(24).toString('base64url');
+		db.update(trips).set({ publicToken: token }).where(eq(trips.id, tripId)).run();
+	}
+
+	const link = `${origin}/share/${encodeURIComponent(token)}`;
+	const sent = await sendMail(contact.email.trim(), {
+		title: `Itinerary shared: ${trip.name}`,
+		body: `You have been sent an itinerary for "${trip.name}". Open the link below to view the trip details.`,
+		link
+	});
+
+	logAudit(userId, 'emergency_share', 'trip', tripId, {
+		contactId,
+		email: contact.email.trim(),
+		sent
+	});
+
+	return { contact, trip, link, sent };
 }

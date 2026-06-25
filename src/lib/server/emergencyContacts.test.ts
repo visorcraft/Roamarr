@@ -1,19 +1,27 @@
 import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+vi.mock('nodemailer', () => ({
+	default: {
+		createTransport: () => ({ sendMail: async (m: Record<string, unknown>) => sent.push(m) })
+	}
+}));
 
 import {
 	listEmergencyContacts,
 	addEmergencyContact,
 	updateEmergencyContact,
-	deleteEmergencyContact
+	deleteEmergencyContact,
+	shareItineraryWithContact,
+	resetEmergencyShareRateLimit
 } from './emergencyContacts';
-import { emergencyContacts, users, auditLogs } from './db/schema';
+import { emergencyContacts, users, auditLogs, trips, settings, tripShares } from './db/schema';
 import { eq } from 'drizzle-orm';
 
 test('addEmergencyContact creates a contact and audits', () => {
@@ -156,4 +164,189 @@ test('deleteEmergencyContact removes only the owned contact', () => {
 	expect(remainingA).toHaveLength(0);
 	expect(remainingB).toHaveLength(1);
 	expect(remainingB[0].name).toBe('B-contact');
+});
+
+test('shareItineraryWithContact sends link and audits', async () => {
+	resetEmergencyShareRateLimit();
+	sent.length = 0;
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-share@x.c', passwordHash: 'x', displayName: 'U' })
+		.returning()
+		.get();
+	db.update(settings)
+		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
+		.where(eq(settings.id, 1))
+		.run();
+	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
+	const trip = db
+		.insert(trips)
+		.values({ ownerId: u.id, name: 'Tokyo Trip', defaultVisibility: 'private' })
+		.returning()
+		.get();
+
+	const result = await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+
+	expect(result.link).toMatch(/^https:\/\/roamarr\.test\/share\/[A-Za-z0-9_-]+$/);
+	expect(result.sent).toBe(true);
+	expect(sent.length).toBe(1);
+	expect(sent[0].to).toBe('em@x.c');
+	expect(sent[0].subject).toBe('Itinerary shared: Tokyo Trip');
+	expect(String(sent[0].text)).toContain('Tokyo Trip');
+	expect(String(sent[0].text)).toContain(result.link);
+
+	const updated = db.select().from(trips).where(eq(trips.id, trip.id)).get()!;
+	expect(updated.publicToken).toBeTruthy();
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs.some((l) => l.action === 'emergency_share' && l.entityType === 'trip' && l.entityId === trip.id)).toBe(true);
+});
+
+test('shareItineraryWithContact reuses existing public token', async () => {
+	resetEmergencyShareRateLimit();
+	sent.length = 0;
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-reuse@x.c', passwordHash: 'x', displayName: 'U' })
+		.returning()
+		.get();
+	db.update(settings)
+		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
+		.where(eq(settings.id, 1))
+		.run();
+	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
+	const trip = db
+		.insert(trips)
+		.values({ ownerId: u.id, name: 'Paris Trip', defaultVisibility: 'private', publicToken: 'existing-token' })
+		.returning()
+		.get();
+
+	const result = await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+
+	expect(result.link).toBe('https://roamarr.test/share/existing-token');
+	expect(sent.length).toBe(1);
+});
+
+test('shareItineraryWithContact enforces contact ownership', async () => {
+	resetEmergencyShareRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db
+		.insert(users)
+		.values({ email: 'ec-own-a@x.c', passwordHash: 'x', displayName: 'A' })
+		.returning()
+		.get();
+	const b = db
+		.insert(users)
+		.values({ email: 'ec-own-b@x.c', passwordHash: 'x', displayName: 'B' })
+		.returning()
+		.get();
+	const contact = addEmergencyContact(a.id, { name: 'A-contact', email: 'a@x.c' });
+	const trip = db.insert(trips).values({ ownerId: b.id, name: 'B Trip', defaultVisibility: 'private' }).returning().get();
+
+	try {
+		await shareItineraryWithContact(a.id, trip.id, contact.id, 'https://roamarr.test');
+		expect.unreachable('expected ownership error');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});
+
+test('shareItineraryWithContact enforces trip ownership', async () => {
+	resetEmergencyShareRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db
+		.insert(users)
+		.values({ email: 'ec-trip-owner@x.c', passwordHash: 'x', displayName: 'Owner' })
+		.returning()
+		.get();
+	const other = db
+		.insert(users)
+		.values({ email: 'ec-trip-other@x.c', passwordHash: 'x', displayName: 'Other' })
+		.returning()
+		.get();
+	const contact = addEmergencyContact(other.id, { name: 'Contact', email: 'c@x.c' });
+	const trip = db.insert(trips).values({ ownerId: owner.id, name: 'Private Trip', defaultVisibility: 'private' }).returning().get();
+
+	try {
+		await shareItineraryWithContact(other.id, trip.id, contact.id, 'https://roamarr.test');
+		expect.unreachable('expected trip permission error');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});
+
+test('shareItineraryWithContact rejects non-owner editors', async () => {
+	resetEmergencyShareRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db
+		.insert(users)
+		.values({ email: 'ec-editor-owner@x.c', passwordHash: 'x', displayName: 'Owner' })
+		.returning()
+		.get();
+	const editor = db
+		.insert(users)
+		.values({ email: 'ec-editor@x.c', passwordHash: 'x', displayName: 'Editor' })
+		.returning()
+		.get();
+	const contact = addEmergencyContact(editor.id, { name: 'Contact', email: 'c@x.c' });
+	const trip = db.insert(trips).values({ ownerId: owner.id, name: 'Shared Trip', defaultVisibility: 'private' }).returning().get();
+	db.insert(tripShares).values({ tripId: trip.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
+
+	try {
+		await shareItineraryWithContact(editor.id, trip.id, contact.id, 'https://roamarr.test');
+		expect.unreachable('expected owner-only error');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});
+
+test('shareItineraryWithContact rejects contact without email', async () => {
+	resetEmergencyShareRateLimit();
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-noemail@x.c', passwordHash: 'x', displayName: 'U' })
+		.returning()
+		.get();
+	const contact = addEmergencyContact(u.id, { name: 'No Email' });
+	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Trip', defaultVisibility: 'private' }).returning().get();
+
+	try {
+		await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+		expect.unreachable('expected email required error');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+});
+
+test('shareItineraryWithContact rate limits repeat shares', async () => {
+	resetEmergencyShareRateLimit();
+	sent.length = 0;
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-rate@x.c', passwordHash: 'x', displayName: 'U' })
+		.returning()
+		.get();
+	db.update(settings)
+		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
+		.where(eq(settings.id, 1))
+		.run();
+	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
+	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Rated Trip', defaultVisibility: 'private' }).returning().get();
+
+	await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+	await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+	await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+	expect(sent.length).toBe(3);
+
+	try {
+		await shareItineraryWithContact(u.id, trip.id, contact.id, 'https://roamarr.test');
+		expect.unreachable('expected rate limit error');
+	} catch (e: any) {
+		expect(e.status).toBe(429);
+	}
+	expect(sent.length).toBe(3);
 });

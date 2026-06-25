@@ -1234,6 +1234,24 @@
 				</div>
 			{/if}
 
+			{#if data.owner === true && data.emergencyContacts?.length}
+				<div class="trip-sidebar-card">
+					<h2 class="subsection-title mb-3">
+						<Icon name="share" class="inline h-4 w-4 mr-1.5" />
+						Share with emergency contact
+					</h2>
+					<form method="POST" action="?/shareItineraryWithContact" class="flex flex-col gap-2">
+						<label for="emergencyContactId" class="text-xs text-slate-400">Select contact</label>
+						<select id="emergencyContactId" name="contactId" class="input text-sm" required>
+							{#each data.emergencyContacts as c (c.id)}
+								<option value={c.id}>{c.name}{#if c.relationship} ({c.relationship}){/if}</option>
+							{/each}
+						</select>
+						<button class="btn btn-primary btn-sm w-full">Send itinerary link</button>
+					</form>
+				</div>
+			{/if}
+
 			{#if data.documentLinks?.length || isEditor}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Trip documents</h2>

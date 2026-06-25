@@ -88,3 +88,22 @@ export async function deliver(userId: number, msg: NotificationMessage) {
 	await Promise.all(externalChannels.map((c) => c.send(userId, msg)));
 }
 
+export async function sendMail(to: string, msg: NotificationMessage) {
+	const s = getSettings();
+	if (!s.smtpHost || !s.smtpFrom) return false;
+	const transport = nodemailer.createTransport({
+		host: s.smtpHost,
+		port: s.smtpPort ?? 587,
+		auth: s.smtpUser
+			? { user: s.smtpUser, pass: s.smtpPass ? decrypt(s.smtpPass) : '' }
+			: undefined
+	});
+	await transport.sendMail({
+		from: s.smtpFrom,
+		to,
+		subject: msg.title,
+		text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
+	});
+	return true;
+}
+

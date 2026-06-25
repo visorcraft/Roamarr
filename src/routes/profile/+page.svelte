@@ -35,6 +35,8 @@
 	const selectedThemeName = $derived(
 		data.themes.find((theme) => theme.id === selectedThemeId)?.name ?? 'Midnight Travels'
 	);
+
+	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
 </script>
 
 <header class="page-header">
@@ -93,6 +95,24 @@
 				class="input"
 				required
 			/>
+		</div>
+		<div class="field">
+			<label class="label" for="defaultCurrency">Default currency</label>
+			<input
+				id="defaultCurrency"
+				name="defaultCurrency"
+				value={data.user.defaultCurrency}
+				class="input uppercase"
+				list="profile-currencies"
+				maxlength="3"
+				pattern="[A-Za-z][A-Za-z][A-Za-z]"
+				required
+			/>
+			<datalist id="profile-currencies">
+				{#each currencyOptions as currency}
+					<option value={currency}>{currency}</option>
+				{/each}
+			</datalist>
 		</div>
 		<div class="field sm:col-span-2">
 			<div class="flex flex-wrap items-center justify-between gap-2">

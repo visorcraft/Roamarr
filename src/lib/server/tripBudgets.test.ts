@@ -23,14 +23,15 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 	const u = db.insert(users).values({ email: 'b1@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
 
-	setBudget(t.id, 'food', 10000);
+	setBudget(t.id, 'food', 10000, 'EUR');
 	setBudget(t.id, 'lodging', 50000);
 
 	const expenses = [
-		{ amount: 8000, category: 'food' },
-		{ amount: 2000, category: 'food' },
-		{ amount: 10000, category: 'lodging' },
-		{ amount: 3000 } // uncategorized -> other
+		{ amount: 8000, currency: 'EUR', category: 'food' },
+		{ amount: 2000, currency: 'EUR', category: 'food' },
+		{ amount: 9999, currency: 'USD', category: 'food' },
+		{ amount: 10000, currency: 'USD', category: 'lodging' },
+		{ amount: 3000, currency: 'USD' } // uncategorized -> other
 	];
 
 	const budgets = listBudgetsWithSpent(t.id, expenses);
@@ -40,16 +41,19 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 	const transport = budgets.find((b) => b.category === 'transport')!;
 
 	expect(food.amount).toBe(10000);
+	expect(food.currency).toBe('EUR');
 	expect(food.spent).toBe(10000);
 	expect(food.remaining).toBe(0);
 	expect(food.alert).toBe('over');
 
 	expect(lodging.amount).toBe(50000);
+	expect(lodging.currency).toBe('USD');
 	expect(lodging.spent).toBe(10000);
 	expect(lodging.remaining).toBe(40000);
 	expect(lodging.alert).toBe('ok');
 
 	expect(other.amount).toBeNull();
+	expect(other.currency).toBe('USD');
 	expect(other.spent).toBe(3000);
 	expect(other.remaining).toBeNull();
 	expect(other.alert).toBe('ok');
@@ -123,7 +127,7 @@ test('setBudget updates existing cap', () => {
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
 
 	setBudget(t.id, 'food', 10000);
-	setBudget(t.id, 'food', 15000);
+	setBudget(t.id, 'food', 15000, 'EUR');
 
 	const row = db
 		.select()
@@ -131,11 +135,12 @@ test('setBudget updates existing cap', () => {
 		.where(and(eq(tripBudgetCategories.tripId, t.id), eq(tripBudgetCategories.category, 'food')))
 		.get();
 	expect(row!.amount).toBe(15000);
+	expect(row!.currency).toBe('USD');
 });
 
-test('setTripBudget and deleteTripBudget enforce editable trip ownership', () => {
+test('setTripBudget snapshots the editing users default currency and deleteTripBudget enforces ownership', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'bo@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const owner = db.insert(users).values({ email: 'bo@x.c', passwordHash: 'x', displayName: 'O', defaultCurrency: 'GBP' }).returning().get();
 	const other = db.insert(users).values({ email: 'bn@x.c', passwordHash: 'x', displayName: 'N' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
 
@@ -144,6 +149,13 @@ test('setTripBudget and deleteTripBudget enforce editable trip ownership', () =>
 	);
 
 	setTripBudget(owner.id, t.id, 'food', 10000);
+	const row = db
+		.select()
+		.from(tripBudgetCategories)
+		.where(and(eq(tripBudgetCategories.tripId, t.id), eq(tripBudgetCategories.category, 'food')))
+		.get();
+	expect(row!.currency).toBe('GBP');
+
 	expect(() => deleteTripBudget(other.id, t.id, 'food')).toThrowError(
 		expect.objectContaining({ status: 404 })
 	);

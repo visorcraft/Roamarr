@@ -103,7 +103,8 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		documentExpiryLeadDays: 60,
 		emailNotifications: true,
 		webhookNotifications: false,
-		themeId: 'vibes'
+		themeId: 'vibes',
+		defaultCurrency: 'eur'
 	});
 	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
 	expect(row.displayName).toBe('Ada');
@@ -111,6 +112,7 @@ test('update profile changes display name, timezone and reminder leads', () => {
 	expect(row.flightCheckinLeadHours).toBe(48);
 	expect(row.documentExpiryLeadDays).toBe(60);
 	expect(row.themeId).toBe('vibes');
+	expect(row.defaultCurrency).toBe('EUR');
 });
 
 test('update profile rejects invalid timezone', () => {
@@ -128,7 +130,8 @@ test('update profile rejects invalid timezone', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels'
+			themeId: 'midnight-travels',
+			defaultCurrency: 'USD'
 		})
 	).toThrow('Invalid timezone');
 });
@@ -148,7 +151,8 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels'
+			themeId: 'midnight-travels',
+			defaultCurrency: 'USD'
 		})
 	).toThrow('Flight check-in lead must be a non-negative integer');
 	expect(() =>
@@ -159,7 +163,8 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 1.5,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels'
+			themeId: 'midnight-travels',
+			defaultCurrency: 'USD'
 		})
 	).toThrow('Document expiry lead must be a non-negative integer');
 });
@@ -179,9 +184,31 @@ test('update profile rejects invalid theme', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'not-a-theme'
+			themeId: 'not-a-theme',
+			defaultCurrency: 'USD'
 		})
 	).toThrow('Invalid theme');
+});
+
+test('update profile rejects invalid default currency', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p-currency@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' })
+		.returning()
+		.get();
+	expect(() =>
+		_updateProfile(u.id, {
+			displayName: 'P',
+			timezone: 'UTC',
+			flightCheckinLeadHours: 24,
+			documentExpiryLeadDays: 90,
+			emailNotifications: true,
+			webhookNotifications: true,
+			themeId: 'midnight-travels',
+			defaultCurrency: 'US Dollar'
+		})
+	).toThrow('Default currency must be a 3-letter currency code');
 });
 
 test('update password requires old password and hashes new password', async () => {

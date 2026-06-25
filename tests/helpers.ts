@@ -34,6 +34,7 @@ export function makeUser(
 			timezone: over.timezone ?? 'UTC',
 			flightCheckinLeadHours: over.flightCheckinLeadHours ?? 24,
 			documentExpiryLeadDays: over.documentExpiryLeadDays ?? 90,
+			defaultCurrency: over.defaultCurrency ?? 'USD',
 			themeId: over.themeId ?? 'midnight-travels'
 		})
 		.returning()

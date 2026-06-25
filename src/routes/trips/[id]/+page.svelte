@@ -279,7 +279,7 @@
 				</div>
 
 				{#if dayGroups.length}
-					<div class="space-y-8">
+					<div class="trip-timeline-groups space-y-8">
 						{#each dayGroups as group (group.key)}
 							<div>
 								<div class="trip-timeline-day">
@@ -735,12 +735,11 @@
 							<Icon name="budget" class="inline h-4 w-4 mr-1.5" />
 							Budget
 						</h2>
-						<span class="text-xs text-slate-400">USD cents</span>
 					</div>
-					<div class="space-y-3">
+					<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						{#each data.budgets.filter((b) => isEditor || b.amount != null) as budget (budget.category)}
 							{@const percent = budget.amount != null && budget.amount > 0 ? Math.min(100, Math.round((budget.spent / budget.amount) * 100)) : 0}
-							<div class="list-item-compact">
+							<div class="list-item-compact flex min-h-28 flex-col justify-between gap-3">
 								<div class="flex items-center justify-between gap-3">
 									<span class="font-medium text-slate-200 capitalize">{budget.category}</span>
 									{#if budget.amount != null}
@@ -758,10 +757,10 @@
 									{/if}
 								</div>
 								{#if budget.amount != null}
-									<div class="mt-2">
+									<div>
 										<div class="mb-1 flex items-center justify-between text-xs text-slate-400">
-											<span>Spent {formatCents(budget.spent)} / {formatCents(budget.amount)}</span>
-											<span>{budget.remaining != null ? `${formatCents(budget.remaining)} remaining` : ''}</span>
+											<span>Spent {formatCents(budget.spent, budget.currency)} / {formatCents(budget.amount, budget.currency)}</span>
+											<span>{budget.remaining != null ? `${formatCents(budget.remaining, budget.currency)} remaining` : ''}</span>
 										</div>
 										<div class="progress-track">
 											<div
@@ -771,9 +770,10 @@
 										</div>
 									</div>
 								{:else if isEditor}
-									<form method="POST" action="?/setBudget" class="mt-2 flex flex-wrap items-end gap-2">
+									<form method="POST" action="?/setBudget" class="flex flex-wrap items-center gap-2">
 										<input type="hidden" name="category" value={budget.category} />
-										<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cap (cents)" required />
+										<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="input input-compact w-28" placeholder="Amount" required />
+										<span class="badge badge-slate badge-compact font-mono">{budget.currency}</span>
 										<button class="btn btn-primary btn-sm">Set cap</button>
 									</form>
 								{/if}

@@ -21,7 +21,7 @@ import { listMedications } from './tripMedications';
 import { listEntryRequirements } from './tripEntryRequirements';
 import { listImportantItems } from './tripImportantItems';
 
-export function buildTripDetail(u: { id: number }, tripId: number, url: URL) {
+export function buildTripDetail(u: { id: number; defaultCurrency?: string | null }, tripId: number, url: URL) {
 	const view = loadTripFor(u.id, tripId);
 	const baseCurrency = ((view.trip as typeof trips.$inferSelect).baseCurrency as string | undefined) ?? 'USD';
 	const companions = listTripCompanions(view.trip.id).map((c) =>
@@ -51,7 +51,7 @@ export function buildTripDetail(u: { id: number }, tripId: number, url: URL) {
 	}));
 	const expenseSummary = summarizeTripExpenses(expenses, companions, baseCurrency);
 	const expenseSettlement = computeSettlement(expenses, companions);
-	const budgets = listBudgetsWithSpent(view.trip.id, expenses);
+	const budgets = listBudgetsWithSpent(view.trip.id, expenses, u.defaultCurrency ?? 'USD');
 	const journalEntries = listJournalEntries(view.trip.id);
 	const documentLinks = listDocumentLinks(view.trip.id);
 	const polls = listPollsWithVotes(view.trip.id);
@@ -159,4 +159,3 @@ export function buildTripDetail(u: { id: number }, tripId: number, url: URL) {
 		importantItems
 	};
 }
-

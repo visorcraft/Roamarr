@@ -73,6 +73,7 @@ export const users = sqliteTable(
 		emailNotifications: integer('email_notifications', { mode: 'boolean' }).notNull().default(true),
 		webhookNotifications: integer('webhook_notifications', { mode: 'boolean' }).notNull().default(true),
 		themeId: text('theme_id').notNull().default('midnight-travels'),
+		defaultCurrency: text('default_currency').notNull().default('USD'),
 		calendarToken: text('calendar_token').unique(),
 		calendarTokenExpiresAt: text('calendar_token_expires_at'),
 		createdAt: text('created_at').notNull().default(now)
@@ -800,6 +801,7 @@ export const tripBudgetCategories = sqliteTable(
 			.references(() => trips.id, { onDelete: 'cascade' }),
 		category: text('category').notNull(),
 		amount: integer('amount').notNull(),
+		currency: text('currency').notNull().default('USD'),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({

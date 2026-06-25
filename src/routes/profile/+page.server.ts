@@ -8,6 +8,7 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
+import { currency as parseCurrency } from '$lib/server/validation';
 import {
 	listEmergencyContacts,
 	addEmergencyContact,
@@ -40,6 +41,7 @@ export function _updateProfile(
 		emailNotifications: boolean;
 		webhookNotifications: boolean;
 		themeId: string;
+		defaultCurrency: string;
 	}
 ) {
 	requireOwnedUser(userId);
@@ -48,6 +50,8 @@ export function _updateProfile(
 	if (!validLead(i.flightCheckinLeadHours)) throw new Error('Flight check-in lead must be a non-negative integer');
 	if (!validLead(i.documentExpiryLeadDays)) throw new Error('Document expiry lead must be a non-negative integer');
 	if (!isThemeId(i.themeId)) throw new Error('Invalid theme');
+	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
+	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
 	db.update(users)
 		.set({
 			displayName: i.displayName,
@@ -56,7 +60,8 @@ export function _updateProfile(
 			documentExpiryLeadDays: i.documentExpiryLeadDays,
 			emailNotifications: i.emailNotifications,
 			webhookNotifications: i.webhookNotifications,
-			themeId: i.themeId
+			themeId: i.themeId,
+			defaultCurrency: defaultCurrency.value
 		})
 		.where(eq(users.id, userId))
 		.run();
@@ -142,7 +147,8 @@ export const load: PageServerLoad = ({ locals, cookies, url }) => {
 			documentExpiryLeadDays: u.documentExpiryLeadDays,
 			emailNotifications: u.emailNotifications,
 			webhookNotifications: u.webhookNotifications,
-			themeId: normalizeThemeId(u.themeId)
+			themeId: normalizeThemeId(u.themeId),
+			defaultCurrency: u.defaultCurrency
 		},
 		themes: THEMES,
 		sessions: userSessions,
@@ -163,6 +169,7 @@ export const actions: Actions = {
 		const emailNotifications = f.get('emailNotifications') === 'on';
 		const webhookNotifications = f.get('webhookNotifications') === 'on';
 		const themeId = String(f.get('themeId') ?? u.themeId);
+		const defaultCurrency = String(f.get('defaultCurrency') ?? u.defaultCurrency);
 		try {
 			_updateProfile(u.id, {
 				displayName,
@@ -171,7 +178,8 @@ export const actions: Actions = {
 				documentExpiryLeadDays,
 				emailNotifications,
 				webhookNotifications,
-				themeId
+				themeId,
+				defaultCurrency
 			});
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });

@@ -1033,62 +1033,6 @@ button.card:hover,
 	select.select option:disabled {
 		color: var(--theme-readable-faint) !important;
 	}
-	@supports (appearance: base-select) and (selector(::picker(select))) {
-		select.input,
-		select.select {
-			appearance: base-select;
-			background-image: none;
-			padding-right: 0.75rem;
-		}
-		select.input::picker-icon,
-		select.select::picker-icon {
-			color: var(--theme-readable-muted);
-			transition: transform 0.15s ease;
-		}
-		select.input:open::picker-icon,
-		select.select:open::picker-icon {
-			transform: rotate(180deg);
-		}
-		select.input::picker(select),
-		select.select::picker(select) {
-			appearance: base-select;
-			margin-top: 0.25rem;
-			border: 1px solid var(--theme-line);
-			border-radius: 0.5rem;
-			background: var(--theme-panel-solid);
-			box-shadow:
-				0 24px 52px color-mix(in oklab, var(--theme-shadow) 42%, transparent),
-				inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 60%, transparent);
-			color: var(--theme-ink);
-			padding: 0.25rem;
-		}
-		select.input option,
-		select.select option {
-			min-height: 2rem;
-			border-radius: 0.375rem;
-			background: transparent !important;
-			color: var(--theme-ink) !important;
-			padding: 0.5rem 0.75rem;
-		}
-		select.input option:hover,
-		select.input option:focus,
-		select.select option:hover,
-		select.select option:focus {
-			background: var(--theme-option-hover) !important;
-			box-shadow: none !important;
-			color: var(--theme-strong) !important;
-		}
-		select.input option:checked,
-		select.select option:checked {
-			background: var(--theme-option-selected) !important;
-			box-shadow: none !important;
-			color: var(--theme-strong) !important;
-		}
-		select.input option::checkmark,
-		select.select option::checkmark {
-			color: var(--theme-brand-readable);
-		}
-	}
 	.input-compact,
 	.select-compact {
 		min-height: 2rem;
@@ -1459,16 +1403,23 @@ button.card:hover,
 		background: color-mix(in oklab, var(--theme-panel-raised) 90%, transparent);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
 	}
+	.trip-timeline-groups {
+		@apply relative;
+	}
+	.trip-timeline-groups::before {
+		content: '';
+		position: absolute;
+		top: 3.875rem;
+		bottom: 0.5rem;
+		left: 1.125rem;
+		width: 1px;
+		background: color-mix(in oklab, var(--theme-brand) 34%, transparent);
+	}
 	.trip-timeline-track {
 		@apply relative pl-10;
 	}
-	.trip-timeline-track::before {
-		content: '';
-		@apply absolute top-2 bottom-2 left-[1.125rem] w-px bg-indigo-500/25;
-		background: color-mix(in oklab, var(--theme-brand) 34%, transparent);
-	}
 	.trip-timeline-node {
-		@apply absolute top-3 left-0 grid h-9 w-9 place-items-center rounded-full bg-surface2 text-indigo-300 ring-2 ring-indigo-500/30;
+		@apply absolute top-3 left-0 z-10 grid h-9 w-9 place-items-center rounded-full bg-surface2 text-indigo-300 ring-2 ring-indigo-500/30;
 		left: -2.5rem;
 		background: var(--theme-panel-raised);
 		box-shadow: 0 0 0 2px color-mix(in oklab, var(--theme-brand) 34%, transparent);

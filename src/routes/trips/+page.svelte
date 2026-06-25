@@ -1,6 +1,7 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import TripCard from '$lib/components/TripCard.svelte';
 	import { parseTags } from '$lib/tags';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
@@ -11,12 +12,6 @@
 			new Set(data.trips.flatMap((t) => parseTags(t.tags).map((x) => x.toLowerCase())))
 		).sort()
 	);
-
-	const visBadge: Record<string, string> = {
-		private: 'badge-slate',
-		groups: 'badge-brand',
-		public: 'badge-green'
-	};
 
 	const statusBadge: Record<TripStatus, string> = {
 		planning: 'badge-slate',
@@ -132,50 +127,7 @@
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.trips as t (t.id)}
-				<div class="card group relative flex flex-col gap-3 p-5">
-					{#if !t.isShared}
-						<input
-							type="checkbox"
-							name="selected"
-							value={t.id}
-							class="checkbox absolute top-3 right-3"
-							onclick={(e) => e.stopPropagation()}
-						/>
-					{/if}
-					<a href={`/trips/${t.id}`} class="contents">
-						<div class="flex items-start justify-between gap-3">
-							<h2 class="section-title">
-								{#if t.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
-								{t.name}
-							</h2>
-							<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
-								<span class="badge {statusBadge[t.status]} capitalize">{statusLabel[t.status]}</span>
-								{#if t.isShared}
-									<span class="badge badge-brand">Shared</span>
-								{:else}
-									{@const badgeClass = t.defaultVisibility ? visBadge[t.defaultVisibility] ?? 'badge-slate' : 'badge-slate'}
-									<span class="badge {badgeClass} capitalize">{t.defaultVisibility || 'private'}</span>
-								{/if}
-							</div>
-						</div>
-						{#if t.destination}
-							<p class="flex items-center gap-1.5 text-sm text-slate-400">
-								<Icon name="location" class="h-4 w-4 text-slate-500" />
-								{t.destination}
-							</p>
-						{/if}
-						{#if parseTags(t.tags).length}
-							<div class="flex flex-wrap gap-1.5">
-								{#each parseTags(t.tags) as tag}
-									<span class="badge badge-slate text-xs">{tag}</span>
-								{/each}
-							</div>
-						{/if}
-						{#if t.startDate || t.endDate}
-							<p class="mt-auto font-mono text-xs text-slate-500">{t.startDate || '—'} → {t.endDate || '—'}</p>
-						{/if}
-					</a>
-				</div>
+				<TripCard trip={t} showCheckbox={true} />
 			{/each}
 		</div>
 	</form>

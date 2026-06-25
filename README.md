@@ -112,15 +112,17 @@ Migrations are applied automatically during application boot before the schedule
 ## Features
 
 - Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, and bulk actions.
-- Sharing with users, groups, public token links, calendar feeds, read/edit/detail controls, and token expiry.
-- Dashboard summary cards for upcoming trips, unread notifications, expiring documents, and fare watches.
+- Sharing with users, groups, public token links, read/edit/detail controls, and token expiry; per-trip calendar feeds plus an aggregate feed for all viewable trips.
+- Dashboard summary cards, a "Today" agenda, upcoming trips, and expiring documents.
 - JSON/CSV trip export and JSON/CSV import with dry-run preview.
 - Flight check-in, document-expiry, trip, segment, and custom reminders.
 - Fare-watch provider framework with configurable provider accounts and connection testing.
 - Travel documents, loyalty programs, cards, global benefit templates, and insurance policies.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
-- Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, and Vibes.
-- Admin settings for users, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.
+- Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, Vibes, and a High Contrast accessibility theme.
+- Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.
+- Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
+- Shared UI components (`Icon`, `Toast` with variants, loading states) and mobile sidebar accessibility.
 - Health and deep-health endpoints plus PWA manifest/icons.
 
 ## Themes

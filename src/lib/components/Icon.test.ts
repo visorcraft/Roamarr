@@ -1,6 +1,7 @@
 import { render } from 'svelte/server';
 import { test, expect } from 'vitest';
-import Icon, { ICON_PATHS, type IconName } from './Icon.svelte';
+import Icon from './Icon.svelte';
+import { ICON_PATHS, type IconName } from '$lib/icons';
 
 const NAMES = Object.keys(ICON_PATHS) as IconName[];
 

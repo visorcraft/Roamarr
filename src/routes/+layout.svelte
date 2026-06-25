@@ -5,9 +5,9 @@
 	import { page } from '$app/state';
 	import Toast from '$lib/components/Toast.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import type { IconName } from '$lib/components/Icon.svelte';
+	import type { IconName } from '$lib/icons';
 	import { installPickerInputs } from '$lib/pickerInput';
-	import type { ToastVariant } from '$lib/components/Toast.svelte';
+	import type { ToastVariant } from '$lib/toast';
 
 	let { data, children } = $props();
 	let open = $state(false);

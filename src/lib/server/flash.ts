@@ -1,11 +1,10 @@
 import { dev } from '$app/environment';
 import type { Cookies } from '@sveltejs/kit';
-
-export type FlashVariant = 'success' | 'error' | 'info' | 'warning';
+import type { ToastVariant } from '$lib/toast';
 
 export type FlashMessage = {
 	message: string;
-	variant?: FlashVariant;
+	variant?: ToastVariant;
 };
 
 /**

@@ -3,6 +3,7 @@ import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp } from '$lib/server/boot';
+import type { ToastVariant } from '$lib/toast';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
 // start: adapter-node imports this module on `node build`, so a missing ROAMARR_SECRET
@@ -45,11 +46,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const flashRaw = event.cookies.get('flash');
 	if (flashRaw) {
-		let flash: string | { message: string; variant?: string } = flashRaw;
+		let flash: string | { message: string; variant?: ToastVariant } = flashRaw;
 		try {
 			const parsed = JSON.parse(flashRaw);
 			if (parsed && typeof parsed.message === 'string') {
-				flash = parsed as { message: string; variant?: string };
+				const variant = ['success', 'error', 'info', 'warning'].includes(parsed.variant)
+					? (parsed.variant as ToastVariant)
+					: undefined;
+				flash = { message: parsed.message, variant };
 			}
 		} catch {
 			// keep plain string flash

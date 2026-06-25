@@ -1,5 +1,5 @@
 <script lang="ts">
-	export type ToastVariant = 'success' | 'error' | 'info' | 'warning';
+	import type { ToastVariant } from '$lib/toast';
 
 	interface Props {
 		message: string;

@@ -111,13 +111,16 @@ Migrations are applied automatically during application boot before the schedule
 
 ## Features
 
-- Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, and bulk actions.
+- Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, bulk actions, and trip status lifecycle.
+- Segment details: end timezone, status tracking, and optional meeting/rally point for group coordination.
 - Sharing with users, groups, public token links, read/edit/detail controls, and token expiry; per-trip calendar feeds plus an aggregate feed for all viewable trips.
 - Dashboard summary cards, a "Today" agenda, upcoming trips, and expiring documents.
 - JSON/CSV trip export and JSON/CSV import with dry-run preview.
 - Flight check-in, document-expiry, trip, segment, and custom reminders.
 - Fare-watch provider framework with configurable provider accounts and connection testing.
-- Travel documents, loyalty programs, cards, global benefit templates, and insurance policies.
+- Travel documents (including documents linked to trip companions), loyalty programs, cards, global benefit templates, and insurance policies.
+- Group/family helpers: trip companions with dietary/allergy/medical notes, reusable packing checklist templates, per-trip expense tracking with split and settlement math, segment attendees, trip polls and voting, trip budget categories with alerts, and emergency-contact itinerary sharing.
+- Trip journal entries, trip document links, and a printable itinerary view.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
 - Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, Vibes, and a High Contrast accessibility theme.
 - Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.

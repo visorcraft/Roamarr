@@ -88,8 +88,11 @@ test('non-editor cannot mutate companions', () => {
 	const owner = db.insert(users).values({ email: 'owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
 	const other = db.insert(users).values({ email: 'other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(owner.id, t.id, { name: 'Mallory' });
 
-	expect(() => insertTripCompanion(other.id, t.id, { name: 'Mallory' })).toThrow();
+	expect(() => insertTripCompanion(other.id, t.id, { name: 'Eve' })).toThrow();
+	expect(() => patchTripCompanion(other.id, t.id, c.id, { name: 'Eve' })).toThrow();
+	expect(() => removeTripCompanion(other.id, t.id, c.id)).toThrow();
 });
 
 test('addCompanion action creates a companion and redirects', async () => {

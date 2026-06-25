@@ -136,6 +136,7 @@ test('deletePoll removes poll, options, and votes and logs audit', () => {
 		.where(and(eq(auditLogs.entityType, 'trip_poll'), eq(auditLogs.entityId, poll.id)))
 		.all();
 	expect(logs.some((l) => l.action === 'create')).toBe(true);
+	expect(logs.some((l) => l.action === 'vote')).toBe(true);
 	expect(logs.some((l) => l.action === 'delete')).toBe(true);
 });
 

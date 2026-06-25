@@ -173,6 +173,7 @@ export function castVote(
 		.run();
 
 	bumpTripUpdatedAt(poll.tripId);
+	logAudit(userId, 'vote', 'trip_poll', pollId, { tripId: poll.tripId, optionId, companionId });
 }
 
 export function removeTripPoll(userId: number, pollId: number) {

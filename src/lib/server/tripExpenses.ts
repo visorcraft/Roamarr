@@ -15,6 +15,8 @@ export interface TripExpenseView {
 	amount: number;
 	currency: string;
 	category: string | null;
+	exchangeRate: number;
+	baseAmount: number;
 	paidByCompanionId: number | null;
 	paidBy: 'owner' | number;
 	splitAmong: Array<'owner' | number>;
@@ -23,6 +25,7 @@ export interface TripExpenseView {
 
 export interface TripExpenseSummary {
 	totalsByCurrency: Record<string, number>;
+	baseTotal: { currency: string; amount: number } | null;
 	perPersonShareByCurrency: Record<string, number>;
 	balancesByCurrency: Record<string, Record<'owner' | number, number>>;
 }
@@ -65,6 +68,8 @@ export function listTripExpenses(tripId: number): TripExpenseView[] {
 		.all();
 	return rows.map((r) => ({
 		...r,
+		exchangeRate: r.exchangeRate ?? 10000,
+		baseAmount: r.baseAmount ?? 0,
 		paidBy: r.paidByCompanionId ?? 'owner',
 		splitAmong: parseSplitAmong(r.splitAmong)
 	}));
@@ -78,6 +83,8 @@ export function addTripExpense(
 		amount: number;
 		currency: string;
 		category?: string | null;
+		exchangeRate?: number;
+		baseAmount?: number;
 		paidByCompanionId?: number | null;
 		splitAmong?: Array<'owner' | number>;
 	}
@@ -92,6 +99,16 @@ export function addTripExpense(
 	const currency = (input.currency ?? 'USD').trim().toUpperCase();
 	if (!currency || currency.length > 3) throw error(400, 'Currency must be 1-3 letters');
 	const category = normalizeCategory(input.category);
+
+	const exchangeRate =
+		input.exchangeRate != null && Number.isInteger(input.exchangeRate) && input.exchangeRate > 0
+			? input.exchangeRate
+			: 10000;
+	if (exchangeRate > 1_000_000_000) throw error(400, 'Exchange rate is too large');
+	const baseAmount =
+		input.baseAmount != null && Number.isInteger(input.baseAmount)
+			? input.baseAmount
+			: Math.round((input.amount * exchangeRate) / 10000);
 
 	const paidByCompanionId = input.paidByCompanionId ?? null;
 	const splitAmong = Array.from(
@@ -128,6 +145,8 @@ export function addTripExpense(
 			amount: input.amount,
 			currency,
 			category,
+			exchangeRate,
+			baseAmount,
 			paidByCompanionId,
 			splitAmong: JSON.stringify(splitAmong)
 		})
@@ -158,14 +177,17 @@ export function deleteTripExpense(userId: number, expenseId: number) {
 
 export function summarizeTripExpenses(
 	expenses: TripExpenseView[],
-	companions: { id: number }[]
+	companions: { id: number }[],
+	baseCurrency = 'USD'
 ): TripExpenseSummary {
 	const people: Array<'owner' | number> = ['owner', ...companions.map((c) => c.id)];
 	const totalsByCurrency: Record<string, number> = {};
+	let baseAmountTotal = 0;
 	const balancesByCurrency: Record<string, Record<'owner' | number, number>> = {};
 
 	for (const e of expenses) {
 		totalsByCurrency[e.currency] = (totalsByCurrency[e.currency] ?? 0) + e.amount;
+		baseAmountTotal += e.baseAmount;
 		if (!balancesByCurrency[e.currency]) {
 			const initial: Record<'owner' | number, number> = { owner: 0 };
 			for (const c of companions) initial[c.id] = 0;
@@ -194,7 +216,12 @@ export function summarizeTripExpenses(
 		perPersonShareByCurrency[currency] = Math.round(total / peopleCount);
 	}
 
-	return { totalsByCurrency, perPersonShareByCurrency, balancesByCurrency };
+	return {
+		totalsByCurrency,
+		baseTotal: expenses.length ? { currency: baseCurrency, amount: baseAmountTotal } : null,
+		perPersonShareByCurrency,
+		balancesByCurrency
+	};
 }
 
 export function computeSettlement(
@@ -250,6 +277,17 @@ export async function addExpense(event: RequestEvent) {
 	const currency = currencyRaw.trim().toUpperCase();
 	if (!currency || currency.length > 3) v.addError('currency', 'Currency must be 1-3 letters');
 
+	const exchangeRateRaw = f.get('exchangeRate');
+	let exchangeRate: number | undefined;
+	if (exchangeRateRaw != null && String(exchangeRateRaw).trim() !== '') {
+		const n = Number(exchangeRateRaw);
+		if (!Number.isFinite(n) || n <= 0) {
+			v.addError('exchangeRate', 'Exchange rate must be a positive number');
+		} else {
+			exchangeRate = Math.round(n * 10000);
+		}
+	}
+
 	let paidByCompanionId: number | null = null;
 	const paidByRaw = f.get('paidByCompanionId');
 	if (paidByRaw && String(paidByRaw).trim()) {
@@ -278,6 +316,7 @@ export async function addExpense(event: RequestEvent) {
 		amount: amount!,
 		currency,
 		category,
+		exchangeRate,
 		paidByCompanionId,
 		splitAmong
 	});

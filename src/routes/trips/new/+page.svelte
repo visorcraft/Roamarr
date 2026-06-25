@@ -1,8 +1,33 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import type { PageData } from './$types';
 
-	let { form }: { form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
+	let selectedTemplateId = $state('');
+
+	function applyTemplate() {
+		const template = data.tripTemplates.find((t) => String(t.id) === selectedTemplateId);
+		if (!template) return;
+		try {
+			const snapshot = JSON.parse(template.snapshotJson) as {
+				name?: string;
+				destination?: string | null;
+				notes?: string | null;
+				tags?: string[];
+			};
+			const nameInput = document.getElementById('name') as HTMLInputElement | null;
+			const destInput = document.getElementById('destination') as HTMLInputElement | null;
+			const notesInput = document.getElementById('notes') as HTMLTextAreaElement | null;
+			const tagsInput = document.getElementById('tags') as HTMLInputElement | null;
+			if (nameInput && !nameInput.value.trim()) nameInput.value = snapshot.name ?? '';
+			if (destInput && !destInput.value.trim()) destInput.value = snapshot.destination ?? '';
+			if (notesInput && !notesInput.value.trim()) notesInput.value = snapshot.notes ?? '';
+			if (tagsInput && !tagsInput.value.trim()) tagsInput.value = (snapshot.tags ?? []).join(', ');
+		} catch {
+			// ignore
+		}
+	}
 </script>
 
 <header>
@@ -16,6 +41,17 @@
 	<form method="POST" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
+		{#if data.tripTemplates.length}
+			<div class="field sm:col-span-2">
+				<label class="label" for="templateId">Start from template</label>
+				<select id="templateId" name="templateId" class="select" bind:value={selectedTemplateId} onchange={applyTemplate} disabled={submitting}>
+					<option value="">None</option>
+					{#each data.tripTemplates as tmpl (tmpl.id)}
+						<option value={tmpl.id}>{tmpl.name}</option>
+					{/each}
+				</select>
+			</div>
+		{/if}
 		<div class="field sm:col-span-2">
 			<label class="label" for="name">Trip name</label>
 			<input id="name" name="name" placeholder="Summer in Lisbon" class="input {form?.errors?.name ? 'input-error' : ''}" required disabled={submitting} />

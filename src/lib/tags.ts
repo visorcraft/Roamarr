@@ -9,3 +9,12 @@ export function parseTags(tags: string | string[] | undefined | null): string[] 
 	}
 	return [];
 }
+
+export function serializeTags(raw?: string | null): string {
+	if (!raw || !raw.trim()) return '[]';
+	const tags = raw
+		.split(/[,\n]+/)
+		.map((t) => t.trim().toLowerCase())
+		.filter(Boolean);
+	return JSON.stringify([...new Set(tags)]);
+}

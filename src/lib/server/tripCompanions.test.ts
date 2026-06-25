@@ -196,6 +196,59 @@ test('patch companion updates dietary, allergy, and medical notes', () => {
 	expect(row.medicalNotes).toBe('Asthma inhaler');
 });
 
+test('insert and list companion preferences and kid gear needs', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'pref@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const c = insertTripCompanion(u.id, t.id, {
+		name: 'Jordan',
+		category: 'child',
+		needsCarSeat: true,
+		needsStroller: true,
+		needsCrib: true,
+		needsKidsMeal: true,
+		childTicketDiscount: 'child',
+		seatPreference: 'window',
+		bedPreference: 'twin',
+		accessibilityNeeds: 'Sensory friendly seating',
+		roomNotes: 'Connecting room'
+	});
+	expect(c.needsCarSeat).toBe(true);
+	expect(c.seatPreference).toBe('window');
+	expect(c.bedPreference).toBe('twin');
+
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	expect(row.needsCarSeat).toBe(true);
+	expect(row.needsStroller).toBe(true);
+	expect(row.needsCrib).toBe(true);
+	expect(row.needsKidsMeal).toBe(true);
+	expect(row.childTicketDiscount).toBe('child');
+	expect(row.accessibilityNeeds).toBe('Sensory friendly seating');
+	expect(row.roomNotes).toBe('Connecting room');
+});
+
+test('patch companion updates preferences and gear needs', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'patchpref@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
+
+	patchTripCompanion(u.id, t.id, c.id, {
+		seatPreference: 'aisle',
+		bedPreference: 'king',
+		needsCarSeat: true,
+		needsCrib: false,
+		accessibilityNeeds: 'Wheelchair accessible room'
+	});
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	expect(row.seatPreference).toBe('aisle');
+	expect(row.bedPreference).toBe('king');
+	expect(row.needsCarSeat).toBe(true);
+	expect(row.needsCrib).toBe(false);
+	expect(row.accessibilityNeeds).toBe('Wheelchair accessible room');
+});
+
 test('companion notes are rejected above max length', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'long@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();

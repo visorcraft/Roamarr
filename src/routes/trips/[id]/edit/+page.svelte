@@ -3,7 +3,7 @@
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 
 	const statusLabel: Record<TripStatus, string> = {
@@ -73,6 +73,11 @@
 			<label class="label" for="tags">Tags</label>
 			<input id="tags" name="tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" class="input {form?.errors?.tags ? 'input-error' : ''}" disabled={submitting} />
 			{#if form?.errors?.tags}<p class="field-error">{form.errors.tags}</p>{/if}
+		</div>
+		<div class="field">
+			<label class="label" for="baseCurrency">Base currency</label>
+			<input id="baseCurrency" name="baseCurrency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" class="input {form?.errors?.baseCurrency ? 'input-error' : ''}" disabled={submitting} />
+			{#if form?.errors?.baseCurrency}<p class="field-error">{form.errors.baseCurrency}</p>{/if}
 		</div>
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
 			<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>

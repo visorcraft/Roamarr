@@ -9,7 +9,25 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
-import { users, trips, segments, insurancePolicies, fareProviders, reminders, tripComments, auditLogs, tripCompanions, tripShares } from '$lib/server/db/schema';
+import {
+	users,
+	trips,
+	segments,
+	insurancePolicies,
+	fareProviders,
+	reminders,
+	tripComments,
+	auditLogs,
+	tripCompanions,
+	tripShares,
+	tripTemplates,
+	tripHomeTasks,
+	tripMedications,
+	tripEntryRequirements,
+	tripImportantItems,
+	tripExpenseAttachments,
+	tripExpenses
+} from '$lib/server/db/schema';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { eq } from 'drizzle-orm';
 
@@ -18,6 +36,14 @@ function event(user: { id: number }, tripId: number) {
 		locals: { user } as App.Locals,
 		params: { id: String(tripId) },
 		url: new URL(`http://localhost/trips/${tripId}`)
+	} as any;
+}
+
+function formEvent(user: { id: number }, tripId: number, body: FormData) {
+	return {
+		locals: { user } as App.Locals,
+		params: { id: String(tripId) },
+		request: new Request(`http://localhost/trips/${tripId}`, { method: 'POST', body })
 	} as any;
 }
 
@@ -354,4 +380,109 @@ test('setSegmentStatus action rejects a non-editor', async () => {
 		body: new URLSearchParams({ segmentId: String(s.id), status: 'completed' })
 	});
 	await expect(actions.setSegmentStatus({ ...event(other, t.id), request })).rejects.toMatchObject({ status: 404 });
+});
+
+test('saveTripTemplate action saves a template and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'stpl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const templateForm = new FormData();
+	templateForm.set('name', 'Template');
+	await expect(actions.saveTripTemplate(formEvent(u, t.id, templateForm))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	expect(db.select().from(tripTemplates).where(eq(tripTemplates.userId, u.id)).all()).toHaveLength(1);
+});
+
+test('addHomeTask action creates a task and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const f = new FormData();
+	f.set('text', 'Stop mail');
+	f.set('dueDate', '2026-07-01');
+	await expect(actions.addHomeTask(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.tripId, t.id)).all()).toHaveLength(1);
+});
+
+test('addMedication action creates a schedule and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const f = new FormData();
+	f.set('name', 'Claritin');
+	f.set('dosage', '5mg');
+	await expect(actions.addMedication(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	expect(db.select().from(tripMedications).where(eq(tripMedications.tripId, t.id)).all()).toHaveLength(1);
+});
+
+test('addEntryRequirement action creates a requirement and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const f = new FormData();
+	f.set('country', 'Japan');
+	f.set('requirementType', 'visa');
+	f.set('status', 'in_progress');
+	await expect(actions.addEntryRequirement(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const rows = db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].status).toBe('in_progress');
+});
+
+test('addImportantItem action creates an item and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const f = new FormData();
+	f.set('name', 'Passport');
+	f.set('serialNumber', 'ABC123');
+	await expect(actions.addImportantItem(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const rows = db.select().from(tripImportantItems).where(eq(tripImportantItems.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].serialNumber).toBe('ABC123');
+});
+
+test('addAttachment action uploads a receipt and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const e = db
+		.insert(tripExpenses)
+		.values({ tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' })
+		.returning()
+		.get();
+
+	const f = new FormData();
+	f.set('expenseId', String(e.id));
+	f.set('file', new File(['hello'], 'receipt.png', { type: 'image/png' }));
+	await expect(actions.addAttachment(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expenseId, e.id)).all()).toHaveLength(1);
 });

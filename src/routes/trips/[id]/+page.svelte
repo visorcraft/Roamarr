@@ -32,7 +32,14 @@
 		meetingAt?: string | null;
 	};
 
-	type SegmentRow = SharedSegment & { id?: number; startTz: string; endTz?: string | null; cardId?: number | null };
+	type SegmentRow = SharedSegment & {
+		id?: number;
+		startTz: string;
+		endTz?: string | null;
+		cardId?: number | null;
+		paymentStatus?: string | null;
+		paymentDueDate?: string | null;
+	};
 
 	const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 
@@ -357,6 +364,21 @@
 														{#if form?.errors?.meetingAt}<p class="field-error">{form.errors.meetingAt}</p>{/if}
 													</div>
 													<div class="field sm:col-span-2">
+													<div class="field">
+														<label class="label" for={`paymentStatus-${s.id}`}>Payment status</label>
+														<select id={`paymentStatus-${s.id}`} name="paymentStatus" class="input {form?.errors?.paymentStatus ? 'input-error' : ''}">
+															<option value="quoted" selected={s.paymentStatus === 'quoted'}>Quoted</option>
+															<option value="deposit_paid" selected={s.paymentStatus === 'deposit_paid'}>Deposit paid</option>
+															<option value="fully_paid" selected={s.paymentStatus === 'fully_paid'}>Fully paid</option>
+															<option value="refunded" selected={s.paymentStatus === 'refunded'}>Refunded</option>
+														</select>
+														{#if form?.errors?.paymentStatus}<p class="field-error">{form.errors.paymentStatus}</p>{/if}
+													</div>
+													<div class="field">
+														<label class="label" for={`paymentDueDate-${s.id}`}>Payment due</label>
+														<input id={`paymentDueDate-${s.id}`} name="paymentDueDate" type="date" value={s.paymentDueDate ?? ''} class="input {form?.errors?.paymentDueDate ? 'input-error' : ''}" />
+														{#if form?.errors?.paymentDueDate}<p class="field-error">{form.errors.paymentDueDate}</p>{/if}
+													</div>
 														<label class="label" for={`detailsJson-${s.id}`}>Details (JSON)</label>
 														<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs {form?.errors?.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
 														{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
@@ -398,6 +420,9 @@
 																{:else if s.status}
 																	<span class="badge badge-compact {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>
 																{/if}
+													{#if s.paymentStatus && s.paymentStatus !== 'quoted'}
+														<span class="badge badge-compact badge-slate capitalize">{s.paymentStatus.replace('_', ' ')}</span>
+													{/if}
 															</div>
 															{#if s.endAt}
 																<p class="mt-1 font-mono text-xs text-slate-500">
@@ -577,11 +602,11 @@
 							<button class="btn btn-ghost btn-sm">Save template</button>
 						</form>
 					{/if}
-					{#if data.templates?.length}
+					{#if data.packingTemplates?.length}
 						<form method="POST" action="?/applyChecklistTemplate" class="mt-3 flex flex-wrap items-end gap-2">
 							<select name="templateId" class="select min-w-0 flex-1 text-sm" required>
 								<option value="" disabled selected>Apply a template</option>
-								{#each data.templates as tmpl (tmpl.id)}
+								{#each data.packingTemplates as tmpl (tmpl.id)}
 									<option value={tmpl.id}>{tmpl.name} ({tmpl.items.length})</option>
 								{/each}
 							</select>
@@ -599,6 +624,9 @@
 							<div class="flex flex-wrap gap-2">
 								{#each Object.entries(data.expenseSummary.totalsByCurrency) as [currency, amount]}
 									<span class="badge badge-slate badge-compact font-mono">{currency} {(amount / 100).toFixed(2)}</span>
+									{#if data.expenseSummary.baseTotal}
+										<span class="badge badge-compact badge-brand font-mono">{data.expenseSummary.baseTotal.currency} {(data.expenseSummary.baseTotal.amount / 100).toFixed(2)}</span>
+									{/if}
 								{/each}
 							</div>
 						{/if}
@@ -613,6 +641,14 @@
 											Paid by {e.paidBy === 'owner' ? 'you' : data.companions?.find((c) => c.id === e.paidBy)?.name ?? 'unknown'}
 											{#if e.splitAmong.length}> · Split {e.splitAmong.length} way{e.splitAmong.length === 1 ? '' : 's'}{/if}
 										</p>
+										{#if e.attachments?.length}}
+											<div class="mt-1 flex flex-wrap items-center gap-2">
+												<Icon name="attachment" class="h-3.5 w-3.5 text-slate-500" />
+												{#each e.attachments as a (a.id)}
+													<a href="/trips/{trip.id}/expenses/{e.id}/attachments/{a.id}" target="_blank" class="text-xs text-indigo-300/90 hover:underline">{a.filename}</a>
+												{/each}
+											</div>
+										{/if}
 									</div>
 									<div class="flex items-center gap-2">
 										<span class="font-mono text-sm text-slate-200">{e.currency} {(e.amount / 100).toFixed(2)}</span>
@@ -636,6 +672,7 @@
 							<input name="description" class="input text-sm" placeholder="Description" required />
 							<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cents" required />
 							<input name="currency" class="input w-24 text-sm" placeholder="USD" value="USD" required />
+							<input name="exchangeRate" type="number" min="0.0001" step="0.0001" class="input w-28 text-sm" placeholder="Rate" title="Exchange rate to trip base currency" />
 								<select name="category" class="input w-auto text-sm">
 									<option value="lodging">Lodging</option>
 									<option value="transport">Transport</option>
@@ -664,6 +701,14 @@
 							</div>
 							<button class="btn btn-primary btn-sm sm:col-span-5">Add expense</button>
 						</form>
+							{#if data.expenses?.length}
+								<form method="POST" action="?/addAttachment" enctype="multipart/form-data" class="mt-3 flex flex-wrap items-end gap-2">
+									<input type="hidden" name="expenseId" value={data.expenses[0].id} />
+									<span class="text-xs text-slate-400">Attach receipt to first expense</span>
+									<input type="file" name="file" accept="image/*,application/pdf" class="input text-sm w-auto" required />
+									<button class="btn btn-ghost btn-sm">Upload</button>
+								</form>
+							{/if}
 					{/if}
 
 					{#if data.expenseSettlement && Object.keys(data.expenseSettlement).length}
@@ -962,6 +1007,197 @@
 				</section>
 			{/if}
 
+			{#if isEditor && data.owner === true}}
+				<section class="card p-5">
+					<h2 class="section-title mb-3">Save as template</h2>
+					<form method="POST" action="?/saveTripTemplate" class="flex flex-wrap items-end gap-2">
+						<input name="name" class="input text-sm min-w-0 flex-1" placeholder="Template name" required maxlength="100" />
+						<button class="btn btn-primary btn-sm">Save template</button>
+					</form>
+				</section>
+			{/if}
+
+			{#if data.homeTasks?.length || isEditor}}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">Home prep</h2>
+						{#if data.homeTasks?.length}<span class="font-mono text-xs text-slate-500">{data.homeTasks.filter((t) => t.done).length}/{data.homeTasks.length}</span>{/if}
+					</div>
+				{#if data.homeTasks?.length}
+					<ul class="space-y-2">
+						{#each data.homeTasks as task (task.id)}
+							<li class="list-item-compact flex items-center justify-between gap-3">
+								<form method="POST" action="?/toggleHomeTask" class="flex items-center gap-3">
+									<input type="hidden" name="taskId" value={task.id} />
+									<button type="submit" class="flex items-center gap-3 text-left">
+										<span class="grid h-5 w-5 shrink-0 place-items-center rounded border {task.done ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300' : 'border-slate-600 text-transparent'}">
+											{#if task.done}<Icon name="check" class="h-3.5 w-3.5" />{/if}
+										</span>
+										<span class="text-sm {task.done ? 'text-slate-500 line-through' : 'text-slate-200'}">{task.text}</span>
+									</button>
+								</form>
+								<div class="flex items-center gap-2">
+									{#if task.dueDate}<span class="text-xs text-slate-500">{task.dueDate}</span>{/if}
+									{#if isEditor}
+										<form method="POST" action="?/deleteHomeTask">
+											<input type="hidden" name="taskId" value={task.id} />
+											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete task"><Icon name="close" class="h-3.5 w-3.5" /></button>
+										</form>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="empty-text py-2">No home-prep tasks yet.</p>
+				{/if}
+				{#if isEditor}
+					<form method="POST" action="?/addHomeTask" class="mt-4 flex flex-wrap items-end gap-2">
+						<input name="text" class="input min-w-0 flex-1 text-sm" placeholder="Add a task…" required />
+						<input name="dueDate" type="date" class="input w-auto text-sm" />
+						<button class="btn btn-primary btn-sm">Add</button>
+					</form>
+				{/if}
+				</section>
+			{/if}
+
+			{#if data.medications?.length || isEditor}}
+				<section class="card p-5">
+					<h2 class="section-title mb-3">Medications</h2>
+				{#if data.medications?.length}
+					<ul class="space-y-2">
+						{#each data.medications as med (med.id)}
+							<li class="list-item-compact">
+								<div class="flex items-center justify-between gap-2">
+									<span class="font-medium text-slate-200">{med.name}</span>
+									{#if isEditor}
+										<form method="POST" action="?/deleteMedication">
+											<input type="hidden" name="medicationId" value={med.id} />
+											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete medication"><Icon name="close" class="h-3.5 w-3.5" /></button>
+										</form>
+									{/if}
+								</div>
+								{#if med.companionName}<p class="text-xs text-slate-500">For {med.companionName}</p>{/if}
+								{#if med.dosage || med.schedule}<p class="text-xs text-slate-400">{med.dosage}{#if med.dosage && med.schedule} · {/if}{med.schedule}</p>{/if}
+								{#if med.notes}<p class="text-xs text-slate-500">{med.notes}</p>{/if}
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="empty-text py-2">No medications recorded.</p>
+				{/if}
+				{#if isEditor}
+					<form method="POST" action="?/addMedication" class="mt-4 grid gap-2 sm:grid-cols-2">
+						<input name="name" class="input text-sm" placeholder="Name" required />
+						<select name="companionId" class="input text-sm">
+							<option value="">For anyone</option>
+							{#each data.companions ?? [] as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+						</select>
+						<input name="dosage" class="input text-sm" placeholder="Dosage" />
+						<input name="schedule" class="input text-sm" placeholder="Schedule" />
+						<input name="startsAt" type="datetime-local" class="input text-sm" placeholder="Starts" />
+						<input name="endsAt" type="datetime-local" class="input text-sm" placeholder="Ends" />
+						<textarea name="notes" class="input text-sm sm:col-span-2" placeholder="Notes" rows="2"></textarea>
+						<button class="btn btn-primary btn-sm sm:col-span-2">Add medication</button>
+					</form>
+				{/if}
+				</section>
+			{/if}
+
+			{#if data.entryRequirements?.length || isEditor}}
+				<section class="card p-5">
+					<h2 class="section-title mb-3">Entry requirements</h2>
+				{#if data.entryRequirements?.length}
+					<ul class="space-y-2">
+						{#each data.entryRequirements as req (req.id)}
+							<li class="list-item-compact flex items-center justify-between gap-3">
+								<div>
+									<p class="text-sm font-medium text-slate-200">{req.country} — <span class="capitalize">{req.requirementType}</span></p>
+									{#if req.dueDate}<p class="text-xs text-slate-500">Due {req.dueDate}</p>{/if}
+									{#if req.notes}<p class="text-xs text-slate-500">{req.notes}</p>{/if}
+								</div>
+								<div class="flex items-center gap-2">
+									{#if isEditor}
+										<form method="POST" action="?/updateEntryRequirementStatus" class="flex items-center gap-1">
+											<input type="hidden" name="requirementId" value={req.id} />
+											<select name="status" class="input h-8 py-0 text-xs w-auto" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+												<option value="needed" selected={req.status === 'needed'}>Needed</option>
+												<option value="in_progress" selected={req.status === 'in_progress'}>In progress</option>
+												<option value="complete" selected={req.status === 'complete'}>Complete</option>
+												<option value="not_needed" selected={req.status === 'not_needed'}>Not needed</option>
+											</select>
+										</form>
+										<form method="POST" action="?/deleteEntryRequirement">
+											<input type="hidden" name="requirementId" value={req.id} />
+											<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete requirement"><Icon name="close" class="h-3.5 w-3.5" /></button>
+										</form>
+									{:else}
+										<span class="badge badge-compact badge-slate capitalize">{req.status.replace('_', ' ')}</span>
+									{/if}
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="empty-text py-2">No entry requirements recorded.</p>
+				{/if}
+				{#if isEditor}
+					<form method="POST" action="?/addEntryRequirement" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+						<input name="country" class="input text-sm" placeholder="Country" required />
+						<select name="requirementType" class="input text-sm">
+							<option value="visa">Visa</option>
+							<option value="vaccination">Vaccination</option>
+							<option value="other">Other</option>
+						</select>
+						<input name="dueDate" type="date" class="input text-sm" />
+						<input name="notes" class="input text-sm sm:col-span-3" placeholder="Notes" />
+						<button class="btn btn-primary btn-sm sm:col-span-3">Add requirement</button>
+					</form>
+				{/if}
+				</section>
+			{/if}
+
+			{#if data.importantItems?.length || isEditor}}
+				<section class="card p-5">
+					<h2 class="section-title mb-3">Important items</h2>
+				{#if data.importantItems?.length}
+					<ul class="space-y-2">
+						{#each data.importantItems as item (item.id)}
+							<li class="list-item-compact flex items-center justify-between gap-3">
+								<div>
+									<p class="text-sm font-medium text-slate-200">{item.name}</p>
+									{#if item.companionName}<p class="text-xs text-slate-500">{item.companionName}</p>{/if}
+									{#if item.serialNumber || item.trackerId}<p class="font-mono text-[10px] text-slate-500">{#if item.serialNumber}SN {item.serialNumber}{/if}{#if item.trackerId}{#if item.serialNumber} · {/if}ID {item.trackerId}{/if}</p>{/if}
+									{#if item.notes}<p class="text-xs text-slate-500">{item.notes}</p>{/if}
+								</div>
+								{#if isEditor}
+									<form method="POST" action="?/deleteImportantItem">
+										<input type="hidden" name="itemId" value={item.id} />
+										<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete item"><Icon name="close" class="h-3.5 w-3.5" /></button>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="empty-text py-2">No important items recorded.</p>
+				{/if}
+				{#if isEditor}
+					<form method="POST" action="?/addImportantItem" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+						<input name="name" class="input text-sm" placeholder="Item name" required />
+						<select name="companionId" class="input text-sm">
+							<option value="">Unassigned</option>
+							{#each data.companions ?? [] as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
+						</select>
+						<input name="serialNumber" class="input text-sm" placeholder="Serial #" />
+						<input name="trackerId" class="input text-sm" placeholder="Tracker ID" />
+						<textarea name="notes" class="input text-sm sm:col-span-3" placeholder="Notes" rows="2"></textarea>
+						<button class="btn btn-primary btn-sm sm:col-span-3">Add item</button>
+					</form>
+				{/if}
+				</section>
+			{/if}
+
 			<section class="card p-5">
 				<h2 class="section-title mb-3">Activity</h2>
 				{#if data.comments?.length}
@@ -1089,6 +1325,32 @@
 											<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" value={c.dietary ?? ''} />
 											<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" value={c.allergies ?? ''} />
 											<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2">{c.medicalNotes ?? ''}</textarea>
+											{#if c.category === 'child'}}
+												<div class="flex flex-wrap gap-3 text-xs">
+													<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" checked={c.needsCarSeat} /> Car seat</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" checked={c.needsStroller} /> Stroller</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" checked={c.needsCrib} /> Crib</label>
+													<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" checked={c.needsKidsMeal} /> Kids meal</label>
+												</div>
+												<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" value={c.childTicketDiscount ?? ''} />
+											{/if}
+											<select name="seatPreference" class="input text-sm">
+												<option value="" selected={!c.seatPreference}>Seat preference…</option>
+												<option value="aisle" selected={c.seatPreference === 'aisle'}>Aisle</option>
+												<option value="window" selected={c.seatPreference === 'window'}>Window</option>
+												<option value="middle" selected={c.seatPreference === 'middle'}>Middle</option>
+												<option value="none" selected={c.seatPreference === 'none'}>No preference</option>
+											</select>
+											<select name="bedPreference" class="input text-sm">
+												<option value="" selected={!c.bedPreference}>Bed preference…</option>
+												<option value="king" selected={c.bedPreference === 'king'}>King</option>
+												<option value="queen" selected={c.bedPreference === 'queen'}>Queen</option>
+												<option value="twin" selected={c.bedPreference === 'twin'}>Twin</option>
+												<option value="two_doubles" selected={c.bedPreference === 'two_doubles'}>Two doubles</option>
+												<option value="other" selected={c.bedPreference === 'other'}>Other</option>
+											</select>
+											<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" value={c.accessibilityNeeds ?? ''} />
+											<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" value={c.roomNotes ?? ''} />
 											<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
 										{/if}
 										<button
@@ -1139,7 +1401,17 @@
 											{#if c.notes}
 												<span class="badge badge-compact badge-slate" title={c.notes}>Notes</span>
 											{/if}
-										</div>
+																					{#if c.category === 'child' && (c.needsCarSeat || c.needsStroller || c.needsCrib || c.needsKidsMeal)}}
+												<span class="badge badge-compact badge-brand" title="Kid gear">
+													{#if c.needsCarSeat}car seat{/if}{#if c.needsStroller}{#if c.needsCarSeat}, {/if}stroller{/if}{#if c.needsCrib}{#if c.needsCarSeat || c.needsStroller}, {/if}crib{/if}{#if c.needsKidsMeal}{#if c.needsCarSeat || c.needsStroller || c.needsCrib}, {/if}kids meal{/if}
+												</span>
+											{/if}
+											{#if c.seatPreference}}
+												<span class="badge badge-compact badge-slate" title="Seat preference">{c.seatPreference}</span>
+											{/if}
+											{#if c.bedPreference}}
+												<span class="badge badge-compact badge-slate" title="Bed preference">{c.bedPreference.replace('_', ' ')}</span>
+											{/if}</div>
 									{/if}
 								{/if}
 							</li>
@@ -1168,6 +1440,30 @@
 								<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" />
 								<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" />
 								<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2"></textarea>
+								<div class="flex flex-wrap gap-3 text-xs">
+									<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" /> Car seat</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" /> Stroller</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" /> Crib</label>
+									<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" /> Kids meal</label>
+								</div>
+								<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" />
+								<select name="seatPreference" class="input text-sm">
+									<option value="">Seat preference…</option>
+									<option value="aisle">Aisle</option>
+									<option value="window">Window</option>
+									<option value="middle">Middle</option>
+									<option value="none">No preference</option>
+								</select>
+								<select name="bedPreference" class="input text-sm">
+									<option value="">Bed preference…</option>
+									<option value="king">King</option>
+									<option value="queen">Queen</option>
+									<option value="twin">Twin</option>
+									<option value="two_doubles">Two doubles</option>
+									<option value="other">Other</option>
+								</select>
+								<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" />
+								<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" />
 							{/if}
 						</form>
 					{/if}

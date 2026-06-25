@@ -27,6 +27,9 @@ function requireCompanion(tripId: number, companionId: number) {
 	return c;
 }
 
+const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
+const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
+
 interface CompanionInput {
 	name: string;
 	category?: CompanionCategory;
@@ -34,6 +37,21 @@ interface CompanionInput {
 	dietary?: string;
 	allergies?: string;
 	medicalNotes?: string;
+	needsCarSeat?: boolean;
+	needsStroller?: boolean;
+	needsCrib?: boolean;
+	needsKidsMeal?: boolean;
+	childTicketDiscount?: string;
+	seatPreference?: string | null;
+	bedPreference?: string | null;
+	accessibilityNeeds?: string;
+	roomNotes?: string;
+}
+
+function booleanFromForm(raw: FormDataEntryValue | null): boolean {
+	if (raw == null) return false;
+	const s = String(raw).trim();
+	return s === 'true' || s === 'on' || s === '1';
 }
 
 function validateCompanionInput(form: FormData): CompanionInput & { errors?: Record<string, string> } {
@@ -50,10 +68,68 @@ function validateCompanionInput(form: FormData): CompanionInput & { errors?: Rec
 	const medicalNotes = v.optionalString(String(form.get('medicalNotes') ?? ''), 'medicalNotes', {
 		max: 1000
 	});
+	const needsCarSeat = booleanFromForm(form.get('needsCarSeat'));
+	const needsStroller = booleanFromForm(form.get('needsStroller'));
+	const needsCrib = booleanFromForm(form.get('needsCrib'));
+	const needsKidsMeal = booleanFromForm(form.get('needsKidsMeal'));
+	const childTicketDiscount = v.optionalString(
+		String(form.get('childTicketDiscount') ?? ''),
+		'childTicketDiscount',
+		{ max: 200 }
+	);
+	const seatPreferenceRaw = form.get('seatPreference');
+	const seatPreference =
+		seatPreferenceRaw && String(seatPreferenceRaw).trim()
+			? (v.enumValue(String(seatPreferenceRaw).trim(), SEAT_PREFERENCES as readonly string[], 'seatPreference') ?? null)
+			: null;
+	const bedPreferenceRaw = form.get('bedPreference');
+	const bedPreference =
+		bedPreferenceRaw && String(bedPreferenceRaw).trim()
+			? (v.enumValue(String(bedPreferenceRaw).trim(), BED_PREFERENCES as readonly string[], 'bedPreference') ?? null)
+			: null;
+	const accessibilityNeeds = v.optionalString(
+		String(form.get('accessibilityNeeds') ?? ''),
+		'accessibilityNeeds',
+		{ max: 1000 }
+	);
+	const roomNotes = v.optionalString(String(form.get('roomNotes') ?? ''), 'roomNotes', { max: 1000 });
 	if (!v.ok()) {
-		return { name: name ?? '', category, notes, dietary, allergies, medicalNotes, errors: v.errors };
+		return {
+			name: name ?? '',
+			category,
+			notes,
+			dietary,
+			allergies,
+			medicalNotes,
+			needsCarSeat,
+			needsStroller,
+			needsCrib,
+			needsKidsMeal,
+			childTicketDiscount,
+			seatPreference,
+			bedPreference,
+			accessibilityNeeds,
+			roomNotes,
+			errors: v.errors
+		};
 	}
-	return { name: name!, category, notes, dietary, allergies, medicalNotes };
+	return {
+		name: name!,
+		category,
+		notes,
+		dietary,
+		allergies,
+		medicalNotes,
+		needsCarSeat,
+		needsStroller,
+		needsCrib,
+		needsKidsMeal,
+		childTicketDiscount,
+		seatPreference,
+		bedPreference,
+		accessibilityNeeds,
+		roomNotes
+	};
 }
 
 export function insertTripCompanion(userId: number, tripId: number, input: CompanionInput) {
@@ -67,7 +143,16 @@ export function insertTripCompanion(userId: number, tripId: number, input: Compa
 			notes: input.notes ?? null,
 			dietary: input.dietary ?? null,
 			allergies: input.allergies ?? null,
-			medicalNotes: input.medicalNotes ?? null
+			medicalNotes: input.medicalNotes ?? null,
+			needsCarSeat: input.needsCarSeat ?? false,
+			needsStroller: input.needsStroller ?? false,
+			needsCrib: input.needsCrib ?? false,
+			needsKidsMeal: input.needsKidsMeal ?? false,
+			childTicketDiscount: input.childTicketDiscount ?? null,
+			seatPreference: input.seatPreference ?? null,
+			bedPreference: input.bedPreference ?? null,
+			accessibilityNeeds: input.accessibilityNeeds ?? null,
+			roomNotes: input.roomNotes ?? null
 		})
 		.returning()
 		.get();
@@ -96,7 +181,16 @@ export function patchTripCompanion(
 			notes: nullablePatchField(input.notes),
 			dietary: nullablePatchField(input.dietary),
 			allergies: nullablePatchField(input.allergies),
-			medicalNotes: nullablePatchField(input.medicalNotes)
+			medicalNotes: nullablePatchField(input.medicalNotes),
+			needsCarSeat: input.needsCarSeat,
+			needsStroller: input.needsStroller,
+			needsCrib: input.needsCrib,
+			needsKidsMeal: input.needsKidsMeal,
+			childTicketDiscount: nullablePatchField(input.childTicketDiscount),
+			seatPreference: input.seatPreference,
+			bedPreference: input.bedPreference,
+			accessibilityNeeds: nullablePatchField(input.accessibilityNeeds),
+			roomNotes: nullablePatchField(input.roomNotes)
 		})
 		.where(eq(tripCompanions.id, companionId))
 		.returning()

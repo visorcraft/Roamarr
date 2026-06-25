@@ -6,6 +6,7 @@ import { trips, segments } from '$lib/server/db/schema';
 import type { trips as tripsTable, segments as segmentsTable } from '$lib/server/db/schema';
 import { canView, canEdit, canViewDetails, viewerProjection } from '$lib/server/sharing';
 import { requireOwnedTrip } from '$lib/server/ownership';
+import { serializeTags } from '$lib/tags';
 
 type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segmentsTable.$inferSelect;
@@ -15,15 +16,6 @@ export type TripView =
 	| { owner: true; editor: true; trip: Trip; segments: Segment[] }
 	| { owner: false; editor: true; trip: Trip; segments: Segment[] }
 	| { owner: false; editor: false; trip: Projection };
-
-export function serializeTags(raw?: string): string {
-	if (!raw) return '[]';
-	const tags = raw
-		.split(',')
-		.map((t) => t.trim().toLowerCase())
-		.filter(Boolean);
-	return JSON.stringify(tags);
-}
 
 export function createTrip(
 	userId: number,

@@ -62,24 +62,79 @@ import {
 	listEmergencyContacts,
 	shareItineraryWithContact
 } from '$lib/server/emergencyContacts';
+import {
+	addAttachment,
+	deleteAttachment,
+	listAttachments
+} from '$lib/server/tripExpenseAttachments';
+import {
+	listTripTemplates,
+	saveTripTemplate,
+	createTripFromTemplate
+} from '$lib/server/tripTemplates';
+import {
+	addHomeTask,
+	toggleHomeTask,
+	deleteHomeTask,
+	listHomeTasks
+} from '$lib/server/tripHomeTasks';
+import {
+	addMedication,
+	deleteMedication,
+	listMedications
+} from '$lib/server/tripMedications';
+import {
+	addEntryRequirement,
+	updateEntryRequirementStatus,
+	deleteEntryRequirement,
+	listEntryRequirements
+} from '$lib/server/tripEntryRequirements';
+import {
+	addImportantItem,
+	deleteImportantItem,
+	listImportantItems
+} from '$lib/server/tripImportantItems';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const view = loadTripFor(u.id, Number(params.id));
+	const baseCurrency = ((view.trip as typeof trips.$inferSelect).baseCurrency as string | undefined) ?? 'USD';
 	const companions = listTripCompanions(view.trip.id).map((c) =>
 		view.editor
 			? c
-			: { ...c, notes: null, dietary: null, allergies: null, medicalNotes: null }
+			: {
+					...c,
+					notes: null,
+					dietary: null,
+					allergies: null,
+					medicalNotes: null,
+					needsCarSeat: null,
+					needsStroller: null,
+					needsCrib: null,
+					needsKidsMeal: null,
+					childTicketDiscount: null,
+					seatPreference: null,
+					bedPreference: null,
+					accessibilityNeeds: null,
+					roomNotes: null
+				}
 	);
 	const checklist = loadChecklist(view.trip.id);
-	const expenses = listTripExpenses(view.trip.id);
-	const expenseSummary = summarizeTripExpenses(expenses, companions);
+	const expenses = listTripExpenses(view.trip.id).map((e) => ({
+		...e,
+		attachments: listAttachments(e.id)
+	}));
+	const expenseSummary = summarizeTripExpenses(expenses, companions, baseCurrency);
 	const expenseSettlement = computeSettlement(expenses, companions);
 	const budgets = listBudgetsWithSpent(view.trip.id, expenses);
 	const journalEntries = listJournalEntries(view.trip.id);
 	const documentLinks = listDocumentLinks(view.trip.id);
 	const polls = listPollsWithVotes(view.trip.id);
+	const homeTasks = listHomeTasks(view.trip.id);
+	const medications = listMedications(view.trip.id);
+	const entryRequirements = listEntryRequirements(view.trip.id);
+	const importantItems = listImportantItems(view.trip.id);
 	let attendeesBySegment = new Map<number, ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never>();
 	if (view.editor) {
 		const segmentIds = view.segments.map((s) => s.id).filter((id): id is number => !!id);
@@ -126,11 +181,56 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
-		const templates = listTemplates(u.id);
+		const packingTemplates = listTemplates(u.id);
+		const tripTemplates = listTripTemplates(u.id);
 		const emergencyContacts = listEmergencyContacts(u.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates, emergencyContacts };
+		return {
+			...view,
+			companions,
+			checklist,
+			expenses,
+			expenseSummary,
+			expenseSettlement,
+			budgets,
+			journalEntries,
+			documentLinks,
+			polls,
+			attendeesBySegment,
+			providers,
+			watches,
+			cards: userCards,
+			policies,
+			availablePolicies,
+			feedUrl,
+			publicShareUrl,
+			comments,
+			packingTemplates,
+			tripTemplates,
+			emergencyContacts,
+			homeTasks,
+			medications,
+			entryRequirements,
+			importantItems
+		};
 	}
-	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, comments: listComments(view.trip.id) };
+	return {
+		...view,
+		companions,
+		checklist,
+		expenses,
+		expenseSummary,
+		expenseSettlement,
+		budgets,
+		journalEntries,
+		documentLinks,
+		polls,
+		attendeesBySegment,
+		comments: listComments(view.trip.id),
+		homeTasks,
+		medications,
+		entryRequirements,
+		importantItems
+	};
 };
 
 export const actions: Actions = {
@@ -296,6 +396,166 @@ export const actions: Actions = {
 		const contactId = Number(f.get('contactId'));
 		if (!Number.isFinite(contactId) || contactId <= 0) throw error(400, 'Invalid contact');
 		await shareItineraryWithContact(u.id, tripId, contactId, url.origin);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addAttachment: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const expenseId = Number(f.get('expenseId'));
+		const file = f.get('file');
+		if (!Number.isFinite(expenseId) || expenseId <= 0) throw error(400, 'Invalid expense');
+		if (!(file instanceof File)) throw error(400, 'File is required');
+		await addAttachment(u.id, expenseId, file);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteAttachment: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const attachmentId = Number(f.get('attachmentId'));
+		if (!Number.isFinite(attachmentId) || attachmentId <= 0) throw error(400, 'Invalid attachment');
+		deleteAttachment(u.id, attachmentId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	saveTripTemplate: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const name = String(f.get('name') || '').trim();
+		if (!name) throw error(400, 'Template name is required');
+		saveTripTemplate(u.id, tripId, name);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addHomeTask: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const text = String(f.get('text') || '');
+		const dueDate = String(f.get('dueDate') || '') || null;
+		addHomeTask(u.id, tripId, { text, dueDate });
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	toggleHomeTask: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const taskId = Number(f.get('taskId'));
+		if (!Number.isFinite(taskId) || taskId <= 0) throw error(400, 'Invalid task');
+		toggleHomeTask(u.id, tripId, taskId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteHomeTask: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const taskId = Number(f.get('taskId'));
+		if (!Number.isFinite(taskId) || taskId <= 0) throw error(400, 'Invalid task');
+		deleteHomeTask(u.id, tripId, taskId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addMedication: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const name = String(f.get('name') || '');
+		const companionIdRaw = f.get('companionId');
+		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
+		const dosage = String(f.get('dosage') || '');
+		const schedule = String(f.get('schedule') || '');
+		const startsAt = String(f.get('startsAt') || '');
+		const endsAt = String(f.get('endsAt') || '');
+		const notes = String(f.get('notes') || '');
+		addMedication(u.id, tripId, {
+			name,
+			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
+			dosage,
+			schedule,
+			startsAt,
+			endsAt,
+			notes
+		});
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteMedication: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const medicationId = Number(f.get('medicationId'));
+		if (!Number.isFinite(medicationId) || medicationId <= 0) throw error(400, 'Invalid medication');
+		deleteMedication(u.id, tripId, medicationId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addEntryRequirement: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const country = String(f.get('country') || '');
+		const requirementType = String(f.get('requirementType') || '');
+		const status = String(f.get('status') || 'needed');
+		const dueDate = String(f.get('dueDate') || '') || null;
+		const notes = String(f.get('notes') || '');
+		addEntryRequirement(u.id, tripId, { country, requirementType, status, dueDate, notes });
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	updateEntryRequirementStatus: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const requirementId = Number(f.get('requirementId'));
+		const status = String(f.get('status') || '');
+		if (!Number.isFinite(requirementId) || requirementId <= 0) throw error(400, 'Invalid requirement');
+		updateEntryRequirementStatus(u.id, tripId, requirementId, status);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteEntryRequirement: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const requirementId = Number(f.get('requirementId'));
+		if (!Number.isFinite(requirementId) || requirementId <= 0) throw error(400, 'Invalid requirement');
+		deleteEntryRequirement(u.id, tripId, requirementId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	addImportantItem: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const name = String(f.get('name') || '');
+		const companionIdRaw = f.get('companionId');
+		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
+		const serialNumber = String(f.get('serialNumber') || '');
+		const trackerId = String(f.get('trackerId') || '');
+		const notes = String(f.get('notes') || '');
+		addImportantItem(u.id, tripId, {
+			name,
+			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
+			serialNumber,
+			trackerId,
+			notes
+		});
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	deleteImportantItem: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const itemId = Number(f.get('itemId'));
+		if (!Number.isFinite(itemId) || itemId <= 0) throw error(400, 'Invalid item');
+		deleteImportantItem(u.id, tripId, itemId);
 		throw redirect(303, `/trips/${tripId}`);
 	}
 };

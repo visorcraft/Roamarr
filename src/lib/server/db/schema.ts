@@ -156,6 +156,9 @@ export type SegmentType = (typeof SEGMENT_TYPES)[number];
 export const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 
+export const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
+export type SegmentPaymentStatus = (typeof SEGMENT_PAYMENT_STATUSES)[number];
+
 export const segments = sqliteTable(
 	'segments',
 	{

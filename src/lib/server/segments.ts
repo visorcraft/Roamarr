@@ -6,7 +6,13 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { segments, type SegmentType, type SegmentStatus, SEGMENT_STATUSES } from '$lib/server/db/schema';
+import {
+	segments,
+	type SegmentType,
+	type SegmentStatus,
+	SEGMENT_STATUSES,
+	SEGMENT_PAYMENT_STATUSES
+} from '$lib/server/db/schema';
 
 function normalizeMeetingAt(i: {
 	meetingAt?: string;
@@ -36,12 +42,15 @@ export function addSegment(
 		details?: object;
 		meetingPoint?: string;
 		meetingAt?: string;
+		paymentStatus?: string;
+		paymentDueDate?: string | null;
 	}
 ) {
 	requireEditableTrip(userId, tripId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
+	const paymentStatus = normalizePaymentStatus(i.paymentStatus);
 	const seg = db
 		.insert(segments)
 		.values({
@@ -57,12 +66,23 @@ export function addSegment(
 			cardId: i.cardId ?? null,
 			detailsJson: i.details ? JSON.stringify(i.details) : null,
 			meetingPoint,
-			meetingAt
+			meetingAt,
+			paymentStatus,
+			paymentDueDate: i.paymentDueDate ?? null
 		})
 		.returning()
 		.get();
 	upsertRemindersForSegment(seg);
 	return seg;
+}
+
+function normalizePaymentStatus(raw?: string | null): string {
+	if (!raw) return 'quoted';
+	const s = raw.trim();
+	if (!SEGMENT_PAYMENT_STATUSES.includes(s as (typeof SEGMENT_PAYMENT_STATUSES)[number])) {
+		throw error(400, `Invalid payment status: ${s}`);
+	}
+	return s;
 }
 
 export function hasOverlappingSegment(
@@ -108,6 +128,8 @@ export function updateSegment(
 		details?: object;
 		meetingPoint?: string;
 		meetingAt?: string;
+		paymentStatus?: string;
+		paymentDueDate?: string | null;
 	}
 ) {
 	requireEditableTrip(userId, tripId);
@@ -120,6 +142,7 @@ export function updateSegment(
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
+	const paymentStatus = i.paymentStatus ? normalizePaymentStatus(i.paymentStatus) : undefined;
 	const seg = db
 		.update(segments)
 		.set({
@@ -133,7 +156,9 @@ export function updateSegment(
 			cardId: i.cardId ?? null,
 			detailsJson: i.details ? JSON.stringify(i.details) : null,
 			meetingPoint,
-			meetingAt
+			meetingAt,
+			...(paymentStatus && { paymentStatus }),
+			paymentDueDate: i.paymentDueDate
 		})
 		.where(eq(segments.id, segId))
 		.returning()
@@ -172,7 +197,9 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 			cardId: existing.cardId,
 			detailsJson: existing.detailsJson,
 			meetingPoint: existing.meetingPoint,
-			meetingAt: shiftUtcBy24h(existing.meetingAt)
+			meetingAt: shiftUtcBy24h(existing.meetingAt),
+			paymentStatus: existing.paymentStatus,
+			paymentDueDate: existing.paymentDueDate
 		})
 		.returning()
 		.get();

@@ -452,3 +452,60 @@ test('computeSettlement with owner split participant produces correct payment', 
 	expect(settlement.USD.balances).toContainEqual({ companionId: a.id, name: 'A', net: -5000 });
 	expect(settlement.USD.payments).toEqual([{ from: a.id, to: 'owner', amount: 5000 }]);
 });
+
+test('addTripExpense computes base amount from exchange rate', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'fx@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const e = addTripExpense(u.id, t.id, {
+		description: 'Hotel',
+		amount: 10000,
+		currency: 'EUR',
+		exchangeRate: 11000
+	});
+	expect(e.exchangeRate).toBe(11000);
+	expect(e.baseAmount).toBe(11000);
+
+	const summary = summarizeTripExpenses(listTripExpenses(t.id), [], 'USD');
+	expect(summary.baseTotal).toEqual({ currency: 'USD', amount: 11000 });
+});
+
+test('addExpense action accepts an exchange rate and stores base amount', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'fxa@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	await expect(
+		addExpense(
+			event(u, t.id, {
+				description: 'Taxi',
+				amount: '5000',
+				currency: 'GBP',
+				exchangeRate: '1.27'
+			})
+		)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	const row = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).get()!;
+	expect(row.currency).toBe('GBP');
+	expect(row.exchangeRate).toBe(12700);
+	expect(row.baseAmount).toBe(6350);
+});
+
+test('addExpense action rejects a non-positive exchange rate', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'fxb@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const result = await addExpense(
+		event(u, t.id, {
+			description: 'X',
+			amount: '1000',
+			currency: 'USD',
+			exchangeRate: '-1'
+		})
+	);
+	expect(result).toMatchObject({ status: 400 });
+	expect(result.data.errors.exchangeRate).toBeDefined();
+});

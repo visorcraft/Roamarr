@@ -53,6 +53,16 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 	const meetingPoint = v.optionalString(f.get('meetingPoint'), 'meetingPoint', { max: 200 });
 	const meetingAt = v.dateTime(f.get('meetingAt'), 'meetingAt');
 	const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
+	const paymentStatusRaw = f.get('paymentStatus');
+	const paymentStatus =
+		paymentStatusRaw && String(paymentStatusRaw).trim()
+			? v.enumValue(
+					String(paymentStatusRaw).trim(),
+					['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as readonly string[],
+					'paymentStatus'
+				)
+			: undefined;
+	const paymentDueDate = v.date(f.get('paymentDueDate'), 'paymentDueDate');
 	const details = parseSegmentDetails(f);
 
 	if (!v.ok()) {
@@ -78,6 +88,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		meetingPoint,
 		meetingAt: meetingAt ?? undefined,
 		cardId,
+		paymentStatus: paymentStatus ?? undefined,
+		paymentDueDate: paymentDueDate ?? undefined,
 		details
 	});
 	if (overlap) {

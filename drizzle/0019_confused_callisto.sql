@@ -106,7 +106,7 @@ CREATE TABLE `__new_segments` (
 	CONSTRAINT "segments_payment_status_ck" CHECK("__new_segments"."payment_status" in ('quoted','deposit_paid','fully_paid','refunded'))
 );
 --> statement-breakpoint
-INSERT INTO `__new_segments`("id", "trip_id", "type", "title", "start_at", "start_tz", "end_at", "end_tz", "status", "location", "confirmation_number", "details_json", "meeting_point", "meeting_at", "payment_status", "payment_due_date", "card_id", "created_at", "updated_at") SELECT "id", "trip_id", "type", "title", "start_at", "start_tz", "end_at", "end_tz", "status", "location", "confirmation_number", "details_json", "meeting_point", "meeting_at", "payment_status", "payment_due_date", "card_id", "created_at", "updated_at" FROM `segments`;--> statement-breakpoint
+INSERT INTO `__new_segments`("id", "trip_id", "type", "title", "start_at", "start_tz", "end_at", "end_tz", "status", "location", "confirmation_number", "details_json", "meeting_point", "meeting_at", "payment_status", "payment_due_date", "card_id", "created_at", "updated_at") SELECT "id", "trip_id", "type", "title", "start_at", "start_tz", "end_at", "end_tz", "status", "location", "confirmation_number", "details_json", "meeting_point", "meeting_at", 'quoted', NULL, "card_id", "created_at", "updated_at" FROM `segments`;--> statement-breakpoint
 DROP TABLE `segments`;--> statement-breakpoint
 ALTER TABLE `__new_segments` RENAME TO `segments`;--> statement-breakpoint
 PRAGMA foreign_keys=ON;--> statement-breakpoint
@@ -137,7 +137,7 @@ CREATE TABLE `__new_trip_companions` (
 	CONSTRAINT "companions_bed_ck" CHECK("__new_trip_companions"."bed_preference" is null or "__new_trip_companions"."bed_preference" in ('king','queen','twin','two_doubles','other'))
 );
 --> statement-breakpoint
-INSERT INTO `__new_trip_companions`("id", "trip_id", "name", "category", "dietary", "allergies", "medical_notes", "needs_car_seat", "needs_stroller", "needs_crib", "needs_kids_meal", "child_ticket_discount", "seat_preference", "bed_preference", "accessibility_needs", "room_notes", "notes", "created_at") SELECT "id", "trip_id", "name", "category", "dietary", "allergies", "medical_notes", "needs_car_seat", "needs_stroller", "needs_crib", "needs_kids_meal", "child_ticket_discount", "seat_preference", "bed_preference", "accessibility_needs", "room_notes", "notes", "created_at" FROM `trip_companions`;--> statement-breakpoint
+INSERT INTO `__new_trip_companions`("id", "trip_id", "name", "category", "dietary", "allergies", "medical_notes", "needs_car_seat", "needs_stroller", "needs_crib", "needs_kids_meal", "child_ticket_discount", "seat_preference", "bed_preference", "accessibility_needs", "room_notes", "notes", "created_at") SELECT "id", "trip_id", "name", "category", "dietary", "allergies", "medical_notes", 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, "notes", "created_at" FROM `trip_companions`;--> statement-breakpoint
 DROP TABLE `trip_companions`;--> statement-breakpoint
 ALTER TABLE `__new_trip_companions` RENAME TO `trip_companions`;--> statement-breakpoint
 CREATE INDEX `companions_trip_idx` ON `trip_companions` (`trip_id`);--> statement-breakpoint

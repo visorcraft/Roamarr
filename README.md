@@ -119,7 +119,15 @@ Migrations are applied automatically during application boot before the schedule
 - Flight check-in, document-expiry, trip, segment, and custom reminders.
 - Fare-watch provider framework with configurable provider accounts and connection testing.
 - Travel documents (including documents linked to trip companions), loyalty programs, cards, global benefit templates, and insurance policies.
-- Group/family helpers: trip companions with dietary/allergy/medical notes, reusable packing checklist templates, per-trip expense tracking with split and settlement math, segment attendees, trip polls and voting, trip budget categories with alerts, and emergency-contact itinerary sharing.
+- Group/family helpers: trip companions with dietary/allergy/medical notes, seat/bed preferences, accessibility/room notes, kid gear needs (car seat, stroller, crib, kids meal), reusable packing checklist templates, per-trip expense tracking with split and settlement math, segment attendees, trip polls and voting, trip budget categories with alerts, and emergency-contact itinerary sharing.
+- Multi-currency expense support with per-expense exchange rates and a trip base-currency total.
+- Expense receipt attachments (JPEG, PNG, WebP, PDF) stored next to the database with a secure download route.
+- Saved trip templates that clone a trip and its segments for reuse.
+- Home-preparation task list with due dates and completion toggles.
+- Medication and first-aid schedule with dosage, schedule, start/end times, and companion association.
+- Visa, vaccination, and entry-requirement tracker with status and due dates.
+- Segment payment status and payment due dates.
+- Important-items registry with serial numbers, tracker IDs, and companion association.
 - Trip journal entries, trip document links, and a printable itinerary view.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
 - Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, Vibes, and a High Contrast accessibility theme.

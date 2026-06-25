@@ -9,7 +9,7 @@ import { trips, segments } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
 import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES } from '$lib/server/sharing';
-import { serializeTags } from '../../shared';
+import { serializeTags } from '$lib/tags';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
@@ -47,6 +47,10 @@ export const actions: Actions = {
 			typeof statusRaw === 'string' && statusRaw
 				? v.enumValue(statusRaw, TRIP_STATUSES, 'status')
 				: undefined;
+		const baseCurrencyRaw = String(f.get('baseCurrency') || 'USD').trim().toUpperCase();
+		if (!baseCurrencyRaw || baseCurrencyRaw.length > 3) {
+			v.addError('baseCurrency', 'Base currency must be 1-3 letters');
+		}
 		v.dateRange(startDate, endDate);
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
@@ -59,6 +63,7 @@ export const actions: Actions = {
 				endDate,
 				notes,
 				tags: serializeTags(tags),
+				baseCurrency: baseCurrencyRaw,
 				...(status && { status }),
 				updatedAt: nowIso()
 			})

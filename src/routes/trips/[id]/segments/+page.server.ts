@@ -2,6 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, updateSegment } from '$lib/server/segments';
+import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
 
 export const actions: Actions = {
 	delete: async ({ request, locals, params }) => {
@@ -41,6 +42,16 @@ export const actions: Actions = {
 		const meetingPoint = v.optionalString(f.get('meetingPoint'), 'meetingPoint', { max: 200 });
 		const meetingAt = v.dateTime(f.get('meetingAt'), 'meetingAt');
 		const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
+		const paymentStatusRaw = f.get('paymentStatus');
+		const paymentStatus =
+			paymentStatusRaw && String(paymentStatusRaw).trim()
+				? v.enumValue(
+						String(paymentStatusRaw).trim(),
+						SEGMENT_PAYMENT_STATUSES as readonly string[],
+						'paymentStatus'
+					)
+				: undefined;
+		const paymentDueDate = v.date(f.get('paymentDueDate'), 'paymentDueDate');
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 
@@ -55,7 +66,9 @@ export const actions: Actions = {
 			meetingPoint,
 			meetingAt: meetingAt ?? undefined,
 			cardId,
-			details
+			details,
+			paymentStatus,
+			paymentDueDate
 		});
 		throw redirect(303, `/trips/${params.id}`);
 	}

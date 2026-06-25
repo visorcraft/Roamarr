@@ -322,3 +322,75 @@ test('setSegmentStatus rejects a non-editor', () => {
 
 	expect(() => setSegmentStatus(other.id, t.id, s.id, 'completed')).toThrow();
 });
+
+test('addSegment defaults payment status and stores payment details', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'pay@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const defaulted = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+	expect(defaulted.paymentStatus).toBe('quoted');
+
+	const paid = addSegment(u.id, t.id, {
+		type: 'hotel',
+		title: 'Hilton',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC',
+		paymentStatus: 'deposit_paid',
+		paymentDueDate: '2026-06-15'
+	});
+	expect(paid.paymentStatus).toBe('deposit_paid');
+	expect(paid.paymentDueDate).toBe('2026-06-15');
+});
+
+test('updateSegment changes payment status and due date', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'pay-up@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+
+	updateSegment(u.id, t.id, s.id, {
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC',
+		paymentStatus: 'fully_paid',
+		paymentDueDate: '2026-06-20'
+	});
+
+	const row = db.select().from(segments).where(eq(segments.id, s.id)).get()!;
+	expect(row.paymentStatus).toBe('fully_paid');
+	expect(row.paymentDueDate).toBe('2026-06-20');
+});
+
+test('updateSegment preserves existing payment status when omitted', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'pay-pres@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC',
+		paymentStatus: 'fully_paid'
+	});
+
+	updateSegment(u.id, t.id, s.id, {
+		title: 'UA1 renamed',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+
+	const row = db.select().from(segments).where(eq(segments.id, s.id)).get()!;
+	expect(row.paymentStatus).toBe('fully_paid');
+	expect(row.title).toBe('UA1 renamed');
+});

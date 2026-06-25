@@ -88,6 +88,7 @@ import NewTripPage from './+page.svelte';
 test('new trip form highlights invalid fields and shows per-field errors', () => {
 	const { body } = render(NewTripPage, {
 		props: {
+			data: { tripTemplates: [] } as any,
 			form: {
 				error: 'Please fix the highlighted fields.',
 				errors: { name: 'name is required', startDate: 'startDate must be on or before endDate' }

@@ -1,13 +1,28 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { onDestroy } from 'svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data, form } = $props();
 	let selectedThemeId = $state('midnight-travels');
 
+	function applyThemePreview(themeId: string) {
+		if (!browser) return;
+		document.querySelector<HTMLElement>('.theme-root')?.setAttribute('data-theme', themeId);
+		const theme = data.themes.find((candidate) => candidate.id === themeId);
+		if (theme) document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', theme.themeColor);
+	}
+
 	$effect(() => {
 		selectedThemeId = data.user.themeId;
 	});
+
+	$effect(() => {
+		applyThemePreview(selectedThemeId);
+	});
+
+	onDestroy(() => applyThemePreview(data.user.themeId));
 
 	const selectedThemeName = $derived(
 		data.themes.find((theme) => theme.id === selectedThemeId)?.name ?? 'Midnight Travels'
@@ -83,8 +98,8 @@
 							</span>
 						</span>
 						<span class="min-w-0 flex-1">
-							<span class="block font-semibold text-white">{theme.name}</span>
-							<span class="mt-1 block text-xs text-slate-400">{theme.description}</span>
+							<span class="theme-option-name block font-semibold">{theme.name}</span>
+							<span class="theme-option-description mt-1 block text-xs">{theme.description}</span>
 						</span>
 					</label>
 				{/each}

@@ -40,7 +40,7 @@
 {#snippet brand(size: 'sm' | 'lg')}
 	<a href="/" class="flex items-center gap-2.5">
 		<span
-			class="grid place-items-center rounded-xl bg-gradient-to-br from-indigo-400 via-indigo-500 to-fuchsia-500 shadow-lg shadow-indigo-900/40 {size ===
+			class="brand-mark grid place-items-center rounded-xl {size ===
 			'lg'
 				? 'h-9 w-9'
 				: 'h-8 w-8'}"
@@ -55,7 +55,7 @@
 				<polygon points="3 11 22 2 13 21 11 13 3 11" />
 			</svg>
 		</span>
-		<span class="font-display text-lg font-extrabold text-white">
+		<span class="brand-name font-display text-lg font-extrabold">
 			{data.instanceName ?? 'Roamarr'}
 		</span>
 	</a>
@@ -92,7 +92,7 @@
 
 		<!-- Sidebar -->
 		<aside
-			class="fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col border-r border-white/10 bg-surface/80 backdrop-blur-xl transition-transform duration-200 lg:sticky lg:top-0 lg:translate-x-0 {open
+			class="app-sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col border-r backdrop-blur-xl transition-transform duration-200 lg:sticky lg:top-0 lg:translate-x-0 {open
 				? 'translate-x-0'
 				: '-translate-x-full'}"
 		>
@@ -109,8 +109,8 @@
 						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {isActive(
 							item.href
 						)
-							? 'bg-indigo-500/15 text-white ring-1 ring-inset ring-indigo-400/25'
-							: 'text-slate-400 hover:bg-white/5 hover:text-white'}"
+							? 'app-nav-item-active'
+							: 'app-nav-item'}"
 					>
 						<svg
 							viewBox="0 0 24 24"
@@ -119,32 +119,32 @@
 							stroke-width="2"
 							stroke-linecap="round"
 							stroke-linejoin="round"
-							class="h-5 w-5 shrink-0 {isActive(item.href) ? 'text-indigo-300' : ''}"
+							class="h-5 w-5 shrink-0 {isActive(item.href) ? 'app-nav-icon-active' : ''}"
 							aria-hidden="true">{@html item.icon}</svg
 						>
 						<span class="flex-1">{item.label}</span>
 						{#if item.href === '/notifications' && data.unreadCount > 0}
-							<span class="grid h-5 min-w-[1.25rem] place-items-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-bold text-white">{data.unreadCount}</span>
+							<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-[10px] font-bold">{data.unreadCount}</span>
 						{/if}
 					</a>
 				{/each}
 			</nav>
 
 			<!-- User footer -->
-			<div class="border-t border-white/10 p-3">
+			<div class="app-sidebar-footer border-t p-3">
 				<div class="flex items-center gap-3 rounded-lg px-2 py-2">
 					<a
 						href="/profile"
-						class="flex min-w-0 flex-1 items-center gap-3 rounded-md transition hover:bg-white/5"
+						class="app-user-link flex min-w-0 flex-1 items-center gap-3 rounded-md transition"
 						title="Your profile"
 					>
 						<span
-							class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-600 to-slate-700 text-xs font-bold text-white ring-1 ring-white/10"
+							class="app-avatar grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
 							>{initials}</span
 						>
 						<div class="min-w-0 flex-1">
-							<div class="truncate text-sm font-semibold text-white">{data.user?.displayName}</div>
-							<div class="text-xs text-slate-500 capitalize">{data.user?.role}</div>
+							<div class="app-user-name truncate text-sm font-semibold">{data.user?.displayName}</div>
+							<div class="app-user-role text-xs capitalize">{data.user?.role}</div>
 						</div>
 					</a>
 					<form method="POST" action="/logout">
@@ -177,7 +177,7 @@
 		<div class="flex min-h-dvh min-w-0 flex-col">
 			<!-- Mobile top bar -->
 			<header
-				class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/10 bg-canvas/70 px-4 backdrop-blur-xl lg:hidden"
+				class="app-topbar sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-4 backdrop-blur-xl lg:hidden"
 			>
 				<button
 					class="icon-button text-slate-300"

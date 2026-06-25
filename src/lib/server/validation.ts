@@ -1,6 +1,8 @@
 import { DateTime } from 'luxon';
+import { fail } from '@sveltejs/kit';
 
 type FieldErrors = Record<string, string>;
+export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export function sanitizeLast4(raw?: string): string | null {
 	if (!raw) return null;
@@ -130,4 +132,38 @@ export class Validator {
 	addError(field: string, message: string): void {
 		this.errors[field] = message;
 	}
+}
+
+export function positiveIdFromForm(raw: FormDataEntryValue | null, field: string): ValidationResult<number> {
+	const str = String(raw ?? '').trim();
+	const n = Number(str);
+	if (!str || !Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+		return { ok: false, error: `${field} must be a positive integer` };
+	}
+	return { ok: true, value: n };
+}
+
+export function httpUrl(raw: FormDataEntryValue | null, field: string): ValidationResult<string> {
+	const str = String(raw ?? '').trim();
+	try {
+		const url = new URL(str);
+		if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+			return { ok: false, error: `${field} must be an http or https URL` };
+		}
+		return { ok: true, value: str };
+	} catch {
+		return { ok: false, error: `${field} must be a valid URL` };
+	}
+}
+
+export function currency(raw: FormDataEntryValue | null, field: string): ValidationResult<string> {
+	const str = String(raw ?? '').trim().toUpperCase();
+	if (!/^[A-Z]{3}$/.test(str)) {
+		return { ok: false, error: `${field} must be a 3-letter currency code` };
+	}
+	return { ok: true, value: str };
+}
+
+export function formFail(validator: Validator) {
+	return fail(400, { error: validator.failMessage(), errors: validator.errors });
 }

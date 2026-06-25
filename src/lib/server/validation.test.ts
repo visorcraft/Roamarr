@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { Validator } from './validation';
+import { Validator, positiveIdFromForm, httpUrl, currency, formFail } from './validation';
 
 test('requiredString rejects empty, whitespace, non-string, and enforces max', () => {
 	const v = new Validator();
@@ -115,4 +115,38 @@ test('addError attaches custom field errors', () => {
 	v.addError('detailsJson', 'Invalid JSON');
 	expect(v.ok()).toBe(false);
 	expect(v.errors.detailsJson).toBe('Invalid JSON');
+});
+
+test('positiveIdFromForm parses positive integers', () => {
+	expect(positiveIdFromForm('42', 'id')).toEqual({ ok: true, value: 42 });
+	expect(positiveIdFromForm('1', 'id')).toEqual({ ok: true, value: 1 });
+	expect(positiveIdFromForm('0', 'id')).toEqual({ ok: false, error: 'id must be a positive integer' });
+	expect(positiveIdFromForm('-1', 'id')).toEqual({ ok: false, error: 'id must be a positive integer' });
+	expect(positiveIdFromForm('abc', 'id')).toEqual({ ok: false, error: 'id must be a positive integer' });
+	expect(positiveIdFromForm(null, 'id')).toEqual({ ok: false, error: 'id must be a positive integer' });
+	expect(positiveIdFromForm('', 'id')).toEqual({ ok: false, error: 'id must be a positive integer' });
+});
+
+test('httpUrl accepts http/https URLs', () => {
+	expect(httpUrl('https://example.com', 'url')).toEqual({ ok: true, value: 'https://example.com' });
+	expect(httpUrl('http://localhost:3000', 'url')).toEqual({ ok: true, value: 'http://localhost:3000' });
+	expect(httpUrl('example.com', 'url')).toEqual({ ok: false, error: 'url must be a valid URL' });
+	expect(httpUrl('ftp://files.example.com', 'url')).toEqual({ ok: false, error: 'url must be an http or https URL' });
+	expect(httpUrl('', 'url')).toEqual({ ok: false, error: 'url must be a valid URL' });
+});
+
+test('currency accepts 3-letter codes', () => {
+	expect(currency('USD', 'currency')).toEqual({ ok: true, value: 'USD' });
+	expect(currency('eur', 'currency')).toEqual({ ok: true, value: 'EUR' });
+	expect(currency('US', 'currency')).toEqual({ ok: false, error: 'currency must be a 3-letter currency code' });
+	expect(currency('USDD', 'currency')).toEqual({ ok: false, error: 'currency must be a 3-letter currency code' });
+	expect(currency('', 'currency')).toEqual({ ok: false, error: 'currency must be a 3-letter currency code' });
+});
+
+test('formFail returns fail payload', () => {
+	const v = new Validator();
+	v.requiredString('', 'name');
+	const result = formFail(v);
+	expect(result.status).toBe(400);
+	expect(result.data).toMatchObject({ error: 'Please fix the highlighted fields.', errors: { name: 'name is required' } });
 });

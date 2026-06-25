@@ -36,7 +36,8 @@ import {
 	addExpense,
 	deleteExpense,
 	listTripExpenses,
-	summarizeTripExpenses
+	summarizeTripExpenses,
+	computeSettlement
 } from '$lib/server/tripExpenses';
 import {
 	setAttendeeStatus,
@@ -60,10 +61,15 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const view = loadTripFor(u.id, Number(params.id));
-	const companions = listTripCompanions(view.trip.id);
+	const companions = listTripCompanions(view.trip.id).map((c) =>
+		view.editor
+			? c
+			: { ...c, notes: null, dietary: null, allergies: null, medicalNotes: null }
+	);
 	const checklist = loadChecklist(view.trip.id);
 	const expenses = listTripExpenses(view.trip.id);
 	const expenseSummary = summarizeTripExpenses(expenses, companions);
+	const expenseSettlement = computeSettlement(expenses, companions);
 	const journalEntries = listJournalEntries(view.trip.id);
 	const documentLinks = listDocumentLinks(view.trip.id);
 	let attendeesBySegment = new Map<number, ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never>();
@@ -113,9 +119,9 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
 		const templates = listTemplates(u.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
+		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
 	}
-	return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, comments: listComments(view.trip.id) };
+	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, attendeesBySegment, comments: listComments(view.trip.id) };
 };
 
 export const actions: Actions = {

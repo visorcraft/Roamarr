@@ -43,6 +43,10 @@
 	};
 
 	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
+	const companionNameMap = $derived(new Map((data.companions ?? []).map((c) => [c.id, c.name])));
+	function settlementName(id: 'owner' | number) {
+		return id === 'owner' ? 'You' : (companionNameMap.get(id) ?? 'Unknown');
+	}
 
 	function fmtTime(iso: string | null | undefined, tz = 'UTC') {
 		if (!iso) return '';
@@ -587,6 +591,43 @@
 							</div>
 							<button class="btn btn-primary btn-sm sm:col-span-4">Add expense</button>
 						</form>
+					{/if}
+
+					{#if data.expenseSettlement && Object.keys(data.expenseSettlement).length}
+						<div class="mt-5 space-y-4">
+							<h3 class="subsection-title">Settlement</h3>
+							{#each Object.entries(data.expenseSettlement) as [currency, settlement]}
+								<div class="rounded-lg bg-white/[0.03] p-3 ring-1 ring-white/5">
+									<div class="mb-2 flex items-center justify-between">
+										<span class="font-mono text-xs text-slate-400">{currency}</span>
+									</div>
+									<div class="grid gap-4 sm:grid-cols-2">
+										<div>
+											<h4 class="mb-1 text-xs font-medium text-slate-400">Balances</h4>
+											<ul class="space-y-1">
+												{#each settlement.balances.filter((b) => b.net !== 0) as b (b.companionId)}
+													<li class="text-sm {b.net > 0 ? 'text-emerald-300' : 'text-rose-300'}">
+														{settlementName(b.companionId)}: {b.net > 0 ? '+' : ''}{(b.net / 100).toFixed(2)}
+													</li>
+												{/each}
+											</ul>
+										</div>
+										{#if settlement.payments.length}
+											<div>
+												<h4 class="mb-1 text-xs font-medium text-slate-400">Suggested payments</h4>
+												<ul class="space-y-1">
+													{#each settlement.payments as p (`${p.from}-${p.to}-${p.amount}`)}
+														<li class="text-sm text-slate-200">
+															{settlementName(p.from)} pays {settlementName(p.to)} {currency} {(p.amount / 100).toFixed(2)}
+														</li>
+													{/each}
+												</ul>
+											</div>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
 					{/if}
 				</section>
 			{/if}

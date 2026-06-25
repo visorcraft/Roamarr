@@ -12,6 +12,7 @@ import {
 	addTripExpense,
 	deleteTripExpense,
 	summarizeTripExpenses,
+	computeSettlement,
 	addExpense,
 	deleteExpense
 } from './tripExpenses';
@@ -243,4 +244,171 @@ test('deleteExpense action removes an expense and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, e.id)).get()).toBeUndefined();
+});
+
+test('computeSettlement equal split between owner and companion', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'ce@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Dinner',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: [a.id]
+	});
+
+	const settlement = computeSettlement(listTripExpenses(t.id), [{ id: a.id, name: 'A' }]);
+	expect(settlement.USD.balances).toContainEqual({ companionId: 'owner', name: 'You', net: 10000 });
+	expect(settlement.USD.balances).toContainEqual({ companionId: a.id, name: 'A', net: -10000 });
+	expect(settlement.USD.payments).toEqual([{ from: a.id, to: 'owner', amount: 10000 }]);
+});
+
+test('computeSettlement uneven split across three people', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'ue@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const b = db.insert(tripCompanions).values({ tripId: t.id, name: 'B', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Taxi',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: [a.id, b.id]
+	});
+
+	const settlement = computeSettlement(listTripExpenses(t.id), [
+		{ id: a.id, name: 'A' },
+		{ id: b.id, name: 'B' }
+	]);
+	expect(settlement.USD.payments).toHaveLength(2);
+	const totalPaid = settlement.USD.payments.reduce((sum, p) => sum + p.amount, 0);
+	expect(totalPaid).toBe(10000);
+	expect(settlement.USD.payments.every((p) => p.to === 'owner')).toBe(true);
+});
+
+test('computeSettlement single person expense has no payments', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'se@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Solo',
+		amount: 5000,
+		currency: 'USD',
+		paidByCompanionId: a.id,
+		splitAmong: [a.id]
+	});
+
+	const settlement = computeSettlement(listTripExpenses(t.id), [{ id: a.id, name: 'A' }]);
+	expect(settlement.USD.balances.find((b) => b.companionId === a.id)?.net).toBe(0);
+	expect(settlement.USD.payments).toEqual([]);
+});
+
+test('computeSettlement owner-only expense leaves companions neutral', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'oo@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Owner-only',
+		amount: 8000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: []
+	});
+
+	const settlement = computeSettlement(listTripExpenses(t.id), [{ id: a.id, name: 'A' }]);
+	expect(settlement.USD.balances.find((b) => b.companionId === 'owner')?.net).toBe(0);
+	expect(settlement.USD.balances.find((b) => b.companionId === a.id)?.net).toBe(0);
+	expect(settlement.USD.payments).toEqual([]);
+});
+
+test('addTripExpense accepts owner as a split participant', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'ao@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	const e = addTripExpense(u.id, t.id, {
+		description: 'Gas',
+		amount: 9000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: ['owner', a.id]
+	});
+
+	expect(e.splitAmong).toEqual(['owner', a.id]);
+	const row = db.select().from(tripExpenses).where(eq(tripExpenses.id, e.id)).get();
+	expect(JSON.parse(row!.splitAmong)).toEqual(['owner', a.id]);
+});
+
+test('addExpense action accepts owner split participant and redirects', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'as@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	await expect(
+		addExpense(
+			event(u, t.id, {
+				description: 'Toll',
+				amount: '3000',
+				currency: 'USD',
+				paidByCompanionId: '',
+				splitAmong: ['owner', String(a.id)]
+			})
+		)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(JSON.parse(rows[0].splitAmong)).toEqual(['owner', a.id]);
+});
+
+test('summarizeTripExpenses splits expense among owner and companion', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'so@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Lunch',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: ['owner', a.id]
+	});
+
+	const summary = summarizeTripExpenses(listTripExpenses(t.id), [a]);
+	// owner paid 10000 and owes 5000 => net +5000
+	// a owes 5000 => net -5000
+	expect(summary.balancesByCurrency.USD.owner).toBe(5000);
+	expect(summary.balancesByCurrency.USD[a.id]).toBe(-5000);
+});
+
+test('computeSettlement with owner split participant produces correct payment', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'cs@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+
+	addTripExpense(u.id, t.id, {
+		description: 'Lunch',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: ['owner', a.id]
+	});
+
+	const settlement = computeSettlement(listTripExpenses(t.id), [{ id: a.id, name: 'A' }]);
+	expect(settlement.USD.balances).toContainEqual({ companionId: 'owner', name: 'You', net: 5000 });
+	expect(settlement.USD.balances).toContainEqual({ companionId: a.id, name: 'A', net: -5000 });
+	expect(settlement.USD.payments).toEqual([{ from: a.id, to: 'owner', amount: 5000 }]);
 });

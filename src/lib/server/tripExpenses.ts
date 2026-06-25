@@ -15,7 +15,7 @@ export interface TripExpenseView {
 	currency: string;
 	paidByCompanionId: number | null;
 	paidBy: 'owner' | number;
-	splitAmong: number[];
+	splitAmong: Array<'owner' | number>;
 	createdAt: string;
 }
 
@@ -25,12 +25,18 @@ export interface TripExpenseSummary {
 	balancesByCurrency: Record<string, Record<'owner' | number, number>>;
 }
 
-function parseSplitAmong(raw: string): number[] {
+export interface Settlement {
+	balances: Array<{ companionId: 'owner' | number; name: string; net: number }>;
+	payments: Array<{ from: 'owner' | number; to: 'owner' | number; amount: number }>;
+}
+
+function parseSplitAmong(raw: string): Array<'owner' | number> {
 	try {
 		const parsed = JSON.parse(raw);
 		if (Array.isArray(parsed)) {
 			return parsed.filter(
-				(n): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0
+				(n): n is 'owner' | number =>
+					n === 'owner' || (typeof n === 'number' && Number.isInteger(n) && n > 0)
 			);
 		}
 	} catch {
@@ -61,7 +67,7 @@ export function addTripExpense(
 		amount: number;
 		currency: string;
 		paidByCompanionId?: number | null;
-		splitAmong?: number[];
+		splitAmong?: Array<'owner' | number>;
 	}
 ) {
 	requireEditableTrip(userId, tripId);
@@ -76,7 +82,9 @@ export function addTripExpense(
 
 	const paidByCompanionId = input.paidByCompanionId ?? null;
 	const splitAmong = Array.from(
-		new Set((input.splitAmong ?? []).filter((n) => Number.isInteger(n) && n > 0))
+		new Set(
+			(input.splitAmong ?? []).filter((n) => n === 'owner' || (Number.isInteger(n) && n > 0))
+		)
 	);
 
 	if (paidByCompanionId != null) {
@@ -88,14 +96,15 @@ export function addTripExpense(
 		if (!c) throw error(400, 'Payer companion is not on this trip');
 	}
 
-	if (splitAmong.length > 0) {
+	const splitCompanionIds = splitAmong.filter((n): n is number => typeof n === 'number');
+	if (splitCompanionIds.length > 0) {
 		const found = db
 			.select({ id: tripCompanions.id })
 			.from(tripCompanions)
-			.where(and(eq(tripCompanions.tripId, tripId), inArray(tripCompanions.id, splitAmong)))
+			.where(and(eq(tripCompanions.tripId, tripId), inArray(tripCompanions.id, splitCompanionIds)))
 			.all();
 		const foundIds = new Set(found.map((c) => c.id));
-		if (foundIds.size !== splitAmong.length) throw error(400, 'Split companion not found');
+		if (foundIds.size !== splitCompanionIds.length) throw error(400, 'Split companion not found');
 	}
 
 	const inserted = db
@@ -173,6 +182,45 @@ export function summarizeTripExpenses(
 	return { totalsByCurrency, perPersonShareByCurrency, balancesByCurrency };
 }
 
+export function computeSettlement(
+	expenses: TripExpenseView[],
+	companions: { id: number; name: string }[]
+): Record<string, Settlement> {
+	const summary = summarizeTripExpenses(expenses, companions);
+	const names = new Map<number, string>(companions.map((c) => [c.id, c.name]));
+	const result: Record<string, Settlement> = {};
+
+	for (const [currency, balances] of Object.entries(summary.balancesByCurrency)) {
+		const settlementBalances: Settlement['balances'] = [];
+		const creditors: Array<{ id: 'owner' | number; net: number }> = [];
+		const debtors: Array<{ id: 'owner' | number; net: number }> = [];
+
+		for (const [person, net] of Object.entries(balances)) {
+			const id: 'owner' | number = person === 'owner' ? 'owner' : Number(person);
+			const name = id === 'owner' ? 'You' : (names.get(id) ?? 'Unknown');
+			settlementBalances.push({ companionId: id, name, net });
+			if (net > 0) creditors.push({ id, net });
+			else if (net < 0) debtors.push({ id, net: -net });
+		}
+
+		const payments: Settlement['payments'] = [];
+		let i = 0;
+		let j = 0;
+		while (i < debtors.length && j < creditors.length) {
+			const amount = Math.min(debtors[i].net, creditors[j].net);
+			payments.push({ from: debtors[i].id, to: creditors[j].id, amount });
+			debtors[i].net -= amount;
+			creditors[j].net -= amount;
+			if (debtors[i].net === 0) i++;
+			if (creditors[j].net === 0) j++;
+		}
+
+		result[currency] = { balances: settlementBalances, payments };
+	}
+
+	return result;
+}
+
 export async function addExpense(event: RequestEvent) {
 	const u = requireUser(event.locals);
 	const tripId = Number(event.params.id);
@@ -195,8 +243,10 @@ export async function addExpense(event: RequestEvent) {
 
 	const splitAmong = f
 		.getAll('splitAmong')
-		.map((raw) => Number(raw))
-		.filter((n) => Number.isFinite(n) && Number.isInteger(n) && n > 0);
+		.map((raw) => (raw === 'owner' ? 'owner' : Number(raw)))
+		.filter((n): n is 'owner' | number =>
+			n === 'owner' || (Number.isFinite(n) && Number.isInteger(n) && n > 0)
+		);
 
 	if (!v.ok()) {
 		return fail(400, { error: v.failMessage(), errors: v.errors });

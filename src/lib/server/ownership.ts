@@ -3,6 +3,7 @@ import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { trips, cards, fareProviders, segments, groups, travelDocuments, users } from './db/schema';
 import { canEdit } from './sharing';
+import type { SQLiteTable, AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export function requireOwnedUser(userId: number) {
 	const u = db.select().from(users).where(eq(users.id, userId)).get();
@@ -44,6 +45,17 @@ export function requireOwnedDocument(userId: number, documentId: number) {
 		.get();
 	if (!d) throw error(404, 'Not found');
 	return d;
+}
+
+export function requireOwnedTripRow<TTable extends SQLiteTable>(
+	table: TTable & { id: AnySQLiteColumn; tripId: AnySQLiteColumn },
+	tripId: number,
+	id: number,
+	notFoundMessage = 'Not found'
+): TTable['$inferSelect'] {
+	const row = db.select().from(table).where(and(eq(table.id, id), eq(table.tripId, tripId))).get();
+	if (!row) throw error(404, notFoundMessage);
+	return row;
 }
 
 export function assertOwnedRefs(

@@ -7,8 +7,8 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs } from './ownership';
-import { users, trips, cards } from './db/schema';
+import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, requireOwnedTripRow } from './ownership';
+import { users, trips, cards, tripHomeTasks } from './db/schema';
 
 test('blocks cross-owner trip and card access', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -43,4 +43,15 @@ test('requireOwnedUser returns the user row or throws', () => {
 		.get();
 	expect(requireOwnedUser(a.id).id).toBe(a.id);
 	expect(() => requireOwnedUser(999999)).toThrow();
+});
+
+test('requireOwnedTripRow returns row owned by trip or throws 404', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const a = db.insert(users).values({ email: 'row@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const t1 = db.insert(trips).values({ ownerId: a.id, name: 'T1' }).returning().get();
+	const t2 = db.insert(trips).values({ ownerId: a.id, name: 'T2' }).returning().get();
+	const row = db.insert(tripHomeTasks).values({ tripId: t1.id, text: 'A' }).returning().get();
+	expect(requireOwnedTripRow(tripHomeTasks, t1.id, row.id).id).toBe(row.id);
+	expect(() => requireOwnedTripRow(tripHomeTasks, t2.id, row.id)).toThrow();
+	expect(() => requireOwnedTripRow(tripHomeTasks, t1.id, 999999)).toThrow();
 });

@@ -60,6 +60,27 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 	expect(budgets).toHaveLength(BUDGET_CATEGORIES.length);
 });
 
+test('listBudgetsWithSpent buckets null and unknown categories into other', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'b5@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	setBudget(t.id, 'other', 5000);
+
+	const budgets = listBudgetsWithSpent(t.id, [
+		{ amount: 1000 },
+		{ amount: 2000, category: null },
+		{ amount: 1500, category: 'not-a-category' },
+		{ amount: 500, category: 'food' }
+	]);
+
+	const other = budgets.find((b) => b.category === 'other')!;
+	expect(other.spent).toBe(4500);
+
+	const food = budgets.find((b) => b.category === 'food')!;
+	expect(food.spent).toBe(500);
+});
+
 test('alert levels: ok, near, over', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = db.insert(users).values({ email: 'b2@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();

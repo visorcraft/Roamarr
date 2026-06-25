@@ -61,9 +61,49 @@ test('listTripExpenses returns expenses with parsed splitAmong', () => {
 	expect(expenses[0].description).toBe('Dinner');
 	expect(expenses[0].splitAmong).toEqual([c.id]);
 	expect(expenses[0].paidBy).toBe('owner');
+	expect(expenses[0].category).toBe('other');
 });
 
-test('addTripExpense rejects missing description and invalid amount', async () => {
+test('addTripExpense defaults and validates category', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'cat@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const defaulted = addTripExpense(u.id, t.id, { description: 'X', amount: 1000, currency: 'USD' });
+	expect(defaulted.category).toBe('other');
+
+	const food = addTripExpense(u.id, t.id, { description: 'Y', amount: 2000, currency: 'USD', category: 'food' });
+	expect(food.category).toBe('food');
+
+	expect(() =>
+		addTripExpense(u.id, t.id, { description: 'Z', amount: 1000, currency: 'USD', category: 'invalid' })
+	).toThrowError(expect.objectContaining({ status: 400 }));
+});
+
+test('addExpense action stores category', async () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'acat@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	await expect(
+		addExpense(
+			event(u, t.id, {
+				description: 'Train',
+				amount: '12000',
+				currency: 'USD',
+				category: 'transport',
+				paidByCompanionId: '',
+				splitAmong: []
+			})
+		)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].category).toBe('transport');
+});
+
+test('addExpense action returns validation failures', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = db.insert(users).values({ email: 'iv@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();

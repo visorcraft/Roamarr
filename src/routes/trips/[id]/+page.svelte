@@ -632,17 +632,24 @@
 						<p class="empty-text py-2">No expenses recorded yet.</p>
 					{/if}
 					{#if isEditor}
-						<form method="POST" action="?/addExpense" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
+						<form method="POST" action="?/addExpense" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
 							<input name="description" class="input text-sm" placeholder="Description" required />
 							<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cents" required />
 							<input name="currency" class="input w-24 text-sm" placeholder="USD" value="USD" required />
+								<select name="category" class="input w-auto text-sm">
+									<option value="lodging">Lodging</option>
+									<option value="transport">Transport</option>
+									<option value="food">Food</option>
+									<option value="activities">Activities</option>
+									<option value="other" selected>Other</option>
+								</select>
 							<select name="paidByCompanionId" class="input w-auto text-sm">
 								<option value="">You</option>
 								{#each data.companions ?? [] as c (c.id)}
 									<option value={c.id}>{c.name}</option>
 								{/each}
 							</select>
-							<div class="sm:col-span-4">
+							<div class="sm:col-span-5">
 								<p class="mb-1 text-xs text-slate-400">Split among</p>
 								<div class="flex flex-wrap gap-2">
 									<label class="checkbox-label text-xs">
@@ -655,7 +662,7 @@
 									{/each}
 								</div>
 							</div>
-							<button class="btn btn-primary btn-sm sm:col-span-4">Add expense</button>
+							<button class="btn btn-primary btn-sm sm:col-span-5">Add expense</button>
 						</form>
 					{/if}
 

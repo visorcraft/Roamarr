@@ -120,6 +120,13 @@
       "when": 1782377120016,
       "tag": "0016_empty_the_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1782386019306,
+      "tag": "0017_jittery_lethal_legion",
+      "breakpoints": true
     }
   ]
 }

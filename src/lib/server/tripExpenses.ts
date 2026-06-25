@@ -6,6 +6,7 @@ import { requireUser } from './auth';
 import { requireEditableTrip } from './ownership';
 import { Validator } from './validation';
 import { logAudit } from './audit';
+import { BUDGET_CATEGORIES } from './tripBudgets';
 
 export interface TripExpenseView {
 	id: number;
@@ -13,6 +14,7 @@ export interface TripExpenseView {
 	description: string;
 	amount: number;
 	currency: string;
+	category: string | null;
 	paidByCompanionId: number | null;
 	paidBy: 'owner' | number;
 	splitAmong: Array<'owner' | number>;
@@ -45,6 +47,15 @@ function parseSplitAmong(raw: string): Array<'owner' | number> {
 	return [];
 }
 
+function normalizeCategory(category?: string | null): string {
+	if (category == null) return 'other';
+	const c = category.trim().toLowerCase();
+	if (!BUDGET_CATEGORIES.includes(c as typeof BUDGET_CATEGORIES[number])) {
+		throw error(400, `Category must be one of: ${BUDGET_CATEGORIES.join(', ')}`);
+	}
+	return c;
+}
+
 export function listTripExpenses(tripId: number): TripExpenseView[] {
 	const rows = db
 		.select()
@@ -66,6 +77,7 @@ export function addTripExpense(
 		description: string;
 		amount: number;
 		currency: string;
+		category?: string | null;
 		paidByCompanionId?: number | null;
 		splitAmong?: Array<'owner' | number>;
 	}
@@ -79,6 +91,7 @@ export function addTripExpense(
 	}
 	const currency = (input.currency ?? 'USD').trim().toUpperCase();
 	if (!currency || currency.length > 3) throw error(400, 'Currency must be 1-3 letters');
+	const category = normalizeCategory(input.category);
 
 	const paidByCompanionId = input.paidByCompanionId ?? null;
 	const splitAmong = Array.from(
@@ -114,6 +127,7 @@ export function addTripExpense(
 			description,
 			amount: input.amount,
 			currency,
+			category,
 			paidByCompanionId,
 			splitAmong: JSON.stringify(splitAmong)
 		})
@@ -123,7 +137,8 @@ export function addTripExpense(
 	logAudit(userId, 'create', 'trip_expense', inserted.id, {
 		tripId,
 		amount: input.amount,
-		currency
+		currency,
+		category
 	});
 
 	return { ...inserted, paidBy: inserted.paidByCompanionId ?? 'owner', splitAmong };
@@ -241,6 +256,12 @@ export async function addExpense(event: RequestEvent) {
 		paidByCompanionId = v.positiveId(paidByRaw, 'paidByCompanionId') ?? null;
 	}
 
+	const categoryRaw = f.get('category');
+	let category: string | undefined;
+	if (typeof categoryRaw === 'string' && categoryRaw.trim()) {
+		category = v.enumValue(categoryRaw.trim(), BUDGET_CATEGORIES as readonly string[], 'category');
+	}
+
 	const splitAmong = f
 		.getAll('splitAmong')
 		.map((raw) => (raw === 'owner' ? 'owner' : Number(raw)))
@@ -256,6 +277,7 @@ export async function addExpense(event: RequestEvent) {
 		description: description!,
 		amount: amount!,
 		currency,
+		category,
 		paidByCompanionId,
 		splitAmong
 	});

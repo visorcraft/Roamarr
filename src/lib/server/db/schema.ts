@@ -535,6 +535,7 @@ export const tripExpenses = sqliteTable(
 		description: text('description').notNull(),
 		amount: integer('amount').notNull(),
 		currency: text('currency').notNull().default('USD'),
+		category: text('category').default('other'),
 		paidByCompanionId: integer('paid_by_companion_id').references(() => tripCompanions.id, {
 			onDelete: 'set null'
 		}),
@@ -542,7 +543,11 @@ export const tripExpenses = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		tripIdx: index('expenses_trip_idx').on(t.tripId)
+		tripIdx: index('expenses_trip_idx').on(t.tripId),
+		catCk: check(
+			'expenses_category_ck',
+			sql`${t.category} in ('lodging','transport','food','activities','other')`
+		)
 	})
 );
 

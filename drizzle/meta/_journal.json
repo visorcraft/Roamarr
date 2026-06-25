@@ -134,6 +134,13 @@
       "when": 1782387778095,
       "tag": "0018_big_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1782388838048,
+      "tag": "0019_confused_callisto",
+      "breakpoints": true
     }
   ]
 }

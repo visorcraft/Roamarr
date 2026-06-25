@@ -103,6 +103,7 @@ export const trips = sqliteTable(
 		publicShowDetails: integer('public_show_details', { mode: 'boolean' }).notNull().default(false),
 		calendarToken: text('calendar_token').unique(),
 		calendarTokenExpiresAt: text('calendar_token_expires_at'),
+		baseCurrency: text('base_currency').notNull().default('USD'),
 		status: text('status').notNull().default('booked'),
 		createdAt: text('created_at').notNull().default(now),
 		updatedAt: text('updated_at').notNull().default(now)
@@ -174,6 +175,8 @@ export const segments = sqliteTable(
 		detailsJson: text('details_json'),
 		meetingPoint: text('meeting_point'),
 		meetingAt: text('meeting_at'),
+		paymentStatus: text('payment_status').notNull().default('quoted'),
+		paymentDueDate: text('payment_due_date'),
 		cardId: integer('card_id').references(() => cards.id, { onDelete: 'set null' }),
 		createdAt: text('created_at').notNull().default(now),
 		updatedAt: text('updated_at').notNull().default(now)
@@ -186,6 +189,10 @@ export const segments = sqliteTable(
 		statusCk: check(
 			'segments_status_ck',
 			sql`${t.status} in ('planned','checked_in','boarded','arrived','completed')`
+		),
+		paymentStatusCk: check(
+			'segments_payment_status_ck',
+			sql`${t.paymentStatus} in ('quoted','deposit_paid','fully_paid','refunded')`
 		),
 		tripIdx: index('segments_trip_idx').on(t.tripId),
 		startIdx: index('segments_start_idx').on(t.startAt)
@@ -482,11 +489,28 @@ export const tripCompanions = sqliteTable(
 		dietary: text('dietary'),
 		allergies: text('allergies'),
 		medicalNotes: text('medical_notes'),
+		needsCarSeat: integer('needs_car_seat', { mode: 'boolean' }).notNull().default(false),
+		needsStroller: integer('needs_stroller', { mode: 'boolean' }).notNull().default(false),
+		needsCrib: integer('needs_crib', { mode: 'boolean' }).notNull().default(false),
+		needsKidsMeal: integer('needs_kids_meal', { mode: 'boolean' }).notNull().default(false),
+		childTicketDiscount: text('child_ticket_discount'),
+		seatPreference: text('seat_preference'),
+		bedPreference: text('bed_preference'),
+		accessibilityNeeds: text('accessibility_needs'),
+		roomNotes: text('room_notes'),
 		notes: text('notes'),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
 		catCk: check('companions_cat_ck', sql`${t.category} in ('adult','child','other')`),
+		seatCk: check(
+			'companions_seat_ck',
+			sql`${t.seatPreference} is null or ${t.seatPreference} in ('aisle','window','middle','none')`
+		),
+		bedCk: check(
+			'companions_bed_ck',
+			sql`${t.bedPreference} is null or ${t.bedPreference} in ('king','queen','twin','two_doubles','other')`
+		),
 		tripIdx: index('companions_trip_idx').on(t.tripId)
 	})
 );
@@ -535,6 +559,8 @@ export const tripExpenses = sqliteTable(
 		amount: integer('amount').notNull(),
 		currency: text('currency').notNull().default('USD'),
 		category: text('category').default('other'),
+		exchangeRate: integer('exchange_rate').notNull().default(10000),
+		baseAmount: integer('base_amount').notNull().default(0),
 		paidByCompanionId: integer('paid_by_companion_id').references(() => tripCompanions.id, {
 			onDelete: 'set null'
 		}),
@@ -727,3 +753,100 @@ export const tripBudgetCategories = sqliteTable(
 		tripIdx: index('trip_budget_categories_trip_idx').on(t.tripId)
 	})
 );
+
+export const tripExpenseAttachments = sqliteTable('trip_expense_attachments', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	expenseId: integer('expense_id')
+		.notNull()
+		.references(() => tripExpenses.id, { onDelete: 'cascade' }),
+	filename: text('filename').notNull(),
+	storageKey: text('storage_key').notNull().unique(),
+	contentType: text('content_type').notNull(),
+	sizeBytes: integer('size_bytes').notNull().default(0),
+	createdAt: text('created_at').notNull().default(now)
+});
+
+export const tripTemplates = sqliteTable('trip_templates', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	userId: integer('user_id')
+		.notNull()
+		.references(() => users.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	sourceTripId: integer('source_trip_id').references(() => trips.id, { onDelete: 'set null' }),
+	snapshotJson: text('snapshot_json').notNull(),
+	createdAt: text('created_at').notNull().default(now)
+});
+
+export const tripHomeTasks = sqliteTable('trip_home_tasks', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tripId: integer('trip_id')
+		.notNull()
+		.references(() => trips.id, { onDelete: 'cascade' }),
+	text: text('text').notNull(),
+	dueDate: text('due_date'),
+	done: integer('done', { mode: 'boolean' }).notNull().default(false),
+	sortOrder: integer('sort_order').notNull().default(0),
+	createdAt: text('created_at').notNull().default(now)
+});
+
+export const tripMedications = sqliteTable('trip_medications', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tripId: integer('trip_id')
+		.notNull()
+		.references(() => trips.id, { onDelete: 'cascade' }),
+	companionId: integer('companion_id').references(() => tripCompanions.id, {
+		onDelete: 'set null'
+	}),
+	name: text('name').notNull(),
+	dosage: text('dosage'),
+	schedule: text('schedule'),
+	startsAt: text('starts_at'),
+	endsAt: text('ends_at'),
+	notes: text('notes'),
+	createdAt: text('created_at').notNull().default(now),
+	updatedAt: text('updated_at').notNull().default(now)
+});
+
+export const tripEntryRequirements = sqliteTable(
+	'trip_entry_requirements',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		country: text('country').notNull(),
+		requirementType: text('requirement_type').notNull(),
+		status: text('status').notNull().default('needed'),
+		dueDate: text('due_date'),
+		notes: text('notes'),
+		createdAt: text('created_at').notNull().default(now),
+		updatedAt: text('updated_at').notNull().default(now)
+	},
+	(t) => ({
+		typeCk: check(
+			'entry_req_type_ck',
+			sql`${t.requirementType} in ('visa','vaccination','other')`
+		),
+		statusCk: check(
+			'entry_req_status_ck',
+			sql`${t.status} in ('needed','in_progress','complete','not_needed')`
+		),
+		tripIdx: index('entry_req_trip_idx').on(t.tripId)
+	})
+);
+
+export const tripImportantItems = sqliteTable('trip_important_items', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	tripId: integer('trip_id')
+		.notNull()
+		.references(() => trips.id, { onDelete: 'cascade' }),
+	companionId: integer('companion_id').references(() => tripCompanions.id, {
+		onDelete: 'set null'
+	}),
+	name: text('name').notNull(),
+	serialNumber: text('serial_number'),
+	trackerId: text('tracker_id'),
+	notes: text('notes'),
+	createdAt: text('created_at').notNull().default(now),
+	updatedAt: text('updated_at').notNull().default(now)
+});

@@ -15,6 +15,7 @@
 	let editingCompanionId = $state<number | null>(null);
 	let showCompanionNotesId = $state<number | null>(null);
 	let showAddCompanionNotes = $state(false);
+	let selectedCompanionByPoll = $state<Record<number, string>>({});
 
 	type SharedSegment = {
 		type: string;
@@ -664,6 +665,108 @@
 							<input name="entryDate" type="date" class="input w-auto text-sm" required />
 							<textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea>
 							<button class="btn btn-primary btn-sm">Add journal entry</button>
+						</form>
+					{/if}
+				</section>
+			{/if}
+
+			{#if data.polls?.length || isEditor}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">
+							<Icon name="poll" class="inline h-4 w-4 mr-1.5" />
+							Polls
+						</h2>
+						{#if data.polls?.length}
+							<span class="font-mono text-xs text-slate-500">{data.polls.length}</span>
+						{/if}
+					</div>
+
+					{#if data.polls?.length}
+						<div class="space-y-4">
+							{#each data.polls as poll (poll.id)}
+								{@const selectedCompanion = selectedCompanionByPoll[poll.id] ?? ''}
+								{@const currentVote = selectedCompanion
+									? poll.votes.find((v) => v.companionId === Number(selectedCompanion))
+									: undefined}
+								<div class="rounded-lg bg-white/[0.03] p-3 ring-1 ring-white/5">
+									<div class="flex items-start justify-between gap-3">
+										<h3 class="subsection-title">{poll.question}</h3>
+										{#if isEditor}
+											<form method="POST" action="?/deletePoll">
+												<input type="hidden" name="pollId" value={poll.id} />
+												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete poll">
+													<Icon name="close" class="h-3.5 w-3.5" />
+												</button>
+											</form>
+										{/if}
+									</div>
+
+									{#if isEditor}
+										<form method="POST" action="?/votePoll" class="mt-3 space-y-2">
+											<input type="hidden" name="pollId" value={poll.id} />
+											<select
+												name="companionId"
+												class="input text-sm"
+												bind:value={selectedCompanionByPoll[poll.id]}
+												required
+											>
+												<option value="">Vote as companion...</option>
+												{#each data.companions ?? [] as c (c.id)}
+													<option value={c.id}>{c.name}</option>
+												{/each}
+											</select>
+											<div class="flex flex-wrap gap-2">
+												{#each poll.options as opt (opt.id)}
+													{@const isSelected = currentVote?.optionId === opt.id}
+													<button
+														name="optionId"
+														value={opt.id}
+														class="btn btn-sm {isSelected ? 'btn-primary' : 'btn-ghost'}"
+														disabled={!selectedCompanion}
+													>
+														{opt.label}
+														<span class="ml-1.5 font-mono text-xs opacity-80">{opt.voteCount}</span>
+													</button>
+												{/each}
+											</div>
+										</form>
+									{:else}
+										<ul class="mt-2 space-y-1">
+											{#each poll.options as opt (opt.id)}
+												<li class="flex items-center justify-between text-sm">
+													<span class="text-slate-200">{opt.label}</span>
+													<span class="badge badge-slate badge-compact font-mono">{opt.voteCount}</span>
+												</li>
+											{/each}
+										</ul>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<p class="empty-text py-2">No polls yet.</p>
+					{/if}
+
+					{#if isEditor}
+						<form method="POST" action="?/createPoll" class="mt-4 space-y-2">
+							<input
+								name="question"
+								class="input text-sm"
+								placeholder="Ask a question..."
+								required
+								maxlength="500"
+							/>
+							<div class="space-y-1">
+								{#each [0, 1, 2] as i}
+									<input
+										name="options"
+										class="input text-sm"
+										placeholder="Option {i + 1}"
+									/>
+								{/each}
+							</div>
+							<button class="btn btn-primary btn-sm">Create poll</button>
 						</form>
 					{/if}
 				</section>

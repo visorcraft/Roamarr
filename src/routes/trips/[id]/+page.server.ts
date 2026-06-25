@@ -56,6 +56,7 @@ import {
 	deleteDocumentLink,
 	listDocumentLinks
 } from '$lib/server/tripDocumentLinks';
+import { createPoll, deletePoll, listPollsWithVotes, votePoll } from '$lib/server/tripPolls';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -72,6 +73,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const expenseSettlement = computeSettlement(expenses, companions);
 	const journalEntries = listJournalEntries(view.trip.id);
 	const documentLinks = listDocumentLinks(view.trip.id);
+	const polls = listPollsWithVotes(view.trip.id);
 	let attendeesBySegment = new Map<number, ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never>();
 	if (view.editor) {
 		const segmentIds = view.segments.map((s) => s.id).filter((id): id is number => !!id);
@@ -119,9 +121,9 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
 		const templates = listTemplates(u.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
+		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
 	}
-	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, attendeesBySegment, comments: listComments(view.trip.id) };
+	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, polls, attendeesBySegment, comments: listComments(view.trip.id) };
 };
 
 export const actions: Actions = {
@@ -260,6 +262,9 @@ export const actions: Actions = {
 	addDocumentLink,
 	updateDocumentLink,
 	deleteDocumentLink,
+	createPoll,
+	votePoll,
+	deletePoll,
 	saveChecklistTemplate,
 	applyChecklistTemplate
 };

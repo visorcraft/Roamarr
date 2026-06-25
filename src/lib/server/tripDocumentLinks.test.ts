@@ -18,15 +18,8 @@ import {
 } from './tripDocumentLinks';
 import { users, trips, tripDocumentLinks, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
-import type { RequestEvent } from '@sveltejs/kit';
-
-function makeEvent(user: { id: number }, tripId: number, formData: FormData): RequestEvent {
-	return {
-		locals: { user } as App.Locals,
-		params: { id: String(tripId) },
-		request: { formData: async () => formData }
-	} as RequestEvent;
-}
+import { makeUser, makeTrip } from '../../../tests/helpers';
+import { makeFormEvent } from '../../../tests/eventHelpers';
 
 function formData(entries: Record<string, string>): FormData {
 	const f = new FormData();
@@ -157,13 +150,13 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 
 test('addDocumentLink action creates a link and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl8@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db);
+	const t = makeTrip(db, { ownerId: u.id });
 
-	const event = makeEvent(
+	const event = makeFormEvent(
 		u,
-		t.id,
-		formData({ label: 'Action', url: 'https://action.example', notes: 'N' })
+		{ id: String(t.id) },
+		{ label: 'Action', url: 'https://action.example', notes: 'N' }
 	);
 	await expect(addDocumentLink(event)).rejects.toMatchObject({
 		status: 303,
@@ -177,10 +170,10 @@ test('addDocumentLink action creates a link and redirects', async () => {
 
 test('addDocumentLink action returns validation errors', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl9@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db);
+	const t = makeTrip(db, { ownerId: u.id });
 
-	const event = makeEvent(u, t.id, formData({ label: '', url: 'not-a-url' }));
+	const event = makeFormEvent(u, { id: String(t.id) }, { label: '', url: 'not-a-url' });
 	const result = (await addDocumentLink(event)) as {
 		status: number;
 		data: { error: string; errors?: Record<string, string> };
@@ -192,14 +185,14 @@ test('addDocumentLink action returns validation errors', async () => {
 
 test('updateDocumentLink action updates a link and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl10@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db);
+	const t = makeTrip(db, { ownerId: u.id });
 	const link = createDocumentLink(u.id, t.id, { label: 'Old', url: 'https://old.example' });
 
-	const event = makeEvent(
+	const event = makeFormEvent(
 		u,
-		t.id,
-		formData({ linkId: String(link.id), label: 'Updated', url: 'https://updated.example', notes: '' })
+		{ id: String(t.id) },
+		{ linkId: String(link.id), label: 'Updated', url: 'https://updated.example', notes: '' }
 	);
 	await expect(updateDocumentLink(event)).rejects.toMatchObject({
 		status: 303,
@@ -213,11 +206,11 @@ test('updateDocumentLink action updates a link and redirects', async () => {
 
 test('deleteDocumentLink action removes a link and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl11@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db);
+	const t = makeTrip(db, { ownerId: u.id });
 	const link = createDocumentLink(u.id, t.id, { label: 'Remove', url: 'https://remove.example' });
 
-	const event = makeEvent(u, t.id, formData({ linkId: String(link.id) }));
+	const event = makeFormEvent(u, { id: String(t.id) }, { linkId: String(link.id) });
 	await expect(deleteDocumentLink(event)).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`

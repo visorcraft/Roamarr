@@ -57,6 +57,7 @@ import {
 	listDocumentLinks
 } from '$lib/server/tripDocumentLinks';
 import { createPoll, deletePoll, listPollsWithVotes, votePoll } from '$lib/server/tripPolls';
+import { listBudgetsWithSpent, setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -71,6 +72,7 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const expenses = listTripExpenses(view.trip.id);
 	const expenseSummary = summarizeTripExpenses(expenses, companions);
 	const expenseSettlement = computeSettlement(expenses, companions);
+	const budgets = listBudgetsWithSpent(view.trip.id, expenses);
 	const journalEntries = listJournalEntries(view.trip.id);
 	const documentLinks = listDocumentLinks(view.trip.id);
 	const polls = listPollsWithVotes(view.trip.id);
@@ -121,9 +123,9 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
 		const templates = listTemplates(u.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
+		return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
 	}
-	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, journalEntries, documentLinks, polls, attendeesBySegment, comments: listComments(view.trip.id) };
+	return { ...view, companions, checklist, expenses, expenseSummary, expenseSettlement, budgets, journalEntries, documentLinks, polls, attendeesBySegment, comments: listComments(view.trip.id) };
 };
 
 export const actions: Actions = {
@@ -278,5 +280,7 @@ export const actions: Actions = {
 	votePoll,
 	deletePoll,
 	saveChecklistTemplate,
-	applyChecklistTemplate
+	applyChecklistTemplate,
+	setBudget: setBudgetAction,
+	deleteBudget: deleteBudgetAction
 };

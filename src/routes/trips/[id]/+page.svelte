@@ -96,6 +96,10 @@
 		return dt.toFormat("yyyy-MM-dd'T'HH:mm");
 	}
 
+	function fmtMoney(cents: number) {
+		return `USD ${(cents / 100).toFixed(2)}`;
+	}
+
 	function tripDays(start: string | null | undefined, end: string | null | undefined) {
 		if (!start || !end) return null;
 		const s = DateTime.fromISO(start);
@@ -691,6 +695,61 @@
 							{/each}
 						</div>
 					{/if}
+				</section>
+			{/if}
+
+			{#if isEditor || data.budgets?.some((b) => b.amount != null)}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">
+							<Icon name="budget" class="inline h-4 w-4 mr-1.5" />
+							Budget
+						</h2>
+						<span class="text-xs text-slate-400">USD cents</span>
+					</div>
+					<div class="space-y-3">
+						{#each data.budgets.filter((b) => isEditor || b.amount != null) as budget (budget.category)}
+							{@const percent = budget.amount != null && budget.amount > 0 ? Math.min(100, Math.round((budget.spent / budget.amount) * 100)) : 0}
+							<div class="list-item-compact">
+								<div class="flex items-center justify-between gap-3">
+									<span class="font-medium text-slate-200 capitalize">{budget.category}</span>
+									{#if budget.amount != null}
+										<div class="flex items-center gap-2">
+											<span class="badge badge-compact {budget.alert === 'over' ? 'badge-red' : budget.alert === 'near' ? 'badge-amber' : 'badge-green'}">{budget.alert}</span>
+											{#if isEditor}
+												<form method="POST" action="?/deleteBudget">
+													<input type="hidden" name="category" value={budget.category} />
+													<button class="icon-button h-6 w-6 text-slate-500" aria-label="Remove budget">
+														<Icon name="close" class="h-3.5 w-3.5" />
+													</button>
+												</form>
+											{/if}
+										</div>
+									{/if}
+								</div>
+								{#if budget.amount != null}
+									<div class="mt-2">
+										<div class="mb-1 flex items-center justify-between text-xs text-slate-400">
+											<span>Spent {fmtMoney(budget.spent)} / {fmtMoney(budget.amount)}</span>
+											<span>{budget.remaining != null ? `${fmtMoney(budget.remaining)} remaining` : ''}</span>
+										</div>
+										<div class="h-2 w-full overflow-hidden rounded-full bg-surface2">
+											<div
+												class="h-full rounded-full {budget.alert === 'over' ? 'bg-red-500' : budget.alert === 'near' ? 'bg-amber-500' : 'bg-brand'}"
+												style="width: {percent}%;"
+											></div>
+										</div>
+									</div>
+								{:else if isEditor}
+									<form method="POST" action="?/setBudget" class="mt-2 flex flex-wrap items-end gap-2">
+										<input type="hidden" name="category" value={budget.category} />
+										<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cap (cents)" required />
+										<button class="btn btn-primary btn-sm">Set cap</button>
+									</form>
+								{/if}
+							</div>
+						{/each}
+					</div>
 				</section>
 			{/if}
 

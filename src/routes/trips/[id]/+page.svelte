@@ -497,6 +497,24 @@
 							<button class="btn btn-primary btn-sm">Add</button>
 						</form>
 					{/if}
+					{#if data.owner === true && data.checklist?.items?.length}
+						<form method="POST" action="?/saveChecklistTemplate" class="mt-4 flex flex-wrap items-end gap-2 border-t border-white/5 pt-4">
+							<input name="name" class="input min-w-0 flex-1 text-sm" placeholder="Template name" required maxlength="100" />
+							<input type="hidden" name="fromTripId" value={trip.id} />
+							<button class="btn btn-ghost btn-sm">Save template</button>
+						</form>
+					{/if}
+					{#if data.templates?.length}
+						<form method="POST" action="?/applyChecklistTemplate" class="mt-3 flex flex-wrap items-end gap-2">
+							<select name="templateId" class="select min-w-0 flex-1 text-sm" required>
+								<option value="" disabled selected>Apply a template</option>
+								{#each data.templates as tmpl (tmpl.id)}
+									<option value={tmpl.id}>{tmpl.name} ({tmpl.items.length})</option>
+								{/each}
+							</select>
+							<button class="btn btn-primary btn-sm">Apply</button>
+						</form>
+					{/if}
 				</section>
 			{/if}
 

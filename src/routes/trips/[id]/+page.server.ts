@@ -31,6 +31,7 @@ import {
 	deleteChecklistItem,
 	loadChecklist
 } from '$lib/server/tripChecklists';
+import { listTemplates, saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
 import {
 	addExpense,
 	deleteExpense,
@@ -111,7 +112,8 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
-		return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments };
+		const templates = listTemplates(u.id);
+		return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments, templates };
 	}
 	return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, comments: listComments(view.trip.id) };
 };
@@ -251,5 +253,7 @@ export const actions: Actions = {
 	deleteJournalEntry,
 	addDocumentLink,
 	updateDocumentLink,
-	deleteDocumentLink
+	deleteDocumentLink,
+	saveChecklistTemplate,
+	applyChecklistTemplate
 };

@@ -2,6 +2,7 @@ import { and, count, eq, isNull } from 'drizzle-orm';
 import { getSettings } from '$lib/server/settings';
 import { db } from '$lib/server/db';
 import { notifications } from '$lib/server/db/schema';
+import { appInfo } from '$lib/appInfo';
 import { themeForId } from '$lib/themes';
 import type { LayoutServerLoad } from './$types';
 
@@ -19,8 +20,10 @@ export const load: LayoutServerLoad = ({ locals }) => {
 	const theme = themeForId(locals.user?.themeId);
 	return {
 		user: locals.user
-			? { id: locals.user.id, displayName: locals.user.displayName, role: locals.user.role }
+			? { id: locals.user.id, email: locals.user.email, displayName: locals.user.displayName, role: locals.user.role }
 			: null,
+		appName: appInfo.name,
+		appVersion: appInfo.version,
 		themeId: theme.id,
 		themeColor: theme.themeColor,
 		instanceName: s.instanceName,

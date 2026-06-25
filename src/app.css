@@ -471,8 +471,31 @@
 		background: color-mix(in oklab, var(--theme-sidebar) 92%, transparent);
 	}
 	.app-topbar {
-		background: color-mix(in oklab, var(--theme-canvas) 82%, transparent);
+		background: color-mix(in oklab, var(--theme-canvas) 88%, transparent);
 		border-color: var(--theme-line);
+	}
+	.app-search {
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-control-border);
+		color: var(--theme-readable-muted);
+		transition:
+			background 0.15s ease,
+			box-shadow 0.15s ease,
+			color 0.15s ease;
+	}
+	.app-search:focus-within {
+		background: color-mix(in oklab, var(--theme-control) 84%, var(--theme-brand) 7%);
+		box-shadow:
+			inset 0 0 0 1px var(--theme-brand),
+			0 0 0 2px color-mix(in oklab, var(--theme-brand) 24%, transparent);
+		color: var(--theme-strong);
+	}
+	.app-search-input {
+		color: var(--theme-ink);
+		caret-color: var(--theme-brand);
+	}
+	.app-search-input::placeholder {
+		color: var(--theme-readable-faint);
 	}
 	.app-nav-item {
 		color: color-mix(in oklab, var(--theme-muted) 86%, var(--theme-ink));
@@ -500,13 +523,51 @@
 		background: var(--theme-brand);
 		color: var(--theme-accent-text);
 	}
-	.app-user-link:hover {
+	.app-user-summary:hover,
+	.app-version-link:hover,
+	.app-user-menu-item:hover {
 		background: var(--theme-subtle-hover);
 	}
 	.app-avatar {
 		background: linear-gradient(135deg, var(--theme-panel-raised), var(--theme-sidebar));
 		box-shadow: inset 0 0 0 1px var(--theme-line);
 		color: var(--theme-strong);
+	}
+	.app-version-link {
+		color: var(--theme-readable-muted);
+	}
+	.app-version-link:hover {
+		color: var(--theme-strong);
+	}
+	.app-version-name {
+		color: var(--theme-strong);
+	}
+	.app-version-number {
+		color: var(--theme-readable-faint);
+	}
+	.app-user-summary::-webkit-details-marker {
+		display: none;
+	}
+	.app-user-menu-panel {
+		background: var(--theme-panel-solid);
+		border-color: var(--theme-line);
+		box-shadow:
+			0 24px 52px color-mix(in oklab, var(--theme-shadow) 42%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 60%, transparent);
+		color: var(--theme-ink);
+	}
+	.app-user-menu-panel > :first-child {
+		border-color: var(--theme-line);
+	}
+	.app-user-menu-item {
+		@apply flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition;
+		color: var(--theme-readable-muted);
+	}
+	.app-user-menu-item:hover {
+		color: var(--theme-strong);
+	}
+	.app-user-menu-button {
+		cursor: pointer;
 	}
 
 	/* Page chrome */

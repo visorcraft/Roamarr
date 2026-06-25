@@ -112,6 +112,9 @@ Migrations are applied automatically during application boot before the schedule
 
 ## Features
 
+- Application shell with left navigation, a sticky top search field placeholder,
+  top-right user menu, and a sidebar app/version link to the About page. App name
+  and version are read from `package.json`.
 - Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, bulk actions, and trip status lifecycle.
 - Segment details: end timezone, status tracking, and optional meeting/rally point for group coordination.
 - Sharing with users, groups, public token links, read/edit/detail controls, and token expiry; per-trip calendar feeds plus an aggregate feed for all viewable trips.
@@ -132,9 +135,9 @@ Migrations are applied automatically during application boot before the schedule
 - Trip journal entries, trip document links, and a printable itinerary view.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
 - Per-user color themes from the profile page, including a High Contrast accessibility theme (see `AGENTS.md` for the full theme registry).
-- Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.
+- Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, registration control, and a settings-style About page.
 - Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
-- Shared UI components (`Icon`, `Toast` with variants, loading states) and mobile sidebar accessibility.
+- Shared UI components (`Icon`, `Toast` with variants, loading states), theme-aware shell controls, and mobile sidebar accessibility.
 - Health and deep-health endpoints plus PWA manifest/icons.
 
 ## Architecture
@@ -143,6 +146,8 @@ Roamarr is a single long-running SvelteKit app using `@sveltejs/adapter-node`. T
 
 All server-side business logic lives under `src/lib/server/`; SvelteKit routes stay thin and call those modules from load functions and form actions. Authorization is centralized in `sharing.ts` for reads and `ownership.ts` for mutations. Public shares and calendar feeds expose only the reduced viewer projection.
 
+The authenticated app shell is implemented in `src/routes/+layout.svelte` and `+layout.server.ts`. The About page lives at `/settings/about`; its app name/version come from `src/lib/appInfo.ts`, which reads `package.json`.
+
 Sensitive fields currently encrypted at rest are travel document numbers, fare-provider API keys, and the SMTP password. Card data is intentionally limited to network and last four digits.
 
 ## Development Notes
@@ -150,6 +155,7 @@ Sensitive fields currently encrypted at rest are travel document numbers, fare-p
 - Tailwind CSS v4 is configured in `src/app.css` through `@theme`; there is no `tailwind.config.js`.
 - Reuse shared app classes from `src/app.css` and shared components from `src/lib/components/` before adding one-off UI styles.
 - For themed UI, prefer semantic app classes and CSS variables over hard-coded slate/indigo/white utilities so Light and dark themes stay readable.
+- Keep global shell controls theme-aware: sticky search bar, top-right user menu, and sidebar app/version footer should work across all registered themes.
 - Keep route actions thin: validate input, enforce ownership/authorization, call server modules, and return SvelteKit `fail`, `redirect`, or `error` responses.
 - Add or update tests for non-trivial server logic, route actions, schema changes, auth/authorization paths, and security-sensitive behavior.
 - When changing the schema, edit `src/lib/server/db/schema.ts`, run `npm run db:generate`, review the generated SQL in `drizzle/`, and run tests.

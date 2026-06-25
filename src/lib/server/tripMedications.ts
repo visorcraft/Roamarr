@@ -1,13 +1,11 @@
-import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripCompanions, tripMedications } from './db/schema';
-import { requireUser } from './auth';
-import { requireEditableTrip } from './ownership';
+import { requireEditableTrip, requireOwnedTripRow, requireCompanionOnTrip } from './ownership';
 import { logAudit } from './audit';
-import { parseTripId } from './params';
-import { Validator } from './validation';
-import { nowIso } from './tz';
+import { Validator, formFail } from './validation';
+import { withTripAction } from './actions';
 
 export function listMedications(tripId: number) {
 	return db
@@ -32,17 +30,6 @@ export function listMedications(tripId: number) {
 		.all();
 }
 
-function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
-	if (companionId == null) return null;
-	const c = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.get();
-	if (!c) throw error(400, 'Companion is not on this trip');
-	return companionId;
-}
-
 export function addMedication(
 	userId: number,
 	tripId: number,
@@ -64,7 +51,7 @@ export function addMedication(
 	const notes = v.optionalString(input.notes, 'notes', { max: 2000 });
 	const startsAt = v.dateTime(input.startsAt, 'startsAt');
 	const endsAt = v.dateTime(input.endsAt, 'endsAt');
-	if (!v.ok()) throw error(400, v.failMessage());
+	if (!v.ok()) throw formFail(v);
 	const companionId = requireCompanionOnTrip(input.companionId, tripId);
 	const inserted = db
 		.insert(tripMedications)
@@ -86,27 +73,22 @@ export function addMedication(
 
 export function deleteMedication(userId: number, tripId: number, medicationId: number) {
 	requireEditableTrip(userId, tripId);
-	const result = db
-		.delete(tripMedications)
-		.where(and(eq(tripMedications.id, medicationId), eq(tripMedications.tripId, tripId)))
-		.run();
-	if (result.changes === 0) throw error(404, 'Medication not found');
+	requireOwnedTripRow(tripMedications, tripId, medicationId, 'Medication not found');
+	db.delete(tripMedications).where(eq(tripMedications.id, medicationId)).run();
 	logAudit(userId, 'delete', 'trip_medication', medicationId, { tripId });
 }
 
 export async function addMedicationAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = parseTripId(event.params);
-	const f = await event.request.formData();
-	const name = String(f.get('name') || '');
-	const companionIdRaw = f.get('companionId');
+	const { user, tripId, formData } = await withTripAction(event);
+	const name = String(formData.get('name') || '');
+	const companionIdRaw = formData.get('companionId');
 	const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-	const dosage = String(f.get('dosage') || '');
-	const schedule = String(f.get('schedule') || '');
-	const startsAt = String(f.get('startsAt') || '');
-	const endsAt = String(f.get('endsAt') || '');
-	const notes = String(f.get('notes') || '');
-	addMedication(u.id, tripId, {
+	const dosage = String(formData.get('dosage') || '');
+	const schedule = String(formData.get('schedule') || '');
+	const startsAt = String(formData.get('startsAt') || '');
+	const endsAt = String(formData.get('endsAt') || '');
+	const notes = String(formData.get('notes') || '');
+	addMedication(user.id, tripId, {
 		name,
 		companionId: companionId && Number.isFinite(companionId) ? companionId : null,
 		dosage,

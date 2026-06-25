@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
-import { trips, cards, fareProviders, segments, groups, travelDocuments, users } from './db/schema';
+import { trips, cards, fareProviders, segments, groups, travelDocuments, users, tripCompanions } from './db/schema';
 import { canEdit } from './sharing';
 import type { SQLiteTable, AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
@@ -56,6 +56,17 @@ export function requireOwnedTripRow<TTable extends SQLiteTable>(
 	const row = db.select().from(table).where(and(eq(table.id, id), eq(table.tripId, tripId))).get();
 	if (!row) throw error(404, notFoundMessage);
 	return row;
+}
+
+export function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
+	if (companionId == null) return null;
+	const c = db
+		.select({ id: tripCompanions.id })
+		.from(tripCompanions)
+		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
+		.get();
+	if (!c) throw error(400, 'Companion is not on this trip');
+	return companionId;
 }
 
 export function assertOwnedRefs(

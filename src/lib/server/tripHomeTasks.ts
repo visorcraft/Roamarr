@@ -1,12 +1,11 @@
-import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripHomeTasks } from './db/schema';
-import { requireUser } from './auth';
-import { requireEditableTrip } from './ownership';
+import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
-import { parseTripId } from './params';
-import { Validator } from './validation';
+import { Validator, formFail } from './validation';
+import { withTripAction } from './actions';
 
 export function listHomeTasks(tripId: number) {
 	return db
@@ -26,7 +25,7 @@ export function addHomeTask(
 	const v = new Validator();
 	const text = v.requiredString(input.text, 'text', { max: 200 });
 	const dueDate = v.date(input.dueDate, 'dueDate');
-	if (!v.ok()) throw error(400, v.failMessage());
+	if (!v.ok()) throw formFail(v);
 	const inserted = db
 		.insert(tripHomeTasks)
 		.values({ tripId, text: text!, dueDate: dueDate ?? null })
@@ -38,12 +37,7 @@ export function addHomeTask(
 
 export function toggleHomeTask(userId: number, tripId: number, taskId: number) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(tripHomeTasks)
-		.where(and(eq(tripHomeTasks.id, taskId), eq(tripHomeTasks.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Task not found');
+	const existing = requireOwnedTripRow(tripHomeTasks, tripId, taskId, 'Task not found');
 	const updated = db
 		.update(tripHomeTasks)
 		.set({ done: !existing.done })
@@ -56,21 +50,16 @@ export function toggleHomeTask(userId: number, tripId: number, taskId: number) {
 
 export function deleteHomeTask(userId: number, tripId: number, taskId: number) {
 	requireEditableTrip(userId, tripId);
-	const result = db
-		.delete(tripHomeTasks)
-		.where(and(eq(tripHomeTasks.id, taskId), eq(tripHomeTasks.tripId, tripId)))
-		.run();
-	if (result.changes === 0) throw error(404, 'Task not found');
+	requireOwnedTripRow(tripHomeTasks, tripId, taskId, 'Task not found');
+	db.delete(tripHomeTasks).where(eq(tripHomeTasks.id, taskId)).run();
 	logAudit(userId, 'delete', 'trip_home_task', taskId, { tripId });
 }
 
 export async function addHomeTaskAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = parseTripId(event.params);
-	const f = await event.request.formData();
-	const text = String(f.get('text') || '');
-	const dueDateRaw = f.get('dueDate');
+	const { user, tripId, formData } = await withTripAction(event);
+	const text = String(formData.get('text') || '');
+	const dueDateRaw = formData.get('dueDate');
 	const dueDate = typeof dueDateRaw === 'string' && dueDateRaw ? dueDateRaw : null;
-	addHomeTask(u.id, tripId, { text, dueDate });
+	addHomeTask(user.id, tripId, { text, dueDate });
 	throw redirect(303, `/trips/${tripId}`);
 }

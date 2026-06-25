@@ -1,11 +1,11 @@
-import { and, desc, eq } from 'drizzle-orm';
-import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
+import { desc, eq } from 'drizzle-orm';
+import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { db } from './db';
 import { tripDocumentLinks } from './db/schema';
-import { requireUser } from './auth';
-import { requireEditableTrip } from './ownership';
+import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
-import { Validator } from './validation';
+import { Validator, formFail, httpUrl, positiveIdFromForm } from './validation';
+import { withTripAction } from './actions';
 
 export type DocumentLinkInput = {
 	label: string;
@@ -49,13 +49,7 @@ export function editDocumentLink(
 	input: DocumentLinkInput
 ): DocumentLinkRow {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(tripDocumentLinks)
-		.where(and(eq(tripDocumentLinks.id, linkId), eq(tripDocumentLinks.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
-
+	requireOwnedTripRow(tripDocumentLinks, tripId, linkId, 'Not found');
 	const { label, url, notes } = normalizeInput(input);
 	const row = db
 		.update(tripDocumentLinks)
@@ -70,12 +64,7 @@ export function editDocumentLink(
 
 export function removeDocumentLink(userId: number, tripId: number, linkId: number) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(tripDocumentLinks)
-		.where(and(eq(tripDocumentLinks.id, linkId), eq(tripDocumentLinks.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
+	const existing = requireOwnedTripRow(tripDocumentLinks, tripId, linkId, 'Not found');
 
 	db.delete(tripDocumentLinks).where(eq(tripDocumentLinks.id, linkId)).run();
 	logAudit(userId, 'document_link_delete', 'trip_document_link', linkId, {
@@ -109,57 +98,41 @@ function validateLinkForm(
 	const v = new Validator();
 	const label = v.requiredString(formData.get('label'), 'label', { max: 200 });
 	const notes = v.optionalString(formData.get('notes'), 'notes', { max: 2000 });
-	const urlRaw = typeof formData.get('url') === 'string' ? String(formData.get('url')).trim() : '';
-	if (!urlRaw) {
-		v.addError('url', 'url is required');
-	} else if (urlRaw.length > 2048) {
-		v.addError('url', 'url must be at most 2048 characters');
-	} else if (!isValidHttpUrl(urlRaw)) {
-		v.addError('url', 'url must be a valid http or https URL');
-	}
+	const urlResult = httpUrl(formData.get('url'), 'url');
+	if (!urlResult.ok) v.addError('url', urlResult.error);
 	if (!v.ok()) return { errors: v.errors, message: v.failMessage() };
-	return { label: label!, url: urlRaw, notes };
+	return { label: label!, url: urlResult.value, notes };
 }
 
 export async function addDocumentLink(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const validated = validateLinkForm(await event.request.formData());
-	if ('errors' in validated) {
-		return fail(400, { error: validated.message, errors: validated.errors });
-	}
-	createDocumentLink(u.id, tripId, validated);
-	throw redirect(303, `/trips/${tripId}`);
-}
-
-export async function updateDocumentLink(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const formData = await event.request.formData();
-	const linkId = Number(formData.get('linkId'));
-	if (!Number.isFinite(linkId) || linkId <= 0) throw error(400, 'Invalid link');
+	const { user, tripId, formData } = await withTripAction(event);
 
 	const validated = validateLinkForm(formData);
 	if ('errors' in validated) {
 		return fail(400, { error: validated.message, errors: validated.errors });
 	}
-	editDocumentLink(u.id, tripId, linkId, validated);
+	createDocumentLink(user.id, tripId, validated);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function updateDocumentLink(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const linkIdResult = positiveIdFromForm(formData.get('linkId'), 'linkId');
+	if (!linkIdResult.ok) return fail(400, { error: linkIdResult.error });
+
+	const validated = validateLinkForm(formData);
+	if ('errors' in validated) {
+		return fail(400, { error: validated.message, errors: validated.errors });
+	}
+	editDocumentLink(user.id, tripId, linkIdResult.value, validated);
 	throw redirect(303, `/trips/${tripId}`);
 }
 
 export async function deleteDocumentLink(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+	const { user, tripId, formData } = await withTripAction(event);
+	const linkIdResult = positiveIdFromForm(formData.get('linkId'), 'linkId');
+	if (!linkIdResult.ok) return fail(400, { error: linkIdResult.error });
 
-	const formData = await event.request.formData();
-	const linkId = Number(formData.get('linkId'));
-	if (!Number.isFinite(linkId) || linkId <= 0) throw error(400, 'Invalid link');
-
-	removeDocumentLink(u.id, tripId, linkId);
+	removeDocumentLink(user.id, tripId, linkIdResult.value);
 	throw redirect(303, `/trips/${tripId}`);
 }

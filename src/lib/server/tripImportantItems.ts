@@ -1,12 +1,11 @@
-import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripCompanions, tripImportantItems } from './db/schema';
-import { requireUser } from './auth';
-import { requireEditableTrip } from './ownership';
+import { requireEditableTrip, requireOwnedTripRow, requireCompanionOnTrip } from './ownership';
 import { logAudit } from './audit';
-import { parseTripId } from './params';
-import { Validator } from './validation';
+import { Validator, formFail, positiveIdFromForm } from './validation';
+import { withTripAction } from './actions';
 
 export function listImportantItems(tripId: number) {
 	return db
@@ -29,17 +28,6 @@ export function listImportantItems(tripId: number) {
 		.all();
 }
 
-function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
-	if (companionId == null) return null;
-	const c = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.get();
-	if (!c) throw error(400, 'Companion is not on this trip');
-	return companionId;
-}
-
 export function addImportantItem(
 	userId: number,
 	tripId: number,
@@ -57,7 +45,7 @@ export function addImportantItem(
 	const serialNumber = v.optionalString(input.serialNumber, 'serialNumber', { max: 200 });
 	const trackerId = v.optionalString(input.trackerId, 'trackerId', { max: 200 });
 	const notes = v.optionalString(input.notes, 'notes', { max: 2000 });
-	if (!v.ok()) throw error(400, v.failMessage());
+	if (!v.ok()) throw formFail(v);
 	const companionId = requireCompanionOnTrip(input.companionId, tripId);
 	const inserted = db
 		.insert(tripImportantItems)
@@ -70,25 +58,20 @@ export function addImportantItem(
 
 export function deleteImportantItem(userId: number, tripId: number, itemId: number) {
 	requireEditableTrip(userId, tripId);
-	const result = db
-		.delete(tripImportantItems)
-		.where(and(eq(tripImportantItems.id, itemId), eq(tripImportantItems.tripId, tripId)))
-		.run();
-	if (result.changes === 0) throw error(404, 'Item not found');
+	requireOwnedTripRow(tripImportantItems, tripId, itemId, 'Item not found');
+	db.delete(tripImportantItems).where(eq(tripImportantItems.id, itemId)).run();
 	logAudit(userId, 'delete', 'trip_important_item', itemId, { tripId });
 }
 
 export async function addImportantItemAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = parseTripId(event.params);
-	const f = await event.request.formData();
-	const name = String(f.get('name') || '');
-	const companionIdRaw = f.get('companionId');
+	const { user, tripId, formData } = await withTripAction(event);
+	const name = String(formData.get('name') || '');
+	const companionIdRaw = formData.get('companionId');
 	const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-	const serialNumber = String(f.get('serialNumber') || '');
-	const trackerId = String(f.get('trackerId') || '');
-	const notes = String(f.get('notes') || '');
-	addImportantItem(u.id, tripId, {
+	const serialNumber = String(formData.get('serialNumber') || '');
+	const trackerId = String(formData.get('trackerId') || '');
+	const notes = String(formData.get('notes') || '');
+	addImportantItem(user.id, tripId, {
 		name,
 		companionId: companionId && Number.isFinite(companionId) ? companionId : null,
 		serialNumber,

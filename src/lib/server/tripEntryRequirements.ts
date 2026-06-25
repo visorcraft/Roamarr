@@ -1,12 +1,11 @@
-import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripEntryRequirements } from './db/schema';
-import { requireUser } from './auth';
-import { requireEditableTrip } from './ownership';
+import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
-import { parseTripId } from './params';
-import { Validator } from './validation';
+import { Validator, formFail } from './validation';
+import { withTripAction } from './actions';
 
 export const REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 export const REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
@@ -46,7 +45,7 @@ export function addEntryRequirement(
 	);
 	const dueDate = v.date(input.dueDate, 'dueDate');
 	const notes = v.optionalString(input.notes, 'notes', { max: 2000 });
-	if (!v.ok()) throw error(400, v.failMessage());
+	if (!v.ok()) throw formFail(v);
 	const inserted = db
 		.insert(tripEntryRequirements)
 		.values({
@@ -71,14 +70,11 @@ export function updateEntryRequirementStatus(
 ) {
 	requireEditableTrip(userId, tripId);
 	if (!REQUIREMENT_STATUSES.includes(status as (typeof REQUIREMENT_STATUSES)[number])) {
-		throw error(400, 'Invalid status');
+		const v = new Validator();
+		v.addError('status', 'Invalid status');
+		throw formFail(v);
 	}
-	const existing = db
-		.select()
-		.from(tripEntryRequirements)
-		.where(and(eq(tripEntryRequirements.id, requirementId), eq(tripEntryRequirements.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Requirement not found');
+	requireOwnedTripRow(tripEntryRequirements, tripId, requirementId, 'Requirement not found');
 	const updated = db
 		.update(tripEntryRequirements)
 		.set({ status })
@@ -91,24 +87,19 @@ export function updateEntryRequirementStatus(
 
 export function deleteEntryRequirement(userId: number, tripId: number, requirementId: number) {
 	requireEditableTrip(userId, tripId);
-	const result = db
-		.delete(tripEntryRequirements)
-		.where(and(eq(tripEntryRequirements.id, requirementId), eq(tripEntryRequirements.tripId, tripId)))
-		.run();
-	if (result.changes === 0) throw error(404, 'Requirement not found');
+	requireOwnedTripRow(tripEntryRequirements, tripId, requirementId, 'Requirement not found');
+	db.delete(tripEntryRequirements).where(eq(tripEntryRequirements.id, requirementId)).run();
 	logAudit(userId, 'delete', 'trip_entry_requirement', requirementId, { tripId });
 }
 
 export async function addEntryRequirementAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = parseTripId(event.params);
-	const f = await event.request.formData();
-	const country = String(f.get('country') || '');
-	const requirementType = String(f.get('requirementType') || '');
-	const status = String(f.get('status') || 'needed');
-	const dueDateRaw = f.get('dueDate');
+	const { user, tripId, formData } = await withTripAction(event);
+	const country = String(formData.get('country') || '');
+	const requirementType = String(formData.get('requirementType') || '');
+	const status = String(formData.get('status') || 'needed');
+	const dueDateRaw = formData.get('dueDate');
 	const dueDate = typeof dueDateRaw === 'string' && dueDateRaw ? dueDateRaw : null;
-	const notes = String(f.get('notes') || '');
-	addEntryRequirement(u.id, tripId, { country, requirementType, status, dueDate, notes });
+	const notes = String(formData.get('notes') || '');
+	addEntryRequirement(user.id, tripId, { country, requirementType, status, dueDate, notes });
 	throw redirect(303, `/trips/${tripId}`);
 }

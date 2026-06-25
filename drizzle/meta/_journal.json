@@ -106,6 +106,13 @@
       "when": 1782351213845,
       "tag": "0014_unusual_titanium_man",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1782355533562,
+      "tag": "0015_chunky_praxagora",
+      "breakpoints": true
     }
   ]
 }

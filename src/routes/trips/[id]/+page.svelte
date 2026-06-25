@@ -205,6 +205,10 @@
 						<Icon name="calendar" class="h-4 w-4" />
 						Calendar
 					</a>
+					<a href={`/trips/${trip.id}/print`} class="btn btn-ghost">
+						<Icon name="print" class="h-4 w-4" />
+						Print
+					</a>
 					{#if isEditor}
 						<a href={`/trips/${trip.id}/edit`} class="btn btn-ghost">Edit trip</a>
 						<form method="POST" action="?/duplicate">
@@ -356,9 +360,26 @@
 																</div>
 															{/if}
 														</div>
+												{#if data.companions?.length && s.id}
+													{@const attendees = data.attendeesBySegment?.get(s.id) ?? []}
+													{#if attendees.length}
+														<div class="mt-2 flex flex-wrap gap-1.5">
+															{#each attendees as a (a.id)}
+																<span class="badge badge-compact {a.status === 'going' ? 'badge-green' : a.status === 'maybe' ? 'badge-amber' : 'badge-slate'} capitalize">
+																	{a.name}
+																	{#if a.status === 'maybe'}?{:else if a.status === 'not_going'}×{/if}
+																</span>
+															{/each}
+														</div>
+													{/if}
+												{/if}
 																												{#if isEditor && s.id}
 															<div class="flex shrink-0 flex-wrap items-center gap-1">
 																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
+													<form method="POST" action="?/duplicateSegment">
+														<input type="hidden" name="segmentId" value={s.id} />
+														<button class="btn btn-ghost btn-ghost-muted">Duplicate</button>
+													</form>
 																<form method="POST" action={`/trips/${trip.id}/segments?/delete`}>
 																	<input type="hidden" name="segmentId" value={s.id} />
 																	<button class="btn btn-ghost btn-ghost-danger">Delete</button>
@@ -384,6 +405,23 @@
 																		<button class="btn btn-ghost btn-sm">Watch</button>
 																	</form>
 																{/if}
+														{#if data.companions?.length}
+															<div class="flex flex-wrap items-center gap-1">
+																{#each data.companions as comp (comp.id)}
+																	{@const current = data.attendeesBySegment?.get(s.id ?? 0)?.find((a) => a.companionId === comp.id)?.status ?? 'not_invited'}
+																	<form method="POST" action="?/setAttendee" class="flex items-center gap-1">
+																		<input type="hidden" name="segmentId" value={s.id} />
+																		<input type="hidden" name="companionId" value={comp.id} />
+																		<select name="status" class="input h-7 py-0 text-[10px]" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+																			<option value="not_invited" selected={current === 'not_invited'}>{comp.name}</option>
+																			<option value="going" selected={current === 'going'}>{comp.name} ✓</option>
+																			<option value="maybe" selected={current === 'maybe'}>{comp.name} ?</option>
+																			<option value="not_going" selected={current === 'not_going'}>{comp.name} ×</option>
+																		</select>
+																	</form>
+																{/each}
+															</div>
+														{/if}
 															</div>
 														{/if}
 													</div>
@@ -407,6 +445,167 @@
 					</div>
 				{/if}
 			</section>
+
+			{#if data.checklist?.items?.length || isEditor}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">Packing checklist</h2>
+						{#if data.checklist?.items?.length}
+							{@const packed = data.checklist.items.filter((i) => i.packed).length}
+							<span class="font-mono text-xs text-slate-500">{packed}/{data.checklist.items.length}</span>
+						{/if}
+					</div>
+					{#if data.checklist?.items?.length}
+						<ul class="space-y-2">
+							{#each data.checklist.items as item (item.id)}
+								<li class="list-item-compact flex items-center justify-between gap-3">
+									<form method="POST" action="?/toggleChecklistItem" class="flex items-center gap-3">
+										<input type="hidden" name="itemId" value={item.id} />
+										<button type="submit" class="flex items-center gap-3 text-left">
+											<span class="grid h-5 w-5 shrink-0 place-items-center rounded border {item.packed ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300' : 'border-slate-600 text-transparent'}">
+												{#if item.packed}<Icon name="check" class="h-3.5 w-3.5" />{/if}
+											</span>
+											<span class="text-sm {item.packed ? 'text-slate-500 line-through' : 'text-slate-200'}">{item.text}</span>
+										</button>
+									</form>
+									<div class="flex items-center gap-2">
+										{#if item.assignedToName}<span class="text-xs text-slate-500">{item.assignedToName}</span>{/if}
+										{#if isEditor}
+											<form method="POST" action="?/deleteChecklistItem">
+												<input type="hidden" name="itemId" value={item.id} />
+												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete item">
+													<Icon name="close" class="h-3.5 w-3.5" />
+												</button>
+											</form>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="empty-text py-2">No checklist items yet.</p>
+					{/if}
+					{#if isEditor}
+						<form method="POST" action="?/addChecklistItem" class="mt-4 flex flex-wrap items-end gap-2">
+							<input name="text" class="input min-w-0 flex-1 text-sm" placeholder="Add an item..." required />
+							<select name="assignedToCompanionId" class="input w-auto text-sm">
+								<option value="">Unassigned</option>
+								{#each data.companions ?? [] as c (c.id)}
+									<option value={c.id}>{c.name}</option>
+								{/each}
+							</select>
+							<button class="btn btn-primary btn-sm">Add</button>
+						</form>
+					{/if}
+				</section>
+			{/if}
+
+			{#if data.expenses?.length || isEditor}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">Expenses</h2>
+						{#if Object.keys(data.expenseSummary?.totalsByCurrency ?? {}).length}
+							<div class="flex flex-wrap gap-2">
+								{#each Object.entries(data.expenseSummary.totalsByCurrency) as [currency, amount]}
+									<span class="badge badge-slate badge-compact font-mono">{currency} {(amount / 100).toFixed(2)}</span>
+								{/each}
+							</div>
+						{/if}
+					</div>
+					{#if data.expenses?.length}
+						<ul class="space-y-2">
+							{#each data.expenses as e (e.id)}
+								<li class="list-item-compact flex items-center justify-between gap-3">
+									<div class="min-w-0">
+										<p class="text-sm font-medium text-slate-200">{e.description}</p>
+										<p class="text-xs text-slate-500">
+											Paid by {e.paidBy === 'owner' ? 'you' : data.companions?.find((c) => c.id === e.paidBy)?.name ?? 'unknown'}
+											{#if e.splitAmong.length}> · Split {e.splitAmong.length} way{e.splitAmong.length === 1 ? '' : 's'}{/if}
+										</p>
+									</div>
+									<div class="flex items-center gap-2">
+										<span class="font-mono text-sm text-slate-200">{e.currency} {(e.amount / 100).toFixed(2)}</span>
+										{#if isEditor}
+											<form method="POST" action="?/deleteExpense">
+												<input type="hidden" name="expenseId" value={e.id} />
+												<button class="icon-button h-6 w-6 text-slate-500" aria-label="Delete expense">
+													<Icon name="close" class="h-3.5 w-3.5" />
+												</button>
+											</form>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="empty-text py-2">No expenses recorded yet.</p>
+					{/if}
+					{#if isEditor}
+						<form method="POST" action="?/addExpense" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
+							<input name="description" class="input text-sm" placeholder="Description" required />
+							<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cents" required />
+							<input name="currency" class="input w-24 text-sm" placeholder="USD" value="USD" required />
+							<select name="paidByCompanionId" class="input w-auto text-sm">
+								<option value="">You</option>
+								{#each data.companions ?? [] as c (c.id)}
+									<option value={c.id}>{c.name}</option>
+								{/each}
+							</select>
+							<div class="sm:col-span-4">
+								<p class="mb-1 text-xs text-slate-400">Split among</p>
+								<div class="flex flex-wrap gap-2">
+									<label class="checkbox-label text-xs">
+										<input type="checkbox" name="splitAmong" value="owner" /> You
+									</label>
+									{#each data.companions ?? [] as c (c.id)}
+										<label class="checkbox-label text-xs">
+											<input type="checkbox" name="splitAmong" value={c.id} /> {c.name}
+										</label>
+									{/each}
+								</div>
+							</div>
+							<button class="btn btn-primary btn-sm sm:col-span-4">Add expense</button>
+						</form>
+					{/if}
+				</section>
+			{/if}
+
+			{#if data.journalEntries?.length || isEditor}
+				<section class="card p-5">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="section-title">Journal</h2>
+					</div>
+					{#if data.journalEntries?.length}
+						<ul class="space-y-4">
+							{#each data.journalEntries as entry (entry.id)}
+								<li class="list-item-compact">
+									<div class="flex items-center justify-between gap-2">
+										<span class="font-semibold text-slate-200">{entry.title}</span>
+										<span class="font-mono text-xs text-slate-500">{entry.entryDate}</span>
+									</div>
+									<p class="mt-1 whitespace-pre-wrap text-sm text-slate-300">{entry.body}</p>
+									{#if isEditor}
+										<form method="POST" action="?/deleteJournalEntry" class="mt-2">
+											<input type="hidden" name="entryId" value={entry.id} />
+											<button class="btn btn-ghost btn-ghost-danger btn-xs">Delete</button>
+										</form>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="empty-text py-2">No journal entries yet.</p>
+					{/if}
+					{#if isEditor}
+						<form method="POST" action="?/addJournalEntry" class="mt-4 grid gap-2">
+							<input name="title" class="input text-sm" placeholder="Title" required />
+							<input name="entryDate" type="date" class="input w-auto text-sm" required />
+							<textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea>
+							<button class="btn btn-primary btn-sm">Add journal entry</button>
+						</form>
+					{/if}
+				</section>
+			{/if}
 
 			{#if isEditor && data.owner === true && (data.providers?.length || data.watches?.length)}
 				<section class="card p-5">
@@ -566,6 +765,40 @@
 				</div>
 			{/if}
 
+			{#if data.companions?.length}
+				<div class="trip-sidebar-card">
+					<div class="mb-3 flex items-center justify-between">
+						<h2 class="subsection-title">Travelers</h2>
+						<span class="font-mono text-xs text-slate-500">{data.companions.length}</span>
+					</div>
+					<ul class="space-y-2">
+						{#each data.companions as c (c.id)}
+							<li class="list-item-compact text-sm">
+								<div class="flex items-center justify-between gap-2">
+									<span class="font-medium text-slate-200">{c.name}</span>
+									<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
+								</div>
+								{#if c.notes}<p class="mt-1 text-xs text-slate-500">{c.notes}</p>{/if}
+							</li>
+						{/each}
+					</ul>
+					{#if isEditor}
+						<form method="POST" action="?/addCompanion" class="mt-3 flex flex-col gap-2">
+							<input name="name" class="input text-sm" placeholder="Name" required />
+							<div class="flex gap-2">
+								<select name="category" class="input text-sm">
+									<option value="adult">Adult</option>
+									<option value="child">Child</option>
+									<option value="other">Other</option>
+								</select>
+								<button class="btn btn-primary btn-sm shrink-0">Add</button>
+							</div>
+							<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
+						</form>
+					{/if}
+				</div>
+			{/if}
+
 			{#if isEditor && data.owner === true}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Calendar feed</h2>
@@ -622,40 +855,71 @@
 						{#if data.owner === true}
 							<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>
 						{/if}
-				{#if isEditor && (data.policies?.length || data.availablePolicies?.length)}
-					<div class="trip-sidebar-card">
-						<h2 class="subsection-title mb-3">Insurance</h2>
-						{#if data.policies?.length}
+					</nav>
+				</div>
+			{/if}
+
+			{#if data.documentLinks?.length || isEditor}
+				<div class="trip-sidebar-card">
+					<h2 class="subsection-title mb-3">Trip documents</h2>
+					{#if data.documentLinks?.length}
 						<ul class="space-y-2">
-							{#each data.policies as p (p.id)}
-							<li class="list-item p-2.5">
-								<p class="text-sm font-medium text-white">{p.provider}</p>
-								{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
-								{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
-								{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
-								{#if data.owner === true}
-								<form method="POST" action="?/detachPolicy" class="mt-2">
-									<input type="hidden" name="policyId" value={p.id} />
-									<button class="btn btn-ghost btn-ghost-danger btn-sm">Detach</button>
-								</form>
-								{/if}
-							</li>
+							{#each data.documentLinks as link (link.id)}
+								<li class="list-item-compact">
+									<a href={link.url} target="_blank" rel="noopener noreferrer" class="link text-sm">{link.label}</a>
+									{#if link.notes}<p class="mt-0.5 text-xs text-slate-500">{link.notes}</p>{/if}
+									{#if isEditor}
+										<form method="POST" action="?/deleteDocumentLink" class="mt-1">
+											<input type="hidden" name="linkId" value={link.id} />
+											<button class="btn btn-ghost btn-ghost-danger btn-xs">Remove</button>
+										</form>
+									{/if}
+								</li>
 							{/each}
 						</ul>
-						{/if}
-						{#if data.owner === true && data.availablePolicies?.length}
+					{/if}
+					{#if isEditor}
+						<form method="POST" action="?/addDocumentLink" class="mt-3 flex flex-col gap-2">
+							<input name="label" class="input text-sm" placeholder="Label" required />
+							<input name="url" type="url" class="input text-sm" placeholder="https://..." required />
+							<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
+							<button class="btn btn-primary btn-sm">Add link</button>
+						</form>
+					{/if}
+				</div>
+			{/if}
+
+			{#if isEditor && (data.policies?.length || data.availablePolicies?.length)}
+				<div class="trip-sidebar-card">
+					<h2 class="subsection-title mb-3">Insurance</h2>
+					{#if data.policies?.length}
+						<ul class="space-y-2">
+							{#each data.policies as p (p.id)}
+								<li class="list-item p-2.5">
+									<p class="text-sm font-medium text-white">{p.provider}</p>
+									{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
+									{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
+									{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
+									{#if data.owner === true}
+										<form method="POST" action="?/detachPolicy" class="mt-2">
+											<input type="hidden" name="policyId" value={p.id} />
+											<button class="btn btn-ghost btn-ghost-danger btn-sm">Detach</button>
+										</form>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					{#if data.owner === true && data.availablePolicies?.length}
 						<form method="POST" action="?/attachPolicy" class="mt-3 flex flex-col gap-2">
 							<select name="policyId" class="input text-sm">
 								{#each data.availablePolicies as p}
-								<option value={p.id}>{p.provider}{#if p.policyNumber} — {p.policyNumber}{/if}</option>
+									<option value={p.id}>{p.provider}{#if p.policyNumber} — {p.policyNumber}{/if}</option>
 								{/each}
 							</select>
 							<button class="btn btn-primary btn-sm">Attach policy</button>
 						</form>
-						{/if}
-					</div>
-				{/if}
-					</nav>
+					{/if}
 				</div>
 			{/if}
 		</aside>

@@ -8,6 +8,7 @@ import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
 import { Validator } from '$lib/server/validation';
+import { TRIP_STATUSES } from '$lib/server/sharing';
 import { serializeTags } from '../../shared';
 import type { PageServerLoad } from './$types';
 
@@ -41,6 +42,11 @@ export const actions: Actions = {
 		const endDate = v.date(f.get('endDate'), 'endDate');
 		const notes = v.optionalString(f.get('notes'), 'notes', { max: 5000 });
 		const tags = v.optionalString(f.get('tags'), 'tags', { max: 200 });
+		const statusRaw = f.get('status');
+		const status =
+			typeof statusRaw === 'string' && statusRaw
+				? v.enumValue(statusRaw, TRIP_STATUSES, 'status')
+				: undefined;
 		v.dateRange(startDate, endDate);
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
@@ -53,10 +59,12 @@ export const actions: Actions = {
 				endDate,
 				notes,
 				tags: serializeTags(tags),
+				...(status && { status }),
 				updatedAt: nowIso()
 			})
 			.where(eq(trips.id, tripId))
 			.run();
+		logAudit(u.id, 'trip_update', 'trip', tripId, { status });
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	delete: async ({ locals, params }) => {

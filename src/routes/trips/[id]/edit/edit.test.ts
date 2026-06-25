@@ -160,6 +160,47 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 	});
 });
 
+test('edit action updates trip status', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'edit-status@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = createTrip(a.id, { name: 'Trip' });
+
+	const form = formData({
+		name: 'Trip',
+		status: 'active'
+	});
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	expect(updated.status).toBe('active');
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('trip_update');
+	expect(logs[0].entityType).toBe('trip');
+	expect(logs[0].entityId).toBe(t.id);
+});
+
+test('edit action rejects invalid status values', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'edit-status-bad@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = createTrip(a.id, { name: 'Trip' });
+
+	const form = formData({
+		name: 'Trip',
+		status: 'foo'
+	});
+	const result = (await actions.save(makeEvent(form, { id: String(t.id) }, a.id))) as {
+		status: number;
+		data: { errors: Record<string, string> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.errors.status).toBe('status must be one of: planning, booked, active, completed');
+	expect(db.select().from(auditLogs).all()).toHaveLength(0);
+});
+
 test('edit action rejects invalid data and enforces ownership', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'edit-b@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
@@ -195,7 +236,8 @@ test('edit trip form highlights invalid fields and shows per-field errors', () =
 		startDate: '',
 		endDate: '',
 		notes: null,
-		tags: '[]'
+		tags: '[]',
+		status: 'booked' as const
 	};
 	const { body } = render(EditTripPage, {
 		props: { data: { trip, owner: true }, form: { errors: { name: 'name is required' } } }

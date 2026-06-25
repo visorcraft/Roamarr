@@ -8,6 +8,12 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
+import {
+	listEmergencyContacts,
+	addEmergencyContact,
+	updateEmergencyContact,
+	deleteEmergencyContact
+} from '$lib/server/emergencyContacts';
 import { THEMES, isThemeId, normalizeThemeId } from '$lib/themes';
 import { normalizeEmail } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
@@ -124,6 +130,7 @@ export const load: PageServerLoad = ({ locals, cookies, url }) => {
 	const feedUrl = u.calendarToken
 		? `${url.origin}/calendar/feed?token=${encodeURIComponent(u.calendarToken)}`
 		: null;
+	const emergencyContacts = listEmergencyContacts(u.id);
 
 	return {
 		user: {
@@ -140,7 +147,8 @@ export const load: PageServerLoad = ({ locals, cookies, url }) => {
 		themes: THEMES,
 		sessions: userSessions,
 		feedUrl,
-		calendarTokenExpiresAt: u.calendarTokenExpiresAt
+		calendarTokenExpiresAt: u.calendarTokenExpiresAt,
+		emergencyContacts
 	};
 };
 
@@ -225,6 +233,55 @@ export const actions: Actions = {
 		const expiresAt = String(f.get('calendarExpiresAt') || '');
 		_regenerateUserCalendarToken(u.id, expiresAt || null);
 		setFlash(cookies, 'Calendar feed URL regenerated.');
+		throw redirect(303, '/profile');
+	},
+	addEmergencyContact: async ({ request, locals, cookies }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		try {
+			addEmergencyContact(u.id, {
+				name: String(f.get('name') ?? ''),
+				relationship: String(f.get('relationship') || '') || undefined,
+				phone: String(f.get('phone') || '') || undefined,
+				email: String(f.get('email') || '') || undefined,
+				isPrimary: f.get('isPrimary') === 'on'
+			});
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to add contact' });
+		}
+		setFlash(cookies, 'Emergency contact added.');
+		throw redirect(303, '/profile');
+	},
+	updateEmergencyContact: async ({ request, locals, cookies }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const id = Number(f.get('id'));
+		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid contact' });
+		try {
+			updateEmergencyContact(u.id, id, {
+				name: String(f.get('name') ?? ''),
+				relationship: String(f.get('relationship') || '') || undefined,
+				phone: String(f.get('phone') || '') || undefined,
+				email: String(f.get('email') || '') || undefined,
+				isPrimary: f.get('isPrimary') === 'on'
+			});
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to update contact' });
+		}
+		setFlash(cookies, 'Emergency contact updated.');
+		throw redirect(303, '/profile');
+	},
+	deleteEmergencyContact: async ({ request, locals, cookies }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const id = Number(f.get('id'));
+		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid contact' });
+		try {
+			deleteEmergencyContact(u.id, id);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to delete contact' });
+		}
+		setFlash(cookies, 'Emergency contact deleted.');
 		throw redirect(303, '/profile');
 	}
 };

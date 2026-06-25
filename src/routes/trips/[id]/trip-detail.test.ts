@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
-import { users, trips, insurancePolicies, fareProviders, reminders, tripComments } from '$lib/server/db/schema';
+import { users, trips, segments, insurancePolicies, fareProviders, reminders, tripComments, auditLogs } from '$lib/server/db/schema';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { eq } from 'drizzle-orm';
 
@@ -173,4 +173,84 @@ test('delete action removes trip-level reminders', () => {
 	_deleteTrip(u.id, t.id);
 	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
 	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(0);
+});
+
+test('duplicateSegment action copies a segment and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ds@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'event',
+			title: 'City tour',
+			startAt: '2026-09-01T14:00:00Z',
+			startTz: 'UTC',
+			endAt: '2026-09-01T16:00:00Z',
+			confirmationNumber: 'XYZ'
+		})
+		.returning()
+		.get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: String(s.id) })
+	});
+	await expect(actions.duplicateSegment({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const rows = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	expect(rows).toHaveLength(2);
+	const copy = rows.find((r) => r.id !== s.id)!;
+	expect(copy.title).toBe('City tour');
+	expect(copy.startAt).toBe('2026-09-02T14:00:00.000Z');
+	expect(copy.endAt).toBe('2026-09-02T16:00:00.000Z');
+	expect(copy.confirmationNumber).toBeNull();
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, copy.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('duplicate');
+});
+
+test('duplicateSegment action rejects invalid segment id', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: 'abc' })
+	});
+	await expect(actions.duplicateSegment({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 400
+	});
+});
+
+test('duplicateSegment action rejects a non-editor', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-10-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: String(s.id) })
+	});
+	await expect(actions.duplicateSegment({ ...event(other, t.id), request })).rejects.toMatchObject({
+		status: 404
+	});
 });

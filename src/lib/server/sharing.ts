@@ -3,6 +3,9 @@ import { db } from './db';
 import { trips, tripShares, groups, groupMembers, segments } from './db/schema';
 import type { trips as tripsTable } from './db/schema';
 
+export { TRIP_STATUSES } from '../tripStatus';
+import type { TripStatus } from '../tripStatus';
+
 type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segments.$inferSelect;
 
@@ -115,6 +118,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		destination: trip.destination,
 		startDate: trip.startDate,
 		endDate: trip.endDate,
+		status: trip.status,
 		createdAt: trip.createdAt,
 		archived: trip.archived,
 		favorite: trip.favorite,
@@ -143,7 +147,7 @@ type TripFilter = 'active' | 'archived' | 'favorites';
 
 export function listViewableTrips(
 	userId: number,
-	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder; filter?: TripFilter }
+	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder; filter?: TripFilter; status?: TripStatus }
 ): ListedTrip[] {
 	const ownedWhere = options?.startDateGte
 		? and(eq(trips.ownerId, userId), gte(trips.startDate, options.startDateGte))
@@ -205,6 +209,11 @@ export function listViewableTrips(
 	const tag = options?.tag?.trim();
 	if (tag) {
 		result = result.filter((t) => tripHasTag(t, tag));
+	}
+
+	const status = options?.status;
+	if (status) {
+		result = result.filter((t) => t.status === status);
 	}
 
 	const filter: TripFilter = options?.filter ?? 'active';

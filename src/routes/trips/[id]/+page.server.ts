@@ -9,6 +9,7 @@ import {
 	listPoliciesForUser
 } from '$lib/server/insurance';
 import { addComment, deleteComment, listComments } from '$lib/server/tripComments';
+import { duplicateSegment } from '$lib/server/segments';
 import {
 	duplicateTrip,
 	loadTripFor,
@@ -18,11 +19,57 @@ import {
 } from '../shared';
 import { requireOwnedTrip, requireEditableTrip } from '$lib/server/ownership';
 import { upsertCustomReminder } from '$lib/server/reminders';
+import {
+	addCompanion,
+	updateCompanion,
+	deleteCompanion,
+	listTripCompanions
+} from '$lib/server/tripCompanions';
+import {
+	addChecklistItem,
+	toggleChecklistItem,
+	deleteChecklistItem,
+	loadChecklist
+} from '$lib/server/tripChecklists';
+import {
+	addExpense,
+	deleteExpense,
+	listTripExpenses,
+	summarizeTripExpenses
+} from '$lib/server/tripExpenses';
+import {
+	setAttendeeStatus,
+	removeAttendee,
+	listAttendeesForSegments
+} from '$lib/server/segmentAttendees';
+import {
+	addJournalEntry,
+	updateJournalEntry,
+	deleteJournalEntry,
+	listJournalEntries
+} from '$lib/server/tripJournal';
+import {
+	addDocumentLink,
+	updateDocumentLink,
+	deleteDocumentLink,
+	listDocumentLinks
+} from '$lib/server/tripDocumentLinks';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const view = loadTripFor(u.id, Number(params.id));
+	const companions = listTripCompanions(view.trip.id);
+	const checklist = loadChecklist(view.trip.id);
+	const expenses = listTripExpenses(view.trip.id);
+	const expenseSummary = summarizeTripExpenses(expenses, companions);
+	const journalEntries = listJournalEntries(view.trip.id);
+	const documentLinks = listDocumentLinks(view.trip.id);
+	let attendeesBySegment = new Map<number, ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never>();
+	if (view.editor) {
+		const segmentIds = view.segments.map((s) => s.id).filter((id): id is number => !!id);
+		attendeesBySegment = listAttendeesForSegments(segmentIds);
+	}
 	if (view.owner) {
 		const providers = db
 			.select({
@@ -64,18 +111,9 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);
-		return { ...view, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments } as TripView & {
-			providers: { id: number; providerKey: string; label: string }[];
-			watches: typeof watches;
-			cards: typeof userCards;
-			policies: typeof policies;
-			availablePolicies: typeof allPolicies;
-			feedUrl: string | null;
-			publicShareUrl: string | null;
-			comments: typeof comments;
-		};
+		return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, providers, watches, cards: userCards, policies, availablePolicies, feedUrl, publicShareUrl, comments };
 	}
-	return { ...view, comments: listComments(view.trip.id) };
+	return { ...view, companions, checklist, expenses, expenseSummary, journalEntries, documentLinks, attendeesBySegment, comments: listComments(view.trip.id) };
 };
 
 export const actions: Actions = {
@@ -150,6 +188,15 @@ export const actions: Actions = {
 		upsertCustomReminder(u.id, 'segment', segmentId, seg.startAt, offset);
 		throw redirect(303, `/trips/${tripId}`);
 	},
+	duplicateSegment: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const segmentId = Number((await request.formData()).get('segmentId'));
+		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
+		duplicateSegment(u.id, tripId, segmentId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
 	attachPolicy: async ({ locals, params, request }) => {
 		const u = requireUser(locals);
 		const tripId = Number(params.id);
@@ -188,5 +235,21 @@ export const actions: Actions = {
 		if (!Number.isFinite(commentId) || commentId <= 0) throw error(400, 'Invalid comment');
 		deleteComment(u.id, commentId);
 		throw redirect(303, `/trips/${tripId}`);
-	}
+	},
+	addCompanion,
+	updateCompanion,
+	deleteCompanion,
+	addChecklistItem,
+	toggleChecklistItem,
+	deleteChecklistItem,
+	addExpense,
+	deleteExpense,
+	setAttendeeStatus,
+	removeAttendee,
+	addJournalEntry,
+	updateJournalEntry,
+	deleteJournalEntry,
+	addDocumentLink,
+	updateDocumentLink,
+	deleteDocumentLink
 };

@@ -1,9 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
+
+	const statusLabel: Record<TripStatus, string> = {
+		planning: 'Planning',
+		booked: 'Booked',
+		active: 'Active',
+		completed: 'Completed'
+	};
 
 	function tagString(raw: string): string {
 		try {
@@ -46,6 +54,15 @@
 			<label class="label" for="endDate">End date</label>
 			<input id="endDate" name="endDate" type="date" value={data.trip.endDate ?? ''} class="input {form?.errors?.endDate ? 'input-error' : ''}" disabled={submitting} />
 			{#if form?.errors?.endDate}<p class="field-error">{form.errors.endDate}</p>{/if}
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="status">Status</label>
+			<select id="status" name="status" value={data.trip.status} class="input {form?.errors?.status ? 'input-error' : ''}" disabled={submitting}>
+				{#each TRIP_STATUSES as status}
+					<option value={status}>{statusLabel[status]}</option>
+				{/each}
+			</select>
+			{#if form?.errors?.status}<p class="field-error">{form.errors.status}</p>{/if}
 		</div>
 		<div class="field sm:col-span-2">
 			<label class="label" for="notes">Notes</label>

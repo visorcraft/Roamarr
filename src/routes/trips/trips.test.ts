@@ -143,6 +143,36 @@ test('trip list filters archived and favorite trips', () => {
 	expect(favorites.trips.map((t: any) => t.name)).toEqual(['Favorite']);
 });
 
+test('trip list filters by status', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'status-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	db.insert(trips).values({ ownerId: a.id, name: 'Planning Trip', startDate: '2026-07-01', status: 'planning' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Booked Trip', startDate: '2026-08-01', status: 'booked' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Active Trip', startDate: '2026-09-01', status: 'active' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Completed Trip', startDate: '2026-06-01', status: 'completed' }).run();
+
+	const planning = load(event(a, '?status=planning')) as any;
+	expect(planning.trips.map((t: any) => t.name)).toEqual(['Planning Trip']);
+	expect(planning.status).toBe('planning');
+
+	const active = load(event(a, '?status=active')) as any;
+	expect(active.trips.map((t: any) => t.name)).toEqual(['Active Trip']);
+
+	const all = load(event(a)) as any;
+	expect(all.trips.map((t: any) => t.name).sort()).toEqual(['Active Trip', 'Booked Trip', 'Completed Trip', 'Planning Trip']);
+	expect(all.status).toBeUndefined();
+});
+
+test('trip list rejects invalid status values', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'status-bad@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	db.insert(trips).values({ ownerId: a.id, name: 'Only', startDate: '2026-07-01' }).run();
+
+	const bad = load(event(a, '?status=foo')) as any;
+	expect(bad.trips.map((t: any) => t.name)).toEqual(['Only']);
+	expect(bad.status).toBeUndefined();
+});
+
 test('trip list rejects invalid sort and order values', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();

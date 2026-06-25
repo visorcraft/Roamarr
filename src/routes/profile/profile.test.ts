@@ -23,7 +23,7 @@ import {
 	actions
 } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
-import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs } from '$lib/server/db/schema';
+import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergencyContacts } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
@@ -515,4 +515,118 @@ test('changeEmail action sets a flash cookie and redirects', async () => {
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Email changed.', expect.any(Object));
 	expect(db.select().from(users).where(eq(users.id, u.id)).get()!.email).toBe('changed@x.c');
+});
+
+
+test('addEmergencyContact action creates a contact and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({
+			name: 'Sam Doe',
+			relationship: 'sibling',
+			phone: '+1-555-0199',
+			email: 'sam@x.c',
+			isPrimary: 'on'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.addEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Emergency contact added.', expect.any(Object));
+	const row = db.select().from(emergencyContacts).get()!;
+	expect(row.name).toBe('Sam Doe');
+	expect(row.isPrimary).toBe(true);
+});
+
+test('updateEmergencyContact action edits a contact and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-update-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+	const c = db
+		.insert(emergencyContacts)
+		.values({ userId: u.id, name: 'Old', phone: '000', isPrimary: false })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({
+			id: String(c.id),
+			name: 'New Name',
+			relationship: '',
+			phone: '111',
+			email: '',
+			isPrimary: 'on'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.updateEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	const row = db.select().from(emergencyContacts).where(eq(emergencyContacts.id, c.id)).get()!;
+	expect(row.name).toBe('New Name');
+	expect(row.phone).toBe('111');
+	expect(row.isPrimary).toBe(true);
+});
+
+test('deleteEmergencyContact action removes a contact and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-delete-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+	const c = db
+		.insert(emergencyContacts)
+		.values({ userId: u.id, name: 'Remove me', isPrimary: false })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({ id: String(c.id) })
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.deleteEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(db.select().from(emergencyContacts).where(eq(emergencyContacts.id, c.id)).get()).toBeUndefined();
+});
+
+test('emergency contact actions reject invalid contact ids', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'ec-invalid@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+
+	const updateRequest = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({ id: 'not-a-number', name: 'X' })
+	});
+	const updateResult = await actions.updateEmergencyContact({ request: updateRequest, locals: { user: u }, cookies } as any);
+	expect(updateResult?.status).toBe(400);
+
+	const deleteRequest = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({ id: 'not-a-number' })
+	});
+	const deleteResult = await actions.deleteEmergencyContact({ request: deleteRequest, locals: { user: u }, cookies } as any);
+	expect(deleteResult?.status).toBe(400);
 });

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import Icon from '$lib/components/Icon.svelte';
 	import { parseTags } from '$lib/tags';
+	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
-	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string; filter: string }; form?: { error?: string } } = $props();
+	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus }; form?: { error?: string } } = $props();
 
 	const allTags = $derived(
 		Array.from(
@@ -15,6 +16,32 @@
 		groups: 'badge-brand',
 		public: 'badge-green'
 	};
+
+	const statusBadge: Record<TripStatus, string> = {
+		planning: 'badge-slate',
+		booked: 'badge-brand',
+		active: 'badge-green',
+		completed: 'badge-amber'
+	};
+
+	const statusLabel: Record<TripStatus, string> = {
+		planning: 'Planning',
+		booked: 'Booked',
+		active: 'Active',
+		completed: 'Completed'
+	};
+
+	function searchHref(overrides: { status?: TripStatus | null }) {
+		const params = new URLSearchParams();
+		if (data.q) params.set('q', data.q);
+		if (data.tag) params.set('tag', data.tag);
+		if (data.sort && data.sort !== 'startDate') params.set('sort', data.sort);
+		if (data.order && data.order !== 'asc') params.set('order', data.order);
+		if (data.filter && data.filter !== 'active') params.set('filter', data.filter);
+		if (overrides.status) params.set('status', overrides.status);
+		const s = params.toString();
+		return s ? `?${s}` : '?';
+	}
 </script>
 
 <header class="page-header">
@@ -73,6 +100,13 @@
 	<a href="?filter=favorites" class="btn btn-sm {data.filter === 'favorites' ? 'btn-primary' : 'btn-ghost'}">Favorites</a>
 </div>
 
+<div class="mt-3 flex flex-wrap gap-2">
+	<a href={searchHref({ status: null })} class="badge {data.status ? 'badge-slate' : 'badge-brand'}">All statuses</a>
+	{#each TRIP_STATUSES as status}
+		<a href={searchHref({ status })} class="badge {data.status === status ? statusBadge[status] : 'badge-slate'}">{statusLabel[status]}</a>
+	{/each}
+</div>
+
 {#if allTags.length}
 	<div class="mt-3 flex flex-wrap gap-1.5">
 		{#each allTags as tag}
@@ -113,12 +147,15 @@
 								{#if t.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
 								{t.name}
 							</h2>
-							{#if t.isShared}
-								<span class="badge badge-brand shrink-0">Shared</span>
-							{:else}
-								{@const badgeClass = t.defaultVisibility ? visBadge[t.defaultVisibility] ?? 'badge-slate' : 'badge-slate'}
-								<span class="badge {badgeClass} shrink-0 capitalize">{t.defaultVisibility || 'private'}</span>
-							{/if}
+							<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
+								<span class="badge {statusBadge[t.status]} capitalize">{statusLabel[t.status]}</span>
+								{#if t.isShared}
+									<span class="badge badge-brand">Shared</span>
+								{:else}
+									{@const badgeClass = t.defaultVisibility ? visBadge[t.defaultVisibility] ?? 'badge-slate' : 'badge-slate'}
+									<span class="badge {badgeClass} capitalize">{t.defaultVisibility || 'private'}</span>
+								{/if}
+							</div>
 						</div>
 						{#if t.destination}
 							<p class="flex items-center gap-1.5 text-sm text-slate-400">

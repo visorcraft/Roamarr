@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
-import { listViewableTrips } from '$lib/server/sharing';
+import { listViewableTrips, TRIP_STATUSES } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { cancelRemindersFor } from '$lib/server/reminders';
@@ -18,12 +18,16 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const sortRaw = url.searchParams.get('sort');
 	const orderRaw = url.searchParams.get('order');
 	const filterRaw = url.searchParams.get('filter');
+	const statusRaw = url.searchParams.get('status');
 	const sort = SORT_FIELDS.includes(sortRaw as (typeof SORT_FIELDS)[number]) ? (sortRaw as (typeof SORT_FIELDS)[number]) : 'startDate';
 	const order = ORDERS.includes(orderRaw as (typeof ORDERS)[number]) ? (orderRaw as (typeof ORDERS)[number]) : 'asc';
 	const filter = FILTERS.includes(filterRaw as (typeof FILTERS)[number])
 		? (filterRaw as (typeof FILTERS)[number])
 		: 'active';
-	return { trips: listViewableTrips(u.id, { q, tag, sort, order, filter }), q, tag, sort, order, filter };
+	const status = TRIP_STATUSES.includes(statusRaw as (typeof TRIP_STATUSES)[number])
+		? (statusRaw as (typeof TRIP_STATUSES)[number])
+		: undefined;
+	return { trips: listViewableTrips(u.id, { q, tag, sort, order, filter, status }), q, tag, sort, order, filter, status };
 };
 
 function selectedIds(formData: FormData): number[] {

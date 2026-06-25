@@ -1,0 +1,155 @@
+import { test, expect, vi } from 'vitest';
+
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+vi.mock('$lib/server/db', async () => {
+	const { freshDb } = await import('../../../tests/helpers');
+	Object.assign(ctx, freshDb());
+	return ctx;
+});
+
+import {
+	listTripCompanions,
+	insertTripCompanion,
+	patchTripCompanion,
+	removeTripCompanion,
+	addCompanion,
+	updateCompanion,
+	deleteCompanion
+} from './tripCompanions';
+import { users, trips, tripCompanions, auditLogs } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
+
+function event(user: { id: number }, tripId: number, body: URLSearchParams) {
+	return {
+		locals: { user } as App.Locals,
+		params: { id: String(tripId) },
+		request: new Request('http://localhost/trips/' + tripId, {
+			method: 'POST',
+			body
+		})
+	} as any;
+}
+
+test('insert and list companions', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'tc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const a = insertTripCompanion(u.id, t.id, { name: 'Alice', category: 'adult', notes: 'Likes windows' });
+	const b = insertTripCompanion(u.id, t.id, { name: 'Bob', category: 'child' });
+
+	const rows = listTripCompanions(t.id);
+	expect(rows.map((r) => r.id)).toEqual([a.id, b.id]);
+	expect(rows[0].notes).toBe('Likes windows');
+	expect(rows[1].category).toBe('child');
+});
+
+test('patch companion updates fields', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'patch@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Charlie', category: 'other' });
+
+	patchTripCompanion(u.id, t.id, c.id, { name: 'Charles', category: 'adult', notes: 'Updated' });
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	expect(row.name).toBe('Charles');
+	expect(row.category).toBe('adult');
+	expect(row.notes).toBe('Updated');
+});
+
+test('remove companion deletes the row', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'del@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Dana' });
+
+	removeTripCompanion(u.id, t.id, c.id);
+	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()).toBeUndefined();
+});
+
+test('mutations bump trip updated_at and write audit logs', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'audit@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const before = t.updatedAt;
+
+	const c = insertTripCompanion(u.id, t.id, { name: 'Eve' });
+	const afterInsert = db.select().from(trips).where(eq(trips.id, t.id)).get()!.updatedAt;
+	expect(afterInsert).not.toBe(before);
+
+	removeTripCompanion(u.id, t.id, c.id);
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs.map((l) => l.action)).toContain('create');
+	expect(logs.map((l) => l.action)).toContain('delete');
+});
+
+test('non-editor cannot mutate companions', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+
+	expect(() => insertTripCompanion(other.id, t.id, { name: 'Mallory' })).toThrow();
+});
+
+test('addCompanion action creates a companion and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'add@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	await expect(
+		addCompanion(event(u, t.id, new URLSearchParams({ name: 'Alice', category: 'adult', notes: 'A' })))
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.tripId, t.id)).all();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].name).toBe('Alice');
+});
+
+test('updateCompanion action updates a companion and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'upd@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Ben', category: 'child' });
+
+	await expect(
+		updateCompanion(
+			event(
+				u,
+				t.id,
+				new URLSearchParams({ companionId: String(c.id), name: 'Benjamin', category: 'adult' })
+			)
+		)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	expect(row.name).toBe('Benjamin');
+	expect(row.category).toBe('adult');
+});
+
+test('deleteCompanion action deletes a companion and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'rm@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Cara' });
+
+	await expect(
+		deleteCompanion(event(u, t.id, new URLSearchParams({ companionId: String(c.id) })))
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+
+	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()).toBeUndefined();
+});
+
+test('action handlers reject invalid input with fail(400)', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'bad@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const addResult = await addCompanion(event(u, t.id, new URLSearchParams({ name: '' })));
+	expect(addResult).toMatchObject({ status: 400, data: { error: expect.any(String) } });
+
+	const updateResult = await updateCompanion(
+		event(u, t.id, new URLSearchParams({ companionId: '1', name: '', category: 'wizard' }))
+	);
+	expect(updateResult).toMatchObject({ status: 400, data: { errors: expect.any(Object) } });
+});

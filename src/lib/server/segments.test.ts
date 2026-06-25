@@ -7,8 +7,9 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { hasOverlappingSegment } from './segments';
-import { users, trips, segments } from './db/schema';
+import { hasOverlappingSegment, duplicateSegment } from './segments';
+import { users, trips, segments, cards, auditLogs } from './db/schema';
+import { eq } from 'drizzle-orm';
 
 test('detects overlap with existing segment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -46,4 +47,73 @@ test('excluding current segment avoids self-overlap', () => {
 		.get();
 
 	expect(hasOverlappingSegment(t.id, s.id, '2026-01-01T10:00:00Z', '2026-01-01T12:00:00Z')).toBe(false);
+});
+
+test('duplicateSegment copies a segment shifted 24 hours and clears confirmation', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'dup@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = db
+		.insert(cards)
+		.values({ userId: u.id, nickname: 'Travel', network: 'visa', last4: '1234' })
+		.returning()
+		.get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'shuttle',
+			title: 'Airport shuttle',
+			startAt: '2026-07-01T09:00:00Z',
+			startTz: 'America/New_York',
+			endAt: '2026-07-01T10:00:00Z',
+			location: 'JFK',
+			confirmationNumber: 'ABC123',
+			cardId: c.id,
+			detailsJson: JSON.stringify({ note: 'x' })
+		})
+		.returning()
+		.get();
+
+	const copy = duplicateSegment(u.id, t.id, s.id);
+	expect(copy.id).not.toBe(s.id);
+	expect(copy.type).toBe(s.type);
+	expect(copy.title).toBe(s.title);
+	expect(copy.location).toBe(s.location);
+	expect(copy.startTz).toBe(s.startTz);
+	expect(copy.startAt).toBe('2026-07-02T09:00:00.000Z');
+	expect(copy.endAt).toBe('2026-07-02T10:00:00.000Z');
+	expect(copy.confirmationNumber).toBeNull();
+	expect(copy.cardId).toBe(c.id);
+	expect(copy.detailsJson).toBe(s.detailsJson);
+
+	const rows = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	expect(rows).toHaveLength(2);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, copy.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('duplicate');
+	expect(logs[0].entityType).toBe('segment');
+});
+
+test('duplicateSegment rejects a segment from another trip or non-editor', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const owner = db.insert(users).values({ email: 'dup-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'dup-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t1 = db.insert(trips).values({ ownerId: owner.id, name: 'T1' }).returning().get();
+	const t2 = db.insert(trips).values({ ownerId: owner.id, name: 'T2' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t1.id,
+			type: 'flight',
+			title: 'A',
+			startAt: '2026-08-01T08:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	expect(() => duplicateSegment(owner.id, t2.id, s.id)).toThrow();
+	expect(() => duplicateSegment(other.id, t1.id, s.id)).toThrow();
 });

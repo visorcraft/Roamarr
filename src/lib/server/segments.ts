@@ -1,8 +1,10 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, ne, sql } from 'drizzle-orm';
+import { DateTime } from 'luxon';
 import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
 import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
+import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { segments, type SegmentType } from '$lib/server/db/schema';
 
@@ -110,4 +112,40 @@ export function updateSegment(
 		.get();
 	upsertRemindersForSegment(seg);
 	return seg;
+}
+
+function shiftUtcBy24h(iso: string | null) {
+	if (!iso) return null;
+	return DateTime.fromISO(iso, { zone: 'utc' }).plus({ hours: 24 }).toUTC().toISO()!;
+}
+
+export function duplicateSegment(userId: number, tripId: number, segId: number) {
+	requireEditableTrip(userId, tripId);
+	const existing = db
+		.select()
+		.from(segments)
+		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
+		.get();
+	if (!existing) throw error(404, 'Not found');
+	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
+
+	const copy = db
+		.insert(segments)
+		.values({
+			tripId,
+			type: existing.type,
+			title: existing.title,
+			startAt: shiftUtcBy24h(existing.startAt)!,
+			startTz: existing.startTz,
+			endAt: shiftUtcBy24h(existing.endAt),
+			location: existing.location,
+			confirmationNumber: null,
+			cardId: existing.cardId,
+			detailsJson: existing.detailsJson
+		})
+		.returning()
+		.get();
+	upsertRemindersForSegment(copy);
+	logAudit(userId, 'duplicate', 'segment', copy.id, { sourceSegmentId: segId, sourceTripId: tripId });
+	return copy;
 }

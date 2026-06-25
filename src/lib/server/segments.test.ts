@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { addSegment, hasOverlappingSegment, duplicateSegment } from './segments';
+import { addSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -166,4 +166,88 @@ test('hasOverlappingSegment uses UTC endAt for comparison', () => {
 
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T11:00:00Z', '2026-01-01T13:00:00Z')).toBe(true);
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T12:00:00Z', '2026-01-01T13:00:00Z')).toBe(false);
+});
+
+test('updateSegmentStatus updates segment status', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'status@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const updated = updateSegmentStatus(s.id, 'checked_in');
+	expect(updated.status).toBe('checked_in');
+	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	expect(row?.status).toBe('checked_in');
+});
+
+test('updateSegmentStatus rejects invalid status', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'status-bad@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	expect(() => updateSegmentStatus(s.id, 'invalid' as any)).toThrow();
+});
+
+test('setSegmentStatus updates status for an editor and logs audit', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'status-editor@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const updated = setSegmentStatus(u.id, t.id, s.id, 'boarded');
+	expect(updated.status).toBe('boarded');
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('update_status');
+});
+
+test('setSegmentStatus rejects a non-editor', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const owner = db.insert(users).values({ email: 'status-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'status-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	expect(() => setSegmentStatus(other.id, t.id, s.id, 'completed')).toThrow();
 });

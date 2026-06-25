@@ -23,6 +23,7 @@
 		startAt: string | null;
 		endAt: string | null;
 		location: string | null;
+		status?: string | null;
 		confirmationNumber?: string | null;
 		detailsJson?: string | null;
 		startTz?: string;
@@ -30,6 +31,24 @@
 	};
 
 	type SegmentRow = SharedSegment & { id?: number; startTz: string; endTz?: string | null; cardId?: number | null };
+
+	const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
+
+	const segmentStatusMeta: Record<string, { label: string; class: string }> = {
+		planned: { label: 'Planned', class: 'badge-slate' },
+		checked_in: { label: 'Checked in', class: 'badge-brand' },
+		boarded: { label: 'Boarded', class: 'badge-amber' },
+		arrived: { label: 'Arrived', class: 'badge-green' },
+		completed: { label: 'Completed', class: 'badge-green' }
+	};
+
+	function segmentStatusLabel(status: string) {
+		return segmentStatusMeta[status]?.label ?? status.replace('_', ' ');
+	}
+
+	function segmentStatusClass(status: string) {
+		return segmentStatusMeta[status]?.class ?? 'badge-slate';
+	}
 
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
@@ -347,6 +366,22 @@
 															<div class="flex flex-wrap items-center gap-2">
 																<span class="badge badge-slate">{SEG[s.type as keyof typeof SEG]?.label ?? s.type}</span>
 																<h3 class="font-semibold text-white">{s.title}</h3>
+																{#if isEditor && s.id}
+																	<form method="POST" action="?/setSegmentStatus" class="contents">
+																		<input type="hidden" name="segmentId" value={s.id} />
+																		<select
+																			name="status"
+																			class="input h-7 py-0 text-[10px] w-auto"
+																			onchange={(e) => e.currentTarget.form?.requestSubmit()}
+																		>
+																			{#each SEGMENT_STATUSES as st}
+																				<option value={st} selected={s.status === st}>{segmentStatusLabel(st)}</option>
+																			{/each}
+																		</select>
+																	</form>
+																{:else if s.status}
+																	<span class="badge badge-compact {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>
+																{/if}
 															</div>
 															{#if s.endAt}
 																<p class="mt-1 font-mono text-xs text-slate-500">

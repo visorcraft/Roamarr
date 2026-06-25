@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
-import { users, trips, segments, insurancePolicies, fareProviders, reminders, tripComments, auditLogs } from '$lib/server/db/schema';
+import { users, trips, segments, insurancePolicies, fareProviders, reminders, tripComments, auditLogs, tripCompanions, tripShares } from '$lib/server/db/schema';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { eq } from 'drizzle-orm';
 
@@ -253,4 +253,105 @@ test('duplicateSegment action rejects a non-editor', async () => {
 	await expect(actions.duplicateSegment({ ...event(other, t.id), request })).rejects.toMatchObject({
 		status: 404
 	});
+});
+
+test('load strips companion notes from shared viewers', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'co@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const reader = db.insert(users).values({ email: 'cr@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	db.insert(tripCompanions).values({
+		tripId: t.id,
+		name: 'Sam',
+		category: 'adult',
+		dietary: 'Vegetarian',
+		allergies: 'Peanuts',
+		medicalNotes: 'EpiPen',
+		notes: 'Likes windows'
+	}).run();
+	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id }).run();
+
+	const result = load(event(reader, t.id)) as { companions: { name: string; dietary: string | null; allergies: string | null; medicalNotes: string | null; notes: string | null }[] };
+	expect(result.companions).toHaveLength(1);
+	expect(result.companions[0].name).toBe('Sam');
+	expect(result.companions[0].dietary).toBeNull();
+	expect(result.companions[0].allergies).toBeNull();
+	expect(result.companions[0].medicalNotes).toBeNull();
+	expect(result.companions[0].notes).toBeNull();
+});
+
+test('setSegmentStatus action updates segment status for an editor', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ss@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: String(s.id), status: 'checked_in' })
+	});
+	await expect(actions.setSegmentStatus({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	expect(row?.status).toBe('checked_in');
+});
+
+test('setSegmentStatus action rejects invalid status', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: String(s.id), status: 'invalid' })
+	});
+	await expect(actions.setSegmentStatus({ ...event(u, t.id), request })).rejects.toMatchObject({ status: 400 });
+});
+
+test('setSegmentStatus action rejects a non-editor', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'F',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC'
+		})
+		.returning()
+		.get();
+
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ segmentId: String(s.id), status: 'completed' })
+	});
+	await expect(actions.setSegmentStatus({ ...event(other, t.id), request })).rejects.toMatchObject({ status: 404 });
 });

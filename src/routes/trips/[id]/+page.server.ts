@@ -9,7 +9,7 @@ import {
 	listPoliciesForUser
 } from '$lib/server/insurance';
 import { addComment, deleteComment, listComments } from '$lib/server/tripComments';
-import { duplicateSegment } from '$lib/server/segments';
+import { duplicateSegment, setSegmentStatus } from '$lib/server/segments';
 import {
 	duplicateTrip,
 	loadTripFor,
@@ -205,6 +205,18 @@ export const actions: Actions = {
 		const segmentId = Number((await request.formData()).get('segmentId'));
 		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
 		duplicateSegment(u.id, tripId, segmentId);
+		throw redirect(303, `/trips/${tripId}`);
+	},
+	setSegmentStatus: async ({ locals, params, request }) => {
+		const u = requireUser(locals);
+		const tripId = Number(params.id);
+		if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+		const f = await request.formData();
+		const segmentId = Number(f.get('segmentId'));
+		const status = String(f.get('status') || '');
+		if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
+		if (!status) throw error(400, 'Invalid status');
+		setSegmentStatus(u.id, tripId, segmentId, status as import('$lib/server/db/schema').SegmentStatus);
 		throw redirect(303, `/trips/${tripId}`);
 	},
 	attachPolicy: async ({ locals, params, request }) => {

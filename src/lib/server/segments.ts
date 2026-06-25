@@ -6,7 +6,7 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
-import { segments, type SegmentType } from '$lib/server/db/schema';
+import { segments, type SegmentType, type SegmentStatus, SEGMENT_STATUSES } from '$lib/server/db/schema';
 
 export function addSegment(
 	userId: number,
@@ -155,4 +155,34 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 	upsertRemindersForSegment(copy);
 	logAudit(userId, 'duplicate', 'segment', copy.id, { sourceSegmentId: segId, sourceTripId: tripId });
 	return copy;
+}
+
+export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
+	if (!SEGMENT_STATUSES.includes(status)) {
+		throw error(400, 'Invalid segment status');
+	}
+	return db
+		.update(segments)
+		.set({ status, updatedAt: DateTime.utc().toISO() })
+		.where(eq(segments.id, segmentId))
+		.returning()
+		.get();
+}
+
+export function setSegmentStatus(
+	userId: number,
+	tripId: number,
+	segmentId: number,
+	status: SegmentStatus
+) {
+	requireEditableTrip(userId, tripId);
+	const existing = db
+		.select({ id: segments.id })
+		.from(segments)
+		.where(and(eq(segments.id, segmentId), eq(segments.tripId, tripId)))
+		.get();
+	if (!existing) throw error(404, 'Not found');
+	const seg = updateSegmentStatus(segmentId, status);
+	logAudit(userId, 'update_status', 'segment', segmentId, { status });
+	return seg;
 }

@@ -1,4 +1,4 @@
-import { error, fail, redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { buildTripDetail } from '$lib/server/tripDetail';
 import { parseTripId } from '$lib/server/params';
@@ -26,7 +26,7 @@ import {
 } from '$lib/server/tripDocumentLinks';
 import { createPoll, votePoll, deletePoll } from '$lib/server/tripPolls';
 import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
-import { listTemplates, saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
+import { saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
 import {
 	addHomeTaskAction,
 	toggleHomeTask,

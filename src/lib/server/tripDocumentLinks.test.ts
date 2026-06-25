@@ -21,14 +21,6 @@ import { eq } from 'drizzle-orm';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import { makeFormEvent } from '../../../tests/eventHelpers';
 
-function formData(entries: Record<string, string>): FormData {
-	const f = new FormData();
-	for (const [key, value] of Object.entries(entries)) {
-		f.set(key, value);
-	}
-	return f;
-}
-
 test('listDocumentLinks returns links ordered by newest first', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = db.insert(users).values({ email: 'dl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();

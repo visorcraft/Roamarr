@@ -1,11 +1,9 @@
-import { redirect, type RequestEvent } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripCompanions, tripImportantItems } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow, requireCompanionOnTrip } from './ownership';
 import { logAudit } from './audit';
-import { Validator, formFail, positiveIdFromForm } from './validation';
-import { withTripAction } from './actions';
+import { Validator, formFail } from './validation';
 
 export function listImportantItems(tripId: number) {
 	return db
@@ -61,22 +59,4 @@ export function deleteImportantItem(userId: number, tripId: number, itemId: numb
 	requireOwnedTripRow(tripImportantItems, tripId, itemId, 'Item not found');
 	db.delete(tripImportantItems).where(eq(tripImportantItems.id, itemId)).run();
 	logAudit(userId, 'delete', 'trip_important_item', itemId, { tripId });
-}
-
-export async function addImportantItemAction(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const name = String(formData.get('name') || '');
-	const companionIdRaw = formData.get('companionId');
-	const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-	const serialNumber = String(formData.get('serialNumber') || '');
-	const trackerId = String(formData.get('trackerId') || '');
-	const notes = String(formData.get('notes') || '');
-	addImportantItem(user.id, tripId, {
-		name,
-		companionId: companionId && Number.isFinite(companionId) ? companionId : null,
-		serialNumber,
-		trackerId,
-		notes
-	});
-	throw redirect(303, `/trips/${tripId}`);
 }

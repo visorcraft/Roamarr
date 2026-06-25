@@ -1,11 +1,9 @@
-import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripEntryRequirements } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
 import { Validator, formFail } from './validation';
-import { withTripAction } from './actions';
 
 export const REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 export const REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
@@ -90,16 +88,4 @@ export function deleteEntryRequirement(userId: number, tripId: number, requireme
 	requireOwnedTripRow(tripEntryRequirements, tripId, requirementId, 'Requirement not found');
 	db.delete(tripEntryRequirements).where(eq(tripEntryRequirements.id, requirementId)).run();
 	logAudit(userId, 'delete', 'trip_entry_requirement', requirementId, { tripId });
-}
-
-export async function addEntryRequirementAction(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const country = String(formData.get('country') || '');
-	const requirementType = String(formData.get('requirementType') || '');
-	const status = String(formData.get('status') || 'needed');
-	const dueDateRaw = formData.get('dueDate');
-	const dueDate = typeof dueDateRaw === 'string' && dueDateRaw ? dueDateRaw : null;
-	const notes = String(formData.get('notes') || '');
-	addEntryRequirement(user.id, tripId, { country, requirementType, status, dueDate, notes });
-	throw redirect(303, `/trips/${tripId}`);
 }

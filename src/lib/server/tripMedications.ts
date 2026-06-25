@@ -1,11 +1,9 @@
-import { redirect, type RequestEvent } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripCompanions, tripMedications } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow, requireCompanionOnTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator, formFail } from './validation';
-import { withTripAction } from './actions';
 
 export function listMedications(tripId: number) {
 	return db
@@ -76,26 +74,4 @@ export function deleteMedication(userId: number, tripId: number, medicationId: n
 	requireOwnedTripRow(tripMedications, tripId, medicationId, 'Medication not found');
 	db.delete(tripMedications).where(eq(tripMedications.id, medicationId)).run();
 	logAudit(userId, 'delete', 'trip_medication', medicationId, { tripId });
-}
-
-export async function addMedicationAction(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const name = String(formData.get('name') || '');
-	const companionIdRaw = formData.get('companionId');
-	const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-	const dosage = String(formData.get('dosage') || '');
-	const schedule = String(formData.get('schedule') || '');
-	const startsAt = String(formData.get('startsAt') || '');
-	const endsAt = String(formData.get('endsAt') || '');
-	const notes = String(formData.get('notes') || '');
-	addMedication(user.id, tripId, {
-		name,
-		companionId: companionId && Number.isFinite(companionId) ? companionId : null,
-		dosage,
-		schedule,
-		startsAt,
-		endsAt,
-		notes
-	});
-	throw redirect(303, `/trips/${tripId}`);
 }

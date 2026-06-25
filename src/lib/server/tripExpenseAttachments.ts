@@ -1,10 +1,10 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { db } from './db';
-import { tripExpenseAttachments, tripExpenses, trips } from './db/schema';
+import { tripExpenseAttachments, tripExpenses } from './db/schema';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 

@@ -160,4 +160,3 @@ export function buildTripDetail(u: { id: number }, tripId: number, url: URL) {
 	};
 }
 
-export type TripDetail = ReturnType<typeof buildTripDetail>;

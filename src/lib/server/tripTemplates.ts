@@ -1,11 +1,9 @@
-import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import { eq, and } from 'drizzle-orm';
 import { db } from './db';
 import { segments, trips, tripTemplates } from './db/schema';
-import { requireUser } from './auth';
-import { requireOwnedTrip, requireEditableTrip } from './ownership';
+import { requireOwnedTrip } from './ownership';
 import { logAudit } from './audit';
-import { parseTripId } from './params';
 import { nowIso } from './tz';
 import { serializeTags, parseTags } from '$lib/tags';
 
@@ -19,19 +17,6 @@ export interface TripTemplateSnapshot {
 
 export function listTripTemplates(userId: number) {
 	return db.select().from(tripTemplates).where(eq(tripTemplates.userId, userId)).orderBy(tripTemplates.name).all();
-}
-
-export function listTripTemplatesWithItems(userId: number) {
-	const templates = listTripTemplates(userId);
-	return templates.map((t) => {
-		let snapshot: TripTemplateSnapshot = { name: t.name, destination: null, notes: null, tags: [], segmentTemplates: [] };
-		try {
-			snapshot = JSON.parse(t.snapshotJson) as TripTemplateSnapshot;
-		} catch {
-			// ignore
-		}
-		return { ...t, snapshot };
-	});
 }
 
 export function saveTripTemplate(userId: number, sourceTripId: number, name: string) {
@@ -113,14 +98,4 @@ export function createTripFromTemplate(
 
 	logAudit(userId, 'create_from_template', 'trip', trip.id, { templateId });
 	return trip;
-}
-
-export async function saveTemplateAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = parseTripId(event.params);
-	const f = await event.request.formData();
-	const name = String(f.get('name') || '').trim();
-	if (!name) throw error(400, 'Template name is required');
-	saveTripTemplate(u.id, tripId, name);
-	throw redirect(303, `/trips/${tripId}`);
 }

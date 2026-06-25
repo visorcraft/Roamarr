@@ -4,7 +4,7 @@ import { db } from './db';
 import { tripDocumentLinks } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
-import { Validator, formFail, httpUrl, positiveIdFromForm } from './validation';
+import { Validator, httpUrl, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
 
 export type DocumentLinkInput = {

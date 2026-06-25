@@ -8,7 +8,7 @@ vi.mock('./db', async () => {
 });
 
 import { createTripFromTemplate, listTripTemplates, saveTripTemplate } from './tripTemplates';
-import { auditLogs, segments, trips, tripTemplates, users } from './db/schema';
+import { auditLogs, segments, trips, users } from './db/schema';
 import { eq } from 'drizzle-orm';
 
 beforeEach(() => {
@@ -86,7 +86,7 @@ test('listTripTemplates returns only the users templates', () => {
 });
 
 test('saveTripTemplate rejects non-owner', () => {
-	const { db, u, t } = seed();
+	const { db, t } = seed();
 	const other = db.insert(users).values({ email: 'no@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
 	expect(() => saveTripTemplate(other.id, t.id, 'Nope')).toThrow();
 });

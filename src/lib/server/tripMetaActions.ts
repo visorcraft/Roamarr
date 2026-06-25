@@ -1,6 +1,5 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { requireUser } from './auth';
 import { db } from './db';
 import { trips, segments } from './db/schema';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';

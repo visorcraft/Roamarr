@@ -7,14 +7,10 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { error } from '@sveltejs/kit';
 import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem } from './tripChecklists';
 import { users, trips, tripCompanions, tripChecklists, tripChecklistItems } from './db/schema';
 import { eq } from 'drizzle-orm';
-
-function makeLocals(user: typeof users.$inferSelect) {
-	return { user, flash: undefined };
-}
+import { makeLocals } from '../../../tests/eventHelpers';
 
 function formRequest(data: Record<string, string>) {
 	const body = new URLSearchParams(data);

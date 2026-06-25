@@ -4,7 +4,7 @@ import { DateTime } from 'luxon';
 import { db } from './db';
 import { tripJournalEntries } from './db/schema';
 import { logAudit } from './audit';
-import { requireEditableTrip, requireOwnedTripRow } from './ownership';
+import { requireEditableTrip } from './ownership';
 import { Validator, formFail, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
 

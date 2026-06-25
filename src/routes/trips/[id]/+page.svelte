@@ -10,7 +10,7 @@
 	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
-	import { SEGMENT_STATUS_META, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
+	import { segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
 	import { tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
 	import type { PageData } from './$types';

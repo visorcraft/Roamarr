@@ -176,16 +176,22 @@ function formData(obj: Record<string, string>) {
 }
 
 const addSegmentAction = newSegmentPage('flight').actions.default;
+const rentalCarAddAction = newSegmentPage('rental_car').actions.default;
 
-function makeAddEvent(form: FormData, params: Record<string, string>, userId: number) {
+function makeAddEvent(
+	form: FormData,
+	params: Record<string, string>,
+	userId: number,
+	type = 'flight'
+) {
 	return {
-		request: new Request(`http://localhost/trips/${params.id}/segments/new/flight`, {
+		request: new Request(`http://localhost/trips/${params.id}/segments/new/${type}`, {
 			method: 'POST',
 			body: form
 		}),
 		params,
 		locals: locals({ id: userId }),
-		url: new URL(`http://localhost/trips/${params.id}/segments/new/flight`)
+		url: new URL(`http://localhost/trips/${params.id}/segments/new/${type}`)
 	} as any;
 }
 
@@ -340,6 +346,90 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()).toBeUndefined();
 });
 
+
+test('add and update actions store meeting point and rally time', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'meet-act@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+
+	const addForm = formData({
+		title: 'Coffee',
+		localStart: '2026-07-01T10:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Hotel lobby',
+		meetingAt: '2026-07-01T09:30'
+	});
+	const addPage = newSegmentPage('meetup').actions.default;
+	await expect(addPage!(makeAddEvent(addForm, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	let seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	expect(seg.meetingPoint).toBe('Hotel lobby');
+	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+
+	const updateForm = formData({
+		segmentId: String(seg.id),
+		title: 'Coffee',
+		localStart: '2026-07-01T10:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Lobby entrance',
+		meetingAt: '2026-07-01T09:45'
+	});
+	await expect(actions.update(makeEvent(updateForm, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	seg = db.select().from(segments).where(eq(segments.id, seg.id)).get()!;
+	expect(seg.meetingPoint).toBe('Lobby entrance');
+	expect(seg.meetingAt).toBe('2026-07-01T13:45:00.000Z');
+});
+
+test('flight add action stores meeting point and rally time', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'flight-meet@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+
+	const form = formData({
+		title: 'UA1',
+		localStart: '2026-07-01T10:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Gate A12',
+		meetingAt: '2026-07-01T09:30'
+	});
+	await expect(addSegmentAction!(makeAddEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	expect(seg.type).toBe('flight');
+	expect(seg.meetingPoint).toBe('Gate A12');
+	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+});
+
+test('rental_car add action stores meeting point and rally time', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'car-meet@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+
+	const form = formData({
+		title: 'Hertz',
+		localStart: '2026-07-01T10:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Rental counter',
+		meetingAt: '2026-07-01T09:30'
+	});
+	await expect(
+		rentalCarAddAction!(makeAddEvent(form, { id: String(t.id) }, a.id, 'rental_car'))
+	).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	expect(seg.type).toBe('rental_car');
+	expect(seg.meetingPoint).toBe('Rental counter');
+	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+});
 
 test('update action attaches an owned card and rejects a foreign card', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;

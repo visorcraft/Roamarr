@@ -50,6 +50,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 	const confirmationNumber = v.optionalString(f.get('confirmationNumber'), 'confirmationNumber', {
 		max: 100
 	});
+	const meetingPoint = v.optionalString(f.get('meetingPoint'), 'meetingPoint', { max: 200 });
+	const meetingAt = v.dateTime(f.get('meetingAt'), 'meetingAt');
 	const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
 	const details = parseSegmentDetails(f);
 
@@ -73,6 +75,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		endTz: endTz ?? undefined,
 		location,
 		confirmationNumber,
+		meetingPoint,
+		meetingAt: meetingAt ?? undefined,
 		cardId,
 		details
 	});

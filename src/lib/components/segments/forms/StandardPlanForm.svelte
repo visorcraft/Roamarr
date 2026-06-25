@@ -44,6 +44,29 @@
 	{#if errors.location}<p class="field-error">{errors.location}</p>{/if}
 </div>
 
+<div class="field sm:col-span-2">
+	<label class="label" for="meetingPoint">Meeting / rally point</label>
+	<input
+		id="meetingPoint"
+		name="meetingPoint"
+		placeholder="e.g. Hotel lobby, gate A12"
+		class="input {errors.meetingPoint ? 'input-error' : ''}"
+		maxlength="200"
+	/>
+	{#if errors.meetingPoint}<p class="field-error">{errors.meetingPoint}</p>{/if}
+</div>
+
+<div class="field">
+	<label class="label" for="meetingAt">Rally time</label>
+	<input
+		id="meetingAt"
+		name="meetingAt"
+		type="datetime-local"
+		class="input {errors.meetingAt ? 'input-error' : ''}"
+	/>
+	{#if errors.meetingAt}<p class="field-error">{errors.meetingAt}</p>{/if}
+</div>
+
 <BookedRow {errors} />
 
 <div class="field sm:col-span-2">

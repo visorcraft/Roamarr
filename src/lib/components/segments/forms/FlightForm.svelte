@@ -161,6 +161,29 @@
 	</section>
 {/each}
 
+<div class="field sm:col-span-2">
+	<label class="label" for="meetingPoint">Meeting / rally point</label>
+	<input
+		id="meetingPoint"
+		name="meetingPoint"
+		placeholder="e.g. Hotel lobby, gate A12"
+		class="input {errors.meetingPoint ? 'input-error' : ''}"
+		maxlength="200"
+	/>
+	{#if errors.meetingPoint}<p class="field-error">{errors.meetingPoint}</p>{/if}
+</div>
+
+<div class="field">
+	<label class="label" for="meetingAt">Rally time</label>
+	<input
+		id="meetingAt"
+		name="meetingAt"
+		type="datetime-local"
+		class="input {errors.meetingAt ? 'input-error' : ''}"
+	/>
+	{#if errors.meetingAt}<p class="field-error">{errors.meetingAt}</p>{/if}
+</div>
+
 <div class="sm:col-span-2">
 	<button type="button" class="btn btn-ghost" onclick={addFlight}>
 		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>

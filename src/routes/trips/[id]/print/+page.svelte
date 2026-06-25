@@ -19,6 +19,8 @@
 		detailsJson?: string | null;
 		startTz?: string;
 		endTz?: string | null;
+		meetingPoint?: string | null;
+		meetingAt?: string | null;
 	};
 
 	const segmentList = $derived(data.segments as SegmentRow[]);
@@ -164,6 +166,13 @@
 										{/if}
 										{#if s.confirmationNumber}
 											<p class="print-segment-meta mt-1 text-slate-400" style="color: var(--theme-readable-muted)">Confirmation {s.confirmationNumber}</p>
+										{/if}
+										{#if s.meetingPoint || s.meetingAt}
+											<p class="print-segment-meta mt-1 text-slate-400" style="color: var(--theme-readable-muted)">
+												{#if s.meetingPoint}<strong>Rally point:</strong> {s.meetingPoint}{/if}
+												{#if s.meetingPoint && s.meetingAt} · {/if}
+												{#if s.meetingAt}<strong>Meet at:</strong> {fmtTime(s.meetingAt, s.startTz ?? 'UTC')} ({s.startTz ?? 'UTC'}){/if}
+											</p>
 										{/if}
 										{#if s.detailsJson}
 											<pre class="print-segment-details mt-2 whitespace-pre-wrap rounded bg-white/[0.03] p-2 font-mono text-[10px] text-slate-400 ring-1 ring-white/5" style="background: var(--theme-subtle); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 72%, transparent); color: var(--theme-readable-muted)">{s.detailsJson}</pre>

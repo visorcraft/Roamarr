@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { addSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus } from './segments';
+import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -117,6 +117,77 @@ test('duplicateSegment rejects a segment from another trip or non-editor', () =>
 
 	expect(() => duplicateSegment(owner.id, t2.id, s.id)).toThrow();
 	expect(() => duplicateSegment(other.id, t1.id, s.id)).toThrow();
+});
+
+test('addSegment stores meeting point and rally time as UTC', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'meet@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const seg = addSegment(u.id, t.id, {
+		type: 'meetup',
+		title: 'Coffee',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Hotel lobby',
+		meetingAt: '2026-09-01T09:30:00'
+	});
+	expect(seg.meetingPoint).toBe('Hotel lobby');
+	expect(seg.meetingAt).toBe('2026-09-01T13:30:00.000Z');
+});
+
+test('updateSegment stores and clears meeting info', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'meet-update@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const seg = addSegment(u.id, t.id, {
+		type: 'meetup',
+		title: 'Coffee',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'America/New_York'
+	});
+
+	const withMeeting = updateSegment(u.id, t.id, seg.id, {
+		title: 'Coffee',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'America/New_York',
+		meetingPoint: 'Lobby entrance',
+		meetingAt: '2026-09-01T09:15:00'
+	});
+	expect(withMeeting.meetingPoint).toBe('Lobby entrance');
+	expect(withMeeting.meetingAt).toBe('2026-09-01T13:15:00.000Z');
+
+	const cleared = updateSegment(u.id, t.id, seg.id, {
+		title: 'Coffee',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'America/New_York'
+	});
+	expect(cleared.meetingPoint).toBeNull();
+	expect(cleared.meetingAt).toBeNull();
+});
+
+test('duplicateSegment copies meeting point and shifts rally time by 24h', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'dup-meet@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'meetup',
+			title: 'Coffee',
+			startAt: '2026-07-01T14:00:00Z',
+			startTz: 'UTC',
+			endAt: '2026-07-01T15:00:00Z',
+			meetingPoint: 'Lobby',
+			meetingAt: '2026-07-01T13:30:00Z'
+		})
+		.returning()
+		.get();
+
+	const copy = duplicateSegment(u.id, t.id, s.id);
+	expect(copy.meetingPoint).toBe('Lobby');
+	expect(copy.meetingAt).toBe('2026-07-02T13:30:00.000Z');
 });
 
 test('addSegment stores endTz and defaults to startTz', () => {

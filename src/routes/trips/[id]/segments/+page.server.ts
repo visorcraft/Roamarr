@@ -38,6 +38,8 @@ export const actions: Actions = {
 			'confirmationNumber',
 			{ max: 100 }
 		);
+		const meetingPoint = v.optionalString(f.get('meetingPoint'), 'meetingPoint', { max: 200 });
+		const meetingAt = v.dateTime(f.get('meetingAt'), 'meetingAt');
 		const cardId = f.get('cardId') ? v.positiveId(f.get('cardId'), 'cardId') : undefined;
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
@@ -50,6 +52,8 @@ export const actions: Actions = {
 			endTz: endTz ?? undefined,
 			location,
 			confirmationNumber,
+			meetingPoint,
+			meetingAt: meetingAt ?? undefined,
 			cardId,
 			details
 		});

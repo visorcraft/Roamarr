@@ -130,6 +130,8 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 			endAt: s.endAt,
 			status: s.status,
 			location: s.location,
+			meetingPoint: s.meetingPoint,
+			meetingAt: s.meetingAt,
 			...(includeDetails && {
 				confirmationNumber: s.confirmationNumber,
 				detailsJson: s.detailsJson

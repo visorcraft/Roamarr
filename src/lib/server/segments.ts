@@ -8,6 +8,18 @@ import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
 import { segments, type SegmentType, type SegmentStatus, SEGMENT_STATUSES } from '$lib/server/db/schema';
 
+function normalizeMeetingAt(i: {
+	meetingAt?: string;
+	meetingPoint?: string;
+	startTz?: string;
+	endTz?: string;
+}): { meetingPoint: string | null; meetingAt: string | null } {
+	const meetingPoint = i.meetingPoint?.trim() ? i.meetingPoint.trim().slice(0, 200) : null;
+	if (!i.meetingAt?.trim()) return { meetingPoint, meetingAt: null };
+	const tz = i.startTz ?? 'UTC';
+	return { meetingPoint, meetingAt: localToUtc(i.meetingAt, tz) };
+}
+
 export function addSegment(
 	userId: number,
 	tripId: number,
@@ -22,11 +34,14 @@ export function addSegment(
 		confirmationNumber?: string;
 		cardId?: number;
 		details?: object;
+		meetingPoint?: string;
+		meetingAt?: string;
 	}
 ) {
 	requireEditableTrip(userId, tripId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
+	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const seg = db
 		.insert(segments)
 		.values({
@@ -40,7 +55,9 @@ export function addSegment(
 			location: i.location ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
-			detailsJson: i.details ? JSON.stringify(i.details) : null
+			detailsJson: i.details ? JSON.stringify(i.details) : null,
+			meetingPoint,
+			meetingAt
 		})
 		.returning()
 		.get();
@@ -89,6 +106,8 @@ export function updateSegment(
 		confirmationNumber?: string;
 		cardId?: number;
 		details?: object;
+		meetingPoint?: string;
+		meetingAt?: string;
 	}
 ) {
 	requireEditableTrip(userId, tripId);
@@ -100,6 +119,7 @@ export function updateSegment(
 	if (!existing) throw error(404, 'Not found');
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
+	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const seg = db
 		.update(segments)
 		.set({
@@ -111,7 +131,9 @@ export function updateSegment(
 			location: i.location ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
-			detailsJson: i.details ? JSON.stringify(i.details) : null
+			detailsJson: i.details ? JSON.stringify(i.details) : null,
+			meetingPoint,
+			meetingAt
 		})
 		.where(eq(segments.id, segId))
 		.returning()
@@ -148,7 +170,9 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 			location: existing.location,
 			confirmationNumber: null,
 			cardId: existing.cardId,
-			detailsJson: existing.detailsJson
+			detailsJson: existing.detailsJson,
+			meetingPoint: existing.meetingPoint,
+			meetingAt: shiftUtcBy24h(existing.meetingAt)
 		})
 		.returning()
 		.get();

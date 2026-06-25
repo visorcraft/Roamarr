@@ -28,6 +28,8 @@
 		detailsJson?: string | null;
 		startTz?: string;
 		endTz?: string | null;
+		meetingPoint?: string | null;
+		meetingAt?: string | null;
 	};
 
 	type SegmentRow = SharedSegment & { id?: number; startTz: string; endTz?: string | null; cardId?: number | null };
@@ -341,6 +343,16 @@
 														{#if form?.errors?.confirmationNumber}<p class="field-error">{form.errors.confirmationNumber}</p>{/if}
 													</div>
 													<div class="field sm:col-span-2">
+														<label class="label" for={`meetingPoint-${s.id}`}>Meeting / rally point</label>
+														<input id={`meetingPoint-${s.id}`} name="meetingPoint" value={s.meetingPoint ?? ''} maxlength="200" class="input {form?.errors?.meetingPoint ? 'input-error' : ''}" />
+														{#if form?.errors?.meetingPoint}<p class="field-error">{form.errors.meetingPoint}</p>{/if}
+													</div>
+													<div class="field">
+														<label class="label" for={`meetingAt-${s.id}`}>Rally time</label>
+														<input id={`meetingAt-${s.id}`} name="meetingAt" type="datetime-local" value={toDatetimeLocal(s.meetingAt, s.startTz ?? 'UTC')} class="input {form?.errors?.meetingAt ? 'input-error' : ''}" />
+														{#if form?.errors?.meetingAt}<p class="field-error">{form.errors.meetingAt}</p>{/if}
+													</div>
+													<div class="field sm:col-span-2">
 														<label class="label" for={`detailsJson-${s.id}`}>Details (JSON)</label>
 														<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs {form?.errors?.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
 														{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
@@ -393,6 +405,14 @@
 															{/if}
 															{#if isEditor && s.confirmationNumber}
 																<p class="mt-1 font-mono text-xs text-slate-500">Confirmation {s.confirmationNumber}</p>
+															{/if}
+															{#if s.meetingPoint || s.meetingAt}
+																<p class="mt-1.5 text-sm text-indigo-300/90">
+																	<Icon name="location" class="inline h-3.5 w-3.5 mr-1" />
+																	{#if s.meetingPoint}<span class="font-medium">{s.meetingPoint}</span>{/if}
+																	{#if s.meetingPoint && s.meetingAt}<span class="mx-1 text-slate-500">·</span>{/if}
+																	{#if s.meetingAt}Meet at {fmtTime(s.meetingAt, s.startTz ?? 'UTC')}{/if}
+																</p>
 															{/if}
 												{#if s.cardId}
 													{@const c = cardMap.get(s.cardId)}

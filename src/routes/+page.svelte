@@ -1,4 +1,7 @@
 <script lang="ts">
+	import Icon from '$lib/components/Icon.svelte';
+	import { SEG } from '$lib/segmentLabels';
+
 	let { data } = $props();
 	const firstName = $derived((data.user?.displayName ?? '').split(/\s+/)[0]);
 
@@ -22,7 +25,7 @@
 		</p>
 	</div>
 	<a href="/trips/new" class="btn btn-primary">
-		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+		<Icon name="plus" class="h-4 w-4" />
 		New trip
 	</a>
 </header>
@@ -34,6 +37,47 @@
 			<div class="metric-label group-hover:text-slate-300">{s.label}</div>
 		</a>
 	{/each}
+</section>
+
+<section class="card mt-6 p-5">
+	<div class="mb-3 flex items-center justify-between">
+		<h2 class="section-title">Today</h2>
+		<span class="text-sm text-slate-400">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+	</div>
+	{#if data.agenda.length}
+		<ul class="divide-y divide-white/5">
+			{#each data.agenda as item (`${item.kind}:${item.id}`)}
+				<li>
+					{#if item.kind === 'trip'}
+						<a href={`/trips/${item.id}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
+							<span class="min-w-0">
+								<span class="flex items-center gap-2">
+									<span class="block truncate font-semibold text-white">{item.name}</span>
+									{#if item.isShared}<span class="badge badge-brand">Shared</span>{/if}
+									<span class="badge badge-slate">Trip</span>
+								</span>
+								{#if item.destination}<span class="block truncate text-sm text-slate-400">{item.destination}</span>{/if}
+							</span>
+						</a>
+					{:else}
+						<a href={`/trips/${item.tripId}`} class="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition hover:bg-white/5">
+							<span class="min-w-0">
+								<span class="flex items-center gap-2">
+									<span class="block truncate font-semibold text-white">{item.title}</span>
+									<span class="badge badge-slate">{SEG[item.type as keyof typeof SEG]?.label ?? item.type}</span>
+									<span class="badge badge-amber">{item.kind === 'segment-start' ? 'Start' : 'End'}</span>
+								</span>
+								<span class="block truncate text-sm text-slate-400">{item.tripName}</span>
+							</span>
+							<span class="ml-3 shrink-0 font-mono text-xs text-slate-400">{item.time}</span>
+						</a>
+					{/if}
+				</li>
+			{/each}
+		</ul>
+	{:else}
+		<p class="empty-text">Nothing on the agenda today.</p>
+	{/if}
 </section>
 
 <div class="mt-6 grid gap-6 lg:grid-cols-2">

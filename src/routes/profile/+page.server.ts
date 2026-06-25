@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
@@ -9,6 +9,7 @@ import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
 import { THEMES, isThemeId, normalizeThemeId } from '$lib/themes';
+import { normalizeEmail } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
 
 function tokenHash(token: string) {
@@ -72,7 +73,43 @@ export async function _updatePassword(
 	logAudit(userId, 'password_change', 'user', userId);
 }
 
-export const load: PageServerLoad = ({ locals, cookies }) => {
+export async function _changeEmail(
+	userId: number,
+	i: { currentPassword: string; newEmail: string; confirmEmail?: string }
+) {
+	const u = requireOwnedUser(userId);
+	if (!(await verifyPassword(u.passwordHash, i.currentPassword)))
+		throw new Error('Current password is incorrect');
+
+	const email = normalizeEmail(i.newEmail);
+	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
+
+	if (i.confirmEmail !== undefined && email !== normalizeEmail(i.confirmEmail)) {
+		throw new Error('Email addresses do not match.');
+	}
+
+	const duplicate = db.select().from(users).where(eq(users.email, email)).get();
+	if (duplicate && duplicate.id !== userId) throw new Error('That email is already in use.');
+
+	const oldEmail = u.email;
+	db.update(users).set({ email }).where(eq(users.id, userId)).run();
+	logAudit(userId, 'email_change', 'user', userId, { oldEmail });
+}
+
+export function _regenerateUserCalendarToken(userId: number, expiresAt?: string | null) {
+	requireOwnedUser(userId);
+	const token = randomBytes(24).toString('base64url');
+	db.update(users)
+		.set({ calendarToken: token, calendarTokenExpiresAt: expiresAt ?? null })
+		.where(eq(users.id, userId))
+		.run();
+	logAudit(userId, 'calendar_token_regenerate', 'user', userId, {
+		expiresAt: expiresAt ?? null
+	});
+	return token;
+}
+
+export const load: PageServerLoad = ({ locals, cookies, url }) => {
 	const u = requireUser(locals);
 	const currentToken = cookies.get('session');
 	const currentHash = currentToken ? tokenHash(currentToken) : null;
@@ -84,6 +121,10 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 	const userSessions = sessionRows
 		.filter((s) => s.expiresAt >= DateTime.utc().toISO()!)
 		.map((s) => ({ ...s, current: s.tokenHash === currentHash }));
+	const feedUrl = u.calendarToken
+		? `${url.origin}/calendar/feed?token=${encodeURIComponent(u.calendarToken)}`
+		: null;
+
 	return {
 		user: {
 			email: u.email,
@@ -97,7 +138,9 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 			themeId: normalizeThemeId(u.themeId)
 		},
 		themes: THEMES,
-		sessions: userSessions
+		sessions: userSessions,
+		feedUrl,
+		calendarTokenExpiresAt: u.calendarTokenExpiresAt
 	};
 };
 
@@ -160,6 +203,28 @@ export const actions: Actions = {
 			return fail(400, { error: e instanceof Error ? e.message : 'Password update failed' });
 		}
 		setFlash(cookies, 'Password changed.');
+		throw redirect(303, '/profile');
+	},
+	changeEmail: async ({ cookies, request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const currentPassword = String(f.get('currentPassword') ?? '');
+		const newEmail = String(f.get('newEmail') ?? '');
+		const confirmEmail = String(f.get('confirmEmail') ?? '');
+		try {
+			await _changeEmail(u.id, { currentPassword, newEmail, confirmEmail });
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Email change failed' });
+		}
+		setFlash(cookies, 'Email changed.');
+		throw redirect(303, '/profile');
+	},
+	regenerateCalendarToken: async ({ cookies, request, locals }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const expiresAt = String(f.get('calendarExpiresAt') || '');
+		_regenerateUserCalendarToken(u.id, expiresAt || null);
+		setFlash(cookies, 'Calendar feed URL regenerated.');
 		throw redirect(303, '/profile');
 	}
 };

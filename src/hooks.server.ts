@@ -43,8 +43,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 	}
 
-	const flash = event.cookies.get('flash');
-	if (flash) {
+	const flashRaw = event.cookies.get('flash');
+	if (flashRaw) {
+		let flash: string | { message: string; variant?: string } = flashRaw;
+		try {
+			const parsed = JSON.parse(flashRaw);
+			if (parsed && typeof parsed.message === 'string') {
+				flash = parsed as { message: string; variant?: string };
+			}
+		} catch {
+			// keep plain string flash
+		}
 		event.locals.flash = flash;
 		event.cookies.set('flash', '', { path: '/', maxAge: 0 });
 	}

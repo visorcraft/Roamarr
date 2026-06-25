@@ -15,7 +15,13 @@ vi.mock('$lib/server/reminders', () => remindersMock);
 
 import { _addDocument as addDocument } from './documents/+page.server';
 import { _updateProgram as updateProgram } from './loyalty/+page.server';
-import { _updateProfile, _updatePassword, actions } from './+page.server';
+import {
+	_updateProfile,
+	_updatePassword,
+	_changeEmail,
+	_regenerateUserCalendarToken,
+	actions
+} from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
 import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
@@ -352,4 +358,161 @@ test('updatePassword action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Password changed.', expect.any(Object));
+});
+
+test('regenerate user calendar token mints a new token and audits', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'cal@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' })
+		.returning()
+		.get();
+
+	const token = _regenerateUserCalendarToken(u.id);
+	expect(token).not.toBe('old-token');
+	expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
+
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(row.calendarToken).toBe(token);
+	expect(row.calendarTokenExpiresAt).toBeNull();
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('calendar_token_regenerate');
+	expect(logs[0].entityType).toBe('user');
+});
+
+test('regenerate user calendar token can set an expiry', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'cal-exp@x.c', passwordHash: 'x', displayName: 'Cal' })
+		.returning()
+		.get();
+
+	const expiresAt = '2030-01-01T00:00:00Z';
+	const token = _regenerateUserCalendarToken(u.id, expiresAt);
+
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(row.calendarToken).toBe(token);
+	expect(row.calendarTokenExpiresAt).toBe(expiresAt);
+});
+
+test('regenerateCalendarToken action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'cal-action@x.c', passwordHash: 'x', displayName: 'Cal' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({ calendarExpiresAt: '2030-01-01T00:00:00Z' })
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.regenerateCalendarToken({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Calendar feed URL regenerated.', expect.any(Object));
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(row.calendarToken).toBeTruthy();
+	expect(row.calendarTokenExpiresAt).toBe('2030-01-01T00:00:00Z');
+});
+
+test('change email requires current password and updates the email', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({ email: 'old@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+
+	await _changeEmail(u.id, {
+		currentPassword: 'oldsecret',
+		newEmail: 'new@x.c',
+		confirmEmail: 'new@x.c'
+	});
+
+	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	expect(row.email).toBe('new@x.c');
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('email_change');
+	expect(logs[0].entityType).toBe('user');
+});
+
+test('change email rejects a duplicate email', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const a = db
+		.insert(users)
+		.values({ email: 'dup-a@x.c', passwordHash: initialHash, displayName: 'A', timezone: 'UTC' })
+		.returning()
+		.get();
+	db.insert(users)
+		.values({ email: 'dup-b@x.c', passwordHash: initialHash, displayName: 'B', timezone: 'UTC' })
+		.returning()
+		.get();
+
+	await expect(
+		_changeEmail(a.id, { currentPassword: 'oldsecret', newEmail: 'dup-b@x.c', confirmEmail: 'dup-b@x.c' })
+	).rejects.toThrow('That email is already in use.');
+});
+
+test('change email rejects wrong current password', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({ email: 'wrong@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+
+	await expect(
+		_changeEmail(u.id, { currentPassword: 'nope', newEmail: 'new@x.c', confirmEmail: 'new@x.c' })
+	).rejects.toThrow('Current password is incorrect');
+});
+
+test('change email rejects mismatched confirmation', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({ email: 'mismatch@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+
+	await expect(
+		_changeEmail(u.id, { currentPassword: 'oldsecret', newEmail: 'new@x.c', confirmEmail: 'other@x.c' })
+	).rejects.toThrow('Email addresses do not match.');
+});
+
+test('changeEmail action sets a flash cookie and redirects', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const initialHash = await hashPassword('oldsecret');
+	const u = db
+		.insert(users)
+		.values({ email: 'action@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' })
+		.returning()
+		.get();
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile', {
+		method: 'POST',
+		body: new URLSearchParams({
+			currentPassword: 'oldsecret',
+			newEmail: 'changed@x.c',
+			confirmEmail: 'changed@x.c'
+		})
+	});
+	const locals = { user: u } as App.Locals;
+	await expect(actions.changeEmail({ request, locals, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/profile'
+	});
+	expect(cookies.set).toHaveBeenCalledWith('flash', 'Email changed.', expect.any(Object));
+	expect(db.select().from(users).where(eq(users.id, u.id)).get()!.email).toBe('changed@x.c');
 });

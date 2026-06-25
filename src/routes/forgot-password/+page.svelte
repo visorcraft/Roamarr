@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+
 	let { form } = $props();
+	let submitting = $state(false);
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
@@ -9,12 +12,12 @@
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 	{#if form?.success}<p class="notice notice-success mt-4">If an account exists, a reset link has been sent.</p>{/if}
 
-	<form method="POST" class="mt-6 grid gap-4">
+	<form method="POST" class="mt-6 grid gap-4" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
 		<div class="field">
 			<label class="label" for="email">Email</label>
-			<input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="input" required />
+			<input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" class="input" required disabled={submitting} />
 		</div>
-		<button class="btn btn-primary mt-1 w-full">Send reset link</button>
+		<button class="btn btn-primary mt-1 w-full" disabled={submitting} class:btn-loading={submitting}>Send reset link</button>
 	</form>
 
 	<p class="mt-5 text-center text-sm text-muted">

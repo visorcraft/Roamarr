@@ -13,7 +13,8 @@ import {
 	_unshareUser as unshareUser,
 	_unshareGroup as unshareGroup,
 	_mintPublicToken as mintPublicToken,
-	_setShowDetails as setShowDetails
+	_setShowDetails as setShowDetails,
+	_setPublicShowDetails as setPublicShowDetails
 } from './+page.server';
 import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
 import { users, trips, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
@@ -209,4 +210,34 @@ test('listGroupsForUser returns owned and member groups', () => {
 
 	const list = listGroupsForUser(a.id);
 	expect(list.map((g) => g.name).sort()).toEqual(['Member', 'Owned']);
+});
+
+test('public token can be minted with showDetails enabled', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'pub-det-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+
+	mintPublicToken(owner.id, t.id, true);
+	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	expect(updated.publicToken).toBeTruthy();
+	expect(updated.publicShowDetails).toBe(true);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	expect(logs.some((l) => l.action === 'trip_public_token_mint' && JSON.parse(l.metaJson).publicShowDetails === true)).toBe(true);
+});
+
+test('owner can toggle publicShowDetails; non-owner cannot', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const owner = db.insert(users).values({ email: 'pub-toggle-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const other = db.insert(users).values({ email: 'pub-toggle-x@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T', publicShowDetails: false }).returning().get();
+
+	setPublicShowDetails(owner.id, t.id, true);
+	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()!.publicShowDetails).toBe(true);
+
+	expect(() => setPublicShowDetails(other.id, t.id, false)).toThrow();
+	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()!.publicShowDetails).toBe(true);
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	expect(logs.some((l) => l.action === 'trip_public_set_show_details')).toBe(true);
 });

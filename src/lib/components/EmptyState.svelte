@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		message: string;
@@ -16,18 +17,7 @@
 		{#if icon}
 			{@render icon()}
 		{:else}
-			<svg
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class="h-6 w-6"
-			>
-				<circle cx="12" cy="12" r="10" />
-				<path d="M12 8v8M8 12h8" />
-			</svg>
+			<Icon name="empty" class="h-6 w-6" />
 		{/if}
 	</div>
 	<p class="text-slate-300">{message}</p>

@@ -2,6 +2,7 @@
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
@@ -150,7 +151,7 @@
 
 		<div class="relative px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
 			<a href="/trips" class="mb-4 inline-flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="m15 18-6-6 6-6" /></svg>
+				<Icon name="back" class="h-4 w-4" />
 				Back to trips
 			</a>
 
@@ -160,7 +161,7 @@
 					style="background-image: linear-gradient(145deg, hsl({heroAccent} 45% 28% / 0.5), hsl({(heroAccent + 50) % 360} 35% 16% / 0.8));"
 				>
 					<div class="text-center">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto h-8 w-8 text-white/70"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+						<Icon name="location" class="mx-auto h-8 w-8 text-white/70" />
 						<p class="mt-2 font-display text-2xl font-bold text-white">{posterInitials(trip.name, trip.destination)}</p>
 					</div>
 				</div>
@@ -181,14 +182,14 @@
 					<div class="mt-3 flex flex-wrap gap-2">
 						{#if trip.destination}
 							<span class="trip-meta-pill">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-slate-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+								<Icon name="location" class="h-3.5 w-3.5 text-slate-500" />
 								{trip.destination}
 							</span>
 						{/if}
 						{#if trip.startDate || trip.endDate}
 							<span class="trip-meta-pill">
 								<span class="font-mono leading-none">{trip.startDate || '—'}</span>
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="trip-meta-pill-arrow" aria-hidden="true"><path d="M5 12h14" /><path d="m13 7 6 5-6 5" /></svg>
+								<Icon name="arrow-right" class="trip-meta-pill-arrow" />
 								<span class="font-mono leading-none">{trip.endDate || '—'}</span>
 							</span>
 						{/if}
@@ -201,7 +202,7 @@
 
 				<div class="flex flex-wrap gap-2 sm:justify-end">
 					<a href={`/trips/${trip.id}/calendar`} class="btn btn-ghost">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+						<Icon name="calendar" class="h-4 w-4" />
 						Calendar
 					</a>
 					{#if isEditor}
@@ -217,7 +218,7 @@
 								<button class="btn btn-ghost">{trip.archived ? 'Unarchive' : 'Archive'}</button>
 							</form>
 							<a href={`/trips/${trip.id}/share`} class="btn btn-primary">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" x2="12" y1="2" y2="15" /></svg>
+								<Icon name="share" class="h-4 w-4" />
 								Share
 							</a>
 							{#if data.publicShareUrl}
@@ -247,7 +248,7 @@
 					<h2 class="section-title">Itinerary</h2>
 					{#if isEditor}
 						<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+							<Icon name="plus" class="h-4 w-4" />
 							Add segment
 						</a>
 					{/if}
@@ -344,7 +345,7 @@
 													{@const c = cardMap.get(s.cardId)}
 													{#if c}
 														<p class="mt-1 text-xs text-slate-400">
-															<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline h-3.5 w-3.5 mr-1"><rect width="20" height="14" x="2" y="5" rx="2"/><path d="M2 10h20"/></svg>
+															<Icon name="card" class="inline h-3.5 w-3.5 mr-1" />
 															{c.nickname}{#if c.network || c.last4} — {c.network}{c.last4 ? ` ····${c.last4}` : ''}{/if}
 														</p>
 													{/if}
@@ -397,7 +398,7 @@
 				{:else}
 					<div class="empty-state mt-0">
 						<div class="empty-icon">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
+							<Icon name="flight" class="h-6 w-6" />
 						</div>
 						<p class="text-slate-300">{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}</p>
 						{#if isEditor}

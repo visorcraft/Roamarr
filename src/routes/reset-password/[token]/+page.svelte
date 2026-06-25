@@ -1,5 +1,8 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+
 	let { form, data } = $props();
+	let submitting = $state(false);
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
@@ -8,16 +11,16 @@
 
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
-	<form method="POST" class="mt-6 grid gap-4">
+	<form method="POST" class="mt-6 grid gap-4" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
 		<input type="hidden" name="token" value={data.token} />
 		<div class="field">
 			<label class="label" for="password">New password</label>
-			<input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" class="input" required />
+			<input id="password" name="password" type="password" autocomplete="new-password" placeholder="At least 8 characters" class="input" required disabled={submitting} />
 		</div>
 		<div class="field">
 			<label class="label" for="confirmPassword">Confirm password</label>
-			<input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" placeholder="Repeat password" class="input" required />
+			<input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" placeholder="Repeat password" class="input" required disabled={submitting} />
 		</div>
-		<button class="btn btn-primary mt-1 w-full">Update password</button>
+		<button class="btn btn-primary mt-1 w-full" disabled={submitting} class:btn-loading={submitting}>Update password</button>
 	</form>
 </div>

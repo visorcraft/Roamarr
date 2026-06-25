@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '$lib/components/Icon.svelte';
 	import { parseTags } from '$lib/tags';
 
 	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean }[]; q?: string; tag?: string; sort: string; order: string; filter: string }; form?: { error?: string } } = $props();
@@ -25,15 +26,15 @@
 	</div>
 	<div class="flex flex-wrap gap-2">
 		<a href="/trips/import" class="btn btn-ghost">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 11l5 5 5-5" /><path d="M12 4v12" /></svg>
+			<Icon name="import" class="h-4 w-4" />
 			Import
 		</a>
 		<a href="/trips/export" class="btn btn-ghost">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 9l5-5 5 5" /><path d="M12 4v12" /></svg>
+			<Icon name="export" class="h-4 w-4" />
 			Export
 		</a>
 		<a href="/trips/new" class="btn btn-primary">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+			<Icon name="plus" class="h-4 w-4" />
 			New trip
 		</a>
 	</div>
@@ -121,7 +122,7 @@
 						</div>
 						{#if t.destination}
 							<p class="flex items-center gap-1.5 text-sm text-slate-400">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0 text-slate-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+								<Icon name="location" class="h-4 w-4 text-slate-500" />
 								{t.destination}
 							</p>
 						{/if}
@@ -143,7 +144,7 @@
 {:else}
 	<div class="empty-state">
 		<div class="empty-icon">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" /></svg>
+			<Icon name="trips" class="h-6 w-6" />
 		</div>
 		<p class="text-slate-300">No trips yet — plan your first one.</p>
 		<a href="/trips/new" class="btn btn-primary mt-1">Create a trip</a>

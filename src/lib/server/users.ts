@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
 import {
 	hashPassword,
 	invalidateAllSessions,
@@ -29,6 +30,53 @@ function assertCanChangeAdminAccess(
 	if ((demoting || disabling) && affectsSelf && countAdmins() <= 1) {
 		throw new Error('Cannot remove the last admin.');
 	}
+}
+
+interface AdminCreateUserInput {
+	displayName: string;
+	email: string;
+	role?: 'admin' | 'user';
+}
+
+export async function adminCreateUser(actorId: number, input: AdminCreateUserInput) {
+	const displayName = input.displayName.trim();
+	const email = normalizeEmail(input.email);
+	if (!displayName) throw new Error('Display name is required.');
+	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
+
+	const duplicate = db.select().from(users).where(eq(users.email, email)).get();
+	if (duplicate) throw new Error('That email is already in use.');
+
+	const role = input.role === 'admin' ? 'admin' : 'user';
+	const temporaryPassword = randomBytes(16).toString('base64url');
+	const passwordHash = await hashPassword(temporaryPassword);
+
+	const created = db
+		.insert(users)
+		.values({
+			email,
+			passwordHash,
+			displayName,
+			role,
+			mustResetPassword: true
+		})
+		.returning()
+		.get();
+
+	logAudit(actorId, 'user_create', 'user', created.id, { role });
+	return { user: created, temporaryPassword };
+}
+
+export async function adminDeleteUser(actorId: number, userId: number) {
+	const target = db.select().from(users).where(eq(users.id, userId)).get();
+	if (!target) throw new Error('User not found.');
+
+	if (target.role === 'admin' && countAdmins() <= 1) {
+		throw new Error('Cannot delete the last admin.');
+	}
+
+	db.delete(users).where(eq(users.id, userId)).run();
+	logAudit(actorId, 'user_delete', 'user', userId, { email: target.email, role: target.role });
 }
 
 interface AdminUpdateUserInput {

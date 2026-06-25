@@ -19,6 +19,8 @@ import { eq } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './auth';
 import { users, sessions } from './db/schema';
 import {
+	adminCreateUser,
+	adminDeleteUser,
 	adminSendPasswordReset,
 	adminUpdateUser,
 	completeRequiredPasswordChange,
@@ -118,6 +120,66 @@ test('completeRequiredPasswordChange clears mustResetPassword', async () => {
 	expect(updated.mustResetPassword).toBe(false);
 	expect(await verifyPassword(updated.passwordHash, 'newpassword')).toBe(true);
 	expect(ctx.db.select().from(sessions).all()).toHaveLength(1);
+});
+
+test('adminCreateUser creates a user with a random password and forced reset', async () => {
+	const admin = ctx.db
+		.insert(users)
+		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
+		.returning()
+		.get();
+
+	const { user: created, temporaryPassword } = await adminCreateUser(admin.id, {
+		displayName: 'New User',
+		email: 'new@x.c'
+	});
+
+	expect(created.displayName).toBe('New User');
+	expect(created.email).toBe('new@x.c');
+	expect(created.role).toBe('user');
+	expect(created.mustResetPassword).toBe(true);
+	expect(temporaryPassword.length).toBeGreaterThanOrEqual(16);
+	expect(await verifyPassword(created.passwordHash, temporaryPassword)).toBe(true);
+});
+
+test('adminCreateUser rejects duplicate email', async () => {
+	const admin = ctx.db
+		.insert(users)
+		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
+		.returning()
+		.get();
+	ctx.db.insert(users).values({ email: 'exists@x.c', passwordHash: 'x', displayName: 'Existing' }).run();
+
+	await expect(
+		adminCreateUser(admin.id, { displayName: 'Duplicate', email: 'exists@x.c' })
+	).rejects.toThrow(/already in use/i);
+});
+
+test('adminDeleteUser removes a user', async () => {
+	const admin = ctx.db
+		.insert(users)
+		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
+		.returning()
+		.get();
+	const target = ctx.db
+		.insert(users)
+		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
+		.returning()
+		.get();
+
+	await adminDeleteUser(admin.id, target.id);
+
+	expect(ctx.db.select().from(users).where(eq(users.id, target.id)).get()).toBeUndefined();
+});
+
+test('adminDeleteUser refuses to delete the last admin', async () => {
+	const admin = ctx.db
+		.insert(users)
+		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
+		.returning()
+		.get();
+
+	await expect(adminDeleteUser(admin.id, admin.id)).rejects.toThrow(/last admin/i);
 });
 
 test('adminSendPasswordReset sends a reset notification', async () => {

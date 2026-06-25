@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 </script>
@@ -21,7 +22,7 @@
 			<input id="name" name="name" placeholder="Family, Coworkers…" class="input" required />
 		</div>
 		<button class="btn btn-primary">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+			<Icon name="plus" class="h-4 w-4" />
 			Create group
 		</button>
 	</form>
@@ -40,13 +41,13 @@
 					<ul class="flex flex-wrap gap-2">
 						{#each g.members as m}
 							<li class="tag">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 shrink-0 text-slate-500"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+								<Icon name="user" class="h-3.5 w-3.5 text-slate-500" />
 								{m.email}
 								<form method="POST" action="?/removeMember" class="contents">
 									<input type="hidden" name="groupId" value={g.id} />
 									<input type="hidden" name="userId" value={m.id} />
 									<ConfirmButton class="ml-1 text-slate-500 transition hover:text-red-300" aria-label={`Remove ${m.email}`} message="Remove this member from the group?">
-										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M18 6 6 18" /><path d="M6 6l12 12" /></svg>
+										<Icon name="close" class="h-3 w-3" />
 									</ConfirmButton>
 								</form>
 							</li>
@@ -75,7 +76,7 @@
 {:else}
 	<div class="empty-state">
 		<div class="empty-icon">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+			<Icon name="users" class="h-6 w-6" />
 		</div>
 		<p class="text-slate-300">No groups yet — create one to share trips.</p>
 	</div>

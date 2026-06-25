@@ -1,11 +1,17 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { enhance } from '$app/forms';
 	import { onDestroy } from 'svelte';
+	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data, form } = $props();
 	let selectedThemeId = $state('midnight-travels');
+	let submittingProfile = $state(false);
+	let submittingPassword = $state(false);
+	let submittingEmail = $state(false);
+	let submittingCalendar = $state(false);
 
 	function applyThemePreview(themeId: string) {
 		if (!browser) return;
@@ -40,7 +46,18 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Profile</h2>
-	<form method="POST" action="?/updateProfile" class="mt-4 grid gap-4 sm:grid-cols-2">
+	<form
+		method="POST"
+		action="?/updateProfile"
+		use:enhance={() => {
+			submittingProfile = true;
+			return async ({ update }) => {
+				await update();
+				submittingProfile = false;
+			};
+		}}
+		class="mt-4 grid gap-4 sm:grid-cols-2"
+	>
 		<div class="field">
 			<label class="label" for="displayName">Display name</label>
 			<input id="displayName" name="displayName" value={data.user.displayName} class="input" required />
@@ -118,14 +135,61 @@
 			</label>
 		</div>
 		<div class="sm:col-span-2">
-			<button class="btn btn-primary">Save profile</button>
+			<button class="btn btn-primary" class:btn-loading={submittingProfile} disabled={submittingProfile}>
+				Save profile
+			</button>
+		</div>
+	</form>
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Change email</h2>
+	<form
+		method="POST"
+		action="?/changeEmail"
+		use:enhance={() => {
+			submittingEmail = true;
+			return async ({ update }) => {
+				await update();
+				submittingEmail = false;
+			};
+		}}
+		class="mt-4 grid gap-4 sm:grid-cols-2"
+	>
+		<div class="field">
+			<label class="label" for="currentPassword">Current password</label>
+			<input id="currentPassword" name="currentPassword" type="password" class="input" required />
+		</div>
+		<div class="field">
+			<label class="label" for="newEmail">New email</label>
+			<input id="newEmail" name="newEmail" type="email" class="input" required />
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="label" for="confirmEmail">Confirm new email</label>
+			<input id="confirmEmail" name="confirmEmail" type="email" class="input" required />
+		</div>
+		<div class="sm:col-span-2">
+			<button class="btn btn-primary" class:btn-loading={submittingEmail} disabled={submittingEmail}>
+				Change email
+			</button>
 		</div>
 	</form>
 </section>
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Change password</h2>
-	<form method="POST" action="?/updatePassword" class="mt-4 grid gap-4 sm:grid-cols-2">
+	<form
+		method="POST"
+		action="?/updatePassword"
+		use:enhance={() => {
+			submittingPassword = true;
+			return async ({ update }) => {
+				await update();
+				submittingPassword = false;
+			};
+		}}
+		class="mt-4 grid gap-4 sm:grid-cols-2"
+	>
 		<div class="field">
 			<label class="label" for="oldPassword">Current password</label>
 			<input id="oldPassword" name="oldPassword" type="password" class="input" required />
@@ -139,7 +203,9 @@
 			<input id="confirmPassword" name="confirmPassword" type="password" class="input" required />
 		</div>
 		<div class="sm:col-span-2">
-			<button class="btn btn-primary">Update password</button>
+			<button class="btn btn-primary" class:btn-loading={submittingPassword} disabled={submittingPassword}>
+				Update password
+			</button>
 		</div>
 	</form>
 </section>
@@ -169,5 +235,59 @@
 		</ul>
 	{:else}
 		<p class="empty-text mt-4 text-left">No active sessions.</p>
+	{/if}
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Aggregate calendar feed</h2>
+	{#if data.feedUrl}
+		<p class="mt-4 text-sm">Subscribe to all your trips with one calendar URL.</p>
+		<div class="mt-2 flex items-start gap-2">
+			<p class="code-chip flex-1 px-2.5 text-[10px] leading-relaxed">{data.feedUrl}</p>
+			<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
+		</div>
+		{#if data.calendarTokenExpiresAt}
+			<p class="mt-2 text-xs text-muted">
+				Expires {formatDateTime(data.calendarTokenExpiresAt)}
+			</p>
+		{/if}
+		<form
+			method="POST"
+			action="?/regenerateCalendarToken"
+			use:enhance={() => {
+				submittingCalendar = true;
+				return async ({ update }) => {
+					await update();
+					submittingCalendar = false;
+				};
+			}}
+			class="mt-4 flex flex-col gap-2"
+		>
+			<label for="calendarExpiresAt" class="label">New URL expires (optional)</label>
+			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
+			<button class="btn btn-primary" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
+				Regenerate feed URL
+			</button>
+		</form>
+	{:else}
+		<p class="empty-text mt-4 text-left">Generate a single .ics feed URL for all your trips.</p>
+		<form
+			method="POST"
+			action="?/regenerateCalendarToken"
+			use:enhance={() => {
+				submittingCalendar = true;
+				return async ({ update }) => {
+					await update();
+					submittingCalendar = false;
+				};
+			}}
+			class="mt-4 flex flex-col gap-2"
+		>
+			<label for="calendarExpiresAt" class="label">Expires (optional)</label>
+			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
+			<button class="btn btn-primary" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
+				Generate feed URL
+			</button>
+		</form>
 	{/if}
 </section>

@@ -5,7 +5,7 @@ declare global {
 		interface Error {}
 		interface Locals {
 			user: typeof users.$inferSelect | null;
-			flash?: string;
+			flash?: string | { message: string; variant?: string };
 		}
 		interface PageData {}
 		interface PageState {}

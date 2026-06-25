@@ -199,3 +199,101 @@ test('sendReset delivers a reset link', async () => {
 	expect(vi.mocked(deliver)).toHaveBeenCalledOnce();
 	expect(vi.mocked(deliver).mock.calls[0][1].link).toMatch(/^https:\/\/roamarr\.test\/reset-password\//);
 });
+
+test('create adds a new user with a temporary password', async () => {
+	const admin = adminLocals();
+	const form = new FormData();
+	form.set('displayName', 'New User');
+	form.set('email', 'new@x.c');
+	form.set('role', 'user');
+
+	const result = (await actions.create({
+		request: { formData: async () => form },
+		locals: admin,
+		cookies: { set: vi.fn() }
+	} as any)) as { success: boolean; email: string; generatedPassword: string };
+
+	expect(result.success).toBe(true);
+	expect(result.email).toBe('new@x.c');
+	expect(result.generatedPassword).toBeTruthy();
+
+	const created = (ctx as any).db.select().from(users).where(eq(users.email, 'new@x.c')).get();
+	expect(created.displayName).toBe('New User');
+	expect(created.mustResetPassword).toBe(true);
+	expect(created.role).toBe('user');
+});
+
+test('create rejects duplicate email', async () => {
+	const db = (ctx as any).db;
+	const admin = adminLocals();
+	db.insert(users).values({ email: 'exists@x.c', passwordHash: 'x', displayName: 'Existing' }).run();
+
+	const form = new FormData();
+	form.set('displayName', 'Duplicate');
+	form.set('email', 'exists@x.c');
+	form.set('role', 'user');
+
+	const result = (await actions.create({
+		request: { formData: async () => form },
+		locals: admin
+	} as any)) as { status: number; data: { error: string } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/already in use/i);
+});
+
+test('create rejects invalid role', async () => {
+	const admin = adminLocals();
+	const form = new FormData();
+	form.set('displayName', 'Bad Role');
+	form.set('email', 'bad@x.c');
+	form.set('role', 'superuser');
+
+	const result = (await actions.create({
+		request: { formData: async () => form },
+		locals: admin
+	} as any)) as { status: number; data: { error: string } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/Invalid role/i);
+});
+
+test('delete removes a user', async () => {
+	const db = (ctx as any).db;
+	const admin = adminLocals();
+	const target = db
+		.insert(users)
+		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
+		.returning()
+		.get();
+
+	const form = new FormData();
+	form.set('userId', String(target.id));
+	try {
+		await actions.delete({
+			request: { formData: async () => form },
+			locals: admin,
+			cookies: { set: vi.fn() }
+		} as any);
+		expect.fail('should have redirected');
+	} catch (e: any) {
+		expect(e.status).toBe(303);
+	}
+
+	expect(db.select().from(users).where(eq(users.id, target.id)).get()).toBeUndefined();
+});
+
+test('delete prevents deleting the last admin', async () => {
+	const admin = adminLocals();
+	const form = new FormData();
+	form.set('userId', String(admin.user.id));
+
+	const result = (await actions.delete({
+		request: { formData: async () => form },
+		locals: admin,
+		cookies: { set: vi.fn() }
+	} as any)) as { status: number; data: { error: string } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/last admin/i);
+});

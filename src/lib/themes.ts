@@ -50,6 +50,22 @@ export const THEMES = [
 		}
 	},
 	{
+		id: 'high-contrast',
+		name: 'High Contrast',
+		description: 'Maximum accessibility',
+		colorScheme: 'dark',
+		themeColor: '#000000',
+		preview: {
+			canvas: '#000000',
+			surface: '#000000',
+			surface2: '#1a1a1a',
+			sidebar: '#000000',
+			text: '#ffffff',
+			muted: '#b3b3b3',
+			accent: '#0078d4'
+		}
+	},
+	{
 		id: 'dark',
 		name: 'Dark',
 		description: 'Neutral dark',

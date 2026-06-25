@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import PasswordStrength from '$lib/components/PasswordStrength.svelte';
 
 	let { data, form } = $props();
 	let newPassword = $state('');
+	let submitting = $state(false);
 </script>
 
 <header>
@@ -17,10 +19,10 @@
 {/if}
 
 <section class="card mt-6 p-5 sm:p-6 sm:max-w-lg">
-	<form method="POST" class="grid gap-4">
+	<form method="POST" class="grid gap-4" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
 		<div class="field">
 			<label class="label" for="newPassword">New password</label>
-			<input id="newPassword" name="newPassword" type="password" autocomplete="new-password" class="input" required bind:value={newPassword} />
+			<input id="newPassword" name="newPassword" type="password" autocomplete="new-password" class="input" required bind:value={newPassword} disabled={submitting} />
 			<PasswordStrength password={newPassword} />
 		</div>
 		<div class="field">
@@ -32,8 +34,9 @@
 				autocomplete="new-password"
 				class="input"
 				required
+				disabled={submitting}
 			/>
 		</div>
-		<button class="btn btn-primary">Save password</button>
+		<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Save password</button>
 	</form>
 </section>

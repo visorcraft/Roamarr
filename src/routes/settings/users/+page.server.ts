@@ -4,7 +4,7 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
-import { adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
+import { adminCreateUser, adminDeleteUser, adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -51,6 +51,37 @@ function parseUpdate(formData: FormData) {
 }
 
 export const actions: Actions = {
+	create: async ({ request, locals }) => {
+		const admin = requireAdmin(locals);
+		const formData = await request.formData();
+		const displayName = String(formData.get('displayName') ?? '');
+		const email = String(formData.get('email') ?? '');
+		const role = String(formData.get('role') ?? 'user');
+		if (role !== 'admin' && role !== 'user') return fail(400, { error: 'Invalid role.' });
+
+		try {
+			const { temporaryPassword } = await adminCreateUser(admin.id, { displayName, email, role: role as 'admin' | 'user' });
+			return { success: true, email, generatedPassword: temporaryPassword };
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Could not create user.' });
+		}
+	},
+
+	delete: async ({ request, locals, cookies }) => {
+		const admin = requireAdmin(locals);
+		const userId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(userId) || userId <= 0) return fail(400, { error: 'Invalid user.' });
+
+		try {
+			await adminDeleteUser(admin.id, userId);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Could not delete user.' });
+		}
+
+		setFlash(cookies, 'User deleted.');
+		throw redirect(303, '/settings/users');
+	},
+
 	update: async ({ request, locals, cookies }) => {
 		const admin = requireAdmin(locals);
 		const parsed = parseUpdate(await request.formData());

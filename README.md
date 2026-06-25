@@ -119,8 +119,15 @@ Migrations are applied automatically during application boot before the schedule
 - Fare-watch provider framework with configurable provider accounts and connection testing.
 - Travel documents, loyalty programs, cards, global benefit templates, and insurance policies.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
+- Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, and Vibes.
 - Admin settings for users, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.
 - Health and deep-health endpoints plus PWA manifest/icons.
+
+## Themes
+
+Users can choose their own theme on `/profile`. Theme selections preview immediately on click and are saved when the profile form is submitted. The original Roamarr look is available as `Midnight Travels` and is the default for new users.
+
+Theme metadata lives in `src/lib/themes.ts`; CSS variables and theme-aware app classes live in `src/app.css`. When adding or renaming a theme, keep the registry, CSS tokens, profile tests, and `users.theme_id` defaults in sync.
 
 ## Architecture
 
@@ -134,6 +141,7 @@ Sensitive fields currently encrypted at rest are travel document numbers, fare-p
 
 - Tailwind CSS v4 is configured in `src/app.css` through `@theme`; there is no `tailwind.config.js`.
 - Reuse shared app classes from `src/app.css` and shared components from `src/lib/components/` before adding one-off UI styles.
+- For themed UI, prefer semantic app classes and CSS variables over hard-coded slate/indigo/white utilities so Light and dark themes stay readable.
 - Keep route actions thin: validate input, enforce ownership/authorization, call server modules, and return SvelteKit `fail`, `redirect`, or `error` responses.
 - Add or update tests for non-trivial server logic, route actions, schema changes, auth/authorization paths, and security-sensitive behavior.
 - When changing the schema, edit `src/lib/server/db/schema.ts`, run `npm run db:generate`, review the generated SQL in `drizzle/`, and run tests.

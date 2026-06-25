@@ -105,6 +105,26 @@
 			--theme-wash: rgba(0, 0, 0, 0.035);
 		}
 	}
+	:where(.theme-root, .theme-preview)[data-theme='high-contrast'] {
+		--theme-color-scheme: dark;
+		--theme-canvas: #000000;
+		--theme-surface: #000000;
+		--theme-surface2: #1a1a1a;
+		--theme-sidebar: #000000;
+		--theme-line: #ffffff;
+		--theme-ink: #ffffff;
+		--theme-strong: #ffffff;
+		--theme-muted: #b3b3b3;
+		--theme-brand: #0078d4;
+		--theme-brand-readable: #9ecbff;
+		--theme-brand-2: #00a1ff;
+		--theme-accent-text: #000000;
+		--theme-wash: rgba(0, 120, 212, 0.12);
+	}
+	:where(.theme-root, .theme-preview)[data-theme='high-contrast'] :focus-visible {
+		outline: 3px solid var(--theme-brand);
+		outline-offset: 2px;
+	}
 	:where(.theme-root, .theme-preview)[data-theme='oled-black'] {
 		--theme-color-scheme: dark;
 		--theme-canvas: #000000;
@@ -612,6 +632,29 @@
 	.icon-button-danger {
 		@apply hover:text-red-300;
 	}
+	.btn-loading {
+		@apply relative cursor-wait text-transparent select-none;
+	}
+	.btn-loading:disabled {
+		@apply opacity-80;
+	}
+	.btn-loading::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		margin: auto;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 9999px;
+		border: 2px solid color-mix(in oklab, var(--theme-strong) 30%, transparent);
+		border-top-color: var(--theme-strong);
+		animation: btn-spin 0.7s linear infinite;
+	}
+	@keyframes btn-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 	.link {
 		@apply font-medium text-indigo-300 underline-offset-4 transition hover:text-indigo-200 hover:underline;
 		color: var(--theme-brand-readable);
@@ -919,6 +962,58 @@
 		background: var(--theme-active);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 30%, transparent);
 		color: var(--theme-brand-readable);
+	}
+
+	/* Toast */
+	.toast {
+		@apply fixed right-4 top-4 z-50 flex max-w-sm items-center gap-3 rounded-xl bg-surface/95 px-4 py-3 text-sm text-ink shadow-xl backdrop-blur-xl;
+		background: color-mix(in oklab, var(--theme-surface) 95%, transparent);
+		box-shadow:
+			0 24px 48px color-mix(in oklab, var(--theme-shadow) 36%, transparent),
+			inset 0 0 0 1px var(--theme-line);
+	}
+	.toast-success {
+		@apply ring-emerald-400/30;
+		box-shadow:
+			0 24px 48px color-mix(in oklab, var(--theme-shadow) 36%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 80%, transparent),
+			0 0 0 1px color-mix(in oklab, rgb(52 211 153) 30%, transparent);
+	}
+	.toast-error {
+		@apply ring-red-400/30;
+		box-shadow:
+			0 24px 48px color-mix(in oklab, var(--theme-shadow) 36%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 80%, transparent),
+			0 0 0 1px color-mix(in oklab, rgb(248 113 113) 30%, transparent);
+	}
+	.toast-info {
+		@apply ring-indigo-400/30;
+		box-shadow:
+			0 24px 48px color-mix(in oklab, var(--theme-shadow) 36%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 80%, transparent),
+			0 0 0 1px color-mix(in oklab, var(--theme-brand-readable) 30%, transparent);
+	}
+	.toast-warning {
+		@apply ring-amber-400/30;
+		box-shadow:
+			0 24px 48px color-mix(in oklab, var(--theme-shadow) 36%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 80%, transparent),
+			0 0 0 1px color-mix(in oklab, rgb(251 191 36) 30%, transparent);
+	}
+	.toast-icon {
+		@apply grid h-6 w-6 shrink-0 place-items-center rounded-full ring-1;
+	}
+	.toast-icon-success {
+		@apply bg-emerald-500/15 text-emerald-300 ring-emerald-400/30;
+	}
+	.toast-icon-error {
+		@apply bg-red-500/15 text-red-300 ring-red-400/30;
+	}
+	.toast-icon-info {
+		@apply bg-indigo-500/15 text-indigo-300 ring-indigo-400/30;
+	}
+	.toast-icon-warning {
+		@apply bg-amber-500/15 text-amber-300 ring-amber-400/30;
 	}
 
 	/* Trip detail — Seerr-inspired hero + TripIt timeline */

@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { buildCalendar } from './ical';
+import { buildCalendar, buildAggregateCalendar } from './ical';
 
 const trip = {
 	id: 1,
@@ -115,4 +115,47 @@ test('omits DTEND when segment has no end time', () => {
 	);
 	expect(ics).toContain('DTSTART:20260701T160000Z');
 	expect(ics).not.toContain('DTEND');
+});
+
+test('buildAggregateCalendar combines multiple trips and their segments', () => {
+	const ics = buildAggregateCalendar('All Trips', [
+		{
+			trip: { id: 1, name: 'Trip A', startDate: '2026-07-01' },
+			segments: [
+				{
+					type: 'flight',
+					title: 'AA1',
+					startAt: '2026-07-01T10:00:00Z',
+					endAt: '2026-07-01T13:00:00Z'
+				}
+			]
+		},
+		{
+			trip: { id: 2, name: 'Trip B', startDate: '2026-08-01' },
+			segments: [
+				{
+					type: 'hotel',
+					title: 'Inn',
+					startAt: '2026-08-01T15:00:00Z'
+				}
+			]
+		}
+	]);
+	expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+	expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+	expect(ics).toContain('X-WR-CALNAME:All Trips');
+	expect(ics).toContain('UID:roamarr-trip-1@roamarr');
+	expect(ics).toContain('UID:roamarr-trip-2@roamarr');
+	expect(ics).toContain('UID:roamarr-trip-1-segment-1@roamarr');
+	expect(ics).toContain('UID:roamarr-trip-2-segment-1@roamarr');
+	expect(ics).toContain('SUMMARY:Flight: AA1');
+	expect(ics).toContain('SUMMARY:Hotel: Inn');
+});
+
+test('buildAggregateCalendar works for an empty trip list', () => {
+	const ics = buildAggregateCalendar('Empty', []);
+	expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+	expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+	expect(ics).toContain('X-WR-CALNAME:Empty');
+	expect(ics).not.toContain('BEGIN:VEVENT');
 });

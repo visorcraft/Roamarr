@@ -3,6 +3,7 @@
 
 	let { data, form } = $props();
 	let editingId = $state<number | null>(null);
+	let creating = $state(false);
 </script>
 
 <header>
@@ -16,7 +17,61 @@
 	</div>
 {/if}
 
+{#if form?.success && form?.generatedPassword}
+	<div class="notice notice-success mt-6">
+		<p>Created account for <strong>{form.email}</strong>.</p>
+		<p class="mt-1">
+			Temporary password: <code class="code-chip">{form.generatedPassword}</code>
+		</p>
+		<p class="field-help mt-1">The user must change this password on first sign-in.</p>
+	</div>
+{/if}
+
 <section class="card mt-8 p-5 sm:p-6">
+	<div class="flex items-center justify-between">
+		<h2 class="subsection-title">Create user</h2>
+		<button type="button" class="btn btn-primary" onclick={() => (creating = !creating)}>
+			{creating ? 'Hide form' : 'Create user'}
+		</button>
+	</div>
+
+	{#if creating}
+		<form
+			method="POST"
+			action="?/create"
+			use:enhance={() => {
+				return async ({ update, result }) => {
+					await update();
+					if (result.type === 'success') {
+						creating = false;
+					}
+				};
+			}}
+			class="mt-4 grid gap-4 sm:grid-cols-3"
+		>
+			<div class="field">
+				<label class="label" for="create-displayName">Display name</label>
+				<input id="create-displayName" name="displayName" class="input" required />
+			</div>
+			<div class="field">
+				<label class="label" for="create-email">Email</label>
+				<input id="create-email" name="email" type="email" class="input" required />
+			</div>
+			<div class="field">
+				<label class="label" for="create-role">Role</label>
+				<select id="create-role" name="role" class="input">
+					<option value="user" selected>User</option>
+					<option value="admin">Admin</option>
+				</select>
+			</div>
+			<div class="flex items-end sm:col-span-3">
+				<button class="btn btn-primary">Create account</button>
+			</div>
+		</form>
+	{/if}
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
 	<div class="overflow-x-auto">
 		<table class="table">
 			<thead>
@@ -56,13 +111,28 @@
 						</td>
 						<td class="text-slate-400">{user.createdAt}</td>
 						<td class="text-right">
-							<button
-								type="button"
-								class="btn btn-ghost btn-ghost-indigo"
-								onclick={() => (editingId = editingId === user.id ? null : user.id)}
-							>
-								{editingId === user.id ? 'Cancel' : 'Edit'}
-							</button>
+							<div class="flex items-center justify-end gap-2">
+								<button
+									type="button"
+									class="btn btn-ghost btn-ghost-indigo"
+									onclick={() => (editingId = editingId === user.id ? null : user.id)}
+								>
+									{editingId === user.id ? 'Cancel' : 'Edit'}
+								</button>
+								<form
+									method="POST"
+									action="?/delete"
+									class="inline"
+									onsubmit={(e: SubmitEvent) => {
+										if (!confirm(`Delete ${user.displayName} (${user.email})? This cannot be undone.`)) {
+											e.preventDefault();
+										}
+									}}
+								>
+									<input type="hidden" name="userId" value={user.id} />
+									<button type="submit" class="btn btn-ghost btn-ghost-danger">Delete</button>
+								</form>
+							</div>
 						</td>
 					</tr>
 					{#if editingId === user.id}

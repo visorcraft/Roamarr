@@ -33,6 +33,8 @@ export const users = sqliteTable(
 		emailNotifications: integer('email_notifications', { mode: 'boolean' }).notNull().default(true),
 		webhookNotifications: integer('webhook_notifications', { mode: 'boolean' }).notNull().default(true),
 		themeId: text('theme_id').notNull().default('midnight-travels'),
+		calendarToken: text('calendar_token').unique(),
+		calendarTokenExpiresAt: text('calendar_token_expires_at'),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
@@ -98,6 +100,7 @@ export const trips = sqliteTable(
 		defaultVisibility: text('default_visibility').notNull().default('private'),
 		publicToken: text('public_token').unique(),
 		publicTokenExpiresAt: text('public_token_expires_at'),
+		publicShowDetails: integer('public_show_details', { mode: 'boolean' }).notNull().default(false),
 		calendarToken: text('calendar_token').unique(),
 		calendarTokenExpiresAt: text('calendar_token_expires_at'),
 		createdAt: text('created_at').notNull().default(now),

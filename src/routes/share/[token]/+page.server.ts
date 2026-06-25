@@ -16,7 +16,7 @@ export function _loadByToken(token: string) {
 	const t = db.select().from(trips).where(eq(trips.publicToken, token)).get();
 	if (!t || isExpired(t.publicTokenExpiresAt)) throw error(404, 'Not found');
 	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
-	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs) };
+	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs, t.publicShowDetails) };
 }
 
 export const load: PageServerLoad = ({ params, getClientAddress }) => {

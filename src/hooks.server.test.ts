@@ -111,6 +111,30 @@ test('reads a flash cookie into locals and clears it', async () => {
 	expect(cookies.set).toHaveBeenCalledWith('flash', '', { path: '/', maxAge: 0 });
 });
 
+test('parses a JSON flash cookie with a variant', async () => {
+	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	const flashPayload = JSON.stringify({ message: 'Failed.', variant: 'error' });
+	const cookies = {
+		get: (name: string) => (name === 'flash' ? flashPayload : undefined),
+		set: vi.fn()
+	};
+	const ev = (path: string) => ({
+		url: new URL('http://x' + path),
+		cookies,
+		locals: {} as App.Locals,
+		request: new Request('http://x' + path)
+	});
+	const res = (await handle({
+		event: ev('/login') as any,
+		resolve: async (e: any) => {
+			expect(e.locals.flash).toEqual({ message: 'Failed.', variant: 'error' });
+			return new Response('ok');
+		}
+	})) as Response;
+	expect(res.status).toBe(200);
+	expect(cookies.set).toHaveBeenCalledWith('flash', '', { path: '/', maxAge: 0 });
+});
+
 test('redirects users who must reset password', async () => {
 	const db = (ctx as any).db;
 	db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();

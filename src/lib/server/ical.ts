@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon';
 import type { SegmentType } from './db/schema';
 
-type CalendarTrip = {
+export type CalendarTrip = {
 	id: number;
 	name: string;
 	destination?: string | null;
@@ -143,6 +143,35 @@ export function buildCalendar(trip: CalendarTrip, segments: CalendarSegment[]): 
 	segments.forEach((segment, index) => {
 		parts.push(buildEvent(trip, segment, index, stamp));
 	});
+
+	parts.push('END:VCALENDAR');
+
+	return parts.map(foldLine).join('\r\n') + '\r\n';
+}
+
+export function buildAggregateCalendar(
+	calendarName: string,
+	trips: { trip: CalendarTrip; segments: CalendarSegment[] }[]
+): string {
+	const stamp = formatUtcDateTime(DateTime.utc().toISO()!);
+
+	const parts: string[] = [];
+	parts.push('BEGIN:VCALENDAR');
+	parts.push(`VERSION:2.0`);
+	parts.push(`PRODID:-//Roamarr//EN`);
+	parts.push(`CALSCALE:GREGORIAN`);
+	parts.push(`METHOD:PUBLISH`);
+	parts.push(`X-WR-CALNAME:${escapeText(calendarName)}`);
+	parts.push(`X-WR-TIMEZONE:UTC`);
+
+	for (const { trip, segments } of trips) {
+		const tripEvent = buildTripEvent(trip, stamp);
+		if (tripEvent) parts.push(tripEvent);
+
+		segments.forEach((segment, index) => {
+			parts.push(buildEvent(trip, segment, index, stamp));
+		});
+	}
 
 	parts.push('END:VCALENDAR');
 

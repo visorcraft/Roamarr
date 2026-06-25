@@ -54,12 +54,29 @@ export function _shareWithGroup(
 	logAudit(ownerId, 'trip_share_group', 'trip', tripId, { sharedWithGroupId: groupId, permission });
 }
 
-export function _mintPublicToken(ownerId: number, tripId: number, expiresAt?: string | null) {
+export function _mintPublicToken(
+	ownerId: number,
+	tripId: number,
+	publicShowDetails = false,
+	expiresAt?: string | null
+) {
 	requireOwnedTrip(ownerId, tripId);
 	const token = randomBytes(24).toString('base64url');
-	db.update(trips).set({ publicToken: token, publicTokenExpiresAt: expiresAt ?? null }).where(eq(trips.id, tripId)).run();
-	logAudit(ownerId, 'trip_public_token_mint', 'trip', tripId, { expiresAt: expiresAt ?? null });
+	db.update(trips)
+		.set({ publicToken: token, publicTokenExpiresAt: expiresAt ?? null, publicShowDetails })
+		.where(eq(trips.id, tripId))
+		.run();
+	logAudit(ownerId, 'trip_public_token_mint', 'trip', tripId, {
+		expiresAt: expiresAt ?? null,
+		publicShowDetails
+	});
 	return token;
+}
+
+export function _setPublicShowDetails(ownerId: number, tripId: number, publicShowDetails: boolean) {
+	requireOwnedTrip(ownerId, tripId);
+	db.update(trips).set({ publicShowDetails }).where(eq(trips.id, tripId)).run();
+	logAudit(ownerId, 'trip_public_set_show_details', 'trip', tripId, { publicShowDetails });
 }
 
 export function _unshareUser(ownerId: number, tripId: number, shareId: number) {
@@ -163,7 +180,15 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		const expiresAt = String(f.get('publicExpiresAt') || '');
-		_mintPublicToken(u.id, Number(params.id), expiresAt || null);
+		const publicShowDetails = String(f.get('publicShowDetails')) === '1';
+		_mintPublicToken(u.id, Number(params.id), publicShowDetails, expiresAt || null);
+		throw redirect(303, `/trips/${params.id}/share`);
+	},
+	setPublicShowDetails: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const publicShowDetails = String(f.get('publicShowDetails')) === '1';
+		_setPublicShowDetails(u.id, Number(params.id), publicShowDetails);
 		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	revokePublic: async ({ locals, params }) => {
@@ -171,7 +196,7 @@ export const actions: Actions = {
 		const tripId = Number(params.id);
 		requireOwnedTrip(u.id, tripId);
 		db.update(trips)
-			.set({ publicToken: null })
+			.set({ publicToken: null, publicTokenExpiresAt: null, publicShowDetails: false })
 			.where(eq(trips.id, tripId))
 			.run();
 		logAudit(u.id, 'trip_public_token_revoke', 'trip', tripId);

@@ -1,8 +1,12 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 
 	let { data } = $props();
+	let sharingUser = $state(false);
+	let sharingGroup = $state(false);
+	let makingPublic = $state(false);
 	const userShares = $derived(data.shares.filter((s) => s.email));
 	const groupShares = $derived(data.shares.filter((s) => s.groupName));
 </script>
@@ -46,19 +50,19 @@
 		<p class="empty-text py-4 text-left">Not shared with anyone yet.</p>
 	{/if}
 
-	<form method="POST" action="?/shareUser" class="mt-4 flex flex-wrap items-end gap-3">
+	<form method="POST" action="?/shareUser" class="mt-4 flex flex-wrap items-end gap-3" use:enhance={() => { sharingUser = true; return async ({ update }) => { await update(); sharingUser = false; }; }} aria-busy={sharingUser}>
 		<div class="field min-w-0 flex-1">
 			<label class="label" for="email">Invite by email</label>
-			<input id="email" name="email" type="email" placeholder="user@example.com" class="input" required />
+			<input id="email" name="email" type="email" placeholder="user@example.com" class="input" required disabled={sharingUser} />
 		</div>
 		<div class="field w-32">
 			<label class="label" for="permission-user">Permission</label>
-			<select id="permission-user" name="permission" class="select">
+			<select id="permission-user" name="permission" class="select" disabled={sharingUser}>
 				<option value="read">Read</option>
 				<option value="edit">Edit</option>
 			</select>
 		</div>
-		<button class="btn btn-primary">Share</button>
+		<button class="btn btn-primary" disabled={sharingUser} class:btn-loading={sharingUser}>Share</button>
 	</form>
 </section>
 
@@ -95,10 +99,10 @@
 		{/if}
 
 		{#if data.groups.length}
-			<form method="POST" action="?/shareGroup" class="mt-4 flex flex-wrap items-end gap-3">
+			<form method="POST" action="?/shareGroup" class="mt-4 flex flex-wrap items-end gap-3" use:enhance={() => { sharingGroup = true; return async ({ update }) => { await update(); sharingGroup = false; }; }} aria-busy={sharingGroup}>
 				<div class="field min-w-0 flex-1">
 					<label class="label" for="groupId">Group</label>
-					<select id="groupId" name="groupId" class="select">
+					<select id="groupId" name="groupId" class="select" disabled={sharingGroup}>
 						{#each data.groups as g (g.id)}
 							<option value={g.id}>{g.name}</option>
 						{/each}
@@ -106,12 +110,12 @@
 				</div>
 				<div class="field w-32">
 					<label class="label" for="permission-group">Permission</label>
-					<select id="permission-group" name="permission" class="select">
+					<select id="permission-group" name="permission" class="select" disabled={sharingGroup}>
 						<option value="read">Read</option>
 						<option value="edit">Edit</option>
 					</select>
 				</div>
-				<button class="btn btn-primary">Share</button>
+				<button class="btn btn-primary" disabled={sharingGroup} class:btn-loading={sharingGroup}>Share</button>
 			</form>
 		{/if}
 	</section>
@@ -125,17 +129,27 @@
 			<p class="code-chip flex-1">/share/{data.trip.publicToken}</p>
 			<CopyButton text={data.publicShareUrl} class="btn btn-ghost shrink-0" label="Copy link" />
 		</div>
+		<form method="POST" action="?/setPublicShowDetails" class="mt-3">
+			<input type="hidden" name="publicShowDetails" value={data.trip.publicShowDetails ? '0' : '1'} />
+			<button class="btn btn-ghost">{data.trip.publicShowDetails ? 'Hide details on public link' : 'Show details on public link'}</button>
+		</form>
 		<form method="POST" action="?/revokePublic" class="mt-3">
 			<ConfirmButton class="btn btn-danger" message="Revoke the public link? Anyone with the link will lose access.">Revoke public link</ConfirmButton>
 		</form>
 	{:else}
 		<p class="text-sm text-slate-400">Generate a link that lets anyone view this trip without an account. You can optionally set an expiry.</p>
-		<form method="POST" action="?/makePublic" class="mt-3 flex flex-wrap items-end gap-3">
+		<form method="POST" action="?/makePublic" class="mt-3 flex flex-wrap items-end gap-3" use:enhance={() => { makingPublic = true; return async ({ update }) => { await update(); makingPublic = false; }; }} aria-busy={makingPublic}>
 			<div class="field">
 				<label class="label" for="publicExpiresAt">Expires (optional)</label>
-				<input id="publicExpiresAt" name="publicExpiresAt" type="datetime-local" class="input" />
+				<input id="publicExpiresAt" name="publicExpiresAt" type="datetime-local" class="input" disabled={makingPublic} />
 			</div>
-			<button class="btn btn-primary">Create public link</button>
+			<div class="field flex items-end">
+				<label class="checkbox-label">
+					<input type="checkbox" name="publicShowDetails" value="1" class="checkbox" disabled={makingPublic} />
+					Show confirmation numbers and details
+				</label>
+			</div>
+			<button class="btn btn-primary" disabled={makingPublic} class:btn-loading={makingPublic}>Create public link</button>
 		</form>
 	{/if}
 </section>

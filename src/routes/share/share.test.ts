@@ -8,6 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _loadByToken as loadByToken, load } from './[token]/+page.server';
+import { eq } from 'drizzle-orm';
 import { users, trips, segments } from '$lib/server/db/schema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
@@ -89,4 +90,31 @@ test('expired public token returns 404', () => {
 	} catch (e: any) {
 		expect(e.status).toBe(404);
 	}
+});
+
+test('public link hides details by default and shows them when publicShowDetails is enabled', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T', publicToken: 'det-hidden' }).returning().get();
+	db.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2026-07-01T00:00:00Z',
+			startTz: 'UTC',
+			confirmationNumber: 'CONF123',
+			detailsJson: '{"seat":"12A"}'
+		})
+		.run();
+
+	const hidden = loadByToken('det-hidden') as { trip: { segments: unknown[] } };
+	expect(JSON.stringify(hidden)).not.toContain('CONF123');
+	expect(JSON.stringify(hidden)).not.toContain('12A');
+
+	db.update(trips).set({ publicShowDetails: true }).where(eq(trips.id, t.id)).run();
+
+	const visible = loadByToken('det-hidden') as { trip: { segments: unknown[] } };
+	expect(JSON.stringify(visible)).toContain('CONF123');
+	expect(JSON.stringify(visible)).toContain('12A');
 });

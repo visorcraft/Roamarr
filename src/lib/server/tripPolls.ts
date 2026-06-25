@@ -1,26 +1,25 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
-import { DateTime } from 'luxon';
 import { requireUser } from './auth';
 import { db } from './db';
 import {
 	tripPolls,
 	tripPollOptions,
 	tripPollVotes,
-	tripCompanions,
-	trips
+	tripCompanions
 } from './db/schema';
 import { logAudit } from './audit';
 import { requireEditableTrip } from './ownership';
 import { Validator } from './validation';
+import { bumpTripUpdatedAt } from './tz';
 
-export interface PollVoteView {
+interface PollVoteView {
 	id: number;
 	optionId: number;
 	companionId: number;
 }
 
-export interface PollOptionView {
+interface PollOptionView {
 	id: number;
 	label: string;
 	sortOrder: number;
@@ -34,14 +33,6 @@ export interface PollWithVotes {
 	createdAt: string;
 	options: PollOptionView[];
 	votes: PollVoteView[];
-}
-
-function utcNow() {
-	return DateTime.utc().toISO()!;
-}
-
-function bumpTripUpdatedAt(tripId: number) {
-	db.update(trips).set({ updatedAt: utcNow() }).where(eq(trips.id, tripId)).run();
 }
 
 export function listPollsWithVotes(tripId: number): PollWithVotes[] {

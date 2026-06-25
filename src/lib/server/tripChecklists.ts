@@ -6,10 +6,11 @@ import { tripChecklists, tripChecklistItems, tripCompanions } from './db/schema'
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator } from './validation';
+import { parseTripId } from './params';
 
 const ITEM_TEXT_MAX = 200;
 
-export interface ChecklistItem {
+interface ChecklistItem {
 	id: number;
 	text: string;
 	packed: boolean;
@@ -24,7 +25,7 @@ export interface ChecklistWithItems {
 	items: ChecklistItem[];
 }
 
-function getOrCreateChecklist(tripId: number) {
+export function getOrCreateChecklist(tripId: number) {
 	const existing = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, tripId)).get();
 	if (existing) return existing;
 	return db.insert(tripChecklists).values({ tripId }).returning().get();
@@ -116,12 +117,6 @@ export function deleteItem(userId: number, tripId: number, itemId: number) {
 		.run();
 	if (result.changes === 0) throw error(404, 'Item not found');
 	logAudit(userId, 'checklist_item_delete', 'trip_checklist_item', itemId, { tripId });
-}
-
-function parseTripId(params: Record<string, string>) {
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	return tripId;
 }
 
 export async function addChecklistItem({ locals, params, request }: RequestEvent) {

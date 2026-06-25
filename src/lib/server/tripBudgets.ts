@@ -9,7 +9,7 @@ import { logAudit } from './audit';
 
 export const BUDGET_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
 export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
-export type BudgetAlertLevel = 'ok' | 'near' | 'over';
+type BudgetAlertLevel = 'ok' | 'near' | 'over';
 
 export interface BudgetWithSpent {
 	category: BudgetCategory;

@@ -1,16 +1,12 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { DateTime } from 'luxon';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
-import { tripCompanions, trips, COMPANION_CATEGORIES, type CompanionCategory } from '$lib/server/db/schema';
+import { tripCompanions, COMPANION_CATEGORIES, type CompanionCategory } from '$lib/server/db/schema';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
-
-function utcNow() {
-	return DateTime.utc().toISO()!;
-}
+import { bumpTripUpdatedAt } from './tz';
 
 export function listTripCompanions(tripId: number) {
 	return db
@@ -29,10 +25,6 @@ function requireCompanion(tripId: number, companionId: number) {
 		.get();
 	if (!c) throw error(404, 'Companion not found');
 	return c;
-}
-
-function bumpTripUpdatedAt(tripId: number) {
-	db.update(trips).set({ updatedAt: utcNow() }).where(eq(trips.id, tripId)).run();
 }
 
 interface CompanionInput {

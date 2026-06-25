@@ -127,6 +127,13 @@
       "when": 1782386019306,
       "tag": "0017_jittery_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1782387778095,
+      "tag": "0018_big_shotgun",
+      "breakpoints": true
     }
   ]
 }

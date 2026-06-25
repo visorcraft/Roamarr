@@ -3,15 +3,17 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db, sqlite } from './db';
 import { packingTemplates, packingTemplateItems, tripChecklists, tripChecklistItems } from './db/schema';
+import { getOrCreateChecklist } from './tripChecklists';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator } from './validation';
+import { parseTripId } from './params';
 
 const TEMPLATE_NAME_MAX = 100;
 const ITEM_LABEL_MAX = 200;
 const ITEM_CATEGORY_MAX = 50;
 
-export interface TemplateItem {
+interface TemplateItem {
 	id: number;
 	label: string;
 	category: string;
@@ -35,12 +37,6 @@ function requireTemplateOwner(userId: number, templateId: number) {
 		.get();
 	if (!template) throw error(404, 'Template not found');
 	return template;
-}
-
-function getOrCreateChecklist(tripId: number) {
-	const existing = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, tripId)).get();
-	if (existing) return existing;
-	return db.insert(tripChecklists).values({ tripId }).returning().get();
 }
 
 function loadChecklistItems(tripId: number) {
@@ -181,12 +177,6 @@ const applyTx = sqlite.transaction((templateId: number, tripId: number, userId: 
 export function applyTemplate(templateId: number, tripId: number, userId: number) {
 	requireEditableTrip(userId, tripId);
 	return applyTx(templateId, tripId, userId);
-}
-
-function parseTripId(params: Record<string, string>) {
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	return tripId;
 }
 
 export async function saveChecklistTemplate({ locals, params, request }: RequestEvent) {

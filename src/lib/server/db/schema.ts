@@ -379,8 +379,7 @@ export const fareProviders = sqliteTable('fare_providers', {
 	providerKey: text('provider_key').notNull(),
 	label: text('label').notNull().default(''),
 	apiKey: text('api_key'),
-	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
-	configJson: text('config_json')
+	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true)
 });
 
 export const fareWatches = sqliteTable(

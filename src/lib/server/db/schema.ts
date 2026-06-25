@@ -152,6 +152,9 @@ export const SEGMENT_TYPES = [
 ] as const;
 export type SegmentType = (typeof SEGMENT_TYPES)[number];
 
+export const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
+export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
+
 export const segments = sqliteTable(
 	'segments',
 	{
@@ -164,9 +167,13 @@ export const segments = sqliteTable(
 		startAt: text('start_at').notNull(),
 		startTz: text('start_tz').notNull().default('UTC'),
 		endAt: text('end_at'),
+		endTz: text('end_tz'),
+		status: text('status').notNull().default('planned'),
 		location: text('location'),
 		confirmationNumber: text('confirmation_number'),
 		detailsJson: text('details_json'),
+		meetingPoint: text('meeting_point'),
+		meetingAt: text('meeting_at'),
 		cardId: integer('card_id').references(() => cards.id, { onDelete: 'set null' }),
 		createdAt: text('created_at').notNull().default(now),
 		updatedAt: text('updated_at').notNull().default(now)
@@ -175,6 +182,10 @@ export const segments = sqliteTable(
 		typeCk: check(
 			'segments_type_ck',
 			sql`${t.type} in ('flight','event','hotel','rental_car','note','todo','parking','boat','train','directions','food','poi','meetup','rideshare','shuttle')`
+		),
+		statusCk: check(
+			'segments_status_ck',
+			sql`${t.status} in ('planned','checked_in','boarded','arrived','completed')`
 		),
 		tripIdx: index('segments_trip_idx').on(t.tripId),
 		startIdx: index('segments_start_idx').on(t.startAt)
@@ -191,6 +202,9 @@ export const travelDocuments = sqliteTable(
 		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
+		companionId: integer('companion_id').references(() => tripCompanions.id, {
+			onDelete: 'cascade'
+		}),
 		type: text('type').notNull(),
 		number: text('number'),
 		issuingAuthority: text('issuing_authority'),
@@ -202,7 +216,8 @@ export const travelDocuments = sqliteTable(
 			'docs_type_ck',
 			sql`${t.type} in ('passport','drivers_license','global_entry','visa')`
 		),
-		expIdx: index('docs_user_exp_idx').on(t.userId, t.expiresOn)
+		expIdx: index('docs_user_exp_idx').on(t.userId, t.expiresOn),
+		companionIdx: index('docs_companion_idx').on(t.companionId)
 	})
 );
 
@@ -465,6 +480,9 @@ export const tripCompanions = sqliteTable(
 			.references(() => trips.id, { onDelete: 'cascade' }),
 		name: text('name').notNull(),
 		category: text('category').notNull().default('adult'),
+		dietary: text('dietary'),
+		allergies: text('allergies'),
+		medicalNotes: text('medical_notes'),
 		notes: text('notes'),
 		createdAt: text('created_at').notNull().default(now)
 	},
@@ -602,5 +620,106 @@ export const tripDocumentLinks = sqliteTable(
 	},
 	(t) => ({
 		tripIdx: index('doc_links_trip_idx').on(t.tripId)
+	})
+);
+
+export const packingTemplates = sqliteTable(
+	'packing_templates',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		userIdx: index('packing_templates_user_idx').on(t.userId)
+	})
+);
+
+export const packingTemplateItems = sqliteTable(
+	'packing_template_items',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		templateId: integer('template_id')
+			.notNull()
+			.references(() => packingTemplates.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		category: text('category').notNull().default('general'),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		templateIdx: index('packing_template_items_template_idx').on(t.templateId)
+	})
+);
+
+export const tripPolls = sqliteTable(
+	'trip_polls',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		question: text('question').notNull(),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		tripIdx: index('trip_polls_trip_idx').on(t.tripId)
+	})
+);
+
+export const tripPollOptions = sqliteTable(
+	'trip_poll_options',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		pollId: integer('poll_id')
+			.notNull()
+			.references(() => tripPolls.id, { onDelete: 'cascade' }),
+		label: text('label').notNull(),
+		sortOrder: integer('sort_order').notNull().default(0),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		pollIdx: index('trip_poll_options_poll_idx').on(t.pollId)
+	})
+);
+
+export const tripPollVotes = sqliteTable(
+	'trip_poll_votes',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		pollId: integer('poll_id')
+			.notNull()
+			.references(() => tripPolls.id, { onDelete: 'cascade' }),
+		optionId: integer('option_id')
+			.notNull()
+			.references(() => tripPollOptions.id, { onDelete: 'cascade' }),
+		companionId: integer('companion_id')
+			.notNull()
+			.references(() => tripCompanions.id, { onDelete: 'cascade' }),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		uq: unique('trip_poll_votes_poll_companion_uq').on(t.pollId, t.companionId),
+		pollIdx: index('trip_poll_votes_poll_idx').on(t.pollId)
+	})
+);
+
+export const tripBudgetCategories = sqliteTable(
+	'trip_budget_categories',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		category: text('category').notNull(),
+		amount: integer('amount').notNull(),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		uq: unique('trip_budget_categories_trip_category_uq').on(t.tripId, t.category),
+		tripIdx: index('trip_budget_categories_trip_idx').on(t.tripId)
 	})
 );

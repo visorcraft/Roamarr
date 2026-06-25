@@ -85,9 +85,9 @@
 		{/if}
 		{#if trip.startDate || trip.endDate}
 			<p class="mt-auto inline-flex items-center gap-1.5 font-mono text-xs text-slate-500">
-				<span>{trip.startDate || '—'}</span>
-				<Icon name="arrow-right" class="h-3.5 w-3.5 shrink-0" />
-				<span>{trip.endDate || '—'}</span>
+				<span class="leading-none">{trip.startDate || '—'}</span>
+				<Icon name="arrow-right" class="h-[0.9375rem] w-[0.9375rem] shrink-0 -translate-y-px" />
+				<span class="leading-none">{trip.endDate || '—'}</span>
 			</p>
 		{/if}
 	</a>

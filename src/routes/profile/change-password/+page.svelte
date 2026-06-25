@@ -6,8 +6,8 @@
 </script>
 
 <header>
-	<h1 class="text-3xl font-extrabold text-white">Choose a new password</h1>
-	<p class="mt-1 text-sm text-muted">
+	<h1 class="page-title">Choose a new password</h1>
+	<p class="page-subtitle">
 		Your account must set a new password before you can continue. Signed in as {data.email}.
 	</p>
 </header>

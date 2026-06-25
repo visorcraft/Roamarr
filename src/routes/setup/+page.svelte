@@ -6,8 +6,8 @@
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
-	<h1 class="text-2xl font-extrabold text-white">Welcome to Roamarr</h1>
-	<p class="mt-1 text-sm text-muted">Create your admin account to get started.</p>
+	<h1 class="auth-title">Welcome to Roamarr</h1>
+	<p class="page-subtitle">Create your admin account to get started.</p>
 
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 

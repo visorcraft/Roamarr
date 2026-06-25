@@ -16,8 +16,8 @@
 
 <header>
 	<div class="min-w-0">
-		<h1 class="truncate text-3xl font-extrabold text-white">Edit trip</h1>
-		<p class="mt-1 text-sm text-muted">Update the details for {data.trip.name}.</p>
+		<h1 class="page-title truncate">Edit trip</h1>
+		<p class="page-subtitle">Update the details for {data.trip.name}.</p>
 	</div>
 </header>
 
@@ -65,7 +65,7 @@
 {#if data.owner === true}
 	<section class="card mt-6 border-l-4 border-red-500 p-5 sm:p-6">
 		<h2 class="section-title">Danger zone</h2>
-		<p class="mt-1 text-sm text-muted">Deleting this trip cannot be undone.</p>
+		<p class="page-subtitle">Deleting this trip cannot be undone.</p>
 		<form method="POST" action="?/delete" class="mt-4">
 			<ConfirmButton class="btn btn-danger" message="Delete this trip and all its segments? This cannot be undone.">Delete trip</ConfirmButton>
 		</form>

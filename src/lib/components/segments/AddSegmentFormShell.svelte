@@ -17,14 +17,14 @@
 	} = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
 		<a href={`/trips/${trip.id}`} class="mb-2 inline-flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
 			Back to {trip.name}
 		</a>
-		<h1 class="text-3xl font-extrabold text-white">Add {label.toLowerCase()}</h1>
-		<p class="mt-1 text-sm text-muted">Fill in the details below.</p>
+		<h1 class="page-title">Add {label.toLowerCase()}</h1>
+		<p class="page-subtitle">Fill in the details below.</p>
 	</div>
 	<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>
 </header>

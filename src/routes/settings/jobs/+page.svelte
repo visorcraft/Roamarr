@@ -11,10 +11,10 @@
 	}
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Scheduled job runs</h1>
-		<p class="mt-1 text-sm text-muted">Recent scheduler ticks for reminders, fare checks and session cleanup.</p>
+		<h1 class="page-title">Scheduled job runs</h1>
+		<p class="page-subtitle">Recent scheduler ticks for reminders, fare checks and session cleanup.</p>
 	</div>
 	<form method="POST" action="?/runNow">
 		<button class="btn btn-primary">Run scheduler now</button>
@@ -50,7 +50,7 @@
 						</td>
 						<td>
 							{#if run.errorMessage}
-								<code class="rounded bg-slate-950/50 px-2 py-1 text-xs text-red-300">{run.errorMessage}</code>
+								<code class="code-chip px-2 py-1 text-red-300">{run.errorMessage}</code>
 							{/if}
 						</td>
 					</tr>

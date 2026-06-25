@@ -4,10 +4,10 @@
 	let { data } = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Groups</h1>
-		<p class="mt-1 text-sm text-muted">
+		<h1 class="page-title">Groups</h1>
+		<p class="page-subtitle">
 			{data.groups.length} group{data.groups.length === 1 ? '' : 's'} you own
 		</p>
 	</div>
@@ -32,7 +32,7 @@
 		{#each data.groups as g (g.id)}
 			<section class="card flex flex-col gap-4 p-5">
 				<div class="flex items-start justify-between gap-3">
-					<h2 class="font-display text-lg leading-tight font-bold text-white">{g.name}</h2>
+					<h2 class="section-title">{g.name}</h2>
 					<span class="badge badge-slate shrink-0">{g.members.length} member{g.members.length === 1 ? '' : 's'}</span>
 				</div>
 
@@ -45,7 +45,7 @@
 								<form method="POST" action="?/removeMember" class="contents">
 									<input type="hidden" name="groupId" value={g.id} />
 									<input type="hidden" name="userId" value={m.id} />
-									<ConfirmButton class="ml-1 text-slate-500 hover:text-red-300" aria-label={`Remove ${m.email}`} message="Remove this member from the group?">
+									<ConfirmButton class="ml-1 text-slate-500 transition hover:text-red-300" aria-label={`Remove ${m.email}`} message="Remove this member from the group?">
 										<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3"><path d="M18 6 6 18" /><path d="M6 6l12 12" /></svg>
 									</ConfirmButton>
 								</form>
@@ -73,8 +73,8 @@
 		{/each}
 	</div>
 {:else}
-	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
-		<div class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">
+	<div class="empty-state">
+		<div class="empty-icon">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
 		</div>
 		<p class="text-slate-300">No groups yet — create one to share trips.</p>

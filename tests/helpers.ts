@@ -24,7 +24,8 @@ export function makeUser(
 			disabled: over.disabled ?? false,
 			timezone: over.timezone ?? 'UTC',
 			flightCheckinLeadHours: over.flightCheckinLeadHours ?? 24,
-			documentExpiryLeadDays: over.documentExpiryLeadDays ?? 90
+			documentExpiryLeadDays: over.documentExpiryLeadDays ?? 90,
+			themeId: over.themeId ?? 'midnight-travels'
 		})
 		.returning()
 		.get();

@@ -7,10 +7,10 @@
 	const groupShares = $derived(data.shares.filter((s) => s.groupName));
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div class="min-w-0">
-		<h1 class="truncate text-3xl font-extrabold text-white">Share trip</h1>
-		<p class="mt-1 text-sm text-muted">Control who can see {data.trip.name}.</p>
+		<h1 class="page-title truncate">Share trip</h1>
+		<p class="page-subtitle">Control who can see {data.trip.name}.</p>
 	</div>
 	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Back to trip</a>
 </header>
@@ -28,7 +28,7 @@
 						<span class="truncate text-sm text-slate-200">{s.email}</span>
 						<span class="badge badge-slate uppercase">{s.permission}</span>
 					</div>
-					<div class="flex items-center gap-2">
+					<div class="action-row">
 						<form method="POST" action="?/setShowDetails">
 							<input type="hidden" name="shareId" value={s.id} />
 							<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
@@ -43,7 +43,7 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="py-4 text-sm text-slate-500">Not shared with anyone yet.</p>
+		<p class="empty-text py-4 text-left">Not shared with anyone yet.</p>
 	{/if}
 
 	<form method="POST" action="?/shareUser" class="mt-4 flex flex-wrap items-end gap-3">
@@ -76,7 +76,7 @@
 							<span class="truncate text-sm text-slate-200">{s.groupName}</span>
 							<span class="badge badge-slate uppercase">{s.permission}</span>
 						</div>
-						<div class="flex items-center gap-2">
+						<div class="action-row">
 							<form method="POST" action="?/setShowDetails">
 								<input type="hidden" name="shareId" value={s.id} />
 								<input type="hidden" name="showDetails" value={s.showDetails ? '0' : '1'} />
@@ -91,7 +91,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="py-4 text-sm text-slate-500">Not shared with any groups yet.</p>
+			<p class="empty-text py-4 text-left">Not shared with any groups yet.</p>
 		{/if}
 
 		{#if data.groups.length}
@@ -122,7 +122,7 @@
 	{#if data.publicShareUrl}
 		<p class="text-sm text-slate-400">Anyone with this link can view the trip.</p>
 		<div class="mt-2 flex items-center gap-2">
-			<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5">/share/{data.trip.publicToken}</p>
+			<p class="code-chip flex-1">/share/{data.trip.publicToken}</p>
 			<CopyButton text={data.publicShareUrl} class="btn btn-ghost shrink-0" label="Copy link" />
 		</div>
 		<form method="POST" action="?/revokePublic" class="mt-3">

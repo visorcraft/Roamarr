@@ -4,10 +4,10 @@
 	let { form } = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Import trips</h1>
-		<p class="mt-1 text-sm text-muted">Upload a JSON or CSV file to create trips in bulk.</p>
+		<h1 class="page-title">Import trips</h1>
+		<p class="page-subtitle">Upload a JSON or CSV file to create trips in bulk.</p>
 	</div>
 	<a href="/trips" class="btn btn-ghost">Back</a>
 </header>

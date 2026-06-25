@@ -6,32 +6,32 @@
 </script>
 
 <header>
-	<h1 class="text-3xl font-extrabold text-white">General</h1>
-	<p class="mt-1 text-sm text-muted">Configure your Roamarr instance and outgoing email.</p>
+	<h1 class="page-title">General</h1>
+	<p class="page-subtitle">Configure your Roamarr instance and outgoing email.</p>
 </header>
 
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
 <section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-	<div class="card p-4">
-		<p class="text-sm text-slate-400">Users</p>
-		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.users}</p>
+	<div class="metric-card">
+		<p class="metric-label">Users</p>
+		<p class="metric-value">{data.stats.users}</p>
 	</div>
-	<div class="card p-4">
-		<p class="text-sm text-slate-400">Trips</p>
-		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.trips}</p>
+	<div class="metric-card">
+		<p class="metric-label">Trips</p>
+		<p class="metric-value">{data.stats.trips}</p>
 	</div>
-	<div class="card p-4">
-		<p class="text-sm text-slate-400">Segments</p>
-		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.segments}</p>
+	<div class="metric-card">
+		<p class="metric-label">Segments</p>
+		<p class="metric-value">{data.stats.segments}</p>
 	</div>
-	<div class="card p-4">
-		<p class="text-sm text-slate-400">Groups</p>
-		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.groups}</p>
+	<div class="metric-card">
+		<p class="metric-label">Groups</p>
+		<p class="metric-value">{data.stats.groups}</p>
 	</div>
-	<div class="card p-4">
-		<p class="text-sm text-slate-400">Notifications</p>
-		<p class="mt-1 text-2xl font-extrabold text-white">{data.stats.notifications}</p>
+	<div class="metric-card">
+		<p class="metric-label">Notifications</p>
+		<p class="metric-value">{data.stats.notifications}</p>
 	</div>
 </section>
 
@@ -46,11 +46,11 @@
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Recent activity</h2>
 	{#if data.recentLogs.length === 0}
-		<p class="mt-2 text-sm text-slate-400">No audit log entries yet.</p>
+		<p class="empty-text mt-2">No audit log entries yet.</p>
 	{:else}
-		<ul class="mt-3 divide-y divide-white/10">
+		<ul class="mt-3 list-stack">
 			{#each data.recentLogs as log}
-				<li class="py-3 text-sm">
+				<li class="list-item text-sm">
 					<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 						<span class="font-medium text-white">{log.action}</span>
 						<span class="text-slate-400">{log.entityType}:{log.entityId}</span>
@@ -91,13 +91,13 @@
 					<label class="label" for="allowRegistration">Allow self-registration</label>
 					<p class="field-help">Let new users create their own accounts.</p>
 				</div>
-				<label class="flex items-center gap-2 text-sm text-slate-300">
+				<label class="checkbox-label">
 					<input
 						id="allowRegistration"
 						type="checkbox"
 						name="allowRegistration"
 						checked={s.allowRegistration}
-						class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
+						class="checkbox"
 					/>
 					Enabled
 				</label>

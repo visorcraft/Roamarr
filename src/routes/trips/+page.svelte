@@ -16,10 +16,10 @@
 	};
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Trips</h1>
-		<p class="mt-1 text-sm text-muted">
+		<h1 class="page-title">Trips</h1>
+		<p class="page-subtitle">
 			{data.trips.length} trip{data.trips.length === 1 ? '' : 's'} planned
 		</p>
 	</div>
@@ -102,13 +102,13 @@
 							type="checkbox"
 							name="selected"
 							value={t.id}
-							class="absolute top-3 right-3 h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
+							class="checkbox absolute top-3 right-3"
 							onclick={(e) => e.stopPropagation()}
 						/>
 					{/if}
 					<a href={`/trips/${t.id}`} class="contents">
 						<div class="flex items-start justify-between gap-3">
-							<h2 class="font-display text-lg leading-tight font-bold text-white">
+							<h2 class="section-title">
 								{#if t.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
 								{t.name}
 							</h2>
@@ -141,8 +141,8 @@
 		</div>
 	</form>
 {:else}
-	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
-		<div class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">
+	<div class="empty-state">
+		<div class="empty-icon">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><circle cx="6" cy="19" r="3" /><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" /><circle cx="18" cy="5" r="3" /></svg>
 		</div>
 		<p class="text-slate-300">No trips yet — plan your first one.</p>

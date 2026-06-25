@@ -13,7 +13,7 @@
 		text,
 		label = 'Copy',
 		copiedLabel = 'Copied!',
-		class: className = '',
+		class: className = 'btn btn-ghost',
 		...rest
 	}: Props = $props();
 

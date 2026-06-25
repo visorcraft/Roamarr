@@ -144,7 +144,7 @@
 	<section class="trip-hero">
 		<div
 			class="trip-hero-backdrop"
-			style="background-image: radial-gradient(ellipse 120% 100% at 70% 0%, hsl({heroAccent} 55% 35% / 0.55), transparent 55%), linear-gradient(135deg, hsl({heroAccent} 40% 22%) 0%, hsl({(heroAccent + 40) % 360} 35% 14%) 100%);"
+			style="background-image: linear-gradient(135deg, hsl({heroAccent} 45% 30% / 0.58) 0%, hsl({heroAccent} 40% 22% / 0.5) 42%, hsl({(heroAccent + 40) % 360} 35% 14%) 100%);"
 		></div>
 		<div class="trip-hero-scrim"></div>
 
@@ -176,7 +176,7 @@
 						{/if}
 					</div>
 
-					<h1 class="mt-2 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">{trip.name}</h1>
+					<h1 class="mt-2 text-3xl font-extrabold text-white sm:text-4xl">{trip.name}</h1>
 
 					<div class="mt-3 flex flex-wrap gap-2">
 						{#if trip.destination}
@@ -258,7 +258,7 @@
 						{#each dayGroups as group (group.key)}
 							<div>
 								<div class="trip-timeline-day">
-									<span class="text-sm font-semibold text-white">{group.label}</span>
+									<span class="subsection-title">{group.label}</span>
 									<span class="text-[0.938rem] text-slate-500">{group.segments.length} item{group.segments.length === 1 ? '' : 's'}</span>
 								</div>
 
@@ -395,8 +395,8 @@
 						{/each}
 					</div>
 				{:else}
-					<div class="card grid place-items-center gap-3 p-12 text-center">
-						<div class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">
+					<div class="empty-state mt-0">
+						<div class="empty-icon">
 							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
 						</div>
 						<p class="text-slate-300">{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}</p>
@@ -423,10 +423,10 @@
 						{/if}
 					</div>
 					{#if data.watches?.length}
-						<ul class="space-y-2">
+						<ul class="list-stack">
 							{#each data.watches as w (w.id)}
 								{@const last = w.lastResultJson ? JSON.parse(w.lastResultJson) : null}
-								<li class="flex items-center gap-3 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
+								<li class="list-item flex items-center gap-3">
 									<div class="min-w-0 flex-1">
 										<div class="flex flex-wrap items-center gap-2">
 											<span class="badge badge-slate">{w.label || w.providerKey}</span>
@@ -440,7 +440,7 @@
 											<p class="mt-0.5 text-xs text-slate-500">Last checked: {formatDateTime(w.lastCheckedAt, { timeZone: 'UTC' })}</p>
 										{/if}
 									</div>
-									<div class="flex items-center gap-1">
+									<div class="action-row gap-1">
 										<form method="POST" action={`/trips/${trip.id}/fare-watch?/check`}>
 											<input type="hidden" name="watchId" value={w.id} />
 											<button class="btn btn-ghost">Check now</button>
@@ -465,7 +465,7 @@
 							{/each}
 						</ul>
 					{:else}
-						<p class="py-4 text-center text-sm text-slate-500">No fare watches enabled for this trip.</p>
+						<p class="empty-text py-4">No fare watches enabled for this trip.</p>
 					{/if}
 				</section>
 			{/if}
@@ -473,25 +473,25 @@
 			<section class="card p-5">
 				<h2 class="section-title mb-3">Activity</h2>
 				{#if data.comments?.length}
-					<ul class="space-y-3">
+					<ul class="list-stack">
 						{#each data.comments as c (c.id)}
-							<li class="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
+							<li class="list-item">
 								<div class="flex items-center justify-between gap-3">
-									<span class="text-sm font-semibold text-white">{c.displayName}</span>
+									<span class="subsection-title">{c.displayName}</span>
 									<span class="text-xs text-slate-500">{new Date(c.createdAt).toLocaleString()}</span>
 								</div>
 								<p class="mt-1 text-sm text-slate-300 whitespace-pre-wrap">{c.body}</p>
 								{#if c.userId === data.user?.id}
 									<form method="POST" action="?/deleteComment" class="mt-2">
 										<input type="hidden" name="commentId" value={c.id} />
-										<button class="text-xs text-red-300 hover:text-red-200">Delete</button>
+										<button class="btn btn-ghost btn-ghost-danger btn-sm">Delete</button>
 									</form>
 								{/if}
 							</li>
 						{/each}
 					</ul>
 				{:else}
-					<p class="py-4 text-center text-sm text-slate-500">No activity yet.</p>
+					<p class="empty-text py-4">No activity yet.</p>
 				{/if}
 
 				{#if isEditor}
@@ -509,7 +509,7 @@
 		<!-- Sidebar -->
 		<aside class="space-y-4 lg:sticky lg:top-6 lg:self-start">
 			<div class="trip-sidebar-card">
-				<h2 class="mb-3 text-sm font-semibold text-white">Trip details</h2>
+				<h2 class="subsection-title mb-3">Trip details</h2>
 				<dl class="trip-sidebar-dl">
 					<div>
 						<dt>Status</dt>
@@ -550,10 +550,10 @@
 
 			{#if typeCounts.length}
 				<div class="trip-sidebar-card">
-					<h2 class="mb-3 text-sm font-semibold text-white">Plans by type</h2>
+					<h2 class="subsection-title mb-3">Plans by type</h2>
 					<ul class="space-y-2">
 						{#each typeCounts as t (t.type)}
-							<li class="flex items-center justify-between gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm ring-1 ring-white/5">
+							<li class="list-item-compact flex items-center justify-between gap-2 text-sm">
 								<span class="flex items-center gap-2 text-slate-300">
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-indigo-300/80">{@html SEG[t.type].icon}</svg>
 									{SEG[t.type].label}
@@ -567,11 +567,11 @@
 
 			{#if isEditor && data.owner === true}
 				<div class="trip-sidebar-card">
-					<h2 class="mb-3 text-sm font-semibold text-white">Calendar feed</h2>
+					<h2 class="subsection-title mb-3">Calendar feed</h2>
 					{#if data.feedUrl}
 						<p class="text-sm leading-relaxed text-slate-400">Subscribe to this trip with any calendar app.</p>
 						<div class="mt-2 flex items-start gap-2">
-							<p class="flex-1 break-all rounded-lg bg-white/[0.03] px-2.5 py-2 font-mono text-[10px] leading-relaxed text-slate-300 ring-1 ring-white/5">{data.feedUrl}</p>
+							<p class="code-chip flex-1 px-2.5 text-[10px] leading-relaxed">{data.feedUrl}</p>
 							<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 						</div>
 						<div class="mt-3 flex flex-col gap-2">
@@ -597,7 +597,7 @@
 
 				{#if isEditor && data.owner === true && trip.startDate}
 					<div class="trip-sidebar-card">
-						<h2 class="mb-3 text-sm font-semibold text-white">Custom reminder</h2>
+						<h2 class="subsection-title mb-3">Custom reminder</h2>
 						<form method="POST" action="?/customReminder" class="flex flex-col gap-2">
 							<label for="customReminderOffset" class="text-xs text-slate-400">Remind me before start</label>
 							<select id="customReminderOffset" name="offsetMinutes" class="input text-sm">
@@ -614,20 +614,20 @@
 
 			{#if isEditor}
 				<div class="trip-sidebar-card">
-					<h2 class="mb-3 text-sm font-semibold text-white">Quick links</h2>
+					<h2 class="subsection-title mb-3">Quick links</h2>
 					<nav class="flex flex-col gap-1">
-						<a href={`/trips/${trip.id}/edit`} class="rounded-lg px-2.5 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Edit trip info</a>
-						<a href={`/trips/${trip.id}/calendar`} class="rounded-lg px-2.5 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Download calendar</a>
+						<a href={`/trips/${trip.id}/edit`} class="nav-link">Edit trip info</a>
+						<a href={`/trips/${trip.id}/calendar`} class="nav-link">Download calendar</a>
 						{#if data.owner === true}
-							<a href={`/trips/${trip.id}/share`} class="rounded-lg px-2.5 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Sharing settings</a>
+							<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>
 						{/if}
 				{#if isEditor && (data.policies?.length || data.availablePolicies?.length)}
 					<div class="trip-sidebar-card">
-						<h2 class="mb-3 text-sm font-semibold text-white">Insurance</h2>
+						<h2 class="subsection-title mb-3">Insurance</h2>
 						{#if data.policies?.length}
 						<ul class="space-y-2">
 							{#each data.policies as p (p.id)}
-							<li class="rounded-lg bg-white/[0.03] p-2.5 ring-1 ring-white/5">
+							<li class="list-item p-2.5">
 								<p class="text-sm font-medium text-white">{p.provider}</p>
 								{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
 								{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}

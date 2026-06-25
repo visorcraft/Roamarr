@@ -94,13 +94,15 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		flightCheckinLeadHours: 48,
 		documentExpiryLeadDays: 60,
 		emailNotifications: true,
-		webhookNotifications: false
+		webhookNotifications: false,
+		themeId: 'vibes'
 	});
 	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
 	expect(row.displayName).toBe('Ada');
 	expect(row.timezone).toBe('America/New_York');
 	expect(row.flightCheckinLeadHours).toBe(48);
 	expect(row.documentExpiryLeadDays).toBe(60);
+	expect(row.themeId).toBe('vibes');
 });
 
 test('update profile rejects invalid timezone', () => {
@@ -117,7 +119,8 @@ test('update profile rejects invalid timezone', () => {
 			flightCheckinLeadHours: 24,
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
-			webhookNotifications: true
+			webhookNotifications: true,
+			themeId: 'midnight-travels'
 		})
 	).toThrow('Invalid timezone');
 });
@@ -136,7 +139,8 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			flightCheckinLeadHours: -1,
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
-			webhookNotifications: true
+			webhookNotifications: true,
+			themeId: 'midnight-travels'
 		})
 	).toThrow('Flight check-in lead must be a non-negative integer');
 	expect(() =>
@@ -146,9 +150,30 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			flightCheckinLeadHours: 24,
 			documentExpiryLeadDays: 1.5,
 			emailNotifications: true,
-			webhookNotifications: true
+			webhookNotifications: true,
+			themeId: 'midnight-travels'
 		})
 	).toThrow('Document expiry lead must be a non-negative integer');
+});
+
+test('update profile rejects invalid theme', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db
+		.insert(users)
+		.values({ email: 'p-theme@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' })
+		.returning()
+		.get();
+	expect(() =>
+		_updateProfile(u.id, {
+			displayName: 'P',
+			timezone: 'UTC',
+			flightCheckinLeadHours: 24,
+			documentExpiryLeadDays: 90,
+			emailNotifications: true,
+			webhookNotifications: true,
+			themeId: 'not-a-theme'
+		})
+	).toThrow('Invalid theme');
 });
 
 test('update password requires old password and hashes new password', async () => {
@@ -291,7 +316,8 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 			displayName: 'Ada',
 			timezone: 'UTC',
 			flightCheckinLeadHours: '24',
-			documentExpiryLeadDays: '90'
+			documentExpiryLeadDays: '90',
+			themeId: 'red-velvet'
 		})
 	});
 	const locals = { user: u } as App.Locals;
@@ -300,6 +326,7 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Profile updated.', expect.any(Object));
+	expect(db.select().from(users).where(eq(users.id, u.id)).get()!.themeId).toBe('red-velvet');
 });
 
 test('updatePassword action sets a flash cookie and redirects', async () => {

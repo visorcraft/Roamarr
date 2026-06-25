@@ -3,12 +3,21 @@
 	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data, form } = $props();
+	let selectedThemeId = $state('midnight-travels');
+
+	$effect(() => {
+		selectedThemeId = data.user.themeId;
+	});
+
+	const selectedThemeName = $derived(
+		data.themes.find((theme) => theme.id === selectedThemeId)?.name ?? 'Midnight Travels'
+	);
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Your profile</h1>
-		<p class="mt-1 text-sm text-muted">{data.user.email}</p>
+		<h1 class="page-title">Your profile</h1>
+		<p class="page-subtitle">{data.user.email}</p>
 	</div>
 </header>
 
@@ -52,14 +61,44 @@
 			/>
 		</div>
 		<div class="field sm:col-span-2">
-			<label class="flex items-center gap-2 text-sm text-slate-300">
-				<input type="checkbox" name="emailNotifications" checked={data.user.emailNotifications} class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500" />
+			<div class="flex flex-wrap items-center justify-between gap-2">
+				<span id="theme-label" class="label">Theme</span>
+				<span class="badge badge-brand">{selectedThemeName}</span>
+			</div>
+			<div class="theme-option-grid" role="radiogroup" aria-labelledby="theme-label">
+				{#each data.themes as theme (theme.id)}
+					<label class="theme-option">
+						<input
+							type="radio"
+							name="themeId"
+							value={theme.id}
+							bind:group={selectedThemeId}
+						/>
+						<span class="theme-option-preview theme-preview" data-theme={theme.id} aria-hidden="true">
+							<span class="theme-option-sidebar"></span>
+							<span class="theme-option-surface">
+								<span class="theme-option-line"></span>
+								<span class="theme-option-line theme-option-line-muted"></span>
+								<span class="theme-option-accent"></span>
+							</span>
+						</span>
+						<span class="min-w-0 flex-1">
+							<span class="block font-semibold text-white">{theme.name}</span>
+							<span class="mt-1 block text-xs text-slate-400">{theme.description}</span>
+						</span>
+					</label>
+				{/each}
+			</div>
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="checkbox-label">
+				<input type="checkbox" name="emailNotifications" checked={data.user.emailNotifications} class="checkbox" />
 				Email notifications
 			</label>
 		</div>
 		<div class="field sm:col-span-2">
-			<label class="flex items-center gap-2 text-sm text-slate-300">
-				<input type="checkbox" name="webhookNotifications" checked={data.user.webhookNotifications} class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500" />
+			<label class="checkbox-label">
+				<input type="checkbox" name="webhookNotifications" checked={data.user.webhookNotifications} class="checkbox" />
 				Webhook notifications
 			</label>
 		</div>
@@ -93,9 +132,9 @@
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Active sessions</h2>
 	{#if data.sessions.length}
-		<ul class="mt-4 divide-y divide-white/5">
+		<ul class="mt-4 list-stack">
 			{#each data.sessions as s (s.id)}
-				<li class="flex flex-wrap items-center justify-between gap-3 py-3">
+				<li class="list-item flex flex-wrap items-center justify-between gap-3">
 					<div class="text-sm">
 						<p class="font-medium text-white">
 							{s.current ? 'This session' : `Session ${s.id}`}
@@ -108,12 +147,12 @@
 					</div>
 					<form method="POST" action="?/revokeSession">
 						<input type="hidden" name="id" value={s.id} />
-						<button class="btn btn-ghost text-red-300 hover:text-red-200">Revoke</button>
+						<button class="btn btn-ghost btn-ghost-danger">Revoke</button>
 					</form>
 				</li>
 			{/each}
 		</ul>
 	{:else}
-		<p class="mt-4 text-sm text-slate-500">No active sessions.</p>
+		<p class="empty-text mt-4 text-left">No active sessions.</p>
 	{/if}
 </section>

@@ -8,7 +8,7 @@
 		children: Snippet;
 	}
 
-	let { message, children, type = 'submit', class: className = '', ...rest }: Props = $props();
+	let { message, children, type = 'submit', class: className = 'btn btn-ghost', ...rest }: Props = $props();
 </script>
 
 <button {...rest} {type} class={className} onclick={confirmHandler(message)}>

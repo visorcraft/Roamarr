@@ -5,8 +5,8 @@ import EmptyState from './EmptyState.svelte';
 test('renders message with default icon', () => {
 	const { body } = render(EmptyState, { props: { message: 'Nothing here yet.' } });
 	expect(body).toContain('Nothing here yet.');
-	expect(body).toContain('card');
-	expect(body).toContain('rounded-full');
+	expect(body).toContain('empty-state');
+	expect(body).toContain('empty-icon');
 	// Default plus icon
 	expect(body).toContain('<circle');
 	expect(body).not.toContain('Action');
@@ -15,9 +15,8 @@ test('renders message with default icon', () => {
 test('applies card styling and centering classes', () => {
 	const { body } = render(EmptyState, { props: { message: 'Nothing here.' } });
 	expect(body).toContain('Nothing here.');
-	expect(body).toContain('place-items-center');
-	expect(body).toContain('text-center');
-	expect(body).toContain('p-12');
+	expect(body).toContain('empty-state');
+	expect(body).toContain('empty-icon');
 });
 
 test('renders action button when href and label provided', () => {

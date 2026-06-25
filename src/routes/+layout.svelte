@@ -45,31 +45,42 @@
 				? 'h-9 w-9'
 				: 'h-8 w-8'}"
 		>
-			<svg viewBox="0 0 24 24" fill="currentColor" class="h-4.5 w-4.5 text-white" aria-hidden="true">
+			<svg
+				viewBox="0 0 24 24"
+				fill="currentColor"
+				class="h-4.5 w-4.5 text-white"
+				style="color: var(--theme-accent-text)"
+				aria-hidden="true"
+			>
 				<polygon points="3 11 22 2 13 21 11 13 3 11" />
 			</svg>
 		</span>
-		<span class="font-display text-lg font-extrabold tracking-tight text-white">
+		<span class="font-display text-lg font-extrabold text-white">
 			{data.instanceName ?? 'Roamarr'}
 		</span>
 	</a>
 {/snippet}
 
-{#key data.flash}
-	<Toast message={data.flash ?? ''} />
-{/key}
+<svelte:head>
+	<meta name="theme-color" content={data.themeColor} />
+</svelte:head>
 
-{#if standalone}
-	<div class="flex min-h-screen flex-col">
-		<header class="flex items-center px-5 py-4 sm:px-8">
-			{@render brand('lg')}
-		</header>
-		<main class="grid flex-1 place-items-center px-4 py-8">
-			{@render children()}
-		</main>
-	</div>
-{:else}
-	<div class="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+<div class="theme-root" data-theme={data.themeId}>
+	{#key data.flash}
+		<Toast message={data.flash ?? ''} />
+	{/key}
+
+	{#if standalone}
+		<div class="flex min-h-screen flex-col">
+			<header class="flex items-center px-5 py-4 sm:px-8">
+				{@render brand('lg')}
+			</header>
+			<main class="grid flex-1 place-items-center px-4 py-8">
+				{@render children()}
+			</main>
+		</div>
+	{:else}
+		<div class="min-h-dvh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
 		<!-- Backdrop (mobile) -->
 		{#if open}
 			<button
@@ -138,7 +149,7 @@
 					</a>
 					<form method="POST" action="/logout">
 						<button
-							class="grid h-8 w-8 place-items-center rounded-md text-slate-400 transition hover:bg-white/5 hover:text-red-300"
+							class="icon-button icon-button-danger h-8 w-8"
 							title="Sign out"
 							aria-label="Sign out"
 						>
@@ -169,7 +180,7 @@
 				class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-white/10 bg-canvas/70 px-4 backdrop-blur-xl lg:hidden"
 			>
 				<button
-					class="grid h-9 w-9 place-items-center rounded-md text-slate-300 hover:bg-white/5"
+					class="icon-button text-slate-300"
 					aria-label="Open menu"
 					onclick={() => (open = true)}
 				>
@@ -191,5 +202,6 @@
 				</div>
 			</main>
 		</div>
-	</div>
-{/if}
+		</div>
+	{/if}
+</div>

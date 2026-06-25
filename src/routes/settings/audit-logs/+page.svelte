@@ -29,8 +29,8 @@
 </script>
 
 <header>
-	<h1 class="text-3xl font-extrabold text-white">Audit log</h1>
-	<p class="mt-1 text-sm text-muted">Security-relevant events across the instance.</p>
+	<h1 class="page-title">Audit log</h1>
+	<p class="page-subtitle">Security-relevant events across the instance.</p>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
@@ -100,7 +100,7 @@
 							{log.entityType}:{log.entityId}
 						</td>
 						<td>
-							<code class="rounded bg-slate-950/50 px-2 py-1 text-xs text-slate-300">
+							<code class="code-chip px-2 py-1">
 								{JSON.stringify(log.meta)}
 							</code>
 						</td>

@@ -25,10 +25,10 @@
 	);
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Cards</h1>
-		<p class="mt-1 text-sm text-muted">
+		<h1 class="page-title">Cards</h1>
+		<p class="page-subtitle">
 			{data.cards.length} card{data.cards.length === 1 ? '' : 's'} and their travel benefits
 		</p>
 	</div>
@@ -47,7 +47,7 @@
 						</div>
 						{#if c.last4}<div class="mt-1 font-mono text-xs text-slate-400">…{c.last4}</div>{/if}
 					</div>
-					<div class="flex gap-1">
+					<div class="action-row gap-1">
 						<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingCardId = c.id)}>Edit</button>
 						<form method="POST" action="?/deleteCard">
 							<input type="hidden" name="id" value={c.id} />
@@ -91,7 +91,7 @@
 				{#if c.benefits.length}
 					<ul class="mt-3 space-y-1.5">
 						{#each c.benefits as b (b.id)}
-							<li class="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 ring-1 ring-white/5">
+							<li class="list-item-compact flex items-center justify-between gap-3">
 								{#if editingBenefitId === b.id}
 									<form method="POST" action="?/updateBenefit" class="flex flex-1 flex-wrap items-end gap-3">
 										<input type="hidden" name="id" value={b.id} />
@@ -117,7 +117,7 @@
 											<label class="label" for={`benefitNotes-${b.id}`}>Notes</label>
 											<input id={`benefitNotes-${b.id}`} name="notes" value={b.notes ?? ''} placeholder="Optional" class="input" />
 										</div>
-										<div class="flex gap-2">
+										<div class="action-row">
 											<button type="button" class="btn btn-ghost" onclick={() => (editingBenefitId = null)}>Cancel</button>
 											<button class="btn btn-primary">Update</button>
 										</div>
@@ -126,7 +126,7 @@
 									<span class="text-sm text-slate-300">{benefitLabel[b.benefitType] ?? b.benefitType}</span>
 									<div class="flex items-center gap-3">
 										<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
-										<div class="flex gap-1">
+										<div class="action-row gap-1">
 											<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingBenefitId = b.id)}>Edit</button>
 											<form method="POST" action="?/deleteBenefit">
 												<input type="hidden" name="id" value={b.id} />
@@ -176,8 +176,8 @@
 		{/each}
 	</div>
 {:else}
-	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
-		<div class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">
+	<div class="empty-state">
+		<div class="empty-icon">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" /></svg>
 		</div>
 		<p class="text-slate-300">No cards yet — add one below to track its benefits.</p>

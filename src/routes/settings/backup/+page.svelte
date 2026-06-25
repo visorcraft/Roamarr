@@ -3,8 +3,8 @@
 	let confirmed = $state(false);
 </script>
 
-<h1 class="text-3xl font-extrabold text-white">Backup & restore</h1>
-<p class="mt-1 text-sm text-muted">Download a snapshot of the database or restore from a previous backup.</p>
+<h1 class="page-title">Backup & restore</h1>
+<p class="page-subtitle">Download a snapshot of the database or restore from a previous backup.</p>
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Download backup</h2>
@@ -27,8 +27,8 @@
 			<label class="label" for="file">Backup file</label>
 			<input id="file" name="file" type="file" accept=".db,.sqlite,.sqlite3" class="input" required />
 		</div>
-		<label class="flex items-start gap-3 text-sm text-slate-300">
-			<input type="checkbox" bind:checked={confirmed} class="mt-0.5 h-4 w-4 rounded border-white/20 bg-white/5 accent-indigo-500" />
+		<label class="checkbox-label items-start gap-3">
+			<input type="checkbox" bind:checked={confirmed} class="checkbox mt-0.5" />
 			<span>I understand this will overwrite the current database and requires a restart.</span>
 		</label>
 		<button type="submit" class="btn btn-danger" disabled={!confirmed}>Restore backup</button>

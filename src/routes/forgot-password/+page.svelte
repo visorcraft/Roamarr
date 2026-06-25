@@ -3,8 +3,8 @@
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
-	<h1 class="text-2xl font-extrabold text-white">Reset password</h1>
-	<p class="mt-1 text-sm text-muted">Enter your email and we’ll send you a reset link.</p>
+	<h1 class="auth-title">Reset password</h1>
+	<p class="page-subtitle">Enter your email and we’ll send you a reset link.</p>
 
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 	{#if form?.success}<p class="notice notice-success mt-4">If an account exists, a reset link has been sent.</p>{/if}

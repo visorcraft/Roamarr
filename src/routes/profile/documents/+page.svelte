@@ -14,10 +14,10 @@
 	};
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Travel documents</h1>
-		<p class="mt-1 text-sm text-muted">
+		<h1 class="page-title">Travel documents</h1>
+		<p class="page-subtitle">
 			{data.documents.length} document{data.documents.length === 1 ? '' : 's'} on file
 		</p>
 	</div>
@@ -26,9 +26,9 @@
 {#if data.documents.length}
 	<section class="card mt-6 p-5">
 		<h2 class="section-title mb-3">Your documents</h2>
-		<ul class="space-y-2">
+		<ul class="list-stack">
 			{#each data.documents as d (d.id)}
-				<li class="rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/5">
+				<li class="list-item">
 					{#if editingId === d.id}
 						<form method="POST" action="?/update" class="grid gap-3 sm:grid-cols-2">
 							<input type="hidden" name="id" value={d.id} />
@@ -64,7 +64,7 @@
 						</form>
 					{:else}
 						<div class="flex items-start gap-3">
-							<span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
+							<span class="list-icon">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4.5 w-4.5"><path d="M5 22h14a2 2 0 0 0 2-2V7l-5-5H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /></svg>
 							</span>
 							<div class="min-w-0 flex-1">
@@ -73,8 +73,8 @@
 									{#if d.issuingAuthority}<span class="truncate text-sm text-slate-400">{d.issuingAuthority}</span>{/if}
 								</div>
 								<div class="mt-1 font-mono text-xs text-slate-300">{d.number ?? '—'}</div>
-								<div class="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-slate-500">
-									{#if d.expiresOn}<span>Expires <span class="font-mono text-slate-400">{d.expiresOn}</span></span>{/if}
+								<div class="meta mt-0.5 flex flex-wrap items-center gap-x-3">
+									{#if d.expiresOn}<span>Expires <span class="meta-strong">{d.expiresOn}</span></span>{/if}
 									{#if d.notes}<span class="truncate">{d.notes}</span>{/if}
 								</div>
 							</div>

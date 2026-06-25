@@ -8,6 +8,7 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
+import { THEMES, isThemeId, normalizeThemeId } from '$lib/themes';
 import type { PageServerLoad } from './$types';
 
 function tokenHash(token: string) {
@@ -31,6 +32,7 @@ export function _updateProfile(
 		documentExpiryLeadDays: number;
 		emailNotifications: boolean;
 		webhookNotifications: boolean;
+		themeId: string;
 	}
 ) {
 	requireOwnedUser(userId);
@@ -38,6 +40,7 @@ export function _updateProfile(
 	if (!validTimezone(i.timezone)) throw new Error('Invalid timezone');
 	if (!validLead(i.flightCheckinLeadHours)) throw new Error('Flight check-in lead must be a non-negative integer');
 	if (!validLead(i.documentExpiryLeadDays)) throw new Error('Document expiry lead must be a non-negative integer');
+	if (!isThemeId(i.themeId)) throw new Error('Invalid theme');
 	db.update(users)
 		.set({
 			displayName: i.displayName,
@@ -45,7 +48,8 @@ export function _updateProfile(
 			flightCheckinLeadHours: i.flightCheckinLeadHours,
 			documentExpiryLeadDays: i.documentExpiryLeadDays,
 			emailNotifications: i.emailNotifications,
-			webhookNotifications: i.webhookNotifications
+			webhookNotifications: i.webhookNotifications,
+			themeId: i.themeId
 		})
 		.where(eq(users.id, userId))
 		.run();
@@ -89,8 +93,10 @@ export const load: PageServerLoad = ({ locals, cookies }) => {
 			flightCheckinLeadHours: u.flightCheckinLeadHours,
 			documentExpiryLeadDays: u.documentExpiryLeadDays,
 			emailNotifications: u.emailNotifications,
-			webhookNotifications: u.webhookNotifications
+			webhookNotifications: u.webhookNotifications,
+			themeId: normalizeThemeId(u.themeId)
 		},
+		themes: THEMES,
 		sessions: userSessions
 	};
 };
@@ -105,6 +111,7 @@ export const actions: Actions = {
 		const documentExpiryLeadDays = Number(f.get('documentExpiryLeadDays') ?? 90);
 		const emailNotifications = f.get('emailNotifications') === 'on';
 		const webhookNotifications = f.get('webhookNotifications') === 'on';
+		const themeId = String(f.get('themeId') ?? u.themeId);
 		try {
 			_updateProfile(u.id, {
 				displayName,
@@ -112,7 +119,8 @@ export const actions: Actions = {
 				flightCheckinLeadHours,
 				documentExpiryLeadDays,
 				emailNotifications,
-				webhookNotifications
+				webhookNotifications,
+				themeId
 			});
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });

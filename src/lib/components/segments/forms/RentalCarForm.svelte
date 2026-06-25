@@ -134,7 +134,7 @@
 			id="detail_sameAsPickup"
 			name="detail_sameAsPickup"
 			type="checkbox"
-			class="h-4 w-4"
+			class="checkbox"
 			checked={sameAsPickup}
 			onchange={(event) => {
 				sameAsPickup = event.currentTarget.checked;

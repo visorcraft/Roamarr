@@ -10,10 +10,10 @@
 	]);
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Welcome back, {firstName}</h1>
-		<p class="mt-1 text-sm text-muted">
+		<h1 class="page-title">Welcome back, {firstName}</h1>
+		<p class="page-subtitle">
 			{#if data.stats.unread > 0}
 				You have <a href="/notifications" class="link">{data.stats.unread} unread alert{data.stats.unread === 1 ? '' : 's'}</a>.
 			{:else}
@@ -29,9 +29,9 @@
 
 <section class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 	{#each stats as s (s.label)}
-		<a href={s.href} class="card group p-5 transition hover:ring-white/20">
-			<div class="text-4xl font-extrabold tracking-tight {s.accent}">{s.value}</div>
-			<div class="mt-1 text-sm font-medium text-slate-400 group-hover:text-slate-300">{s.label}</div>
+		<a href={s.href} class="metric-card group transition hover:ring-white/20">
+			<div class="text-4xl font-extrabold {s.accent}">{s.value}</div>
+			<div class="metric-label group-hover:text-slate-300">{s.label}</div>
 		</a>
 	{/each}
 </section>
@@ -60,7 +60,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="py-6 text-center text-sm text-slate-500">No upcoming trips yet.</p>
+			<p class="empty-text">No upcoming trips yet.</p>
 		{/if}
 	</section>
 
@@ -79,7 +79,7 @@
 				{/each}
 			</ul>
 		{:else}
-			<p class="py-6 text-center text-sm text-slate-500">Nothing expiring in the next few months.</p>
+			<p class="empty-text">Nothing expiring in the next few months.</p>
 		{/if}
 	</section>
 </div>

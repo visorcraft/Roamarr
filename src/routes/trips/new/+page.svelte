@@ -4,8 +4,8 @@
 
 <header>
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">New trip</h1>
-		<p class="mt-1 text-sm text-muted">Plan a new journey and set who can see it.</p>
+		<h1 class="page-title">New trip</h1>
+		<p class="page-subtitle">Plan a new journey and set who can see it.</p>
 	</div>
 </header>
 

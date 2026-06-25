@@ -6,8 +6,8 @@
 </script>
 
 <header>
-	<h1 class="text-3xl font-extrabold text-white">Users</h1>
-	<p class="mt-1 text-sm text-muted">Manage accounts, roles, and access.</p>
+	<h1 class="page-title">Users</h1>
+	<p class="page-subtitle">Manage accounts, roles, and access.</p>
 </header>
 
 {#if form?.error}
@@ -18,31 +18,31 @@
 
 <section class="card mt-8 p-5 sm:p-6">
 	<div class="overflow-x-auto">
-		<table class="w-full text-left text-sm">
+		<table class="table">
 			<thead>
-				<tr class="border-b border-white/10 text-slate-400">
-					<th class="py-3 pr-4 font-medium">User</th>
-					<th class="py-3 pr-4 font-medium">Role</th>
-					<th class="py-3 pr-4 font-medium">Status</th>
-					<th class="py-3 pr-4 font-medium">Joined</th>
-					<th class="py-3 text-right font-medium"></th>
+				<tr>
+					<th>User</th>
+					<th>Role</th>
+					<th>Status</th>
+					<th>Joined</th>
+					<th class="text-right"></th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each data.users as user (user.id)}
-					<tr class="border-b border-white/5 last:border-0">
-						<td class="py-3 pr-4">
+					<tr>
+						<td>
 							<div class="font-medium text-white">{user.displayName}</div>
 							<div class="text-xs text-slate-500">{user.email}</div>
 						</td>
-						<td class="py-3 pr-4">
+						<td>
 							{#if user.role === 'admin'}
 								<span class="badge badge-brand">Admin</span>
 							{:else}
 								<span class="badge badge-slate">User</span>
 							{/if}
 						</td>
-						<td class="py-3 pr-4">
+						<td>
 							<div class="flex flex-wrap gap-1">
 								{#if user.disabled}
 									<span class="badge badge-red">Disabled</span>
@@ -54,8 +54,8 @@
 								{/if}
 							</div>
 						</td>
-						<td class="py-3 pr-4 text-slate-400">{user.createdAt}</td>
-						<td class="py-3 text-right">
+						<td class="text-slate-400">{user.createdAt}</td>
+						<td class="text-right">
 							<button
 								type="button"
 								class="btn btn-ghost btn-ghost-indigo"
@@ -66,7 +66,7 @@
 						</td>
 					</tr>
 					{#if editingId === user.id}
-						<tr class="border-b border-white/5 last:border-0">
+						<tr>
 							<td colspan="5" class="bg-white/[0.02] px-4 py-4">
 								<form
 									method="POST"
@@ -82,7 +82,7 @@
 									<input type="hidden" name="userId" value={user.id} />
 
 									<div>
-										<h3 class="text-sm font-semibold text-white">Account</h3>
+										<h3 class="subsection-title">Account</h3>
 										<div class="mt-3 grid gap-4 sm:grid-cols-2">
 											<div class="field">
 												<label class="label" for={`displayName-${user.id}`}>Display name</label>
@@ -109,7 +109,7 @@
 									</div>
 
 									<div>
-										<h3 class="text-sm font-semibold text-white">Access</h3>
+										<h3 class="subsection-title">Access</h3>
 										<div class="mt-3 grid gap-4 sm:grid-cols-2">
 											<div class="field">
 												<label class="label" for={`role-${user.id}`}>Role</label>
@@ -119,23 +119,23 @@
 												</select>
 											</div>
 											<div class="field flex items-end">
-												<label class="flex items-center gap-2 text-sm text-slate-300">
+												<label class="checkbox-label">
 													<input
 														type="checkbox"
 														name="enabled"
 														checked={!user.disabled}
-														class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
+														class="checkbox"
 													/>
 													Account enabled
 												</label>
 											</div>
 											<div class="field sm:col-span-2">
-												<label class="flex items-center gap-2 text-sm text-slate-300">
+												<label class="checkbox-label">
 													<input
 														type="checkbox"
 														name="mustResetPassword"
 														checked={user.mustResetPassword}
-														class="h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500"
+														class="checkbox"
 													/>
 													Require password change on next login
 												</label>
@@ -147,7 +147,7 @@
 									</div>
 
 									<div>
-										<h3 class="text-sm font-semibold text-white">Password</h3>
+										<h3 class="subsection-title">Password</h3>
 										<p class="mt-1 field-help">
 											Set a new password directly, or send a reset link instead. Leave the fields blank to keep the current password.
 										</p>

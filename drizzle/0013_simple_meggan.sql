@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `theme_id` text DEFAULT 'midnight-travels' NOT NULL;

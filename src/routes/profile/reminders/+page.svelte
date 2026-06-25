@@ -10,10 +10,10 @@
 	};
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
-		<h1 class="text-3xl font-extrabold text-white">Reminders</h1>
-		<p class="mt-1 text-sm text-muted">Scheduled alerts for trips and documents.</p>
+		<h1 class="page-title">Reminders</h1>
+		<p class="page-subtitle">Scheduled alerts for trips and documents.</p>
 	</div>
 </header>
 
@@ -38,7 +38,7 @@
 		{/each}
 	</ul>
 {:else}
-	<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
+	<div class="empty-state">
 		<p class="text-slate-300">No reminders scheduled.</p>
 	</div>
 {/if}

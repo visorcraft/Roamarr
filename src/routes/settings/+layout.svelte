@@ -19,14 +19,12 @@
 		href === '/settings' ? path === '/settings' : path.startsWith(href);
 </script>
 
-<nav class="-mb-px flex gap-6 overflow-x-auto border-b border-white/10 text-sm font-medium">
+<nav class="tab-list">
 	{#each tabs as tab (tab.href)}
 		<a
 			href={tab.href}
 			aria-current={isActive(tab.href) ? 'page' : undefined}
-			class="whitespace-nowrap border-b-2 px-1 pb-3 transition {isActive(tab.href)
-				? 'border-indigo-400 text-indigo-300'
-				: 'border-transparent text-slate-400 hover:border-white/20 hover:text-white'}"
+			class="tab-link {isActive(tab.href) ? 'tab-link-active' : ''}"
 		>
 			{tab.label}
 		</a>

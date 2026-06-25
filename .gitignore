@@ -17,6 +17,9 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+.podman.env
+podman.env
+deploy/podman/roamarr.env
 CLAUDE.md
 AGENTS.md
 GEMINI.md
@@ -31,3 +34,14 @@ vite.config.ts.timestamp-*
 *.db-wal
 *.db-shm
 /data
+
+# Logs and local QA artifacts
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.playwright-mcp/
+playwright-report/
+test-results/
+roamarr-*.png

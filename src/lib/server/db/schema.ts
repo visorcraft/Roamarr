@@ -32,6 +32,7 @@ export const users = sqliteTable(
 		documentExpiryLeadDays: integer('document_expiry_lead_days').notNull().default(90),
 		emailNotifications: integer('email_notifications', { mode: 'boolean' }).notNull().default(true),
 		webhookNotifications: integer('webhook_notifications', { mode: 'boolean' }).notNull().default(true),
+		themeId: text('theme_id').notNull().default('midnight-travels'),
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({

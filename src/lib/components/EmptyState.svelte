@@ -11,10 +11,8 @@
 	let { message, icon, actionHref, actionLabel }: Props = $props();
 </script>
 
-<div class="card mt-6 grid place-items-center gap-3 p-12 text-center">
-	<div
-		class="grid h-12 w-12 place-items-center rounded-full bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20"
-	>
+<div class="empty-state">
+	<div class="empty-icon">
 		{#if icon}
 			{@render icon()}
 		{:else}

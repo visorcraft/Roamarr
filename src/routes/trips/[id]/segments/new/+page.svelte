@@ -5,14 +5,14 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<header class="flex flex-wrap items-end justify-between gap-4">
+<header class="page-header">
 	<div>
 		<a href={`/trips/${data.trip.id}`} class="mb-2 inline-flex items-center gap-1.5 text-sm text-slate-400 transition hover:text-white">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
 			Back to {data.trip.name}
 		</a>
-		<h1 class="text-3xl font-extrabold text-white">Add segment</h1>
-		<p class="mt-1 text-sm text-muted">Choose what you are adding to this trip.</p>
+		<h1 class="page-title">Add segment</h1>
+		<p class="page-subtitle">Choose what you are adding to this trip.</p>
 	</div>
 	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>
 </header>

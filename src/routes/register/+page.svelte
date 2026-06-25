@@ -6,8 +6,8 @@
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
-	<h1 class="text-2xl font-extrabold text-white">Create an account</h1>
-	<p class="mt-1 text-sm text-muted">Join your travel HQ.</p>
+	<h1 class="auth-title">Create an account</h1>
+	<p class="page-subtitle">Join your travel HQ.</p>
 
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 

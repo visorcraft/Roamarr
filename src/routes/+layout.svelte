@@ -1,8 +1,9 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import Toast from '$lib/components/Toast.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
@@ -13,6 +14,9 @@
 	let open = $state(false);
 	let hamburgerButton = $state<HTMLButtonElement | null>(null);
 	let firstNavLink = $state<HTMLAnchorElement | null>(null);
+	let searchInput = $state<HTMLInputElement | null>(null);
+	let searchValue = $state('');
+	let searchTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 
 	const toastMessage = $derived(
 		typeof data.flash === 'object' && data.flash !== null ? data.flash.message : (data.flash ?? '')
@@ -24,6 +28,10 @@
 	);
 
 	onMount(() => installPickerInputs());
+
+	onDestroy(() => {
+		if (searchTimer) clearTimeout(searchTimer);
+	});
 
 	let wasOpen = false;
 
@@ -43,11 +51,61 @@
 		};
 	});
 
-	function handleKeydown(event: KeyboardEvent) {
+	$effect(() => {
+		if (!browser) return;
+		const pathname = page.url.pathname;
+		const q = page.url.searchParams.get('q') ?? '';
+		if (searchInput === document.activeElement) return;
+		if (pathname === '/search') {
+			searchValue = q;
+		} else if (searchValue) {
+			searchValue = '';
+		}
+	});
+
+	function goToSearch() {
+		const q = searchValue.trim();
+		if (q) {
+			goto(`/search?q=${encodeURIComponent(q)}`, { replaceState: true });
+		} else {
+			goto('/search', { replaceState: true });
+		}
+	}
+
+	function handleSearchInput() {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			goToSearch();
+		}, 300);
+	}
+
+	function handleSearchKeydown(event: KeyboardEvent) {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			if (searchTimer) clearTimeout(searchTimer);
+			goToSearch();
+		}
+	}
+
+	function isEditableElement(el: HTMLElement): boolean {
+		if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+		if (el.isContentEditable) return true;
+		if (el.getAttribute('role') === 'textbox') return true;
+		return false;
+	}
+
+	function handleGlobalKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape' && open) {
 			event.preventDefault();
 			open = false;
+			return;
 		}
+		if (event.key !== '/') return;
+		const target = event.target as HTMLElement | null;
+		if (!target || !searchInput) return;
+		if (isEditableElement(target)) return;
+		event.preventDefault();
+		searchInput.focus();
 	}
 
 	function setFirstNavLink(node: HTMLElement, index: number) {
@@ -114,11 +172,57 @@
 	</a>
 {/snippet}
 
+{#snippet userMenu()}
+	<details class="app-user-menu relative">
+		<summary
+			class="app-user-summary flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 transition"
+			aria-label="User menu"
+		>
+			<span class="app-avatar grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
+				>{initials}</span
+			>
+			<span class="hidden min-w-0 text-left sm:block">
+				<span class="app-user-name block max-w-36 truncate text-sm font-semibold">{data.user?.displayName}</span>
+				<span class="app-user-role block max-w-36 truncate text-xs">{data.user?.role}</span>
+			</span>
+		</summary>
+		<div class="app-user-menu-panel absolute right-0 top-[calc(100%+0.5rem)] z-30 w-72 overflow-hidden rounded-lg border shadow-2xl">
+			<div class="flex items-center gap-3 border-b p-4">
+				<span class="app-avatar grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-bold"
+					>{initials}</span
+				>
+				<div class="min-w-0">
+					<p class="app-user-name truncate text-sm font-semibold">{data.user?.displayName}</p>
+					<p class="app-user-role truncate text-xs">{data.user?.email}</p>
+				</div>
+			</div>
+			<div class="p-2">
+				<a href="/profile" class="app-user-menu-item">
+					<Icon name="user" class="h-4.5 w-4.5" />
+					<span>Profile</span>
+				</a>
+				{#if data.user?.role === 'admin'}
+					<a href="/settings" class="app-user-menu-item">
+						<Icon name="settings" class="h-4.5 w-4.5" />
+						<span>Settings</span>
+					</a>
+				{/if}
+				<form method="POST" action="/logout">
+					<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+						<Icon name="logout" class="h-4.5 w-4.5" />
+						<span>Sign Out</span>
+					</button>
+				</form>
+			</div>
+		</div>
+	</details>
+{/snippet}
+
 <svelte:head>
 	<meta name="theme-color" content={data.themeColor} />
 </svelte:head>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 	<div class="theme-root" data-theme={data.themeId}>
 	{#key toastMessage}
@@ -180,54 +284,62 @@
 				{/each}
 			</nav>
 
-			<!-- User footer -->
+			<!-- App footer -->
 			<div class="app-sidebar-footer border-t p-3">
-				<div class="flex items-center gap-3 rounded-lg px-2 py-2">
-					<a
-						href="/profile"
-						class="app-user-link flex min-w-0 flex-1 items-center gap-3 rounded-md transition"
-						title="Your profile"
-					>
-						<span
-							class="app-avatar grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold"
-							>{initials}</span
-						>
-						<div class="min-w-0 flex-1">
-							<div class="app-user-name truncate text-sm font-semibold">{data.user?.displayName}</div>
-							<div class="app-user-role text-xs capitalize">{data.user?.role}</div>
-						</div>
-					</a>
-					<form method="POST" action="/logout">
-						<button
-							class="icon-button icon-button-danger h-8 w-8"
-							title="Sign out"
-							aria-label="Sign out"
-						>
-							<Icon name="logout" class="h-4.5 w-4.5" />
-						</button>
-					</form>
-				</div>
+				<a
+					href="/settings/about"
+					class="app-version-link flex items-center gap-3 rounded-lg px-3 py-2 transition"
+					title="{data.appName} {data.appVersion}"
+				>
+					<Icon name="info" class="h-5 w-5" />
+					<span class="min-w-0">
+						<span class="app-version-name block truncate text-sm font-semibold">{data.appName}</span>
+						<span class="app-version-number block font-mono text-xs">{data.appVersion}</span>
+					</span>
+				</a>
 			</div>
 		</aside>
 
 		<!-- Main column -->
 		<div class="flex min-h-dvh min-w-0 flex-col">
-			<!-- Mobile top bar -->
+			<!-- App top bar -->
 			<header
-				class="app-topbar sticky top-0 z-20 flex h-14 items-center gap-3 border-b px-4 backdrop-blur-xl lg:hidden"
+				class="app-topbar sticky top-0 z-20 flex min-h-16 items-center gap-3 border-b px-4 py-2 backdrop-blur-xl sm:px-6 lg:px-8"
 			>
 				<button
 					bind:this={hamburgerButton}
-					class="icon-button text-slate-300"
+					class="icon-button lg:hidden"
 					aria-label="Open menu"
 					onclick={() => (open = true)}
 				>
 					<Icon name="menu" class="h-5 w-5" />
 				</button>
-				{@render brand('sm')}
+				<div class="hidden min-w-0 sm:block lg:hidden">
+					{@render brand('sm')}
+				</div>
+				<form
+					class="app-search flex min-w-0 flex-1 items-center gap-2 rounded-full px-3 py-2"
+					role="search"
+					onsubmit={(event) => event.preventDefault()}
+				>
+					<label class="sr-only" for="app-shell-search">Search</label>
+					<Icon name="search" class="h-4.5 w-4.5" />
+					<input
+						bind:this={searchInput}
+						bind:value={searchValue}
+						oninput={handleSearchInput}
+						onkeydown={handleSearchKeydown}
+						id="app-shell-search"
+						type="search"
+						class="app-search-input min-w-0 flex-1 bg-transparent text-sm outline-none"
+						placeholder="Search trips, plans, documents"
+						autocomplete="off"
+					/>
+				</form>
+				{@render userMenu()}
 			</header>
 
-			<main class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+			<main class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
 				<div class="mx-auto w-full max-w-[96rem]">
 					{@render children()}
 				</div>

@@ -45,7 +45,8 @@ export function makeTrip(
 		.values({
 			ownerId: over.ownerId ?? 0,
 			name: over.name ?? `Test Trip ${n}`,
-			visibility: (over.visibility as 'private' | 'group' | 'public') ?? 'private',
+			defaultVisibility:
+				(over.defaultVisibility as 'private' | 'groups' | 'public') ?? 'private',
 			...over
 		})
 		.returning()
@@ -61,6 +62,7 @@ export function makeSegment(
 		.values({
 			tripId: over.tripId ?? 0,
 			type: (over.type as typeof segments.$inferSelect.type) ?? 'flight',
+			title: over.title ?? 'Segment',
 			status: (over.status as typeof segments.$inferSelect.status) ?? 'planned',
 			startAt: over.startAt ?? new Date().toISOString(),
 			...over

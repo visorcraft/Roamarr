@@ -100,7 +100,7 @@ function validateLinkForm(
 	const notes = v.optionalString(formData.get('notes'), 'notes', { max: 2000 });
 	const urlResult = httpUrl(formData.get('url'), 'url');
 	if (!urlResult.ok) v.addError('url', urlResult.error);
-	if (!v.ok()) return { errors: v.errors, message: v.failMessage() };
+	if (!v.ok() || !urlResult.ok) return { errors: v.errors, message: v.failMessage() };
 	return { label: label!, url: urlResult.value, notes };
 }
 

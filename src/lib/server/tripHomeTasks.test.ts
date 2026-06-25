@@ -8,8 +8,9 @@ vi.mock('./db', async () => {
 });
 
 import { addHomeTask, deleteHomeTask, listHomeTasks, toggleHomeTask } from './tripHomeTasks';
-import { tripHomeTasks, trips, users } from './db/schema';
+import { tripHomeTasks } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { makeUser, makeTrip } from '../../../tests/helpers';
 
 beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
@@ -19,9 +20,9 @@ beforeEach(() => {
 
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ht@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const other = db.insert(users).values({ email: 'oth@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const u = makeUser(db, { email: 'ht@x.c' });
+	const t = makeTrip(db, { ownerId: u.id, name: 'T' });
+	const other = makeUser(db, { email: 'oth@x.c' });
 	return { db, u, t, other };
 }
 

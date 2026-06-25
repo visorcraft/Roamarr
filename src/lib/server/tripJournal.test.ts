@@ -16,32 +16,26 @@ import {
 	updateJournalEntry,
 	deleteJournalEntry
 } from './tripJournal';
-import { users, trips, tripJournalEntries, tripShares, auditLogs } from './db/schema';
+import { tripJournalEntries, tripShares, auditLogs } from './db/schema';
 import { and, eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
+import { makeUser as makeUserHelper, makeTrip as makeTripHelper } from '../../../tests/helpers';
 
 function getDb() {
 	return (ctx as { db: import('./db').DB }).db;
 }
 
-let userCounter = 0;
 function makeUser() {
-	const n = userCounter++;
-	const email = `u${n}@x.c`;
-	return getDb()
-		.insert(users)
-		.values({ email, passwordHash: 'x', displayName: email })
-		.returning()
-		.get();
+	return makeUserHelper(getDb());
 }
 
-function makeTrip(ownerId: number, name = 'Trip') {
-	return getDb().insert(trips).values({ ownerId, name }).returning().get();
+function makeTrip(ownerId: number) {
+	return makeTripHelper(getDb(), { ownerId });
 }
 
 function makeEvent(
-	user: typeof users.$inferSelect,
+	user: { id: number; email: string },
 	params: Record<string, string>,
 	values: Record<string, string>
 ): RequestEvent {

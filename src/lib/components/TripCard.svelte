@@ -50,12 +50,13 @@
 			type="checkbox"
 			name="selected"
 			value={trip.id}
-			class="checkbox absolute top-3 right-3"
+			aria-label={`Select ${trip.name}`}
+			class="checkbox absolute top-4 right-4 z-10"
 			onclick={(e) => e.stopPropagation()}
 		/>
 	{/if}
 	<a href={`/trips/${trip.id}`} class="contents">
-		<div class="flex items-start justify-between gap-3">
+		<div class="flex items-start justify-between gap-3 {showCheckbox && !trip.isShared ? 'pr-7' : ''}">
 			<h2 class="section-title">
 				{#if trip.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
 				{trip.name}

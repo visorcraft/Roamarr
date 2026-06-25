@@ -193,36 +193,63 @@
 					</div>
 				</div>
 
-				<div class="flex flex-wrap gap-2 sm:justify-end">
-					<a href={`/trips/${trip.id}/calendar`} class="btn btn-ghost">
-						<Icon name="calendar" class="h-4 w-4" />
-						Calendar
-					</a>
-					<a href={`/trips/${trip.id}/print`} class="btn btn-ghost">
-						<Icon name="print" class="h-4 w-4" />
-						Print
-					</a>
-					{#if isEditor}
-						<a href={`/trips/${trip.id}/edit`} class="btn btn-ghost">Edit trip</a>
-						<form method="POST" action="?/duplicate">
-							<button class="btn btn-ghost">Duplicate</button>
-						</form>
-						{#if data.owner === true}
-							<form method="POST" action="?/toggleFavorite">
-								<button class="btn btn-ghost" title={trip.favorite ? 'Unfavorite' : 'Favorite'}>{trip.favorite ? '★ Favorited' : '☆ Favorite'}</button>
-							</form>
-							<form method="POST" action="?/toggleArchive">
-								<button class="btn btn-ghost">{trip.archived ? 'Unarchive' : 'Archive'}</button>
-							</form>
-							<a href={`/trips/${trip.id}/share`} class="btn btn-primary">
-								<Icon name="share" class="h-4 w-4" />
-								Share
-							</a>
-							{#if data.publicShareUrl}
-								<CopyButton text={data.publicShareUrl} class="btn btn-ghost" label="Copy public link" />
-							{/if}
-						{/if}
-					{/if}
+				<div class="flex justify-end sm:self-end">
+					<details class="app-user-menu relative">
+						<summary class="app-user-summary btn btn-primary flex cursor-pointer list-none items-center gap-2" aria-label="Trip actions">
+							<Icon name="more-horizontal" class="h-4 w-4" />
+							<span>Actions</span>
+						</summary>
+						<div class="app-user-menu-panel absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-lg border shadow-2xl">
+							<div class="p-2">
+								<a href={`/trips/${trip.id}/calendar`} class="app-user-menu-item">
+									<Icon name="calendar" class="h-4.5 w-4.5" />
+									<span>Calendar</span>
+								</a>
+								<a href={`/trips/${trip.id}/print`} class="app-user-menu-item">
+									<Icon name="print" class="h-4.5 w-4.5" />
+									<span>Print</span>
+								</a>
+								{#if isEditor}
+									<a href={`/trips/${trip.id}/edit`} class="app-user-menu-item">
+										<Icon name="edit" class="h-4.5 w-4.5" />
+										<span>Edit trip</span>
+									</a>
+									<form method="POST" action="?/duplicate">
+										<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+											<Icon name="duplicate" class="h-4.5 w-4.5" />
+											<span>Duplicate</span>
+										</button>
+									</form>
+									{#if data.owner === true}
+										<form method="POST" action="?/toggleFavorite">
+											<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+												<Icon name="star" class="h-4.5 w-4.5" />
+												<span>{trip.favorite ? 'Favorited' : 'Favorite'}</span>
+											</button>
+										</form>
+										<form method="POST" action="?/toggleArchive">
+											<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+												<Icon name="archive" class="h-4.5 w-4.5" />
+												<span>{trip.archived ? 'Unarchive' : 'Archive'}</span>
+											</button>
+										</form>
+										<a href={`/trips/${trip.id}/share`} class="app-user-menu-item">
+											<Icon name="share" class="h-4.5 w-4.5" />
+											<span>Share</span>
+										</a>
+										{#if data.publicShareUrl}
+											<CopyButton
+												text={data.publicShareUrl}
+												class="app-user-menu-item app-user-menu-button w-full"
+												label="Copy public link"
+												icon="copy"
+											/>
+										{/if}
+									{/if}
+								{/if}
+							</div>
+						</div>
+					</details>
 				</div>
 			</div>
 		</div>
@@ -244,7 +271,7 @@
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h2 class="section-title">Itinerary</h2>
 					{#if isEditor}
-						<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">
+						<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary">
 							<Icon name="plus" class="h-4 w-4" />
 							Add segment
 						</a>
@@ -346,7 +373,7 @@
 												</form>
 											{:else}
 												<article class="trip-timeline-card">
-													<div class="flex items-start gap-3">
+													<div class="flex flex-col gap-3 lg:flex-row lg:items-start">
 														{#if s.startAt}
 															<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">
 																{formatTime(s.startAt, s.startTz ?? 'UTC')}
@@ -361,7 +388,7 @@
 																		<input type="hidden" name="segmentId" value={s.id} />
 																		<select
 																			name="status"
-																			class="input h-7 py-0 text-[10px] w-auto"
+																			class="input input-xs w-auto"
 																			onchange={(e) => e.currentTarget.form?.requestSubmit()}
 																		>
 																			{#each SEGMENT_STATUSES as st}
@@ -424,7 +451,7 @@
 													{/if}
 												{/if}
 																												{#if isEditor && s.id}
-															<div class="flex shrink-0 flex-wrap items-center gap-1">
+																<div class="flex w-full flex-wrap items-center gap-1 lg:w-auto lg:shrink-0 lg:justify-end">
 																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
 													<form method="POST" action="?/duplicateSegment">
 														<input type="hidden" name="segmentId" value={s.id} />
@@ -436,7 +463,7 @@
 																</form>
 																<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="flex items-center gap-1">
 																	<input type="hidden" name="segmentId" value={s.id} />
-																	<select name="offsetMinutes" class="input h-8 py-0 text-xs">
+																	<select name="offsetMinutes" class="input input-compact w-auto">
 																		{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}
 																			<option value={offset.minutes}>{offset.shortLabel}</option>
 																		{/each}
@@ -446,7 +473,7 @@
 																{#if data.providers?.length}
 																	<form method="POST" action={`/trips/${trip.id}/fare-watch?/enable`} class="flex items-center gap-1">
 																		<input type="hidden" name="segmentId" value={s.id} />
-																		<select name="providerId" class="select h-8 py-0 text-xs w-auto">
+																		<select name="providerId" class="select select-compact w-auto">
 																		{#each data.providers as p (p.id)}
 																			<option value={p.id}>{p.label || p.providerKey}</option>
 																		{/each}
@@ -461,7 +488,7 @@
 																	<form method="POST" action="?/setAttendee" class="flex items-center gap-1">
 																		<input type="hidden" name="segmentId" value={s.id} />
 																		<input type="hidden" name="companionId" value={comp.id} />
-																		<select name="status" class="input h-7 py-0 text-[10px]" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+																		<select name="status" class="input input-xs w-auto" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
 																			<option value="not_invited" selected={current === 'not_invited'}>{comp.name}</option>
 																			<option value="going" selected={current === 'going'}>{comp.name} ✓</option>
 																			<option value="maybe" selected={current === 'maybe'}>{comp.name} ?</option>
@@ -536,8 +563,8 @@
 					{/if}
 					{#if isEditor}
 						<form method="POST" action="?/addChecklistItem" class="mt-4 flex flex-wrap items-end gap-2">
-							<input name="text" class="input min-w-0 flex-1 text-sm" placeholder="Add an item..." required />
-							<select name="assignedToCompanionId" class="input w-auto text-sm">
+							<input name="text" class="input input-compact min-w-0 flex-1" placeholder="Add an item..." required />
+							<select name="assignedToCompanionId" class="input input-compact w-auto">
 								<option value="">Unassigned</option>
 								{#each data.companions ?? [] as c (c.id)}
 									<option value={c.id}>{c.name}</option>
@@ -555,7 +582,7 @@
 					{/if}
 					{#if data.packingTemplates?.length}
 						<form method="POST" action="?/applyChecklistTemplate" class="mt-3 flex flex-wrap items-end gap-2">
-							<select name="templateId" class="select min-w-0 flex-1 text-sm" required>
+							<select name="templateId" class="select select-compact min-w-0 flex-1" required>
 								<option value="" disabled selected>Apply a template</option>
 								{#each data.packingTemplates as tmpl (tmpl.id)}
 									<option value={tmpl.id}>{tmpl.name} ({tmpl.items.length})</option>
@@ -1071,7 +1098,7 @@
 									{#if isEditor}
 										<form method="POST" action="?/updateEntryRequirementStatus" class="flex items-center gap-1">
 											<input type="hidden" name="requirementId" value={req.id} />
-											<select name="status" class="input h-8 py-0 text-xs w-auto" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
+											<select name="status" class="input input-compact w-auto" onchange={(e) => e.currentTarget.form?.requestSubmit()}>
 												<option value="needed" selected={req.status === 'needed'}>Needed</option>
 												<option value="in_progress" selected={req.status === 'in_progress'}>In progress</option>
 												<option value="complete" selected={req.status === 'complete'}>Complete</option>

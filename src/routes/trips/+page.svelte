@@ -6,6 +6,7 @@
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
 	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus }; form?: { error?: string } } = $props();
+	let bulkMode = $state(false);
 
 	const allTags = $derived(
 		Array.from(
@@ -116,18 +117,25 @@
 {#if data.trips.length}
 	<form method="POST" class="mt-6">
 		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-			<p class="text-sm text-slate-400">Select your own trips to manage them in bulk.</p>
 			<div class="flex flex-wrap gap-2">
-				<button formaction="?/favorite" class="btn btn-ghost">Favorite</button>
-				<button formaction="?/archive" class="btn btn-ghost">Archive</button>
-				<button formaction="?/unfavorite" class="btn btn-ghost">Unfavorite</button>
-				<button formaction="?/unarchive" class="btn btn-ghost">Unarchive</button>
-				<button formaction="?/delete" class="btn btn-danger">Delete</button>
+				{#if bulkMode}
+					<button type="button" class="btn btn-ghost" onclick={() => (bulkMode = false)}>Done</button>
+					<button formaction="?/favorite" class="btn btn-ghost">Favorite</button>
+					<button formaction="?/archive" class="btn btn-ghost">Archive</button>
+					<button formaction="?/unfavorite" class="btn btn-ghost">Unfavorite</button>
+					<button formaction="?/unarchive" class="btn btn-ghost">Unarchive</button>
+					<button formaction="?/delete" class="btn btn-danger">Delete</button>
+				{:else}
+					<button type="button" class="btn btn-ghost" onclick={() => (bulkMode = true)}>
+						<Icon name="check" class="h-4 w-4" />
+						Bulk actions
+					</button>
+				{/if}
 			</div>
 		</div>
 		<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.trips as t (t.id)}
-				<TripCard trip={t} showCheckbox={true} />
+				<TripCard trip={t} showCheckbox={bulkMode} />
 			{/each}
 		</div>
 	</form>

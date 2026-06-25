@@ -11,6 +11,7 @@ export type IconName =
 	| 'settings'
 	| 'logout'
 	| 'menu'
+	| 'more-horizontal'
 	| 'search'
 	| 'info'
 	| 'plus'
@@ -29,6 +30,10 @@ export type IconName =
 	| 'flight'
 	| 'print'
 	| 'edit'
+	| 'duplicate'
+	| 'star'
+	| 'archive'
+	| 'copy'
 	| 'dietary'
 	| 'allergies'
 	| 'medical'
@@ -55,6 +60,7 @@ export const ICON_PATHS: Record<IconName, string> = {
 	logout:
 		'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/>',
 	menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+	'more-horizontal': '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
 	search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
 	info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
 	plus: '<path d="M5 12h14M12 5v14"/>',
@@ -78,6 +84,12 @@ export const ICON_PATHS: Record<IconName, string> = {
 	print:
 		'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>',
 	edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+	duplicate:
+		'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+	star: '<path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z"/>',
+	archive:
+		'<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+	copy: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
 	dietary:
 		'<path d="M6 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2"/><path d="M10 2v12"/><path d="M20 10V2v0a4 4 0 0 0-4 4v4a2 2 0 0 0 2 2h2Zm0 0v10"/>',
 	allergies:

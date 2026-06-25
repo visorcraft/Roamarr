@@ -379,7 +379,7 @@
 	}
 
 	html {
-		color-scheme: dark;
+		color-scheme: dark light;
 	}
 	body {
 		background-color: var(--color-canvas);
@@ -401,7 +401,11 @@
 		--theme-active-strong: color-mix(in oklab, var(--theme-brand) 28%, transparent);
 		--theme-shadow: color-mix(in oklab, var(--theme-canvas) 70%, black);
 		--theme-control: color-mix(in oklab, var(--theme-surface) 52%, var(--theme-canvas));
+		--theme-control-hover: color-mix(in oklab, var(--theme-control) 76%, var(--theme-brand) 14%);
 		--theme-control-border: color-mix(in oklab, var(--theme-line) 82%, var(--theme-brand) 10%);
+		--theme-menu-hover: var(--theme-active-strong);
+		--theme-option-hover: var(--theme-active-strong);
+		--theme-option-selected: var(--theme-active-strong);
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-ink));
 		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-canvas));
 		--theme-primary-top: var(
@@ -524,9 +528,8 @@
 		color: var(--theme-accent-text);
 	}
 	.app-user-summary:hover,
-	.app-version-link:hover,
-	.app-user-menu-item:hover {
-		background: var(--theme-subtle-hover);
+	.app-version-link:hover {
+		background: var(--theme-control-hover);
 	}
 	.app-avatar {
 		background: linear-gradient(135deg, var(--theme-panel-raised), var(--theme-sidebar));
@@ -563,8 +566,14 @@
 		@apply flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition;
 		color: var(--theme-readable-muted);
 	}
-	.app-user-menu-item:hover {
+	.app-user-menu-item:hover,
+	.app-user-menu-item:focus-visible {
+		background: var(--theme-menu-hover);
 		color: var(--theme-strong);
+	}
+	.app-user-menu-item:focus-visible {
+		outline: 2px solid var(--theme-brand);
+		outline-offset: 2px;
 	}
 	.app-user-menu-button {
 		cursor: pointer;
@@ -870,13 +879,14 @@ button.card:hover,
 	}
 	.btn-ghost {
 		@apply bg-white/5 text-slate-200 ring-1 ring-white/10 ring-inset hover:bg-white/10 hover:text-white;
-		background: var(--theme-subtle);
-		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 80%, transparent);
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-control-border);
 		color: var(--theme-readable-muted);
 	}
 	.btn-ghost:hover,
 	.btn-secondary:hover {
-		background: var(--theme-subtle-hover);
+		background: var(--theme-control-hover);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 36%, var(--theme-line));
 		color: var(--theme-strong);
 	}
 	.btn-danger {
@@ -1015,13 +1025,101 @@ button.card:hover,
 	select.select option:checked,
 	select.select option:focus,
 	select.select option:hover {
-		background-color: var(--color-brand) !important;
-		box-shadow: 0 0 0 100vmax var(--color-brand) inset !important;
-		color: var(--theme-accent-text) !important;
+		background-color: var(--theme-option-selected) !important;
+		box-shadow: 0 0 0 100vmax var(--theme-option-selected) inset !important;
+		color: var(--theme-strong) !important;
 	}
 	select.input option:disabled,
 	select.select option:disabled {
 		color: var(--theme-readable-faint) !important;
+	}
+	@supports (appearance: base-select) and (selector(::picker(select))) {
+		select.input,
+		select.select {
+			appearance: base-select;
+			background-image: none;
+			padding-right: 0.75rem;
+		}
+		select.input::picker-icon,
+		select.select::picker-icon {
+			color: var(--theme-readable-muted);
+			transition: transform 0.15s ease;
+		}
+		select.input:open::picker-icon,
+		select.select:open::picker-icon {
+			transform: rotate(180deg);
+		}
+		select.input::picker(select),
+		select.select::picker(select) {
+			appearance: base-select;
+			margin-top: 0.25rem;
+			border: 1px solid var(--theme-line);
+			border-radius: 0.5rem;
+			background: var(--theme-panel-solid);
+			box-shadow:
+				0 24px 52px color-mix(in oklab, var(--theme-shadow) 42%, transparent),
+				inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 60%, transparent);
+			color: var(--theme-ink);
+			padding: 0.25rem;
+		}
+		select.input option,
+		select.select option {
+			min-height: 2rem;
+			border-radius: 0.375rem;
+			background: transparent !important;
+			color: var(--theme-ink) !important;
+			padding: 0.5rem 0.75rem;
+		}
+		select.input option:hover,
+		select.input option:focus,
+		select.select option:hover,
+		select.select option:focus {
+			background: var(--theme-option-hover) !important;
+			box-shadow: none !important;
+			color: var(--theme-strong) !important;
+		}
+		select.input option:checked,
+		select.select option:checked {
+			background: var(--theme-option-selected) !important;
+			box-shadow: none !important;
+			color: var(--theme-strong) !important;
+		}
+		select.input option::checkmark,
+		select.select option::checkmark {
+			color: var(--theme-brand-readable);
+		}
+	}
+	.input-compact,
+	.select-compact {
+		min-height: 2rem;
+		height: 2rem;
+		padding-top: 0;
+		padding-bottom: 0;
+		font-size: 0.75rem;
+		line-height: 1rem;
+	}
+	.input-xs,
+	.select-xs {
+		min-height: 1.75rem;
+		height: 1.75rem;
+		padding-top: 0;
+		padding-bottom: 0;
+		font-size: 0.6875rem;
+		line-height: 1rem;
+	}
+	select.input-compact,
+	select.select-compact {
+		padding-left: 0.625rem;
+		padding-right: 2rem;
+		background-position: right 0.625rem center;
+		background-size: 0.875rem 0.875rem;
+	}
+	select.input-xs,
+	select.select-xs {
+		padding-left: 0.5rem;
+		padding-right: 1.75rem;
+		background-position: right 0.5rem center;
+		background-size: 0.75rem 0.75rem;
 	}
 	.textarea {
 		@apply min-h-20 resize-y;
@@ -1314,7 +1412,7 @@ button.card:hover,
 		@apply px-4 pb-6 sm:px-6 lg:px-10 lg:pb-10;
 	}
 	.trip-hero {
-		@apply relative overflow-hidden border-b border-white/10;
+		@apply relative overflow-visible border-b border-white/10;
 		border-color: var(--theme-line);
 	}
 	.trip-hero-backdrop {
@@ -1371,6 +1469,7 @@ button.card:hover,
 	}
 	.trip-timeline-node {
 		@apply absolute top-3 left-0 grid h-9 w-9 place-items-center rounded-full bg-surface2 text-indigo-300 ring-2 ring-indigo-500/30;
+		left: -2.5rem;
 		background: var(--theme-panel-raised);
 		box-shadow: 0 0 0 2px color-mix(in oklab, var(--theme-brand) 34%, transparent);
 		color: var(--theme-brand-readable);

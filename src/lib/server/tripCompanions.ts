@@ -39,6 +39,9 @@ interface CompanionInput {
 	name: string;
 	category?: CompanionCategory;
 	notes?: string;
+	dietary?: string;
+	allergies?: string;
+	medicalNotes?: string;
 }
 
 function validateCompanionInput(form: FormData): CompanionInput & { errors?: Record<string, string> } {
@@ -50,10 +53,15 @@ function validateCompanionInput(form: FormData): CompanionInput & { errors?: Rec
 			? 'adult'
 			: (v.enumValue(String(rawCategory), COMPANION_CATEGORIES, 'category') ?? 'adult');
 	const notes = v.optionalString(String(form.get('notes') ?? ''), 'notes', { max: 2000 });
+	const dietary = v.optionalString(String(form.get('dietary') ?? ''), 'dietary', { max: 1000 });
+	const allergies = v.optionalString(String(form.get('allergies') ?? ''), 'allergies', { max: 1000 });
+	const medicalNotes = v.optionalString(String(form.get('medicalNotes') ?? ''), 'medicalNotes', {
+		max: 1000
+	});
 	if (!v.ok()) {
-		return { name: name ?? '', category, notes, errors: v.errors };
+		return { name: name ?? '', category, notes, dietary, allergies, medicalNotes, errors: v.errors };
 	}
-	return { name: name!, category, notes };
+	return { name: name!, category, notes, dietary, allergies, medicalNotes };
 }
 
 export function insertTripCompanion(userId: number, tripId: number, input: CompanionInput) {
@@ -64,13 +72,20 @@ export function insertTripCompanion(userId: number, tripId: number, input: Compa
 			tripId,
 			name: input.name,
 			category: input.category,
-			notes: input.notes ?? null
+			notes: input.notes ?? null,
+			dietary: input.dietary ?? null,
+			allergies: input.allergies ?? null,
+			medicalNotes: input.medicalNotes ?? null
 		})
 		.returning()
 		.get();
 	bumpTripUpdatedAt(tripId);
 	logAudit(userId, 'create', 'trip_companion', c.id, { tripId, name: c.name });
 	return c;
+}
+
+function nullablePatchField(value: string | undefined): string | null | undefined {
+	return value === undefined ? undefined : (value ?? null);
 }
 
 export function patchTripCompanion(
@@ -86,7 +101,10 @@ export function patchTripCompanion(
 		.set({
 			name: input.name,
 			category: input.category,
-			notes: input.notes === undefined ? undefined : (input.notes ?? null)
+			notes: nullablePatchField(input.notes),
+			dietary: nullablePatchField(input.dietary),
+			allergies: nullablePatchField(input.allergies),
+			medicalNotes: nullablePatchField(input.medicalNotes)
 		})
 		.where(eq(tripCompanions.id, companionId))
 		.returning()

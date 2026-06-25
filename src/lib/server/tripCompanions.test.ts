@@ -153,3 +153,65 @@ test('action handlers reject invalid input with fail(400)', async () => {
 	);
 	expect(updateResult).toMatchObject({ status: 400, data: { errors: expect.any(Object) } });
 });
+
+test('insert and list companion with dietary, allergy, and medical notes', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'notes@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const c = insertTripCompanion(u.id, t.id, {
+		name: 'Sam',
+		category: 'adult',
+		dietary: 'Vegetarian',
+		allergies: 'Peanuts, shellfish',
+		medicalNotes: 'Carries an EpiPen'
+	});
+	expect(c.dietary).toBe('Vegetarian');
+	expect(c.allergies).toBe('Peanuts, shellfish');
+	expect(c.medicalNotes).toBe('Carries an EpiPen');
+
+	const rows = listTripCompanions(t.id);
+	expect(rows[0].dietary).toBe('Vegetarian');
+	expect(rows[0].allergies).toBe('Peanuts, shellfish');
+	expect(rows[0].medicalNotes).toBe('Carries an EpiPen');
+});
+
+test('patch companion updates dietary, allergy, and medical notes', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'patchnotes@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
+
+	patchTripCompanion(u.id, t.id, c.id, {
+		dietary: 'Gluten-free',
+		allergies: 'Dairy',
+		medicalNotes: 'Asthma inhaler'
+	});
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	expect(row.dietary).toBe('Gluten-free');
+	expect(row.allergies).toBe('Dairy');
+	expect(row.medicalNotes).toBe('Asthma inhaler');
+});
+
+test('companion notes are rejected above max length', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'long@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const long = 'x'.repeat(1001);
+	const result = await addCompanion(
+		event(
+			u,
+			t.id,
+			new URLSearchParams({ name: 'Long', dietary: long, allergies: long, medicalNotes: long })
+		)
+	);
+	expect(result).toMatchObject({ status: 400, data: { errors: expect.any(Object) } });
+	const errors = (result as { data: { errors: Record<string, string> } }).data.errors;
+	expect(errors.dietary).toContain('1000');
+	expect(errors.allergies).toContain('1000');
+	expect(errors.medicalNotes).toContain('1000');
+
+	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.tripId, t.id)).all();
+	expect(rows).toHaveLength(0);
+});

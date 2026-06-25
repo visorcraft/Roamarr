@@ -12,6 +12,9 @@
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let editingId = $state<number | null>(null);
+	let editingCompanionId = $state<number | null>(null);
+	let showCompanionNotesId = $state<number | null>(null);
+	let showAddCompanionNotes = $state(false);
 
 	type SharedSegment = {
 		type: string;
@@ -792,11 +795,82 @@
 					<ul class="space-y-2">
 						{#each data.companions as c (c.id)}
 							<li class="list-item-compact text-sm">
-								<div class="flex items-center justify-between gap-2">
-									<span class="font-medium text-slate-200">{c.name}</span>
-									<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
-								</div>
-								{#if c.notes}<p class="mt-1 text-xs text-slate-500">{c.notes}</p>{/if}
+								{#if editingCompanionId === c.id}
+									<form method="POST" action="?/updateCompanion" class="flex flex-col gap-2">
+										<input type="hidden" name="companionId" value={c.id} />
+										<input name="name" class="input text-sm" value={c.name} placeholder="Name" required />
+										<div class="flex gap-2">
+											<select name="category" class="input text-sm">
+												<option value="adult" selected={c.category === 'adult'}>Adult</option>
+												<option value="child" selected={c.category === 'child'}>Child</option>
+												<option value="other" selected={c.category === 'other'}>Other</option>
+											</select>
+											<button class="btn btn-primary btn-sm shrink-0">Save</button>
+										</div>
+										<button
+											type="button"
+											class="btn btn-ghost btn-xs self-start"
+											onclick={() => (showCompanionNotesId = showCompanionNotesId === c.id ? null : c.id)}
+										>
+											Notes {showCompanionNotesId === c.id ? '▲' : '▼'}
+										</button>
+										{#if showCompanionNotesId === c.id}
+											<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" value={c.dietary ?? ''} />
+											<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" value={c.allergies ?? ''} />
+											<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2">{c.medicalNotes ?? ''}</textarea>
+											<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
+										{/if}
+										<button
+											type="button"
+											class="btn btn-ghost btn-xs self-start"
+											onclick={() => (editingCompanionId = null)}
+										>
+											Cancel
+										</button>
+									</form>
+								{:else}
+									<div class="flex items-center justify-between gap-2">
+										<span class="font-medium text-slate-200">{c.name}</span>
+										<div class="flex items-center gap-1">
+											<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
+											{#if isEditor}
+												<button
+													type="button"
+													class="icon-button h-6 w-6 text-slate-500"
+													aria-label="Edit companion"
+													onclick={() => (editingCompanionId = c.id)}
+												>
+													<Icon name="edit" class="h-3.5 w-3.5" />
+												</button>
+											{/if}
+										</div>
+									</div>
+									{#if c.dietary || c.allergies || c.medicalNotes || c.notes}
+										<div class="mt-1 flex flex-wrap gap-1">
+											{#if c.dietary}
+												<span class="badge badge-compact badge-amber" title={c.dietary}>
+													<Icon name="dietary" class="h-3 w-3" />
+													Dietary
+												</span>
+											{/if}
+											{#if c.allergies}
+												<span class="badge badge-compact badge-red" title={c.allergies}>
+													<Icon name="allergies" class="h-3 w-3" />
+													Allergies
+												</span>
+											{/if}
+											{#if c.medicalNotes}
+												<span class="badge badge-compact badge-brand" title={c.medicalNotes}>
+													<Icon name="medical" class="h-3 w-3" />
+													Medical
+												</span>
+											{/if}
+											{#if c.notes}
+												<span class="badge badge-compact badge-slate" title={c.notes}>Notes</span>
+											{/if}
+										</div>
+									{/if}
+								{/if}
 							</li>
 						{/each}
 					</ul>
@@ -812,6 +886,18 @@
 								<button class="btn btn-primary btn-sm shrink-0">Add</button>
 							</div>
 							<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
+							<button
+								type="button"
+								class="btn btn-ghost btn-xs self-start"
+								onclick={() => (showAddCompanionNotes = !showAddCompanionNotes)}
+							>
+								Dietary / allergy / medical {showAddCompanionNotes ? '▲' : '▼'}
+							</button>
+							{#if showAddCompanionNotes}
+								<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" />
+								<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" />
+								<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2"></textarea>
+							{/if}
 						</form>
 					{/if}
 				</div>

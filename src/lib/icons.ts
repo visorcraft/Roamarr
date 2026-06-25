@@ -27,7 +27,11 @@ export type IconName =
 	| 'check'
 	| 'empty'
 	| 'flight'
-	| 'print';
+	| 'print'
+	| 'edit'
+	| 'dietary'
+	| 'allergies'
+	| 'medical';
 
 export const ICON_PATHS: Record<IconName, string> = {
 	home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
@@ -69,5 +73,11 @@ export const ICON_PATHS: Record<IconName, string> = {
 	flight:
 		'<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
 	print:
-		'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>'
+		'<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>',
+	edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
+	dietary:
+		'<path d="M6 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2"/><path d="M10 2v12"/><path d="M20 10V2v0a4 4 0 0 0-4 4v4a2 2 0 0 0 2 2h2Zm0 0v10"/>',
+	allergies:
+		'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>',
+	medical: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'
 };

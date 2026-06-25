@@ -7,9 +7,6 @@ import { withTripAction } from './actions';
 import { tripCrudFactory } from './crud';
 import { ENTRY_REQUIREMENT_STATUSES, ENTRY_REQUIREMENT_TYPES } from './db/schema';
 
-export const REQUIREMENT_TYPES = [...ENTRY_REQUIREMENT_TYPES] as const;
-export const REQUIREMENT_STATUSES = [...ENTRY_REQUIREMENT_STATUSES] as const;
-
 const entryRequirementCrud = tripCrudFactory({
 	table: tripEntryRequirements,
 	auditEntity: 'trip_entry_requirement',

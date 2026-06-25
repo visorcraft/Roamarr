@@ -5,7 +5,7 @@ import { loyaltyPrograms } from './db/schema';
 import { userCrudFactory } from './crud';
 import { Validator } from './validation';
 
-export interface LoyaltyProgramInput {
+interface LoyaltyProgramInput {
 	programName: string;
 	membershipNumber?: string | null;
 	balance?: number | null;

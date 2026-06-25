@@ -1,6 +1,6 @@
-import { error } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { buildCalendar, type CalendarSegment } from '$lib/server/ical';
+import { parseTripId } from '$lib/server/params';
 import { loadTripFor } from '../../shared';
 import type { RequestHandler } from './$types';
 
@@ -19,8 +19,7 @@ function toCalendarSegments(view: ReturnType<typeof loadTripFor>): CalendarSegme
 
 export const GET: RequestHandler = ({ locals, params }) => {
 	const u = requireUser(locals);
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+	const tripId = parseTripId(params);
 
 	const view = loadTripFor(u.id, tripId);
 	const tripInput = {

@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { buildCalendar, type CalendarSegment } from '$lib/server/ical';
+import { parseTripId } from '$lib/server/params';
 import { db } from '$lib/server/db';
 import { segments, trips } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
@@ -21,8 +22,7 @@ export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 		});
 	}
 
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
+	const tripId = parseTripId(params);
 
 	const token = url.searchParams.get('token');
 	if (!token) throw error(404, 'Not found');

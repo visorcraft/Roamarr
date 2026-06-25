@@ -7,7 +7,7 @@ import { logAudit } from './audit';
 import { nowIso } from './tz';
 import { serializeTags, parseTags } from '$lib/tags';
 
-export interface TripTemplateSnapshot {
+interface TripTemplateSnapshot {
 	name: string;
 	destination: string | null;
 	notes: string | null;

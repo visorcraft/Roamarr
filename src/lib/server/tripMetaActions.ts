@@ -9,7 +9,7 @@ import { duplicateSegment, setSegmentStatus } from './segments';
 import { attachPolicyToTrip, detachPolicyFromTrip } from './insurance';
 import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
-import { addAttachment, deleteAttachment } from './tripExpenseAttachments';
+import { addAttachment } from './tripExpenseAttachments';
 import { saveTripTemplate } from './tripTemplates';
 import { positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
@@ -146,14 +146,6 @@ export async function addAttachmentAction(event: RequestEvent) {
 	const file = formData.get('file');
 	if (!(file instanceof File)) throw error(400, 'File is required');
 	await addAttachment(user.id, expenseIdResult.value, file);
-	throw redirect(303, `/trips/${tripId}`);
-}
-
-export async function deleteAttachmentAction(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const attachmentIdResult = positiveIdFromForm(formData.get('attachmentId'), 'attachmentId');
-	if (!attachmentIdResult.ok) throw error(400, attachmentIdResult.error);
-	deleteAttachment(user.id, attachmentIdResult.value);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

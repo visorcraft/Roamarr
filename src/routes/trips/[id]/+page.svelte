@@ -10,7 +10,7 @@
 	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
-	import { segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
+	import { SEGMENT_STATUSES, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
 	import { tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
 	import type { PageData } from './$types';
@@ -45,8 +45,6 @@
 		paymentStatus?: string | null;
 		paymentDueDate?: string | null;
 	};
-
-	const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 
 	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
 	const companionNameMap = $derived(new Map((data.companions ?? []).map((c) => [c.id, c.name])));

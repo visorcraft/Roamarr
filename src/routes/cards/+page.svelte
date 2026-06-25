@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 
 	let { data } = $props();
 	let editingCardId = $state<number | null>(null);
@@ -176,12 +177,11 @@
 		{/each}
 	</div>
 {:else}
-	<div class="empty-state">
-		<div class="empty-icon">
+	<EmptyState message="No cards yet — add one below to track its benefits.">
+		{#snippet icon()}
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><rect width="20" height="14" x="2" y="5" rx="2" /><path d="M2 10h20" /></svg>
-		</div>
-		<p class="text-slate-300">No cards yet — add one below to track its benefits.</p>
-	</div>
+		{/snippet}
+	</EmptyState>
 {/if}
 
 <section class="card mt-6 p-5">

@@ -5,9 +5,10 @@ import { users } from '$lib/server/db/schema';
 import { createPasswordResetToken } from '$lib/server/passwordReset';
 import { deliver } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { normalizeEmail } from '$lib/server/users';
 
 export async function _requestReset(email: string, origin: string) {
-	const u = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+	const u = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
 	if (!u || u.disabled) return;
 	const token = createPasswordResetToken(u.id);
 	const link = `${origin}/reset-password/${token}`;

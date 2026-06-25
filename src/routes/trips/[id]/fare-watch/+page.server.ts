@@ -1,5 +1,6 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
+import { parseTripId } from '$lib/server/params';
 import { pauseWatch, resumeWatch, deleteWatch, toggleWatch, checkWatch } from '$lib/server/fareproviders';
 import { positiveIdFromForm } from '$lib/server/validation';
 
@@ -16,7 +17,7 @@ export const actions: Actions = {
 			if (!segmentResult.ok) return fail(400, { error: segmentResult.error });
 			segmentId = segmentResult.value;
 		}
-		toggleWatch(u.id, Number(params.id), providerResult.value, segmentId);
+		toggleWatch(u.id, parseTripId(params), providerResult.value, segmentId);
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	pause: async ({ request, locals, params }) => {

@@ -1,4 +1,4 @@
-export const VISIBILITY_BADGE: Record<string, string> = {
+const VISIBILITY_BADGE: Record<string, string> = {
 	private: 'badge-slate',
 	groups: 'badge-brand',
 	public: 'badge-green'

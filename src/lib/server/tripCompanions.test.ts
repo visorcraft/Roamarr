@@ -13,8 +13,7 @@ import {
 	patchTripCompanion,
 	removeTripCompanion,
 	addCompanion,
-	updateCompanion,
-	deleteCompanion
+	updateCompanion
 } from './tripCompanions';
 import { users, trips, tripCompanions, auditLogs } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -128,19 +127,6 @@ test('updateCompanion action updates a companion and redirects', async () => {
 	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
 	expect(row.name).toBe('Benjamin');
 	expect(row.category).toBe('adult');
-});
-
-test('deleteCompanion action deletes a companion and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'rm@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = insertTripCompanion(u.id, t.id, { name: 'Cara' });
-
-	await expect(
-		deleteCompanion(event(u, t.id, new URLSearchParams({ companionId: String(c.id) })))
-	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
-
-	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()).toBeUndefined();
 });
 
 test('action handlers reject invalid input with fail(400)', async () => {

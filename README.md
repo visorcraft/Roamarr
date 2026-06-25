@@ -99,6 +99,7 @@ Only commit template files such as `.env.example` and `deploy/podman/roamarr.env
 
 ```sh
 npm run check            # Svelte + TypeScript check
+npm run check:watch      # Svelte + TypeScript check in watch mode
 npm test                 # Vitest suite once
 npm run test:watch       # Vitest watch mode
 npm run build            # production build to ./build
@@ -130,17 +131,11 @@ Migrations are applied automatically during application boot before the schedule
 - Important-items registry with serial numbers, tracker IDs, and companion association.
 - Trip journal entries, trip document links, and a printable itinerary view.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
-- Per-user color themes from the profile page, including Midnight Travels, Follow system, Light, Dark, OLED Black, Gentle Gecko, Black Knight, Diamond, Dreams, Paranoid, Red Velvet, Subspace, Tiefling, Vibes, and a High Contrast accessibility theme.
+- Per-user color themes from the profile page, including a High Contrast accessibility theme (see `AGENTS.md` for the full theme registry).
 - Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, and registration control.
 - Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
 - Shared UI components (`Icon`, `Toast` with variants, loading states) and mobile sidebar accessibility.
 - Health and deep-health endpoints plus PWA manifest/icons.
-
-## Themes
-
-Users can choose their own theme on `/profile`. Theme selections preview immediately on click and are saved when the profile form is submitted. The original Roamarr look is available as `Midnight Travels` and is the default for new users.
-
-Theme metadata lives in `src/lib/themes.ts`; CSS variables and theme-aware app classes live in `src/app.css`. When adding or renaming a theme, keep the registry, CSS tokens, profile tests, and `users.theme_id` defaults in sync.
 
 ## Architecture
 

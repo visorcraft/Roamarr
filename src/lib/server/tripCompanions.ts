@@ -232,10 +232,4 @@ export async function updateCompanion(event: RequestEvent) {
 	throw redirect(303, `/trips/${tripId}`);
 }
 
-export async function deleteCompanion(event: RequestEvent) {
-	const { user: u, tripId, formData: form } = await withTripAction(event);
-	const companionId = Number(form.get('companionId'));
-	if (!Number.isFinite(companionId) || companionId <= 0) throw error(400, 'Invalid companion');
-	removeTripCompanion(u.id, tripId, companionId);
-	throw redirect(303, `/trips/${tripId}`);
-}
+

@@ -307,10 +307,8 @@
 		--theme-subtle-hover: color-mix(in oklab, var(--theme-strong) 7%, transparent);
 		--theme-active: color-mix(in oklab, var(--theme-brand) 18%, transparent);
 		--theme-active-strong: color-mix(in oklab, var(--theme-brand) 28%, transparent);
-		--theme-focus: color-mix(in oklab, var(--theme-brand) 70%, var(--theme-strong));
 		--theme-shadow: color-mix(in oklab, var(--theme-canvas) 70%, black);
 		--theme-control: color-mix(in oklab, var(--theme-surface) 52%, var(--theme-canvas));
-		--theme-control-hover: color-mix(in oklab, var(--theme-surface2) 58%, var(--theme-surface));
 		--theme-control-border: color-mix(in oklab, var(--theme-line) 82%, var(--theme-brand) 10%);
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-ink));
 		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-canvas));
@@ -464,13 +462,6 @@
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 76%, transparent);
 	}
-	.list-item-hover {
-		@apply transition hover:bg-white/[0.05] hover:ring-white/10;
-	}
-	.list-item-hover:hover {
-		background: var(--theme-subtle-hover);
-		box-shadow: inset 0 0 0 1px var(--theme-line);
-	}
 	.list-item-compact {
 		@apply rounded-lg bg-white/[0.03] px-3 py-2 ring-1 ring-white/5;
 		background: var(--theme-subtle);
@@ -513,9 +504,6 @@
 		color: var(--theme-brand-readable);
 	}
 	.action-row {
-		@apply flex flex-wrap items-center gap-2;
-	}
-	.toolbar {
 		@apply flex flex-wrap items-center gap-2;
 	}
 	.nav-link {
@@ -599,9 +587,6 @@
 	.btn-danger {
 		@apply bg-red-500/90 text-white hover:bg-red-500 active:translate-y-px;
 		color: #ffffff;
-	}
-	.btn-warn {
-		@apply bg-amber-400 text-amber-950 hover:bg-amber-300 active:translate-y-px;
 	}
 	.btn-ghost-muted {
 		@apply text-slate-400 hover:bg-white/5 hover:text-slate-200;
@@ -877,7 +862,6 @@
 			.empty-state,
 			.trip-sidebar-card,
 			.trip-timeline-card,
-			.modal-panel,
 			.theme-option
 		)
 		:where(.text-white) {
@@ -891,10 +875,9 @@
 			.empty-state,
 			.trip-sidebar-card,
 			.trip-timeline-card,
-			.modal-panel,
 			.theme-option
 		)
-		:where(.text-slate-100, .text-slate-200, .text-slate-300) {
+		:where(.text-slate-200, .text-slate-300) {
 		color: var(--theme-ink);
 	}
 	:where(
@@ -905,7 +888,6 @@
 			.empty-state,
 			.trip-sidebar-card,
 			.trip-timeline-card,
-			.modal-panel,
 			.theme-option
 		)
 		:where(.text-slate-400, .text-muted) {
@@ -919,7 +901,6 @@
 			.empty-state,
 			.trip-sidebar-card,
 			.trip-timeline-card,
-			.modal-panel,
 			.theme-option
 		)
 		:where(.text-slate-500) {
@@ -1093,20 +1074,6 @@
 	.trip-timeline-card:hover {
 		background: var(--theme-subtle-hover);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
-	}
-
-	.modal-backdrop {
-		@apply fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm;
-	}
-	.modal-panel {
-		@apply w-full max-w-lg rounded-lg bg-surface p-6 shadow-2xl shadow-black/50 ring-1 ring-white/10;
-		background: var(--theme-panel-solid);
-		box-shadow:
-			0 28px 70px color-mix(in oklab, black 40%, transparent),
-			inset 0 0 0 1px var(--theme-line);
-	}
-	.modal-panel-wide {
-		@apply max-w-4xl;
 	}
 
 	.segment-form-section {

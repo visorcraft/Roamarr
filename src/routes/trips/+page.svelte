@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { parseTags } from '$lib/tags';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
@@ -179,11 +180,11 @@
 		</div>
 	</form>
 {:else}
-	<div class="empty-state">
-		<div class="empty-icon">
-			<Icon name="trips" class="h-6 w-6" />
-		</div>
-		<p class="text-slate-300">No trips yet — plan your first one.</p>
-		<a href="/trips/new" class="btn btn-primary mt-1">Create a trip</a>
-	</div>
+	<EmptyState
+		message="No trips yet — plan your first one."
+		actionHref="/trips/new"
+		actionLabel="Create a trip"
+	>
+		{#snippet icon()}<Icon name="trips" class="h-6 w-6" />{/snippet}
+	</EmptyState>
 {/if}

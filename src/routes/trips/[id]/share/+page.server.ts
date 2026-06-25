@@ -7,6 +7,8 @@ import { logAudit } from '$lib/server/audit';
 import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
 import { users, trips, tripShares, groups as groupsTable } from '$lib/server/db/schema';
+import { normalizeEmail } from '$lib/server/users';
+import { parseTripId } from '$lib/server/params';
 import type { PageServerLoad } from './$types';
 
 const SHARE_PERMISSIONS = ['read', 'edit'] as const;
@@ -27,7 +29,7 @@ export function _shareWithUserEmail(
 	const target = db
 		.select()
 		.from(users)
-		.where(eq(users.email, email.trim().toLowerCase()))
+		.where(eq(users.email, normalizeEmail(email)))
 		.get();
 	if (!target) throw error(404, 'No such user');
 	db.insert(tripShares)
@@ -133,7 +135,7 @@ export function _setShowDetails(
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
-	const t = requireOwnedTrip(u.id, Number(params.id));
+	const t = requireOwnedTrip(u.id, parseTripId(params));
 	const shares = db
 		.select({
 			id: tripShares.id,
@@ -162,7 +164,7 @@ export const actions: Actions = {
 		if (!permission) return fail(400, { error: 'Invalid permission' });
 		_shareWithUserEmail(
 			u.id,
-			Number(params.id),
+			parseTripId(params),
 			String(f.get('email')),
 			permission
 		);
@@ -173,7 +175,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const permission = parsePermission(f.get('permission'));
 		if (!permission) return fail(400, { error: 'Invalid permission' });
-		_shareWithGroup(u.id, Number(params.id), Number(f.get('groupId')), permission);
+		_shareWithGroup(u.id, parseTripId(params), Number(f.get('groupId')), permission);
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	makePublic: async ({ request, locals, params }) => {
@@ -181,19 +183,19 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const expiresAt = String(f.get('publicExpiresAt') || '');
 		const publicShowDetails = String(f.get('publicShowDetails')) === '1';
-		_mintPublicToken(u.id, Number(params.id), publicShowDetails, expiresAt || null);
+		_mintPublicToken(u.id, parseTripId(params), publicShowDetails, expiresAt || null);
 		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	setPublicShowDetails: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		const publicShowDetails = String(f.get('publicShowDetails')) === '1';
-		_setPublicShowDetails(u.id, Number(params.id), publicShowDetails);
+		_setPublicShowDetails(u.id, parseTripId(params), publicShowDetails);
 		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	revokePublic: async ({ locals, params }) => {
 		const u = requireUser(locals);
-		const tripId = Number(params.id);
+		const tripId = parseTripId(params);
 		requireOwnedTrip(u.id, tripId);
 		db.update(trips)
 			.set({ publicToken: null, publicTokenExpiresAt: null, publicShowDetails: false })
@@ -205,13 +207,13 @@ export const actions: Actions = {
 	unshareUser: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const shareId = Number((await request.formData()).get('shareId'));
-		_unshareUser(u.id, Number(params.id), shareId);
+		_unshareUser(u.id, parseTripId(params), shareId);
 		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	unshareGroup: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const shareId = Number((await request.formData()).get('shareId'));
-		_unshareGroup(u.id, Number(params.id), shareId);
+		_unshareGroup(u.id, parseTripId(params), shareId);
 		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	setShowDetails: async ({ request, locals, params }) => {
@@ -220,7 +222,7 @@ export const actions: Actions = {
 		const shareId = Number(f.get('shareId'));
 		const showDetails = String(f.get('showDetails')) === '1';
 		if (!Number.isFinite(shareId)) return fail(400, { error: 'Invalid share' });
-		_setShowDetails(u.id, Number(params.id), shareId, showDetails);
+		_setShowDetails(u.id, parseTripId(params), shareId, showDetails);
 		throw redirect(303, `/trips/${params.id}/share`);
 	}
 };

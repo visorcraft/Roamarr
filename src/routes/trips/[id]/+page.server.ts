@@ -1,28 +1,16 @@
 import { requireUser } from '$lib/server/auth';
 import { buildTripDetail } from '$lib/server/tripDetail';
 import { parseTripId } from '$lib/server/params';
-import {
-	addCompanion,
-	updateCompanion,
-	deleteCompanion
-} from '$lib/server/tripCompanions';
+import { addCompanion, updateCompanion } from '$lib/server/tripCompanions';
 import {
 	addChecklistItem,
 	toggleChecklistItem,
 	deleteChecklistItem
 } from '$lib/server/tripChecklists';
 import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
-import { setAttendeeStatus, removeAttendee } from '$lib/server/segmentAttendees';
-import {
-	addJournalEntry,
-	updateJournalEntry,
-	deleteJournalEntry
-} from '$lib/server/tripJournal';
-import {
-	addDocumentLink,
-	updateDocumentLink,
-	deleteDocumentLink
-} from '$lib/server/tripDocumentLinks';
+import { setAttendee } from '$lib/server/segmentAttendees';
+import { addJournalEntry, deleteJournalEntry } from '$lib/server/tripJournal';
+import { addDocumentLink, deleteDocumentLink } from '$lib/server/tripDocumentLinks';
 import { createPoll, votePoll, deletePoll } from '$lib/server/tripPolls';
 import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
 import { saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
@@ -60,7 +48,6 @@ import {
 	deleteCommentAction,
 	shareItineraryWithContactAction,
 	addAttachmentAction,
-	deleteAttachmentAction,
 	saveTripTemplateAction
 } from '$lib/server/tripMetaActions';
 import type { Actions } from '@sveltejs/kit';
@@ -88,19 +75,15 @@ export const actions: Actions = {
 	deleteComment: deleteCommentAction,
 	addCompanion,
 	updateCompanion,
-	deleteCompanion,
 	addChecklistItem,
 	toggleChecklistItem,
 	deleteChecklistItem,
 	addExpense,
 	deleteExpense,
-	setAttendeeStatus,
-	removeAttendee,
+	setAttendee,
 	addJournalEntry,
-	updateJournalEntry,
 	deleteJournalEntry,
 	addDocumentLink,
-	updateDocumentLink,
 	deleteDocumentLink,
 	createPoll,
 	votePoll,
@@ -111,7 +94,6 @@ export const actions: Actions = {
 	deleteBudget: deleteBudgetAction,
 	shareItineraryWithContact: shareItineraryWithContactAction,
 	addAttachment: addAttachmentAction,
-	deleteAttachment: deleteAttachmentAction,
 	saveTripTemplate: saveTripTemplateAction,
 	addHomeTask: addHomeTaskAction,
 	toggleHomeTask: toggleHomeTaskAction,

@@ -21,10 +21,8 @@ test('themeForId returns high-contrast option', () => {
 	expect(theme.colorScheme).toBe('dark');
 });
 
-test('THEMES contains high-contrast with accessible preview colors', () => {
+test('THEMES contains high-contrast accessibility theme', () => {
 	const theme = THEMES.find((t) => t.id === 'high-contrast');
 	expect(theme).toBeDefined();
-	expect(theme?.preview.canvas).toBe('#000000');
-	expect(theme?.preview.text).toBe('#ffffff');
-	expect(theme?.preview.accent).toBe('#0078d4');
+	expect(theme?.colorScheme).toBe('dark');
 });

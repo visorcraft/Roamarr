@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
@@ -74,10 +75,7 @@
 		{/each}
 	</div>
 {:else}
-	<div class="empty-state">
-		<div class="empty-icon">
-			<Icon name="users" class="h-6 w-6" />
-		</div>
-		<p class="text-slate-300">No groups yet — create one to share trips.</p>
-	</div>
+	<EmptyState message="No groups yet — create one to share trips.">
+		{#snippet icon()}<Icon name="users" class="h-6 w-6" />{/snippet}
+	</EmptyState>
 {/if}

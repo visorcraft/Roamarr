@@ -103,25 +103,6 @@ export async function addJournalEntry(event: RequestEvent) {
 	throw redirect(303, `/trips/${tripId}`);
 }
 
-export async function updateJournalEntry(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const entryIdResult = positiveIdFromForm(formData.get('entryId'), 'entryId');
-	if (!entryIdResult.ok) return fail(400, { error: entryIdResult.error });
-	const v = new Validator();
-	const entryDate = v.requiredDate(formData.get('entryDate'), 'entryDate');
-	const title = v.requiredString(formData.get('title'), 'title', { max: 200 });
-	const body = v.requiredString(formData.get('body'), 'body', { max: 10000 });
-	if (!v.ok()) {
-		return formFail(v);
-	}
-	modifyJournalEntry(user.id, entryIdResult.value, {
-		entryDate: entryDate!,
-		title: title!,
-		body: body!
-	});
-	throw redirect(303, `/trips/${tripId}`);
-}
-
 export async function deleteJournalEntry(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);
 	const entryIdResult = positiveIdFromForm(formData.get('entryId'), 'entryId');

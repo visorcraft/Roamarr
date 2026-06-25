@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 
@@ -65,10 +66,7 @@
 		{/each}
 	</ul>
 {:else}
-	<div class="empty-state">
-		<div class="empty-icon">
-			<Icon name="notification" class="h-6 w-6" />
-		</div>
-		<p class="text-slate-300">No notifications yet.</p>
-	</div>
+	<EmptyState message="No notifications yet.">
+		{#snippet icon()}<Icon name="notification" class="h-6 w-6" />{/snippet}
+	</EmptyState>
 {/if}

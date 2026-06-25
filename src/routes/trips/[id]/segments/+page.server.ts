@@ -1,5 +1,6 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
+import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
@@ -11,7 +12,7 @@ export const actions: Actions = {
 		const v = new Validator();
 		const segmentId = v.positiveId(f.get('segmentId'), 'segmentId');
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
-		deleteSegment(u.id, Number(params.id), segmentId!);
+		deleteSegment(u.id, parseTripId(params), segmentId!);
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	update: async ({ request, locals, params }) => {
@@ -55,7 +56,7 @@ export const actions: Actions = {
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 
-		updateSegment(u.id, Number(params.id), segmentId!, {
+		updateSegment(u.id, parseTripId(params), segmentId!, {
 			title: title!,
 			localStart: localStart!,
 			startTz: startTz!,

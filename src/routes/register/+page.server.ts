@@ -5,6 +5,7 @@ import { users } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { normalizeEmail } from '$lib/server/users';
 
 function gate() {
 	const s = getSettings();
@@ -21,7 +22,7 @@ export async function _registerUser(email: string, password: string, displayName
 	return db
 		.insert(users)
 		.values({
-			email: email.trim().toLowerCase(),
+			email: normalizeEmail(email),
 			passwordHash: await hashPassword(password),
 			displayName,
 			role: 'user',

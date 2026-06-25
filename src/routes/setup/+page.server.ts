@@ -4,12 +4,13 @@ import { db, sqlite } from '$lib/server/db';
 import { users, settings } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { normalizeEmail } from '$lib/server/users';
 
 export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },
 	passwordHash?: string
 ) {
-	const email = i.email.trim().toLowerCase();
+	const email = normalizeEmail(i.email);
 	const tx = sqlite.transaction(() => {
 		const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
 		const n = db.select({ c: sql<number>`count(*)` }).from(users).get()!.c;

@@ -4,9 +4,10 @@ import { db } from '$lib/server/db';
 import { users } from '$lib/server/db/schema';
 import { verifyPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { normalizeEmail } from '$lib/server/users';
 
 export async function _authenticate(email: string, password: string) {
-	const u = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+	const u = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
 	if (!u || u.disabled || !(await verifyPassword(u.passwordHash, password))) return null;
 	return u;
 }

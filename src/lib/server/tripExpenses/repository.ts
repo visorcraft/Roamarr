@@ -7,7 +7,7 @@ import { logAudit } from '../audit';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
 import type { TripExpenseView } from './types';
 
-export function parseSplitAmong(raw: string): Array<'owner' | number> {
+function parseSplitAmong(raw: string): Array<'owner' | number> {
 	try {
 		const parsed = JSON.parse(raw);
 		if (Array.isArray(parsed)) {
@@ -22,7 +22,7 @@ export function parseSplitAmong(raw: string): Array<'owner' | number> {
 	return [];
 }
 
-export function normalizeCategory(category?: string | null): string {
+function normalizeCategory(category?: string | null): string {
 	if (category == null) return 'other';
 	const c = category.trim().toLowerCase();
 	if (!BUDGET_CATEGORIES.includes(c as (typeof BUDGET_CATEGORIES)[number])) {

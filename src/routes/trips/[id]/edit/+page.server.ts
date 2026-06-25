@@ -7,6 +7,7 @@ import { cancelRemindersFor } from '$lib/server/reminders';
 import { db } from '$lib/server/db';
 import { trips, segments } from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
+import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES } from '$lib/server/sharing';
 import { serializeTags } from '$lib/tags';
@@ -14,7 +15,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
-	const tripId = Number(params.id);
+	const tripId = parseTripId(params);
 	const trip = requireEditableTrip(u.id, tripId);
 	return { trip, owner: trip.ownerId === u.id };
 };
@@ -31,7 +32,7 @@ export function _deleteTrip(userId: number, tripId: number) {
 export const actions: Actions = {
 	save: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
-		const tripId = Number(params.id);
+		const tripId = parseTripId(params);
 		requireEditableTrip(u.id, tripId);
 		const f = await request.formData();
 		const v = new Validator();
@@ -74,7 +75,7 @@ export const actions: Actions = {
 	},
 	delete: async ({ locals, params }) => {
 		const u = requireUser(locals);
-		_deleteTrip(u.id, Number(params.id));
+		_deleteTrip(u.id, parseTripId(params));
 		throw redirect(303, '/trips');
 	}
 };

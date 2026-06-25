@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data } = $props();
@@ -38,7 +39,5 @@
 		{/each}
 	</ul>
 {:else}
-	<div class="empty-state">
-		<p class="text-slate-300">No reminders scheduled.</p>
-	</div>
+	<EmptyState message="No reminders scheduled." />
 {/if}

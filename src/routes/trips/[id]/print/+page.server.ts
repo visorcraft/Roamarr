@@ -1,4 +1,5 @@
 import { requireUser } from '$lib/server/auth';
+import { parseTripId } from '$lib/server/params';
 import { db } from '$lib/server/db';
 import { tripCompanions } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
@@ -7,7 +8,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
-	const tripId = Number(params.id);
+	const tripId = parseTripId(params);
 	const view = loadTripFor(u.id, tripId);
 	const companions = db
 		.select()

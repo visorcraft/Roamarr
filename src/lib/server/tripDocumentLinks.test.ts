@@ -13,7 +13,6 @@ import {
 	editDocumentLink,
 	removeDocumentLink,
 	addDocumentLink,
-	updateDocumentLink,
 	deleteDocumentLink
 } from './tripDocumentLinks';
 import { users, trips, tripDocumentLinks, auditLogs } from './db/schema';
@@ -173,27 +172,6 @@ test('addDocumentLink action returns validation errors', async () => {
 	expect(result.status).toBe(400);
 	expect(result.data.errors?.label).toBeDefined();
 	expect(result.data.errors?.url).toBeDefined();
-});
-
-test('updateDocumentLink action updates a link and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = makeUser(db);
-	const t = makeTrip(db, { ownerId: u.id });
-	const link = createDocumentLink(u.id, t.id, { label: 'Old', url: 'https://old.example' });
-
-	const event = makeFormEvent(
-		u,
-		{ id: String(t.id) },
-		{ linkId: String(link.id), label: 'Updated', url: 'https://updated.example', notes: '' }
-	);
-	await expect(updateDocumentLink(event)).rejects.toMatchObject({
-		status: 303,
-		location: `/trips/${t.id}`
-	});
-
-	const row = db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, link.id)).get();
-	expect(row?.label).toBe('Updated');
-	expect(row?.url).toBe('https://updated.example');
 });
 
 test('deleteDocumentLink action removes a link and redirects', async () => {

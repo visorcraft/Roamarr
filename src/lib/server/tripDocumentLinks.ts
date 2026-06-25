@@ -115,19 +115,6 @@ export async function addDocumentLink(event: RequestEvent) {
 	throw redirect(303, `/trips/${tripId}`);
 }
 
-export async function updateDocumentLink(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	const linkIdResult = positiveIdFromForm(formData.get('linkId'), 'linkId');
-	if (!linkIdResult.ok) return fail(400, { error: linkIdResult.error });
-
-	const validated = validateLinkForm(formData);
-	if ('errors' in validated) {
-		return fail(400, { error: validated.message, errors: validated.errors });
-	}
-	editDocumentLink(user.id, tripId, linkIdResult.value, validated);
-	throw redirect(303, `/trips/${tripId}`);
-}
-
 export async function deleteDocumentLink(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);
 	const linkIdResult = positiveIdFromForm(formData.get('linkId'), 'linkId');

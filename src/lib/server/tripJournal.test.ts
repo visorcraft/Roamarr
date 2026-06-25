@@ -13,7 +13,6 @@ import {
 	modifyJournalEntry,
 	removeJournalEntry,
 	addJournalEntry,
-	updateJournalEntry,
 	deleteJournalEntry
 } from './tripJournal';
 import { tripJournalEntries, tripShares, auditLogs } from './db/schema';
@@ -224,25 +223,6 @@ test('addJournalEntry action returns fail for invalid input', async () => {
 	const result = await addJournalEntry(event);
 	expect(result?.status).toBe(400);
 	expect((result as unknown as { data: { error: string } }).data.error).toBe('Please fix the highlighted fields.');
-});
-
-test('updateJournalEntry action validates and redirects', async () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
-	const entry = createJournalEntry(u.id, t.id, {
-		entryDate: '2026-06-20',
-		title: 'Before',
-		body: 'Body'
-	});
-	const event = makeEvent(u, { id: String(t.id) }, {
-		entryId: String(entry.id),
-		entryDate: '2026-06-21',
-		title: 'After',
-		body: 'Updated'
-	});
-	await expect(updateJournalEntry(event)).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
-	const updated = listJournalEntries(t.id)[0];
-	expect(updated.title).toBe('After');
 });
 
 test('deleteJournalEntry action deletes and redirects', async () => {

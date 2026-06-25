@@ -129,7 +129,7 @@ export function deleteAttendee(
 	logAudit(userId, 'remove_attendee', 'segment', segmentId, { companionId });
 }
 
-export async function setAttendeeStatus(event: RequestEvent) {
+export async function setAttendee(event: RequestEvent) {
 	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const segmentId = Number(f.get('segmentId'));
 	const companionId = Number(f.get('companionId'));
@@ -142,17 +142,5 @@ export async function setAttendeeStatus(event: RequestEvent) {
 	}
 
 	upsertAttendee(u.id, tripId, segmentId, companionId, status as SegmentAttendeeStatus);
-	throw redirect(303, `/trips/${tripId}`);
-}
-
-export async function removeAttendee(event: RequestEvent) {
-	const { user: u, tripId, formData: f } = await withTripAction(event);
-	const segmentId = Number(f.get('segmentId'));
-	const companionId = Number(f.get('companionId'));
-
-	if (!Number.isFinite(segmentId) || segmentId <= 0) throw error(400, 'Invalid segment');
-	if (!Number.isFinite(companionId) || companionId <= 0) throw error(400, 'Invalid companion');
-
-	deleteAttendee(u.id, tripId, segmentId, companionId);
 	throw redirect(303, `/trips/${tripId}`);
 }

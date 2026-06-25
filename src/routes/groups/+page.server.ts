@@ -6,6 +6,7 @@ import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
 import { users, groups, groupMembers } from '$lib/server/db/schema';
 import { positiveIdFromForm } from '$lib/server/validation';
+import { normalizeEmail } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -26,7 +27,7 @@ export const load: PageServerLoad = ({ locals }) => {
 
 export function _addMember(ownerId: number, groupId: number, email: string) {
 	requireOwnedGroup(ownerId, groupId);
-	const m = db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).get();
+	const m = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
 	if (m) db.insert(groupMembers).values({ groupId, userId: m.id }).onConflictDoNothing().run();
 }
 

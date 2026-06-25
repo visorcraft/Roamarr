@@ -1,4 +1,5 @@
 import { eq, and } from 'drizzle-orm';
+import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { tripComments, users } from './db/schema';
 
@@ -20,7 +21,7 @@ export function listComments(tripId: number) {
 
 export function addComment(userId: number, tripId: number, body: string) {
 	const text = body.trim();
-	if (!text) throw new Error('Comment is required');
+	if (!text) throw error(400, 'Comment is required');
 	return db.insert(tripComments).values({ userId, tripId, body: text }).returning().get();
 }
 

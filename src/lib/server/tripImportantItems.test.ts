@@ -8,21 +8,26 @@ vi.mock('./db', async () => {
 });
 
 import { addImportantItem, deleteImportantItem, listImportantItems } from './tripImportantItems';
-import { tripCompanions, tripImportantItems, trips, users } from './db/schema';
+import { tripImportantItems } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { makeUser, makeTrip, makeCompanion, resetTables } from '../../../tests/helpers';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from trip_important_items; delete from trip_companions; delete from trips; delete from users;'
+	resetTables(
+		(ctx as { sqlite: import('better-sqlite3').Database }).sqlite,
+		'trip_important_items',
+		'trip_companions',
+		'trips',
+		'users'
 	);
 });
 
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ii@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'Alex', category: 'adult' }).returning().get();
-	const other = db.insert(users).values({ email: 'oth@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const u = makeUser(db, { email: 'ii@x.c' });
+	const t = makeTrip(db, { ownerId: u.id, name: 'T' });
+	const c = makeCompanion(db, { tripId: t.id, name: 'Alex', category: 'adult' });
+	const other = makeUser(db, { email: 'oth@x.c' });
 	return { db, u, t, c, other };
 }
 

@@ -12,9 +12,10 @@ import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { users, trips, groups, groupMembers, tripShares, reminders } from '$lib/server/db/schema';
+import { makeGetEvent } from '../../../tests/eventHelpers';
 
-function event(user: { id: number }, search = '') {
-	return { locals: { user } as App.Locals, url: new URL(`http://localhost/trips${search}`) } as any;
+function event(user: { id: number; email: string }, search = '') {
+	return makeGetEvent(user, {}, {}, `http://localhost/trips${search}`) as any;
 }
 
 test('owner sees full trip; non-owner without share is blocked', () => {

@@ -1,15 +1,11 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { requireUser } from '../auth';
+import { withTripAction } from '../actions';
 import { Validator } from '../validation';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
 import { addTripExpense, deleteTripExpense } from './repository';
 
 export async function addExpense(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const v = new Validator();
 	const description = v.requiredString(f.get('description'), 'description', { max: 200 });
 	const amount = v.positiveId(f.get('amount'), 'amount');
@@ -66,11 +62,7 @@ export async function addExpense(event: RequestEvent) {
 }
 
 export async function deleteExpense(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const expenseId = Number(f.get('expenseId'));
 	if (!Number.isFinite(expenseId) || expenseId <= 0) throw error(400, 'Invalid expense');
 

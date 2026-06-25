@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from './db';
 import { tripChecklists, tripChecklistItems, tripCompanions } from './db/schema';
-import { requireEditableTrip } from './ownership';
+import { requireCompanionOnTrip, requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator } from './validation';
 import { parseTripId } from './params';
@@ -48,17 +48,6 @@ export function loadChecklist(tripId: number): ChecklistWithItems {
 		.orderBy(tripChecklistItems.createdAt)
 		.all();
 	return { id: checklist.id, tripId, items };
-}
-
-function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
-	if (companionId == null) return null;
-	const c = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.get();
-	if (!c) throw error(400, 'Assigned companion is not on this trip');
-	return companionId;
 }
 
 export function addItem(

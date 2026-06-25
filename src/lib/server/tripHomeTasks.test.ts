@@ -10,12 +10,10 @@ vi.mock('./db', async () => {
 import { addHomeTask, deleteHomeTask, listHomeTasks, toggleHomeTask } from './tripHomeTasks';
 import { tripHomeTasks } from './db/schema';
 import { eq } from 'drizzle-orm';
-import { makeUser, makeTrip } from '../../../tests/helpers';
+import { makeUser, makeTrip, resetTables } from '../../../tests/helpers';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from trip_home_tasks; delete from trips; delete from users;'
-	);
+	resetTables((ctx as { sqlite: import('better-sqlite3').Database }).sqlite, 'trip_home_tasks', 'trips', 'users');
 });
 
 function seed() {

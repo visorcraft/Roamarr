@@ -2,6 +2,7 @@ import { createDb } from '../src/lib/server/db/createDb';
 import { applyMigrations } from '../src/lib/server/db/migrate';
 import { settings, users, trips, segments, tripCompanions } from '../src/lib/server/db/schema';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import type { Database } from 'better-sqlite3';
 
 let userCounter = 0;
 let tripCounter = 0;
@@ -11,6 +12,10 @@ export function freshDb() {
 	applyMigrations(db);
 	db.insert(settings).values({ id: 1 }).run();
 	return { db, sqlite };
+}
+
+export function resetTables(sqlite: Database, ...tables: string[]) {
+	sqlite.exec(tables.map((t) => `delete from ${t};`).join(' '));
 }
 
 export function makeUser(

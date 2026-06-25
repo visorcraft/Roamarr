@@ -53,7 +53,7 @@ export function listEmergencyContacts(userId: number): EmergencyContactRow[] {
 
 export function addEmergencyContact(userId: number, input: EmergencyContactInput): EmergencyContactRow {
 	const name = input.name.trim();
-	if (!name) throw new Error('Name is required');
+	if (!name) throw error(400, 'Name is required');
 
 	const isPrimary = input.isPrimary ?? false;
 	if (isPrimary) clearOtherPrimary(userId);
@@ -85,7 +85,7 @@ export function updateEmergencyContact(
 ): EmergencyContactRow {
 	requireOwnedContact(userId, contactId);
 	const name = input.name.trim();
-	if (!name) throw new Error('Name is required');
+	if (!name) throw error(400, 'Name is required');
 
 	const isPrimary = input.isPrimary ?? false;
 	if (isPrimary) clearOtherPrimary(userId, contactId);

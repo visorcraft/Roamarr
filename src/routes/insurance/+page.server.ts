@@ -1,9 +1,10 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
 import { insurancePolicies, trips } from '$lib/server/db/schema';
+import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export function _addPolicy(
@@ -84,6 +85,13 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
+		let tripId: number | undefined;
+		const tripIdRaw = f.get('tripId');
+		if (tripIdRaw) {
+			const tripResult = positiveIdFromForm(tripIdRaw, 'tripId');
+			if (!tripResult.ok) return fail(400, { error: tripResult.error });
+			tripId = tripResult.value;
+		}
 		_addPolicy(u.id, {
 			provider: String(f.get('provider')),
 			policyNumber: String(f.get('policyNumber') || '') || undefined,
@@ -91,30 +99,41 @@ export const actions: Actions = {
 			coverageAmount: f.get('coverageAmount') ? Number(f.get('coverageAmount')) : undefined,
 			startDate: String(f.get('startDate') || '') || undefined,
 			endDate: String(f.get('endDate') || '') || undefined,
-			tripId: f.get('tripId') ? Number(f.get('tripId')) : undefined
+			tripId
 		});
 		throw redirect(303, '/insurance');
 	},
 	update: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_updatePolicy(u.id, Number(f.get('id')), {
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		let tripId: number | undefined;
+		const tripIdRaw = f.get('tripId');
+		if (tripIdRaw) {
+			const tripResult = positiveIdFromForm(tripIdRaw, 'tripId');
+			if (!tripResult.ok) return fail(400, { error: tripResult.error });
+			tripId = tripResult.value;
+		}
+		_updatePolicy(u.id, idResult.value, {
 			provider: String(f.get('provider')),
 			policyNumber: String(f.get('policyNumber') || '') || undefined,
 			coverageSummary: String(f.get('coverageSummary') || '') || undefined,
 			coverageAmount: f.get('coverageAmount') ? Number(f.get('coverageAmount')) : undefined,
 			startDate: String(f.get('startDate') || '') || undefined,
 			endDate: String(f.get('endDate') || '') || undefined,
-			tripId: f.get('tripId') ? Number(f.get('tripId')) : undefined,
+			tripId,
 			notes: String(f.get('notes') || '') || undefined
 		});
 		throw redirect(303, '/insurance');
 	},
 	delete: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		const id = Number((await request.formData()).get('id'));
+		const f = await request.formData();
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
 		db.delete(insurancePolicies)
-			.where(and(eq(insurancePolicies.id, id), eq(insurancePolicies.userId, u.id)))
+			.where(and(eq(insurancePolicies.id, idResult.value), eq(insurancePolicies.userId, u.id)))
 			.run();
 		throw redirect(303, '/insurance');
 	}

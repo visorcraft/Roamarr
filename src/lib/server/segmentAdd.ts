@@ -1,5 +1,5 @@
 import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { requireUser } from '$lib/server/auth';
+import { withTripAction } from '$lib/server/actions';
 import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
 import type { SegmentType } from '$lib/server/db/schema';
@@ -36,9 +36,7 @@ function readEndAt(v: Validator, f: FormData): string | undefined {
 }
 
 export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const v = new Validator();
 
 	const title = v.requiredString(f.get('title'), 'title', { max: 200 });

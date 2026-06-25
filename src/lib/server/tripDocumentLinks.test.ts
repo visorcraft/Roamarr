@@ -76,10 +76,10 @@ test('createDocumentLink rejects invalid URLs', () => {
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
 
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'not-a-url' })).toThrow(
-		'URL must be a valid http or https URL'
+		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
 	);
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'ftp://files.example' })).toThrow(
-		'URL must be a valid http or https URL'
+		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
 	);
 });
 

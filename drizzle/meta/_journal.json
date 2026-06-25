@@ -141,6 +141,13 @@
       "when": 1782388838048,
       "tag": "0019_confused_callisto",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1782402296027,
+      "tag": "0020_sloppy_raider",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,8 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from '../db';
-import { tripCompanions, tripExpenses } from '../db/schema';
-import { requireEditableTrip } from '../ownership';
+import { tripExpenses } from '../db/schema';
+import { requireCompanionOnTrip, requireCompanionsOnTrip, requireEditableTrip } from '../ownership';
 import { logAudit } from '../audit';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
 import type { TripExpenseView } from './types';
@@ -89,25 +89,10 @@ export function addTripExpense(
 		)
 	);
 
-	if (paidByCompanionId != null) {
-		const c = db
-			.select()
-			.from(tripCompanions)
-			.where(and(eq(tripCompanions.id, paidByCompanionId), eq(tripCompanions.tripId, tripId)))
-			.get();
-		if (!c) throw error(400, 'Payer companion is not on this trip');
-	}
+	requireCompanionOnTrip(paidByCompanionId, tripId);
 
 	const splitCompanionIds = splitAmong.filter((n): n is number => typeof n === 'number');
-	if (splitCompanionIds.length > 0) {
-		const found = db
-			.select({ id: tripCompanions.id })
-			.from(tripCompanions)
-			.where(and(eq(tripCompanions.tripId, tripId), inArray(tripCompanions.id, splitCompanionIds)))
-			.all();
-		const foundIds = new Set(found.map((c) => c.id));
-		if (foundIds.size !== splitCompanionIds.length) throw error(400, 'Split companion not found');
-	}
+	requireCompanionsOnTrip(splitCompanionIds, tripId);
 
 	const inserted = db
 		.insert(tripExpenses)

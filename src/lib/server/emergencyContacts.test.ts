@@ -75,7 +75,9 @@ test('addEmergencyContact rejects empty name', () => {
 		.returning()
 		.get();
 
-	expect(() => addEmergencyContact(u.id, { name: '   ' })).toThrow('Name is required');
+	expect(() => addEmergencyContact(u.id, { name: '   ' })).toThrow(
+		expect.objectContaining({ status: 400, body: { message: 'Name is required' } })
+	);
 });
 
 test('listEmergencyContacts orders primary first then by name', () => {

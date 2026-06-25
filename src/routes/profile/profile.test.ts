@@ -14,7 +14,7 @@ const remindersMock = vi.hoisted(() => ({
 vi.mock('$lib/server/reminders', () => remindersMock);
 
 import { _addDocument as addDocument } from './documents/+page.server';
-import { _updateProgram as updateProgram } from './loyalty/+page.server';
+import { updateLoyaltyProgram as updateProgram } from '$lib/server/loyaltyPrograms';
 import {
 	_updateProfile,
 	_updatePassword,
@@ -82,7 +82,9 @@ test('updateProgram edits a loyalty program and is user-scoped', () => {
 	expect(row.balance).toBe(5000);
 	expect(row.notes).toBe('new note');
 
-	updateProgram(b.id, program.id, { programName: 'Hacked' });
+	expect(() => updateProgram(b.id, program.id, { programName: 'Hacked' })).toThrow(
+		expect.objectContaining({ status: 404, body: { message: 'Not found' } })
+	);
 	const unchanged = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, program.id)).get()!;
 	expect(unchanged.programName).toBe('United MileagePlus');
 });

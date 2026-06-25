@@ -45,3 +45,4 @@ pnpm-debug.log*
 playwright-report/
 test-results/
 roamarr-*.png
+attachments/

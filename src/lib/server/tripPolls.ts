@@ -1,6 +1,6 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
-import { requireUser } from './auth';
+import { withTripAction } from './actions';
 import { db } from './db';
 import {
 	tripPolls,
@@ -178,11 +178,7 @@ export function removeTripPoll(userId: number, pollId: number) {
 }
 
 export async function createPoll(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const v = new Validator();
 	const question = v.requiredString(f.get('question'), 'question', { max: 500 });
 
@@ -207,11 +203,7 @@ export async function createPoll(event: RequestEvent) {
 }
 
 export async function votePoll(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const pollId = Number(f.get('pollId'));
 	const companionId = Number(f.get('companionId'));
 	const optionId = Number(f.get('optionId'));
@@ -225,11 +217,7 @@ export async function votePoll(event: RequestEvent) {
 }
 
 export async function deletePoll(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const pollId = Number(f.get('pollId'));
 	if (!Number.isFinite(pollId) || pollId <= 0) throw error(400, 'Invalid poll');
 

@@ -13,20 +13,24 @@ import {
 	listEntryRequirements,
 	updateEntryRequirementStatus
 } from './tripEntryRequirements';
-import { tripEntryRequirements, trips, users } from './db/schema';
+import { tripEntryRequirements } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { makeUser, makeTrip, resetTables } from '../../../tests/helpers';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from trip_entry_requirements; delete from trips; delete from users;'
+	resetTables(
+		(ctx as { sqlite: import('better-sqlite3').Database }).sqlite,
+		'trip_entry_requirements',
+		'trips',
+		'users'
 	);
 });
 
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'er@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const other = db.insert(users).values({ email: 'oth@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const u = makeUser(db, { email: 'er@x.c' });
+	const t = makeTrip(db, { ownerId: u.id, name: 'T' });
+	const other = makeUser(db, { email: 'oth@x.c' });
 	return { db, u, t, other };
 }
 
@@ -64,7 +68,7 @@ test('addEntryRequirement validates type and country', () => {
 test('updateEntryRequirementStatus changes status', () => {
 	const { u, t } = seed();
 	const req = addEntryRequirement(u.id, t.id, { country: 'China', requirementType: 'visa' });
-	const updated = updateEntryRequirementStatus(u.id, t.id, req.id, 'complete');
+	const updated = updateEntryRequirementStatus(u.id, t.id, req.id, { status: 'complete' });
 	expect(updated.status).toBe('complete');
 	expect(listEntryRequirements(t.id)[0].status).toBe('complete');
 });
@@ -72,7 +76,7 @@ test('updateEntryRequirementStatus changes status', () => {
 test('updateEntryRequirementStatus rejects invalid status', () => {
 	const { u, t } = seed();
 	const req = addEntryRequirement(u.id, t.id, { country: 'X', requirementType: 'other' });
-	expect(() => updateEntryRequirementStatus(u.id, t.id, req.id, 'nope')).toThrow();
+	expect(() => updateEntryRequirementStatus(u.id, t.id, req.id, { status: 'nope' })).toThrow();
 });
 
 test('deleteEntryRequirement removes the row', () => {
@@ -86,6 +90,6 @@ test('non-editor cannot mutate entry requirements', () => {
 	const { u, t, other } = seed();
 	const req = addEntryRequirement(u.id, t.id, { country: 'Z', requirementType: 'other' });
 	expect(() => addEntryRequirement(other.id, t.id, { country: 'A', requirementType: 'other' })).toThrow();
-	expect(() => updateEntryRequirementStatus(other.id, t.id, req.id, 'complete')).toThrow();
+	expect(() => updateEntryRequirementStatus(other.id, t.id, req.id, { status: 'complete' })).toThrow();
 	expect(() => deleteEntryRequirement(other.id, t.id, req.id)).toThrow();
 });

@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
+import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { db } from './db';
 import { tripDocumentLinks } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';
@@ -77,9 +77,9 @@ function normalizeInput(input: DocumentLinkInput) {
 	const label = input.label.trim();
 	const url = input.url.trim();
 	const notes = input.notes?.trim() || null;
-	if (!label) throw new Error('Label is required');
-	if (!url) throw new Error('URL is required');
-	if (!isValidHttpUrl(url)) throw new Error('URL must be a valid http or https URL');
+	if (!label) throw error(400, 'Label is required');
+	if (!url) throw error(400, 'URL is required');
+	if (!isValidHttpUrl(url)) throw error(400, 'URL must be a valid http or https URL');
 	return { label, url, notes };
 }
 

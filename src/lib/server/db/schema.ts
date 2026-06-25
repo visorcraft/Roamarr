@@ -1,5 +1,6 @@
 import { sqliteTable, integer, text, primaryKey, unique, uniqueIndex, index, check } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { enumCheck } from './schemaHelpers';
 
 export const schedulerRuns = sqliteTable(
 	'scheduler_runs',
@@ -16,6 +17,45 @@ export const schedulerRuns = sqliteTable(
 );
 
 const now = sql`(datetime('now'))`;
+
+export const ROLES = ['admin', 'user'] as const;
+export type Role = (typeof ROLES)[number];
+
+export const VISIBILITIES = ['private', 'groups', 'public'] as const;
+export type Visibility = (typeof VISIBILITIES)[number];
+
+export const TRIP_STATUSES = ['planning', 'booked', 'active', 'completed'] as const;
+export type TripStatus = (typeof TRIP_STATUSES)[number];
+
+export const SHARE_PERMISSIONS = ['read', 'edit'] as const;
+export type SharePermission = (typeof SHARE_PERMISSIONS)[number];
+
+export const CARD_NETWORKS = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
+export type CardNetwork = (typeof CARD_NETWORKS)[number];
+
+export const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
+export type BenefitType = (typeof BENEFIT_TYPES)[number];
+
+export const REMINDER_KINDS = ['flight_checkin', 'document_expiry', 'custom'] as const;
+export type ReminderKind = (typeof REMINDER_KINDS)[number];
+
+export const REMINDER_REF_TYPES = ['segment', 'document', 'trip'] as const;
+export type ReminderRefType = (typeof REMINDER_REF_TYPES)[number];
+
+export const REMINDER_STATUSES = ['pending', 'sending', 'sent'] as const;
+export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
+
+export const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const WATCH_STATUSES = ['active', 'paused'] as const;
+export type WatchStatus = (typeof WATCH_STATUSES)[number];
+
+export const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
+export type EntryRequirementType = (typeof ENTRY_REQUIREMENT_TYPES)[number];
+
+export const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
+export type EntryRequirementStatus = (typeof ENTRY_REQUIREMENT_STATUSES)[number];
 
 export const users = sqliteTable(
 	'users',
@@ -38,23 +78,30 @@ export const users = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		roleCk: check('users_role_ck', sql`${t.role} in ('admin','user')`),
+		roleCk: enumCheck(t.role, ROLES, { constraintName: 'users_role_ck' }),
 		flightLeadCk: check('users_flight_lead_ck', sql`${t.flightCheckinLeadHours} >= 0`),
 		docLeadCk: check('users_doc_lead_ck', sql`${t.documentExpiryLeadDays} >= 0`)
 	})
 );
 
-export const sessions = sqliteTable('sessions', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	tokenHash: text('token_hash').notNull().unique(),
-	userId: integer('user_id')
-		.notNull()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	expiresAt: text('expires_at').notNull(),
-	lastIp: text('last_ip'),
-	userAgent: text('user_agent'),
-	createdAt: text('created_at').notNull().default(now)
-});
+export const sessions = sqliteTable(
+	'sessions',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tokenHash: text('token_hash').notNull().unique(),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		expiresAt: text('expires_at').notNull(),
+		lastIp: text('last_ip'),
+		userAgent: text('user_agent'),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		userIdx: index('sessions_user_idx').on(t.userId),
+		expiresIdx: index('sessions_expires_idx').on(t.expiresAt)
+	})
+);
 
 export const passwordResetTokens = sqliteTable('password_reset_tokens', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
@@ -109,8 +156,8 @@ export const trips = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(now)
 	},
 	(t) => ({
-		visCk: check('trips_vis_ck', sql`${t.defaultVisibility} in ('private','groups','public')`),
-		statusCk: check('trips_status_ck', sql`${t.status} in ('planning','booked','active','completed')`),
+		visCk: enumCheck(t.defaultVisibility, VISIBILITIES, { constraintName: 'trips_vis_ck' }),
+		statusCk: enumCheck(t.status, TRIP_STATUSES, { constraintName: 'trips_status_ck' }),
 		ownerIdx: index('trips_owner_idx').on(t.ownerId),
 		startIdx: index('trips_start_idx').on(t.startDate)
 	})
@@ -157,6 +204,7 @@ export const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 
 export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 
 export const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
+export type SegmentPaymentStatus = (typeof SEGMENT_PAYMENT_STATUSES)[number];
 
 export const segments = sqliteTable(
 	'segments',
@@ -184,18 +232,11 @@ export const segments = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(now)
 	},
 	(t) => ({
-		typeCk: check(
-			'segments_type_ck',
-			sql`${t.type} in ('flight','event','hotel','rental_car','note','todo','parking','boat','train','directions','food','poi','meetup','rideshare','shuttle')`
-		),
-		statusCk: check(
-			'segments_status_ck',
-			sql`${t.status} in ('planned','checked_in','boarded','arrived','completed')`
-		),
-		paymentStatusCk: check(
-			'segments_payment_status_ck',
-			sql`${t.paymentStatus} in ('quoted','deposit_paid','fully_paid','refunded')`
-		),
+		typeCk: enumCheck(t.type, SEGMENT_TYPES, { constraintName: 'segments_type_ck' }),
+		statusCk: enumCheck(t.status, SEGMENT_STATUSES, { constraintName: 'segments_status_ck' }),
+		paymentStatusCk: enumCheck(t.paymentStatus, SEGMENT_PAYMENT_STATUSES, {
+			constraintName: 'segments_payment_status_ck'
+		}),
 		tripIdx: index('segments_trip_idx').on(t.tripId),
 		startIdx: index('segments_start_idx').on(t.startAt)
 	})
@@ -221,10 +262,7 @@ export const travelDocuments = sqliteTable(
 		notes: text('notes')
 	},
 	(t) => ({
-		typeCk: check(
-			'docs_type_ck',
-			sql`${t.type} in ('passport','drivers_license','global_entry','visa')`
-		),
+		typeCk: enumCheck(t.type, TRAVEL_DOCUMENT_TYPES, { constraintName: 'docs_type_ck' }),
 		expIdx: index('docs_user_exp_idx').on(t.userId, t.expiresOn),
 		companionIdx: index('docs_companion_idx').on(t.companionId)
 	})
@@ -247,14 +285,20 @@ export const loyaltyPrograms = sqliteTable(
 	})
 );
 
-export const groups = sqliteTable('groups', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	ownerId: integer('owner_id')
-		.notNull()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	name: text('name').notNull(),
-	createdAt: text('created_at').notNull().default(now)
-});
+export const groups = sqliteTable(
+	'groups',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		ownerId: integer('owner_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		ownerIdx: index('groups_owner_idx').on(t.ownerId)
+	})
+);
 
 export const groupMembers = sqliteTable(
 	'group_members',
@@ -294,7 +338,7 @@ export const tripShares = sqliteTable(
 			'shares_one_target_ck',
 			sql`(${t.sharedWithUserId} is not null) <> (${t.sharedWithGroupId} is not null)`
 		),
-		permCk: check('shares_perm_ck', sql`${t.permission} in ('read','edit')`),
+		permCk: enumCheck(t.permission, SHARE_PERMISSIONS, { constraintName: 'shares_perm_ck' }),
 		uUser: uniqueIndex('shares_trip_user_uq').on(t.tripId, t.sharedWithUserId),
 		uGroup: uniqueIndex('shares_trip_group_uq').on(t.tripId, t.sharedWithGroupId),
 		userIdx: index('shares_user_idx').on(t.sharedWithUserId),
@@ -315,7 +359,7 @@ export const cards = sqliteTable(
 		notes: text('notes')
 	},
 	(t) => ({
-		netCk: check('cards_net_ck', sql`${t.network} in ('visa','mc','amex','disc','other')`),
+		netCk: enumCheck(t.network, CARD_NETWORKS, { constraintName: 'cards_net_ck' }),
 		userIdx: index('cards_user_idx').on(t.userId)
 	})
 );
@@ -333,10 +377,7 @@ export const cardBenefits = sqliteTable(
 		notes: text('notes')
 	},
 	(t) => ({
-		ck: check(
-			'benefit_type_ck',
-			sql`${t.benefitType} in ('trip_delay','baggage_delay','trip_cancellation','other')`
-		)
+		ck: enumCheck(t.benefitType, BENEFIT_TYPES, { constraintName: 'benefit_type_ck' })
 	})
 );
 
@@ -351,10 +392,7 @@ export const benefitTemplates = sqliteTable(
 		description: text('description')
 	},
 	(t) => ({
-		ck: check(
-			'benefit_template_type_ck',
-			sql`${t.benefitType} in ('trip_delay','baggage_delay','trip_cancellation','other')`
-		)
+		ck: enumCheck(t.benefitType, BENEFIT_TYPES, { constraintName: 'benefit_template_type_ck' })
 	})
 );
 
@@ -376,20 +414,27 @@ export const insurancePolicies = sqliteTable(
 		notes: text('notes')
 	},
 	(t) => ({
+		userIdx: index('ins_user_idx').on(t.userId),
 		tripIdx: index('ins_trip_idx').on(t.tripId)
 	})
 );
 
-export const fareProviders = sqliteTable('fare_providers', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	userId: integer('user_id')
-		.notNull()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	providerKey: text('provider_key').notNull(),
-	label: text('label').notNull().default(''),
-	apiKey: text('api_key'),
-	enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true)
-});
+export const fareProviders = sqliteTable(
+	'fare_providers',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		providerKey: text('provider_key').notNull(),
+		label: text('label').notNull().default(''),
+		apiKey: text('api_key'),
+		enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true)
+	},
+	(t) => ({
+		userIdx: index('fare_providers_user_idx').on(t.userId)
+	})
+);
 
 export const fareWatches = sqliteTable(
 	'fare_watches',
@@ -408,9 +453,11 @@ export const fareWatches = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		statusCk: check('watch_status_ck', sql`${t.status} in ('active','paused')`),
+		statusCk: enumCheck(t.status, WATCH_STATUSES, { constraintName: 'watch_status_ck' }),
 		provIdx: index('watch_provider_idx').on(t.providerId),
-		statusIdx: index('watch_status_idx').on(t.status)
+		statusIdx: index('watch_status_idx').on(t.status),
+		tripIdx: index('watch_trip_idx').on(t.tripId),
+		segmentIdx: index('watch_segment_idx').on(t.segmentId)
 	})
 );
 
@@ -431,9 +478,9 @@ export const reminders = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		kindCk: check('rem_kind_ck', sql`${t.kind} in ('flight_checkin','document_expiry','custom')`),
-		refCk: check('rem_ref_ck', sql`${t.refType} in ('segment','document','trip')`),
-		statCk: check('rem_stat_ck', sql`${t.status} in ('pending','sending','sent')`),
+		kindCk: enumCheck(t.kind, REMINDER_KINDS, { constraintName: 'rem_kind_ck' }),
+		refCk: enumCheck(t.refType, REMINDER_REF_TYPES, { constraintName: 'rem_ref_ck' }),
+		statCk: enumCheck(t.status, REMINDER_STATUSES, { constraintName: 'rem_stat_ck' }),
 		uq: unique('rem_source_uq').on(t.kind, t.refType, t.refId),
 		dueIdx: index('rem_due_idx').on(t.status, t.fireAt)
 	})
@@ -479,6 +526,12 @@ export const auditLogs = sqliteTable(
 export const COMPANION_CATEGORIES = ['adult', 'child', 'other'] as const;
 export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
 
+export const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
+export type SeatPreference = (typeof SEAT_PREFERENCES)[number];
+
+export const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
+export type BedPreference = (typeof BED_PREFERENCES)[number];
+
 export const tripCompanions = sqliteTable(
 	'trip_companions',
 	{
@@ -504,15 +557,15 @@ export const tripCompanions = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		catCk: check('companions_cat_ck', sql`${t.category} in ('adult','child','other')`),
-		seatCk: check(
-			'companions_seat_ck',
-			sql`${t.seatPreference} is null or ${t.seatPreference} in ('aisle','window','middle','none')`
-		),
-		bedCk: check(
-			'companions_bed_ck',
-			sql`${t.bedPreference} is null or ${t.bedPreference} in ('king','queen','twin','two_doubles','other')`
-		),
+		catCk: enumCheck(t.category, COMPANION_CATEGORIES, { constraintName: 'companions_cat_ck' }),
+		seatCk: enumCheck(t.seatPreference, SEAT_PREFERENCES, {
+			nullable: true,
+			constraintName: 'companions_seat_ck'
+		}),
+		bedCk: enumCheck(t.bedPreference, BED_PREFERENCES, {
+			nullable: true,
+			constraintName: 'companions_bed_ck'
+		}),
 		tripIdx: index('companions_trip_idx').on(t.tripId)
 	})
 );
@@ -571,10 +624,7 @@ export const tripExpenses = sqliteTable(
 	},
 	(t) => ({
 		tripIdx: index('expenses_trip_idx').on(t.tripId),
-		catCk: check(
-			'expenses_category_ck',
-			sql`${t.category} in ('lodging','transport','food','activities','other')`
-		)
+		catCk: enumCheck(t.category, EXPENSE_CATEGORIES, { constraintName: 'expenses_category_ck' })
 	})
 );
 
@@ -595,7 +645,9 @@ export const segmentAttendees = sqliteTable(
 		createdAt: text('created_at').notNull().default(now)
 	},
 	(t) => ({
-		statusCk: check('attendee_status_ck', sql`${t.status} in ('going','maybe','not_going')`),
+		statusCk: enumCheck(t.status, SEGMENT_ATTENDEE_STATUSES, {
+			constraintName: 'attendee_status_ck'
+		}),
 		uq: unique('attendee_segment_companion_uq').on(t.segmentId, t.companionId),
 		segmentIdx: index('attendees_segment_idx').on(t.segmentId)
 	})
@@ -756,58 +808,84 @@ export const tripBudgetCategories = sqliteTable(
 	})
 );
 
-export const tripExpenseAttachments = sqliteTable('trip_expense_attachments', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	expenseId: integer('expense_id')
-		.notNull()
-		.references(() => tripExpenses.id, { onDelete: 'cascade' }),
-	filename: text('filename').notNull(),
-	storageKey: text('storage_key').notNull().unique(),
-	contentType: text('content_type').notNull(),
-	sizeBytes: integer('size_bytes').notNull().default(0),
-	createdAt: text('created_at').notNull().default(now)
-});
+export const tripExpenseAttachments = sqliteTable(
+	'trip_expense_attachments',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		expenseId: integer('expense_id')
+			.notNull()
+			.references(() => tripExpenses.id, { onDelete: 'cascade' }),
+		filename: text('filename').notNull(),
+		storageKey: text('storage_key').notNull().unique(),
+		contentType: text('content_type').notNull(),
+		sizeBytes: integer('size_bytes').notNull().default(0),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		expenseIdx: index('expense_attachments_expense_idx').on(t.expenseId)
+	})
+);
 
-export const tripTemplates = sqliteTable('trip_templates', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	userId: integer('user_id')
-		.notNull()
-		.references(() => users.id, { onDelete: 'cascade' }),
-	name: text('name').notNull(),
-	sourceTripId: integer('source_trip_id').references(() => trips.id, { onDelete: 'set null' }),
-	snapshotJson: text('snapshot_json').notNull(),
-	createdAt: text('created_at').notNull().default(now)
-});
+export const tripTemplates = sqliteTable(
+	'trip_templates',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		sourceTripId: integer('source_trip_id').references(() => trips.id, { onDelete: 'set null' }),
+		snapshotJson: text('snapshot_json').notNull(),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		userIdx: index('trip_templates_user_idx').on(t.userId),
+		sourceIdx: index('trip_templates_source_idx').on(t.sourceTripId)
+	})
+);
 
-export const tripHomeTasks = sqliteTable('trip_home_tasks', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	tripId: integer('trip_id')
-		.notNull()
-		.references(() => trips.id, { onDelete: 'cascade' }),
-	text: text('text').notNull(),
-	dueDate: text('due_date'),
-	done: integer('done', { mode: 'boolean' }).notNull().default(false),
-	sortOrder: integer('sort_order').notNull().default(0),
-	createdAt: text('created_at').notNull().default(now)
-});
+export const tripHomeTasks = sqliteTable(
+	'trip_home_tasks',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		text: text('text').notNull(),
+		dueDate: text('due_date'),
+		done: integer('done', { mode: 'boolean' }).notNull().default(false),
+		sortOrder: integer('sort_order').notNull().default(0),
+		createdAt: text('created_at').notNull().default(now)
+	},
+	(t) => ({
+		tripIdx: index('home_tasks_trip_idx').on(t.tripId)
+	})
+);
 
-export const tripMedications = sqliteTable('trip_medications', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	tripId: integer('trip_id')
-		.notNull()
-		.references(() => trips.id, { onDelete: 'cascade' }),
-	companionId: integer('companion_id').references(() => tripCompanions.id, {
-		onDelete: 'set null'
-	}),
-	name: text('name').notNull(),
-	dosage: text('dosage'),
-	schedule: text('schedule'),
-	startsAt: text('starts_at'),
-	endsAt: text('ends_at'),
-	notes: text('notes'),
-	createdAt: text('created_at').notNull().default(now),
-	updatedAt: text('updated_at').notNull().default(now)
-});
+export const tripMedications = sqliteTable(
+	'trip_medications',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		companionId: integer('companion_id').references(() => tripCompanions.id, {
+			onDelete: 'set null'
+		}),
+		name: text('name').notNull(),
+		dosage: text('dosage'),
+		schedule: text('schedule'),
+		startsAt: text('starts_at'),
+		endsAt: text('ends_at'),
+		notes: text('notes'),
+		createdAt: text('created_at').notNull().default(now),
+		updatedAt: text('updated_at').notNull().default(now)
+	},
+	(t) => ({
+		tripIdx: index('medications_trip_idx').on(t.tripId),
+		companionIdx: index('medications_companion_idx').on(t.companionId)
+	})
+);
 
 export const tripEntryRequirements = sqliteTable(
 	'trip_entry_requirements',
@@ -825,30 +903,35 @@ export const tripEntryRequirements = sqliteTable(
 		updatedAt: text('updated_at').notNull().default(now)
 	},
 	(t) => ({
-		typeCk: check(
-			'entry_req_type_ck',
-			sql`${t.requirementType} in ('visa','vaccination','other')`
-		),
-		statusCk: check(
-			'entry_req_status_ck',
-			sql`${t.status} in ('needed','in_progress','complete','not_needed')`
-		),
+		typeCk: enumCheck(t.requirementType, ENTRY_REQUIREMENT_TYPES, {
+			constraintName: 'entry_req_type_ck'
+		}),
+		statusCk: enumCheck(t.status, ENTRY_REQUIREMENT_STATUSES, {
+			constraintName: 'entry_req_status_ck'
+		}),
 		tripIdx: index('entry_req_trip_idx').on(t.tripId)
 	})
 );
 
-export const tripImportantItems = sqliteTable('trip_important_items', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	tripId: integer('trip_id')
-		.notNull()
-		.references(() => trips.id, { onDelete: 'cascade' }),
-	companionId: integer('companion_id').references(() => tripCompanions.id, {
-		onDelete: 'set null'
-	}),
-	name: text('name').notNull(),
-	serialNumber: text('serial_number'),
-	trackerId: text('tracker_id'),
-	notes: text('notes'),
-	createdAt: text('created_at').notNull().default(now),
-	updatedAt: text('updated_at').notNull().default(now)
-});
+export const tripImportantItems = sqliteTable(
+	'trip_important_items',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tripId: integer('trip_id')
+			.notNull()
+			.references(() => trips.id, { onDelete: 'cascade' }),
+		companionId: integer('companion_id').references(() => tripCompanions.id, {
+			onDelete: 'set null'
+		}),
+		name: text('name').notNull(),
+		serialNumber: text('serial_number'),
+		trackerId: text('tracker_id'),
+		notes: text('notes'),
+		createdAt: text('created_at').notNull().default(now),
+		updatedAt: text('updated_at').notNull().default(now)
+	},
+	(t) => ({
+		tripIdx: index('important_items_trip_idx').on(t.tripId),
+		companionIdx: index('important_items_companion_idx').on(t.companionId)
+	})
+);

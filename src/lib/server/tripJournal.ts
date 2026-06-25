@@ -1,5 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
-import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
+import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
 import { db } from './db';
 import { tripJournalEntries } from './db/schema';
@@ -30,7 +30,7 @@ function validateFields(input: Partial<JournalEntryInput>) {
 		input.title != null ? v.requiredString(input.title, 'title', { max: 200 }) : undefined;
 	const body = input.body != null ? v.requiredString(input.body, 'body', { max: 10000 }) : undefined;
 	if (!v.ok()) {
-		throw formFail(v);
+		throw error(400, v.failMessage());
 	}
 	return { entryDate: entryDate!, title: title!, body: body! };
 }
@@ -57,7 +57,7 @@ export function modifyJournalEntry(
 		.from(tripJournalEntries)
 		.where(eq(tripJournalEntries.id, entryId))
 		.get();
-	if (!existing) throw formFail(Object.assign(new Validator(), { errors: { entryId: 'Not found' } }));
+	if (!existing) throw error(404, 'Not found');
 	const { entryDate, title, body } = validateFields({
 		entryDate: input.entryDate ?? existing.entryDate,
 		title: input.title ?? existing.title,
@@ -80,7 +80,7 @@ export function removeJournalEntry(userId: number, entryId: number) {
 		.from(tripJournalEntries)
 		.where(eq(tripJournalEntries.id, entryId))
 		.get();
-	if (!existing) throw formFail(Object.assign(new Validator(), { errors: { entryId: 'Not found' } }));
+	if (!existing) throw error(404, 'Not found');
 	requireEditableTrip(userId, existing.tripId);
 	db.delete(tripJournalEntries).where(eq(tripJournalEntries.id, entryId)).run();
 	logAudit(userId, 'delete', 'journal_entry', entryId, { tripId: existing.tripId });

@@ -1,4 +1,3 @@
-import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { buildTripDetail } from '$lib/server/tripDetail';
 import { parseTripId } from '$lib/server/params';
@@ -29,21 +28,21 @@ import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
 import { saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
 import {
 	addHomeTaskAction,
-	toggleHomeTask,
-	deleteHomeTask
+	toggleHomeTaskAction,
+	deleteHomeTaskAction
 } from '$lib/server/tripHomeTasks';
 import {
-	addMedication,
-	deleteMedication
+	addMedicationAction,
+	deleteMedicationAction
 } from '$lib/server/tripMedications';
 import {
-	addEntryRequirement,
-	updateEntryRequirementStatus,
-	deleteEntryRequirement
+	addEntryRequirementAction,
+	updateEntryRequirementStatusAction,
+	deleteEntryRequirementAction
 } from '$lib/server/tripEntryRequirements';
 import {
-	addImportantItem,
-	deleteImportantItem
+	addImportantItemAction,
+	deleteImportantItemAction
 } from '$lib/server/tripImportantItems';
 import {
 	regenerateCalendarFeed,
@@ -64,8 +63,7 @@ import {
 	deleteAttachmentAction,
 	saveTripTemplateAction
 } from '$lib/server/tripMetaActions';
-import { withTripAction } from '$lib/server/actions';
-import { positiveIdFromForm } from '$lib/server/validation';
+import type { Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params, url }) => {
@@ -116,95 +114,13 @@ export const actions: Actions = {
 	deleteAttachment: deleteAttachmentAction,
 	saveTripTemplate: saveTripTemplateAction,
 	addHomeTask: addHomeTaskAction,
-	toggleHomeTask: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
-		if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
-		toggleHomeTask(user.id, tripId, taskIdResult.value);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteHomeTask: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
-		if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
-		deleteHomeTask(user.id, tripId, taskIdResult.value);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addMedication: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const name = String(formData.get('name') || '');
-		const companionIdRaw = formData.get('companionId');
-		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-		const dosage = String(formData.get('dosage') || '');
-		const schedule = String(formData.get('schedule') || '');
-		const startsAt = String(formData.get('startsAt') || '');
-		const endsAt = String(formData.get('endsAt') || '');
-		const notes = String(formData.get('notes') || '');
-		addMedication(user.id, tripId, {
-			name,
-			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
-			dosage,
-			schedule,
-			startsAt,
-			endsAt,
-			notes
-		});
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteMedication: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const medicationIdResult = positiveIdFromForm(formData.get('medicationId'), 'medicationId');
-		if (!medicationIdResult.ok) return fail(400, { error: medicationIdResult.error });
-		deleteMedication(user.id, tripId, medicationIdResult.value);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addEntryRequirement: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const country = String(formData.get('country') || '');
-		const requirementType = String(formData.get('requirementType') || '');
-		const status = String(formData.get('status') || 'needed');
-		const dueDate = String(formData.get('dueDate') || '') || null;
-		const notes = String(formData.get('notes') || '');
-		addEntryRequirement(user.id, tripId, { country, requirementType, status, dueDate, notes });
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	updateEntryRequirementStatus: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const requirementIdResult = positiveIdFromForm(formData.get('requirementId'), 'requirementId');
-		if (!requirementIdResult.ok) return fail(400, { error: requirementIdResult.error });
-		const status = String(formData.get('status') || '');
-		updateEntryRequirementStatus(user.id, tripId, requirementIdResult.value, status);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteEntryRequirement: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const requirementIdResult = positiveIdFromForm(formData.get('requirementId'), 'requirementId');
-		if (!requirementIdResult.ok) return fail(400, { error: requirementIdResult.error });
-		deleteEntryRequirement(user.id, tripId, requirementIdResult.value);
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	addImportantItem: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const name = String(formData.get('name') || '');
-		const companionIdRaw = formData.get('companionId');
-		const companionId = companionIdRaw ? Number(companionIdRaw) : null;
-		const serialNumber = String(formData.get('serialNumber') || '');
-		const trackerId = String(formData.get('trackerId') || '');
-		const notes = String(formData.get('notes') || '');
-		addImportantItem(user.id, tripId, {
-			name,
-			companionId: companionId && Number.isFinite(companionId) ? companionId : null,
-			serialNumber,
-			trackerId,
-			notes
-		});
-		throw redirect(303, `/trips/${tripId}`);
-	},
-	deleteImportantItem: async (event) => {
-		const { user, tripId, formData } = await withTripAction(event);
-		const itemIdResult = positiveIdFromForm(formData.get('itemId'), 'itemId');
-		if (!itemIdResult.ok) return fail(400, { error: itemIdResult.error });
-		deleteImportantItem(user.id, tripId, itemIdResult.value);
-		throw redirect(303, `/trips/${tripId}`);
-	}
+	toggleHomeTask: toggleHomeTaskAction,
+	deleteHomeTask: deleteHomeTaskAction,
+	addMedication: addMedicationAction,
+	deleteMedication: deleteMedicationAction,
+	addEntryRequirement: addEntryRequirementAction,
+	updateEntryRequirementStatus: updateEntryRequirementStatusAction,
+	deleteEntryRequirement: deleteEntryRequirementAction,
+	addImportantItem: addImportantItemAction,
+	deleteImportantItem: deleteImportantItemAction
 };

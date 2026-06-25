@@ -1,10 +1,10 @@
-import { redirect, type RequestEvent } from '@sveltejs/kit';
+import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { eq, asc } from 'drizzle-orm';
 import { db } from './db';
 import { tripHomeTasks } from './db/schema';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';
 import { logAudit } from './audit';
-import { Validator, formFail } from './validation';
+import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
 import { tripCrudFactory } from './crud';
 
@@ -16,7 +16,7 @@ const homeTaskCrud = tripCrudFactory({
 		const v = new Validator();
 		v.requiredString(input.text, 'text', { max: 200 });
 		v.date(input.dueDate, 'dueDate');
-		if (!v.ok()) throw formFail(v);
+		if (!v.ok()) throw error(400, v.failMessage());
 	},
 	buildInsert(input, tripId) {
 		return { tripId, text: input.text, dueDate: input.dueDate ?? null };
@@ -46,5 +46,21 @@ export async function addHomeTaskAction(event: RequestEvent) {
 	const dueDateRaw = formData.get('dueDate');
 	const dueDate = typeof dueDateRaw === 'string' && dueDateRaw ? dueDateRaw : null;
 	addHomeTask(user.id, tripId, { text, dueDate });
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function toggleHomeTaskAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
+	if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
+	toggleHomeTask(user.id, tripId, taskIdResult.value);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function deleteHomeTaskAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const taskIdResult = positiveIdFromForm(formData.get('taskId'), 'taskId');
+	if (!taskIdResult.ok) return fail(400, { error: taskIdResult.error });
+	deleteHomeTask(user.id, tripId, taskIdResult.value);
 	throw redirect(303, `/trips/${tripId}`);
 }

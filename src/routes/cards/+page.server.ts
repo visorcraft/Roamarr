@@ -1,11 +1,11 @@
-import { redirect, error, type Actions } from '@sveltejs/kit';
+import { fail, redirect, error, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { assertOwnedRefs } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
 import { cards, cardBenefits } from '$lib/server/db/schema';
 import { listBenefitTemplates, getBenefitTemplate } from '$lib/server/benefitTemplates';
-import { sanitizeLast4 } from '$lib/server/validation';
+import { sanitizeLast4, positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export function _addCard(
@@ -140,7 +140,9 @@ export const actions: Actions = {
 	updateCard: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_updateCard(u.id, Number(f.get('id')), {
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		_updateCard(u.id, idResult.value, {
 			nickname: String(f.get('nickname')),
 			network: String(f.get('network')),
 			last4: String(f.get('last4') || '') || undefined,
@@ -151,9 +153,16 @@ export const actions: Actions = {
 	addBenefit: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
+		const cardResult = positiveIdFromForm(f.get('cardId'), 'cardId');
+		if (!cardResult.ok) return fail(400, { error: cardResult.error });
 		const templateIdRaw = f.get('templateId');
-		const templateId = templateIdRaw ? Number(templateIdRaw) : undefined;
-		_addBenefit(u.id, Number(f.get('cardId')), {
+		let templateId: number | undefined;
+		if (templateIdRaw) {
+			const templateResult = positiveIdFromForm(templateIdRaw, 'templateId');
+			if (!templateResult.ok) return fail(400, { error: templateResult.error });
+			templateId = templateResult.value;
+		}
+		_addBenefit(u.id, cardResult.value, {
 			templateId,
 			benefitType: templateId ? undefined : String(f.get('benefitType')),
 			coverageAmount: templateId
@@ -169,7 +178,11 @@ export const actions: Actions = {
 	updateBenefit: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_updateBenefit(u.id, Number(f.get('id')), Number(f.get('cardId')), {
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		const cardResult = positiveIdFromForm(f.get('cardId'), 'cardId');
+		if (!cardResult.ok) return fail(400, { error: cardResult.error });
+		_updateBenefit(u.id, idResult.value, cardResult.value, {
 			benefitType: String(f.get('benefitType')),
 			coverageAmount: f.get('coverageAmount') ? Number(f.get('coverageAmount')) : undefined,
 			currency: String(f.get('currency') || '') || undefined,
@@ -180,13 +193,19 @@ export const actions: Actions = {
 	deleteBenefit: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_deleteBenefit(u.id, Number(f.get('id')), Number(f.get('cardId')));
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		const cardResult = positiveIdFromForm(f.get('cardId'), 'cardId');
+		if (!cardResult.ok) return fail(400, { error: cardResult.error });
+		_deleteBenefit(u.id, idResult.value, cardResult.value);
 		throw redirect(303, '/cards');
 	},
 	deleteCard: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		const id = Number((await request.formData()).get('id'));
-		db.delete(cards).where(and(eq(cards.id, id), eq(cards.userId, u.id))).run();
+		const f = await request.formData();
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		db.delete(cards).where(and(eq(cards.id, idResult.value), eq(cards.userId, u.id))).run();
 		throw redirect(303, '/cards');
 	}
 };

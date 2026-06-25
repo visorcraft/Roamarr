@@ -9,7 +9,7 @@ import {
 	type SegmentAttendeeStatus,
 	type CompanionCategory
 } from './db/schema';
-import { requireUser } from './auth';
+import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 
@@ -129,12 +129,8 @@ export function deleteAttendee(
 	logAudit(userId, 'remove_attendee', 'segment', segmentId, { companionId });
 }
 
-export async function setAttendeeStatus({ locals, params, request }: RequestEvent) {
-	const u = requireUser(locals);
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await request.formData();
+export async function setAttendeeStatus(event: RequestEvent) {
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const segmentId = Number(f.get('segmentId'));
 	const companionId = Number(f.get('companionId'));
 	const status = String(f.get('status') || '');
@@ -149,12 +145,8 @@ export async function setAttendeeStatus({ locals, params, request }: RequestEven
 	throw redirect(303, `/trips/${tripId}`);
 }
 
-export async function removeAttendee({ locals, params, request }: RequestEvent) {
-	const u = requireUser(locals);
-	const tripId = Number(params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await request.formData();
+export async function removeAttendee(event: RequestEvent) {
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const segmentId = Number(f.get('segmentId'));
 	const companionId = Number(f.get('companionId'));
 

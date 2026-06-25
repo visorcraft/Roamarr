@@ -2,7 +2,7 @@ import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import { tripBudgetCategories } from './db/schema';
-import { requireUser } from './auth';
+import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { Validator } from './validation';
 import { logAudit } from './audit';
@@ -122,11 +122,7 @@ export function deleteTripBudget(userId: number, tripId: number, category: Budge
 }
 
 export async function setBudgetAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const v = new Validator();
 	const category = v.enumValue(f.get('category'), BUDGET_CATEGORIES as readonly string[], 'category');
 	const amount = v.positiveId(f.get('amount'), 'amount');
@@ -140,11 +136,7 @@ export async function setBudgetAction(event: RequestEvent) {
 }
 
 export async function deleteBudgetAction(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-
-	const f = await event.request.formData();
+	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const category = String(f.get('category') || '');
 	if (!category) throw error(400, 'Category is required');
 

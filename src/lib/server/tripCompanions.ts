@@ -1,6 +1,6 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { requireUser } from '$lib/server/auth';
+import { withTripAction } from '$lib/server/actions';
 import { db } from '$lib/server/db';
 import { tripCompanions, COMPANION_CATEGORIES, type CompanionCategory } from '$lib/server/db/schema';
 import { requireEditableTrip } from '$lib/server/ownership';
@@ -211,10 +211,7 @@ export function removeTripCompanion(userId: number, tripId: number, companionId:
 }
 
 export async function addCompanion(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	const form = await event.request.formData();
+	const { user: u, tripId, formData: form } = await withTripAction(event);
 	const input = validateCompanionInput(form);
 	if (input.errors) {
 		return fail(400, { error: 'Please fix the highlighted fields.', errors: input.errors });
@@ -224,10 +221,7 @@ export async function addCompanion(event: RequestEvent) {
 }
 
 export async function updateCompanion(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	const form = await event.request.formData();
+	const { user: u, tripId, formData: form } = await withTripAction(event);
 	const companionId = Number(form.get('companionId'));
 	if (!Number.isFinite(companionId) || companionId <= 0) throw error(400, 'Invalid companion');
 	const input = validateCompanionInput(form);
@@ -239,10 +233,7 @@ export async function updateCompanion(event: RequestEvent) {
 }
 
 export async function deleteCompanion(event: RequestEvent) {
-	const u = requireUser(event.locals);
-	const tripId = Number(event.params.id);
-	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	const form = await event.request.formData();
+	const { user: u, tripId, formData: form } = await withTripAction(event);
 	const companionId = Number(form.get('companionId'));
 	if (!Number.isFinite(companionId) || companionId <= 0) throw error(400, 'Invalid companion');
 	removeTripCompanion(u.id, tripId, companionId);

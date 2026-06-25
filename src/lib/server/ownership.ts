@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
 import { trips, cards, fareProviders, segments, groups, travelDocuments, users, tripCompanions } from './db/schema';
@@ -58,6 +58,17 @@ export function requireOwnedTripRow<TTable extends SQLiteTable>(
 	return row;
 }
 
+export function requireOwnedUserRow<TTable extends SQLiteTable>(
+	table: TTable & { id: AnySQLiteColumn; userId: AnySQLiteColumn },
+	userId: number,
+	id: number,
+	notFoundMessage = 'Not found'
+): TTable['$inferSelect'] {
+	const row = db.select().from(table).where(and(eq(table.id, id), eq(table.userId, userId))).get();
+	if (!row) throw error(404, notFoundMessage);
+	return row;
+}
+
 export function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
 	if (companionId == null) return null;
 	const c = db
@@ -67,6 +78,17 @@ export function requireCompanionOnTrip(companionId: number | null | undefined, t
 		.get();
 	if (!c) throw error(400, 'Companion is not on this trip');
 	return companionId;
+}
+
+export function requireCompanionsOnTrip(companionIds: number[], tripId: number) {
+	if (companionIds.length === 0) return;
+	const found = db
+		.select({ id: tripCompanions.id })
+		.from(tripCompanions)
+		.where(and(eq(tripCompanions.tripId, tripId), inArray(tripCompanions.id, companionIds)))
+		.all();
+	const foundIds = new Set(found.map((c) => c.id));
+	if (foundIds.size !== companionIds.length) throw error(400, 'Companion is not on this trip');
 }
 
 export function assertOwnedRefs(

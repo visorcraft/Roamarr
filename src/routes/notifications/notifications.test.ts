@@ -8,12 +8,12 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
+import { actions } from './+page.server';
 import {
-	_markRead as markRead,
-	_markUnread as markUnread,
-	_markAllRead as markAllRead,
-	actions
-} from './+page.server';
+	markRead,
+	markUnread,
+	markAllRead
+} from '$lib/server/notifications';
 import { users, notifications } from '$lib/server/db/schema';
 
 function makeUser(email: string, name: string) {
@@ -35,7 +35,9 @@ test('markRead only affects the caller’s own notification', () => {
 	const a = makeUser('a1@x.c', 'A');
 	const b = makeUser('b1@x.c', 'B');
 	const nB = insertNotification(b.id, 't');
-	markRead(a.id, nB.id);
+	expect(() => markRead(a.id, nB.id)).toThrow(
+		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
+	);
 	expect(db.select().from(notifications).get()!.readAt).toBeNull();
 	markRead(b.id, nB.id);
 	expect(db.select().from(notifications).get()!.readAt).not.toBeNull();
@@ -47,8 +49,9 @@ test('markUnread clears readAt for the caller’s own notification', () => {
 	const b = makeUser('b2@x.c', 'B');
 	const nB = insertNotification(b.id, 't');
 	markRead(b.id, nB.id);
-	markUnread(a.id, nB.id);
-	expect(db.select().from(notifications).where(eq(notifications.id, nB.id)).get()!.readAt).not.toBeNull();
+	expect(() => markUnread(a.id, nB.id)).toThrow(
+		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
+	);
 	markUnread(b.id, nB.id);
 	expect(db.select().from(notifications).where(eq(notifications.id, nB.id)).get()!.readAt).toBeNull();
 });

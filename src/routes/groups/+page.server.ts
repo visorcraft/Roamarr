@@ -1,10 +1,11 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedGroup } from '$lib/server/ownership';
 import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
 import { users, groups, groupMembers } from '$lib/server/db/schema';
+import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -52,19 +53,27 @@ export const actions: Actions = {
 	addMember: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_addMember(u.id, Number(f.get('groupId')), String(f.get('email')));
+		const groupResult = positiveIdFromForm(f.get('groupId'), 'groupId');
+		if (!groupResult.ok) return fail(400, { error: groupResult.error });
+		_addMember(u.id, groupResult.value, String(f.get('email')));
 		throw redirect(303, '/groups');
 	},
 	removeMember: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_removeMember(u.id, Number(f.get('groupId')), Number(f.get('userId')));
+		const groupResult = positiveIdFromForm(f.get('groupId'), 'groupId');
+		if (!groupResult.ok) return fail(400, { error: groupResult.error });
+		const userResult = positiveIdFromForm(f.get('userId'), 'userId');
+		if (!userResult.ok) return fail(400, { error: userResult.error });
+		_removeMember(u.id, groupResult.value, userResult.value);
 		throw redirect(303, '/groups');
 	},
 	deleteGroup: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		_deleteGroup(u.id, Number(f.get('groupId')));
+		const groupResult = positiveIdFromForm(f.get('groupId'), 'groupId');
+		if (!groupResult.ok) return fail(400, { error: groupResult.error });
+		_deleteGroup(u.id, groupResult.value);
 		throw redirect(303, '/groups');
 	}
 };

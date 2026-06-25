@@ -1,58 +1,40 @@
-import { redirect, type Actions } from '@sveltejs/kit';
-import { and, eq, isNull } from 'drizzle-orm';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { setFlash } from '$lib/server/flash';
-import { db } from '$lib/server/db';
-import { notifications } from '$lib/server/db/schema';
-import { nowIso } from '$lib/server/tz';
+import {
+	listNotifications,
+	markRead,
+	markUnread,
+	markAllRead
+} from '$lib/server/notifications';
+import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
-
-export function _markRead(userId: number, id: number) {
-	db.update(notifications)
-		.set({ readAt: nowIso() })
-		.where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
-		.run();
-}
-
-export function _markUnread(userId: number, id: number) {
-	db.update(notifications)
-		.set({ readAt: null })
-		.where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
-		.run();
-}
-
-export function _markAllRead(userId: number) {
-	db.update(notifications)
-		.set({ readAt: nowIso() })
-		.where(and(eq(notifications.userId, userId), isNull(notifications.readAt)))
-		.run();
-}
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	return {
-		notifications: db
-			.select()
-			.from(notifications)
-			.where(eq(notifications.userId, u.id))
-			.all()
-	};
+	return { notifications: listNotifications(u.id) };
 };
 
 export const actions: Actions = {
 	markRead: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		_markRead(u.id, Number((await request.formData()).get('id')));
+		const f = await request.formData();
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		markRead(u.id, idResult.value);
 		throw redirect(303, '/notifications');
 	},
 	markUnread: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		_markUnread(u.id, Number((await request.formData()).get('id')));
+		const f = await request.formData();
+		const idResult = positiveIdFromForm(f.get('id'), 'id');
+		if (!idResult.ok) return fail(400, { error: idResult.error });
+		markUnread(u.id, idResult.value);
 		throw redirect(303, '/notifications');
 	},
 	markAllRead: async ({ cookies, locals }) => {
 		const u = requireUser(locals);
-		_markAllRead(u.id);
+		markAllRead(u.id);
 		setFlash(cookies, 'All notifications marked read.');
 		throw redirect(303, '/notifications');
 	}

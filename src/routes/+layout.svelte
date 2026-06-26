@@ -163,20 +163,12 @@
 {#snippet brand(size: 'sm' | 'lg')}
 	<a href="/" class="flex items-center gap-2.5">
 		<span
-			class="brand-mark grid place-items-center rounded-xl {size ===
+			class="brand-mark block shrink-0 overflow-hidden rounded-xl {size ===
 			'lg'
 				? 'h-9 w-9'
 				: 'h-8 w-8'}"
 		>
-			<svg
-				viewBox="0 0 24 24"
-				fill="currentColor"
-				class="h-4.5 w-4.5 text-white"
-				style="color: var(--theme-accent-text)"
-				aria-hidden="true"
-			>
-				<polygon points="3 11 22 2 13 21 11 13 3 11" />
-			</svg>
+			<img src="/icon-512.png?v=0.3.0" alt="" class="h-full w-full object-contain" aria-hidden="true" />
 		</span>
 		<span class="brand-name font-display text-lg font-extrabold">
 			{data.instanceName ?? 'Roamarr'}

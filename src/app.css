@@ -459,8 +459,10 @@
 @layer components {
 	/* Application shell */
 	.brand-mark {
-		background: linear-gradient(135deg, var(--theme-brand-readable), var(--theme-brand), var(--theme-brand-2));
-		box-shadow: 0 14px 32px color-mix(in oklab, var(--theme-brand) 28%, transparent);
+		background: linear-gradient(135deg, #f8fafc, #d7dde5);
+		box-shadow:
+			inset 0 0 0 1px color-mix(in oklab, #ffffff 58%, transparent),
+			0 14px 32px color-mix(in oklab, var(--theme-shadow) 28%, transparent);
 	}
 	.app-sidebar {
 		background:

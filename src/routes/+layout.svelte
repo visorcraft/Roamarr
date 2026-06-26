@@ -168,7 +168,7 @@
 				? 'h-9 w-9'
 				: 'h-8 w-8'}"
 		>
-			<img src="/icon-512.png?v=0.3.0" alt="" class="h-full w-full object-contain" aria-hidden="true" />
+			<img src="/icon-512.png?v=0.3.1" alt="" class="h-full w-full object-contain" aria-hidden="true" />
 		</span>
 		<span class="brand-name font-display text-lg font-extrabold">
 			{data.instanceName ?? 'Roamarr'}

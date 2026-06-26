@@ -701,6 +701,10 @@ button.card:hover,
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 76%, transparent);
 	}
+	.list-item-compact-active {
+		background-color: color-mix(in oklab, var(--theme-brand) 14%, var(--theme-surface));
+		box-shadow: inset 0 0 0 1px var(--theme-brand);
+	}
 	.subpanel {
 		@apply rounded-lg p-3;
 		background: var(--theme-subtle);

@@ -3,7 +3,7 @@
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { SEG, SEGMENT_TYPES } from '$lib/segmentLabels';
+	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
 	import { renderMarkdown } from '$lib/markdown';
@@ -21,6 +21,17 @@
 	let showCompanionNotesId = $state<number | null>(null);
 	let showAddCompanionNotes = $state(false);
 	let selectedCompanionByPoll = $state<Record<number, string>>({});
+	let selectedTypes = $state<Set<SegmentType>>(new Set());
+
+	function toggleType(type: SegmentType) {
+		const next = new Set(selectedTypes);
+		if (next.has(type)) {
+			next.delete(type);
+		} else {
+			next.add(type);
+		}
+		selectedTypes = next;
+	}
 
 	type SharedSegment = {
 		type: string;
@@ -121,7 +132,12 @@
 	const segmentList = $derived(
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);
-	const dayGroups = $derived(groupSegmentsByDay(segmentList));
+	const filteredSegmentList = $derived(
+		selectedTypes.size === 0
+			? segmentList
+			: segmentList.filter((s) => selectedTypes.has(s.type as SegmentType))
+	);
+	const dayGroups = $derived(groupSegmentsByDay(filteredSegmentList));
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 	const status = $derived(tripStatus(trip.startDate, trip.endDate));
 	const heroAccent = $derived(heroHue(trip.destination ?? trip.name));
@@ -514,7 +530,13 @@
 						<div class="empty-icon">
 							<Icon name="flight" class="h-6 w-6" />
 						</div>
-						<p class="text-slate-300">{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}</p>
+						<p class="text-slate-300">
+							{#if selectedTypes.size > 0}
+								No segments match the selected filters.
+							{:else}
+								{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}
+							{/if}
+						</p>
 						{#if isEditor}
 							<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary">Add segment</a>
 						{/if}
@@ -1257,17 +1279,22 @@
 			{#if typeCounts.length}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Plans by type</h2>
-					<ul class="space-y-2">
+					<div class="space-y-2">
 						{#each typeCounts as t (t.type)}
-							<li class="list-item-compact flex items-center justify-between gap-2 text-sm">
+							{@const active = selectedTypes.has(t.type)}
+							<button
+								type="button"
+								class="list-item-compact w-full flex cursor-pointer items-center justify-between gap-2 text-sm text-left {active ? 'list-item-compact-active' : ''}"
+								onclick={() => toggleType(t.type)}
+							>
 								<span class="flex items-center gap-2 text-slate-300">
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 text-indigo-300/80">{@html SEG[t.type].icon}</svg>
 									{SEG[t.type].label}
 								</span>
 								<span class="font-mono text-xs text-slate-500">{t.count}</span>
-							</li>
+							</button>
 						{/each}
-					</ul>
+					</div>
 				</div>
 			{/if}
 

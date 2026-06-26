@@ -1,6 +1,5 @@
 import { error } from '@sveltejs/kit';
 import { asc } from 'drizzle-orm';
-import { db } from './db';
 import { loyaltyPrograms } from './db/schema';
 import { userCrudFactory } from './crud';
 import { Validator } from './validation';

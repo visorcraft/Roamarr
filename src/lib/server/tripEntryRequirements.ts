@@ -1,6 +1,5 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
 import { tripEntryRequirements } from './db/schema';
 import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';

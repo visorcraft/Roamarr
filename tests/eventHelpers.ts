@@ -69,17 +69,3 @@ export function makeFormEvent(
 	return makePostEvent(user, params, form, url);
 }
 
-export function makeActionEvent(
-	user: { id: number; email: string },
-	params: Record<string, string>,
-	formData: FormData,
-	url = 'http://localhost/'
-): RequestEvent {
-	return {
-		...baseEvent(user, params, url),
-		request: {
-			formData: async () => formData,
-			method: 'POST'
-		}
-	} as unknown as RequestEvent;
-}

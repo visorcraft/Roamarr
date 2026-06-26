@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { requireAdmin } from '$lib/server/auth';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
+import { getDatabasePath } from '$lib/server/paths';
 
 export const actions: Actions = {
 	restore: async ({ locals, request, cookies }) => {
@@ -17,7 +18,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Upload a SQLite database file' });
 		}
 
-		const dbPath = process.env.DATABASE_PATH ?? '/data/roamarr.db';
+		const dbPath = getDatabasePath();
 		const tmpPath = join(tmpdir(), `roamarr-restore-${Date.now()}.db`);
 		try {
 			const buffer = Buffer.from(await file.arrayBuffer());

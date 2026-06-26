@@ -1,1 +1,0 @@
-ALTER TABLE `fare_providers` DROP COLUMN `config_json`;

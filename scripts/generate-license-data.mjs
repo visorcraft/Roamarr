@@ -21,27 +21,15 @@ const runtimeComponents = [
 		licenses: 'Public domain',
 		url: 'https://www.sqlite.org/',
 		usage: 'Embedded database engine used through better-sqlite3.'
-	},
-	{
-		name: 'Docker / Podman',
-		licenses: 'Apache-2.0 / Apache-2.0',
-		url: 'https://podman.io/',
-		usage: 'Optional container runtimes used by the documented deployment examples.'
-	},
-	{
-		name: 'Debian bookworm-slim base image',
-		licenses: 'Various DFSG-free licenses',
-		url: 'https://www.debian.org/legal/licenses/',
-		usage: 'Base operating system layer used by the checked-in Dockerfile through node:22-bookworm-slim.'
 	}
 ];
 
 const runtimeLicensesText = `Runtime components
 ==================
 
-Roamarr is a Node.js application. These runtime components are required or documented
-for common deployments, but most are provided by the host operating system or container
-runtime rather than by Roamarr source code.
+Roamarr is a Node.js application. These runtime components are required for
+common source builds and deployments, but most are provided by the host operating
+system rather than by Roamarr source code.
 
 Node.js runtime
 ---------------
@@ -49,9 +37,9 @@ License: MIT
 Project: https://nodejs.org/
 Usage: Required JavaScript runtime for the SvelteKit adapter-node server.
 
-Node.js itself carries its own bundled third-party notices. For the complete notice
-set for the exact Node.js binary you distribute, include the LICENSE file shipped by
-that Node.js release or container image.
+Node.js itself carries its own bundled third-party notices. For the complete
+notice set for the exact Node.js binary you distribute, include the LICENSE file
+shipped by that Node.js release.
 
 SQLite
 ------
@@ -59,27 +47,9 @@ License: Public domain
 Project: https://www.sqlite.org/
 Usage: Embedded database engine used through better-sqlite3.
 
-SQLite source code is dedicated to the public domain by its authors. The better-sqlite3
-npm package used by Roamarr is listed in the third-party package sections.
-
-Docker / Podman
----------------
-License: Apache-2.0 / Apache-2.0
-Projects: https://www.docker.com/ and https://podman.io/
-Usage: Optional container runtimes used by the documented deployment examples.
-
-Docker and Podman are not bundled by Roamarr; they are supplied by operators or
-downstream packaging.
-
-Debian bookworm-slim base image
--------------------------------
-License: Various DFSG-free licenses
-Project: https://www.debian.org/legal/licenses/
-Usage: Base operating system layer used by the checked-in Dockerfile through
-node:22-bookworm-slim.
-
-Container redistributors should retain the Debian and Node.js notices shipped in the
-base image they publish.
+SQLite source code is dedicated to the public domain by its authors. The
+better-sqlite3 npm package used by Roamarr is listed in the third-party package
+sections.
 `;
 
 function readJson(file) {

@@ -4,6 +4,7 @@ import { db } from '$lib/server/db';
 import { groups, notifications, segments, trips, users } from '$lib/server/db/schema';
 import { getSettings } from '$lib/server/settings';
 import { appInfo } from '$lib/appInfo';
+import { getDatabasePath } from '$lib/server/paths';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -16,7 +17,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		instanceName: s.instanceName,
 		isAdmin,
 		environment: process.env.NODE_ENV ?? 'development',
-		databasePath: isAdmin ? (process.env.DATABASE_PATH ?? '/data/roamarr.db') : null,
+		databasePath: isAdmin ? getDatabasePath() : null,
 		stats: isAdmin
 			? {
 					users: db.select({ count: count() }).from(users).get()?.count ?? 0,

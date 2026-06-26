@@ -7,16 +7,13 @@ import { db } from './db';
 import { tripExpenseAttachments, tripExpenses } from './db/schema';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
+import { getAttachmentsPath } from './paths';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 const MAX_SIZE = 5 * 1024 * 1024;
 
 function attachmentsDir(): string {
-	const dbPath = process.env.DATABASE_PATH;
-	if (dbPath) {
-		return path.join(path.dirname(dbPath), 'attachments');
-	}
-	return path.resolve('./data/attachments');
+	return getAttachmentsPath();
 }
 
 function attachmentDirFor(storageKey: string): string {

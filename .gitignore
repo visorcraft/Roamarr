@@ -17,9 +17,6 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
-.podman.env
-podman.env
-deploy/podman/roamarr.env
 CLAUDE.md
 AGENTS.md
 GEMINI.md
@@ -33,6 +30,12 @@ vite.config.ts.timestamp-*
 *.db
 *.db-wal
 *.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 /data
 
 # Logs and local QA artifacts

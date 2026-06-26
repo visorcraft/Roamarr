@@ -1,168 +1,276 @@
-# Roamarr
+<!-- SPDX-FileCopyrightText: 2026 VisorCraft LLC -->
+<!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-Roamarr is a self-hosted, single-container TripIt-style travel organizer built
-with SvelteKit and SQLite. It is an early but broad application: the major
-subsystems are wired end to end, and feature depth is improving incrementally.
+<p align="center">
+  <img src="static/icon-512.png" alt="Roamarr logo" width="250">
+</p>
 
-## Requirements
+<h1 align="center">Roamarr</h1>
 
-- Node.js 22.12 or newer for local development and production builds.
+<p align="center">
+  <strong>A self-hosted travel organizer for trips, families, documents, reminders, and expenses.</strong>
+</p>
+
+<p align="center">
+  A SvelteKit and SQLite itinerary hub for keeping every moving part of a trip
+  in one private place: flights, hotels, trains, documents, companions,
+  checklists, sharing, notifications, and the small details that usually get
+  scattered across email threads and notes apps.
+</p>
+
+## What is Roamarr?
+
+Roamarr is a TripIt-style travel organizer you run yourself. It is built as a
+single Node.js application with a SQLite database, server-rendered SvelteKit
+pages, and a practical app shell designed for repeated use rather than a
+marketing dashboard.
+
+Roamarr can:
+
+- Track trips, itinerary segments, dates, timezones, booking status, notes,
+  tags, favorites, archives, comments, and printable itineraries.
+- Manage flights, hotels, trains, rental cars, rideshares, shuttles, boats,
+  food plans, events, parking, directions, points of interest, todos, and free
+  form notes.
+- Share trips with users, groups, public links, and calendar feeds with
+  read/edit/detail controls and token expiry.
+- Keep traveler context close to the itinerary: companions, documents, loyalty
+  programs, payment cards, insurance policies, entry requirements, medications,
+  emergency contacts, important items, and home-preparation tasks.
+- Coordinate family and group travel with attendee lists, polls, packing
+  templates, kid gear, accessibility notes, dietary details, room preferences,
+  and emergency itinerary sharing.
+- Track trip expenses with multiple currencies, exchange rates, receipt
+  attachments, splits, settlements, budgets, and payment due dates.
+- Import and export trip data as JSON or CSV, including dry-run previews before
+  importing.
+- Send reminders and operational notifications in app, by SMTP, or through
+  signed webhooks.
+- Run admin workflows for setup, users, registration, audit logs, scheduled
+  jobs, backups, restores, demo data, instance stats, and health checks.
+- Surface license text, runtime credits, package attribution, and app version
+  details from the Settings -> About area.
+
+## Your itinerary, under your roof
+
+Travel plans have a strange shape. The critical data is scattered across airline
+confirmations, hotel portals, calendar invites, PDF receipts, family texts,
+medicine lists, passport dates, and last-minute reminders. Roamarr is meant to
+pull that data into one place without handing it to another hosted itinerary
+provider.
+
+### One local database
+
+Roamarr stores application data in SQLite through Drizzle ORM and
+`better-sqlite3`. By default the database lives at `./roamarr.db`, and receipt
+attachments are stored beside it in an `attachments/` directory. Move the
+database path, back it up, snapshot it, or keep it on persistent storage that
+fits your own setup.
+
+### Private by default
+
+The app requires a `ROAMARR_SECRET` before boot. Sensitive fields such as travel
+document numbers, fare-provider API keys, and the SMTP password are encrypted at
+rest with AES-256-GCM. Passwords use argon2id, session cookies contain random
+tokens, and the database stores only token hashes.
+
+Public share links and calendar feeds use reduced viewer data instead of
+dumping every private field attached to a trip. Roamarr is built around the
+idea that itinerary sharing should be explicit, scoped, and revocable.
+
+### Built for the actual trip
+
+Roamarr is not just a date list. It tracks the practical, unglamorous work that
+happens before and during travel: who is coming, who needs what, what is paid,
+what is missing, what expires soon, what needs to be packed, who can see the
+itinerary, and what should happen if plans change.
+
+## Setup
+
+### Requirements
+
+- Node.js 22.12 or newer.
 - npm, using the checked-in `package-lock.json`.
-- Docker or Podman for containerized deployment.
-- A persistent volume or database path for SQLite.
+- SQLite support through the bundled `better-sqlite3` dependency.
+- A persistent database path for local app data.
 - `ROAMARR_SECRET`, generated with `openssl rand -base64 32`.
 
-## Quick Start With Docker
+If native npm packages need to build on your machine, install your platform's
+standard C/C++ build tools before running `npm ci`.
 
-```sh
-docker build -t roamarr .
-docker run -p 3000:3000 -v roamarr-data:/data \
-  -e ROAMARR_SECRET="$(openssl rand -base64 32)" \
-  -e ORIGIN=http://localhost:3000 \
-  roamarr
-```
+### From source
 
-Open `http://localhost:3000` and complete first-run setup to create the admin account.
+```bash
+git clone https://github.com/visorcraft/roamarr.git
+cd roamarr
 
-## Quick Start With Podman
-
-The same image builds and runs with Podman:
-
-```sh
-podman build -t localhost/roamarr:latest -f Dockerfile .
-podman volume create roamarr-data
-podman run --replace -d --name roamarr \
-  -p 3000:3000 \
-  -v roamarr-data:/data \
-  -e ROAMARR_SECRET="$(openssl rand -base64 32)" \
-  -e ORIGIN=http://localhost:3000 \
-  localhost/roamarr:latest
-```
-
-For a rootless systemd/Quadlet service, see `deploy/podman/`.
-
-## Local Development
-
-```sh
 npm ci
-export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export DATABASE_PATH="./roamarr.db"
-npm run dev
+cp .env.example .env
+openssl rand -base64 32
 ```
 
-Open `http://localhost:5173/setup` on first boot.
+Paste the generated secret into `.env`:
 
-The npm scripts use `--env-file-if-exists=.env`, so you may also keep local values in an ignored `.env` file:
-
-```sh
+```env
 ROAMARR_SECRET=replace-with-output-from-openssl
 DATABASE_PATH=./roamarr.db
 PORT=3000
 ORIGIN=http://localhost:5173
 ```
 
-Do not commit real env files. Use `.env.example` as the public template.
+Then start the development server:
 
-## Production Without A Container
-
-```sh
-npm ci
-export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export DATABASE_PATH="./roamarr.db"
-export ORIGIN=https://roamarr.example.com
-npm run build
-node build
+```bash
+npm run dev
 ```
 
-The production server listens on `PORT` or `3000` by default. Set `ORIGIN` to the public URL when Roamarr is behind a reverse proxy so cookies and redirects are generated correctly.
+Open `http://localhost:5173/setup` on first boot.
 
-## Configuration
+### Production build
+
+```bash
+npm ci
+npm run build
+npm start
+```
+
+The production server listens on `PORT` or `3000` by default. Set `ORIGIN` to
+the public URL when Roamarr is behind a reverse proxy so cookies and redirects
+are generated correctly.
+
+Deployment packaging should live outside this source repository. This repository
+is focused on building, testing, and running the Roamarr application from
+source.
+
+## Configure Roamarr
+
+### Environment
 
 | Variable | Required | Default | Notes |
-| --- | --- | --- | --- |
-| `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for AES-256-GCM encryption. The app refuses to boot if unset. |
-| `DATABASE_PATH` | no | `/data/roamarr.db` | SQLite file path. Use a mounted `/data` volume in containers. |
+| -------- | -------- | ------- | ----- |
+| `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. The app refuses to boot if unset. |
+| `DATABASE_PATH` | no | `./roamarr.db` | SQLite file path. Attachments are stored in an `attachments/` directory beside this database. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
 
-SMTP and webhook settings are configured in the app under Settings.
+SMTP, webhooks, registration policy, themes, fare providers, backups, and most
+admin settings are configured inside the app after setup.
 
-## Public Repository Safety
+### Runtime data
 
-This repository is intended to be safe to publish. The ignore files exclude local secrets, databases, logs, build output, and local QA artifacts, including:
+| Data | Default path |
+| ---- | ------------ |
+| SQLite database | `./roamarr.db` |
+| Receipt attachments | `./attachments/` |
+| Production build output | `./build/` |
+| SvelteKit build cache | `./.svelte-kit/` |
 
-- Local env files such as `.env`, non-template `.env.*`, `.podman.env`, `podman.env`, and `deploy/podman/roamarr.env`
-- SQLite files such as `*.db`, `*.db-wal`, `*.db-shm`, and `/data`
-- `node_modules`, `.svelte-kit`, `build`, logs, Playwright artifacts, and generated screenshots
+Local `.env` files, databases, logs, build output, dependencies, Playwright
+artifacts, and screenshots are ignored by Git. Commit only templates such as
+`.env.example`.
 
-Only commit template files such as `.env.example` and `deploy/podman/roamarr.env.example`. Do not commit generated secrets, real SMTP credentials, API keys, webhook secrets, production databases, or local test accounts.
+## Tweak Roamarr
 
-## Commands
+### Common workflows
 
-```sh
-npm run dev              # Vite dev server on http://localhost:5173
-npm run check            # Svelte + TypeScript check
-npm run check:watch      # Svelte + TypeScript check in watch mode
-npm test                 # Vitest suite once
-npm run test:watch       # Vitest watch mode
-npm run build            # production build to ./build
-npm run preview          # preview production build locally
-npm run credits:generate # regenerate bundled license and credits data
-npm run db:generate      # generate SQL migrations after schema changes
-npm run db:push          # push schema directly to the configured DB; use carefully
+```bash
+# Start the dev server
+npm run dev
+
+# Type-check Svelte and TypeScript
+npm run check
+
+# Run the Vitest suite once
+npm test
+
+# Build the production app
+npm run build
+
+# Run the built app
+npm start
+
+# Regenerate bundled license and credits data
+npm run credits:generate
+
+# Generate a new Drizzle migration after schema changes
+npm run db:generate
 ```
 
-Migrations are applied automatically during application boot before the scheduler starts.
+Migrations are applied automatically during application boot before the
+scheduler starts.
 
-## Features
+### Application settings
 
-- Application shell with left navigation, a sticky global search field,
-  top-right user menu, and a sidebar app/version link to the About page. App name
-  and version are read from `package.json`.
-- Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, bulk actions, and trip status lifecycle.
-- Segment details: end timezone, status tracking, and optional meeting/rally point for group coordination.
-- Sharing with users, groups, public token links, read/edit/detail controls, and token expiry; per-trip calendar feeds plus an aggregate feed for all viewable trips.
-- Dashboard summary cards, a "Today" agenda, upcoming trips, and expiring documents.
-- JSON/CSV trip export and JSON/CSV import with dry-run preview.
-- Flight check-in, document-expiry, trip, segment, and custom reminders.
-- Fare-watch provider framework with configurable provider accounts and connection testing.
-- Travel documents (including documents linked to trip companions), loyalty programs, cards, global benefit templates, and insurance policies.
-- Group/family helpers: trip companions with dietary/allergy/medical notes, seat/bed preferences, accessibility/room notes, kid gear needs (car seat, stroller, crib, kids meal), reusable packing checklist templates, per-trip expense tracking with split and settlement math, segment attendees, trip polls and voting, trip budget categories with alerts, and emergency-contact itinerary sharing.
-- Multi-currency expense support with per-expense exchange rates and a trip base-currency total.
-- Expense receipt attachments (JPEG, PNG, WebP, PDF) stored next to the database with a secure download route.
-- Saved trip templates that clone a trip and its segments for reuse.
-- Home-preparation task list with due dates and completion toggles.
-- Medication and first-aid schedule with dosage, schedule, start/end times, and companion association.
-- Visa, vaccination, and entry-requirement tracker with status and due dates.
-- Segment payment status and payment due dates.
-- Important-items registry with serial numbers, tracker IDs, and companion association.
-- Trip journal entries, trip document links, and a printable itinerary view.
-- In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
-- Per-user color themes from the profile page, including a High Contrast
-  accessibility theme. The registry lives in `src/lib/themes.ts`.
-- Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, registration control, and a settings-style About page.
-- Settings/About license and credits pages with bundled project-license status, third-party npm license text, acknowledgements, runtime components, and filterable package credits.
-- Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
-- Shared UI components (`Icon`, `Toast` with variants, loading states), theme-aware shell controls, and mobile sidebar accessibility.
-- Health and deep-health endpoints plus PWA manifest/icons.
+After the first setup flow, use Settings for:
+
+- Instance name, public registration, and admin controls.
+- SMTP delivery, signed webhooks, and per-user notification channels.
+- Fare provider accounts and connection tests.
+- Backups, restores, scheduled jobs, audit logs, health information, and demo
+  data.
+- About, project license, third-party package credits, and runtime component
+  acknowledgements.
+
+Use Profile for:
+
+- Password changes, email changes, and active session management.
+- Calendar feed token management.
+- Per-user theme selection, including High Contrast.
 
 ## Architecture
 
-Roamarr is a single long-running SvelteKit app using `@sveltejs/adapter-node`. The server uses SQLite through Drizzle and `better-sqlite3`; every connection enables WAL mode and foreign keys. Startup requires `ROAMARR_SECRET`, applies migrations, ensures settings and default benefit templates exist, then starts a guarded in-process scheduler that ticks every 60 seconds.
+Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
+`@sveltejs/adapter-node`, Tailwind CSS v4, Drizzle ORM, SQLite, Luxon,
+Nodemailer, and Vitest.
 
-All server-side business logic lives under `src/lib/server/`; SvelteKit routes stay thin and call those modules from load functions and form actions. Authorization is centralized in `sharing.ts` for reads and `ownership.ts` for mutations. Public shares and calendar feeds expose only the reduced viewer projection.
+Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies
+migrations, ensures default settings and benefit templates exist, then starts a
+guarded in-process scheduler. The scheduler runs reminders, fare checks,
+expired-session cleanup, and run pruning without duplicate starts or
+overlapping ticks.
 
-The authenticated app shell is implemented in `src/routes/+layout.svelte` and `+layout.server.ts`. The About page lives at `/settings/about`; its app name/version come from `src/lib/appInfo.ts`, which reads `package.json`.
+Routes stay thin. Server-side business logic lives under `src/lib/server/`.
+Authorization is centralized in sharing and ownership helpers, while public
+share and calendar-feed routes expose only a reduced viewer projection.
 
-Sensitive fields currently encrypted at rest are travel document numbers, fare-provider API keys, and the SMTP password. Card data is intentionally limited to network and last four digits.
+The main app shell lives in `src/routes/+layout.svelte` and
+`src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and
+formatting helpers live under `src/lib/`. Database schema and migrations live
+under `src/lib/server/db/` and `drizzle/`.
 
-## Development Notes
+## Contribute
 
-- Tailwind CSS v4 is configured in `src/app.css` through `@theme`; there is no `tailwind.config.js`.
-- Reuse shared app classes from `src/app.css` and shared components from `src/lib/components/` before adding one-off UI styles.
-- For themed UI, prefer semantic app classes and CSS variables over hard-coded slate/indigo/white utilities so Light and dark themes stay readable.
-- Keep global shell controls theme-aware: sticky search bar, top-right user menu, and sidebar app/version footer should work across all registered themes.
-- Keep route actions thin: validate input, enforce ownership/authorization, call server modules, and return SvelteKit `fail`, `redirect`, or `error` responses.
-- Add or update tests for non-trivial server logic, route actions, schema changes, auth/authorization paths, and security-sensitive behavior.
-- After dependency changes, run `npm run credits:generate` so Settings/About attributions stay current.
-- When changing the schema, edit `src/lib/server/db/schema.ts`, run `npm run db:generate`, review the generated SQL in `drizzle/`, and run tests.
+Contributions are welcome through the standard fork-and-pull-request workflow.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers local setup,
+coding standards, tests, documentation expectations, dependency policy, and
+pull request requirements.
+
+The short version:
+
+```bash
+git clone https://github.com/<you>/roamarr.git
+cd roamarr
+git checkout -b fix-or-feature-name
+
+npm ci
+npm run check
+npm test
+npm run build
+```
+
+Before opening a pull request, include focused tests for behavior changes,
+update relevant docs, and regenerate license data after dependency changes.
+
+## Documentation
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - contribution guidelines
+- [docs/SECURITY.md](docs/SECURITY.md) - security policy and disclosure process
+- [LICENSE](LICENSE) - GPL-3.0-only license text
+- [static/manifest.json](static/manifest.json) - PWA manifest
+- [drizzle/](drizzle/) - generated database migration baseline
+
+## License
+
+Roamarr is licensed under GPL-3.0-only. See [LICENSE](LICENSE) for the full
+license text, [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines,
+and [docs/SECURITY.md](docs/SECURITY.md) for the security disclosure policy.

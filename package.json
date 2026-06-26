@@ -1,7 +1,8 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.2.5",
+	"version": "0.3.0",
+	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
 		"node": ">=22.12"
@@ -9,6 +10,7 @@
 	"scripts": {
 		"dev": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js dev",
 		"build": "vite build",
+		"start": "node --env-file-if-exists=.env build",
 		"preview": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js preview",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

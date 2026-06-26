@@ -7,7 +7,7 @@ import type { ToastVariant } from '$lib/toast';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
 // start: adapter-node imports this module on `node build`, so a missing ROAMARR_SECRET
-// or a failed migration fails the container now rather than on the first HTTP request.
+// or a failed migration fails process startup rather than on the first HTTP request.
 // Idempotent; safe under Vite HMR (the `booted` flag short-circuits re-runs) and build
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();

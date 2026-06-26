@@ -29,8 +29,8 @@
 		<div>
 			<h2 class="section-title">Runtime components</h2>
 			<p class="page-subtitle">
-				Components used by common Roamarr deployments. Host and container providers may add
-				their own notices.
+				Components used by common Roamarr source builds and deployments. Host providers may
+				add their own notices.
 			</p>
 		</div>
 		<a class="btn btn-ghost" href="/settings/about/licenses?tab=runtime">Runtime licenses</a>

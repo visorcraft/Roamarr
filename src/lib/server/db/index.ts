@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { createDb, type DB } from './createDb';
+import { getDatabasePath } from '../paths';
 
 export type { DB };
 
@@ -9,7 +10,7 @@ export type { DB };
 // (and bootApp) triggers the connection.
 let _instance: ReturnType<typeof createDb> | null = null;
 function instance() {
-	if (!_instance) _instance = createDb(process.env.DATABASE_PATH ?? '/data/roamarr.db');
+	if (!_instance) _instance = createDb(getDatabasePath());
 	return _instance;
 }
 

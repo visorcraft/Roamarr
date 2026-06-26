@@ -69,13 +69,13 @@ function validateTemplateInput(name: unknown, items: { label: string; category?:
 	return { templateName: templateName! };
 }
 
-const insertTemplate = sqlite.transaction(
-	(
-		userId: number,
-		name: string,
-		items: { label: string; category?: string }[],
-		fromTripId?: number
-	) => {
+function insertTemplate(
+	userId: number,
+	name: string,
+	items: { label: string; category?: string }[],
+	fromTripId?: number
+) {
+	return sqlite.transaction(() => {
 		const template = db
 			.insert(packingTemplates)
 			.values({ userId, name })
@@ -97,8 +97,8 @@ const insertTemplate = sqlite.transaction(
 			itemCount: items.length
 		});
 		return template.id;
-	}
-);
+	})();
+}
 
 export function saveTemplate(
 	userId: number,
@@ -152,27 +152,29 @@ export function listTemplates(userId: number): PackingTemplate[] {
 	}));
 }
 
-const applyTx = sqlite.transaction((templateId: number, tripId: number, userId: number) => {
-	const template = requireTemplateOwner(userId, templateId);
-	const items = db
-		.select()
-		.from(packingTemplateItems)
-		.where(eq(packingTemplateItems.templateId, templateId))
-		.orderBy(packingTemplateItems.createdAt)
-		.all();
-	const checklist = getOrCreateChecklist(tripId);
-	if (items.length) {
-		db.insert(tripChecklistItems)
-			.values(items.map((item) => ({ checklistId: checklist.id, text: item.label })))
-			.run();
-	}
-	logAudit(userId, 'packing_template_apply', 'trip_checklist', checklist.id, {
-		templateId,
-		tripId,
-		itemCount: items.length
-	});
-	return { template, itemCount: items.length };
-});
+function applyTx(templateId: number, tripId: number, userId: number) {
+	return sqlite.transaction(() => {
+		const template = requireTemplateOwner(userId, templateId);
+		const items = db
+			.select()
+			.from(packingTemplateItems)
+			.where(eq(packingTemplateItems.templateId, templateId))
+			.orderBy(packingTemplateItems.createdAt)
+			.all();
+		const checklist = getOrCreateChecklist(tripId);
+		if (items.length) {
+			db.insert(tripChecklistItems)
+				.values(items.map((item) => ({ checklistId: checklist.id, text: item.label })))
+				.run();
+		}
+		logAudit(userId, 'packing_template_apply', 'trip_checklist', checklist.id, {
+			templateId,
+			tripId,
+			itemCount: items.length
+		});
+		return { template, itemCount: items.length };
+	})();
+}
 
 export function applyTemplate(templateId: number, tripId: number, userId: number) {
 	requireEditableTrip(userId, tripId);

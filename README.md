@@ -6,7 +6,7 @@ subsystems are wired end to end, and feature depth is improving incrementally.
 
 ## Requirements
 
-- Node.js 22 for local development and production builds.
+- Node.js 22.12 or newer for local development and production builds.
 - npm, using the checked-in `package-lock.json`.
 - Docker or Podman for containerized deployment.
 - A persistent volume or database path for SQLite.

@@ -1,6 +1,8 @@
 # Roamarr
 
-Roamarr is a self-hosted, single-container TripIt alternative. It is built as a SvelteKit app over SQLite and is currently a v0.1 walking skeleton: the major subsystems are present end to end, with intentionally shallow implementations that establish the architecture for later depth.
+Roamarr is a self-hosted, single-container TripIt-style travel organizer built
+with SvelteKit and SQLite. It is an early but broad application: the major
+subsystems are wired end to end, and feature depth is improving incrementally.
 
 ## Requirements
 
@@ -112,7 +114,7 @@ Migrations are applied automatically during application boot before the schedule
 
 ## Features
 
-- Application shell with left navigation, a sticky top search field placeholder,
+- Application shell with left navigation, a sticky global search field,
   top-right user menu, and a sidebar app/version link to the About page. App name
   and version are read from `package.json`.
 - Trips and itinerary segments with overlap warnings, notes, tags, favorite/archive flags, comments, bulk actions, and trip status lifecycle.
@@ -134,7 +136,8 @@ Migrations are applied automatically during application boot before the schedule
 - Important-items registry with serial numbers, tracker IDs, and companion association.
 - Trip journal entries, trip document links, and a printable itinerary view.
 - In-app notifications, optional SMTP, signed webhook delivery, and per-user notification channel toggles.
-- Per-user color themes from the profile page, including a High Contrast accessibility theme (see `AGENTS.md` for the full theme registry).
+- Per-user color themes from the profile page, including a High Contrast
+  accessibility theme. The registry lives in `src/lib/themes.ts`.
 - Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, registration control, and a settings-style About page.
 - Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
 - Shared UI components (`Icon`, `Toast` with variants, loading states), theme-aware shell controls, and mobile sidebar accessibility.
@@ -142,7 +145,7 @@ Migrations are applied automatically during application boot before the schedule
 
 ## Architecture
 
-Roamarr is a single long-running SvelteKit app using `@sveltejs/adapter-node`. The server uses SQLite through Drizzle and `better-sqlite3`; every connection enables WAL mode and foreign keys. Startup requires `ROAMARR_SECRET`, applies migrations, ensures settings exist, then starts a guarded in-process scheduler that ticks every 60 seconds.
+Roamarr is a single long-running SvelteKit app using `@sveltejs/adapter-node`. The server uses SQLite through Drizzle and `better-sqlite3`; every connection enables WAL mode and foreign keys. Startup requires `ROAMARR_SECRET`, applies migrations, ensures settings and default benefit templates exist, then starts a guarded in-process scheduler that ticks every 60 seconds.
 
 All server-side business logic lives under `src/lib/server/`; SvelteKit routes stay thin and call those modules from load functions and form actions. Authorization is centralized in `sharing.ts` for reads and `ownership.ts` for mutations. Public shares and calendar feeds expose only the reduced viewer projection.
 

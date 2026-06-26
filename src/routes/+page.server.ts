@@ -12,7 +12,7 @@ import {
 	trips,
 	users
 } from '$lib/server/db/schema';
-import { listViewableTrips } from '$lib/server/sharing';
+import { listEditableTripIds, listViewableTrips } from '$lib/server/sharing';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
 
@@ -163,8 +163,9 @@ export const load: PageServerLoad = ({ locals }) => {
 		.get();
 
 	const viewableIds = viewable.map((t) => t.id);
+	const editableIds = listEditableTripIds(u.id);
 	const paymentsDue =
-		viewableIds.length > 0
+		editableIds.length > 0
 			? db
 					.select({
 						segmentId: segments.id,
@@ -178,7 +179,7 @@ export const load: PageServerLoad = ({ locals }) => {
 					.innerJoin(trips, eq(segments.tripId, trips.id))
 					.where(
 						and(
-							inArray(segments.tripId, viewableIds),
+							inArray(segments.tripId, editableIds),
 							ne(segments.paymentStatus, 'fully_paid'),
 							isNotNull(segments.paymentDueDate),
 							lte(segments.paymentDueDate, soon),

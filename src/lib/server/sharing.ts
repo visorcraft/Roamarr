@@ -53,6 +53,28 @@ export function canEdit(userId: number, trip: Trip) {
 	return !!viaGroup;
 }
 
+export function listEditableTripIds(userId: number): number[] {
+	const owned = db
+		.select({ id: trips.id })
+		.from(trips)
+		.where(eq(trips.ownerId, userId))
+		.all();
+	const directShares = db
+		.select({ tripId: tripShares.tripId })
+		.from(tripShares)
+		.where(and(eq(tripShares.sharedWithUserId, userId), eq(tripShares.permission, 'edit')))
+		.all();
+	const groupShares = db
+		.select({ tripId: tripShares.tripId })
+		.from(tripShares)
+		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
+		.where(and(eq(groupMembers.userId, userId), eq(tripShares.permission, 'edit')))
+		.all();
+	return Array.from(
+		new Set([...owned.map((o) => o.id), ...directShares.map((s) => s.tripId), ...groupShares.map((s) => s.tripId)])
+	);
+}
+
 export function canView(userId: number, trip: Trip) {
 	if (trip.ownerId === userId) return true;
 	const direct = db

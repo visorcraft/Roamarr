@@ -22,7 +22,7 @@ import { listEntryRequirements } from './tripEntryRequirements';
 import { listImportantItems } from './tripImportantItems';
 
 function computeTripStats(
-	segmentsList: (typeof segments.$inferSelect)[],
+	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
 	expenseSummary: ReturnType<typeof summarizeTripExpenses>,
 	checklist: ReturnType<typeof loadChecklist>,
 	budgets: ReturnType<typeof listBudgetsWithSpent>
@@ -85,7 +85,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 	const entryRequirements = listEntryRequirements(view.trip.id);
 	const importantItems = listImportantItems(view.trip.id);
 	const stats = computeTripStats(
-		view.editor ? view.segments : [],
+		view.editor ? view.segments : (view.trip as { segments: Array<{ startAt: string | null; paymentStatus?: string | null }> }).segments,
 		expenseSummary,
 		checklist,
 		budgets

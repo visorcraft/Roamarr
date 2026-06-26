@@ -585,7 +585,7 @@
 												{/if}
 															{#if !isEditor && s.detailsJson}
 																<div class="subpanel-compact mt-2">
-																	<pre class="whitespace-pre-wrap font-mono text-[10px] text-slate-400">{s.detailsJson}</pre>
+																	<pre class="whitespace-pre-wrap font-mono text-xs text-slate-400">{s.detailsJson}</pre>
 																</div>
 															{/if}
 														</div>
@@ -1341,7 +1341,7 @@
 								<div>
 									<p class="text-sm font-medium text-slate-200">{item.name}</p>
 									{#if item.companionName}<p class="text-xs text-slate-500">{item.companionName}</p>{/if}
-									{#if item.serialNumber || item.trackerId}<p class="font-mono text-[10px] text-slate-500">{#if item.serialNumber}SN {item.serialNumber}{/if}{#if item.trackerId}{#if item.serialNumber} · {/if}ID {item.trackerId}{/if}</p>{/if}
+									{#if item.serialNumber || item.trackerId}<p class="font-mono text-xs text-slate-500">{#if item.serialNumber}SN {item.serialNumber}{/if}{#if item.trackerId}{#if item.serialNumber} · {/if}ID {item.trackerId}{/if}</p>{/if}
 									{#if item.notes}<p class="text-xs text-slate-500">{item.notes}</p>{/if}
 								</div>
 								{#if isEditor}
@@ -1683,7 +1683,7 @@
 					{#if data.feedUrl}
 						<p class="text-sm leading-relaxed text-slate-400">Subscribe to this trip with any calendar app.</p>
 						<div class="mt-2 flex items-start gap-2">
-							<p class="code-chip flex-1 px-2.5 text-[10px] leading-relaxed">{data.feedUrl}</p>
+							<p class="code-chip flex-1 px-2.5 text-xs leading-relaxed">{data.feedUrl}</p>
 							<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 						</div>
 						<div class="mt-3 flex flex-col gap-2">
@@ -1791,9 +1791,9 @@
 							{#each data.policies as p (p.id)}
 								<li class="list-item p-2.5">
 									<p class="text-sm font-medium text-white">{p.provider}</p>
-									{#if p.policyNumber}<p class="font-mono text-[10px] text-slate-500">{p.policyNumber}</p>{/if}
+									{#if p.policyNumber}<p class="font-mono text-xs text-slate-500">{p.policyNumber}</p>{/if}
 									{#if p.coverageSummary}<p class="mt-1 text-xs text-slate-400">{p.coverageSummary}</p>{/if}
-									{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-[10px] text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
+									{#if p.startDate || p.endDate}<p class="mt-1 font-mono text-xs text-slate-500">{p.startDate || '—'} → {p.endDate || '—'}</p>{/if}
 									{#if data.owner === true}
 										<form method="POST" action="?/detachPolicy" class="mt-2">
 											<input type="hidden" name="policyId" value={p.id} />

@@ -255,7 +255,7 @@
 	{#if data.feedUrl}
 		<p class="mt-4 text-sm">Subscribe to all your trips with one calendar URL.</p>
 		<div class="mt-2 flex items-start gap-2">
-			<p class="code-chip flex-1 px-2.5 text-[10px] leading-relaxed">{data.feedUrl}</p>
+			<p class="code-chip flex-1 px-2.5 text-xs leading-relaxed">{data.feedUrl}</p>
 			<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 		</div>
 		{#if data.calendarTokenExpiresAt}

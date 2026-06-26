@@ -293,7 +293,7 @@
 						/>
 						<span class="flex-1">{item.label}</span>
 						{#if item.href === '/notifications' && data.unreadCount > 0}
-							<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-[10px] font-bold">{data.unreadCount}</span>
+							<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
 						{/if}
 					</a>
 				{/each}

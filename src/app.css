@@ -19,7 +19,7 @@
 	--color-slate-200: color-mix(in oklab, var(--theme-ink) 82%, var(--theme-canvas));
 	--color-slate-300: color-mix(in oklab, var(--theme-ink) 70%, var(--theme-canvas));
 	--color-slate-400: var(--theme-muted);
-	--color-slate-500: color-mix(in oklab, var(--theme-muted) 78%, var(--theme-canvas));
+	--color-slate-500: color-mix(in oklab, var(--theme-muted) 65%, var(--theme-ink));
 	--color-slate-600: color-mix(in oklab, var(--theme-surface2) 82%, var(--theme-ink));
 	--color-slate-700: color-mix(in oklab, var(--theme-surface) 88%, var(--theme-ink));
 	--color-slate-950: color-mix(in oklab, var(--theme-canvas) 92%, black);
@@ -406,8 +406,8 @@
 		--theme-menu-hover: var(--theme-active-strong);
 		--theme-option-hover: var(--theme-active-strong);
 		--theme-option-selected: var(--theme-active-strong);
-		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-ink));
-		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 82%, var(--theme-canvas));
+		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 70%, var(--theme-ink));
+		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-ink));
 		--theme-primary-top: var(
 			--theme-primary-top-override,
 			color-mix(in oklab, var(--theme-brand) 76%, var(--theme-strong))
@@ -891,6 +891,8 @@ button.card:hover,
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 72%, transparent);
 		color: var(--theme-readable-muted);
+		max-width: 100%;
+		overflow-wrap: anywhere;
 	}
 
 	/* Buttons: use `.btn` plus one visual variant, with optional size/tone modifiers. */
@@ -904,7 +906,7 @@ button.card:hover,
 		@apply min-h-8 gap-1.5 px-2.5 py-1.5 text-xs;
 	}
 	.btn-xs {
-		@apply min-h-6 gap-1 px-2 py-1 text-[0.6875rem] leading-none;
+		@apply min-h-7 gap-1 px-2 py-1 text-xs leading-tight;
 	}
 	.btn-primary {
 		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
@@ -1023,10 +1025,13 @@ button.card:hover,
 		@apply mt-2 divide-y divide-white/5;
 	}
 	.settings-row {
-		@apply grid gap-3 py-4 sm:grid-cols-2 sm:items-center sm:gap-x-8 lg:gap-x-12;
+		@apply grid min-w-0 gap-3 py-4 sm:grid-cols-2 sm:items-center sm:gap-x-8 lg:gap-x-12;
+	}
+	.settings-row > * {
+		min-width: 0;
 	}
 	.settings-row > :last-child {
-		@apply w-full max-w-md justify-self-start;
+		@apply w-full max-w-full justify-self-start sm:max-w-md;
 	}
 	.input,
 	.select,
@@ -1090,11 +1095,11 @@ button.card:hover,
 	}
 	.input-xs,
 	.select-xs {
-		min-height: 1.75rem;
-		height: 1.75rem;
+		min-height: 2rem;
+		height: 2rem;
 		padding-top: 0;
 		padding-bottom: 0;
-		font-size: 0.6875rem;
+		font-size: 0.75rem;
 		line-height: 1rem;
 	}
 	select.input-compact,

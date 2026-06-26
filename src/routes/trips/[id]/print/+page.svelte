@@ -175,7 +175,7 @@
 											</p>
 										{/if}
 										{#if s.detailsJson}
-											<pre class="print-segment-details mt-2 whitespace-pre-wrap rounded bg-white/[0.03] p-2 font-mono text-[10px] text-slate-400 ring-1 ring-white/5" style="background: var(--theme-subtle); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 72%, transparent); color: var(--theme-readable-muted)">{s.detailsJson}</pre>
+											<pre class="print-segment-details mt-2 whitespace-pre-wrap rounded bg-white/[0.03] p-2 font-mono text-xs text-slate-400 ring-1 ring-white/5" style="background: var(--theme-subtle); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 72%, transparent); color: var(--theme-readable-muted)">{s.detailsJson}</pre>
 										{/if}
 									</div>
 								</li>

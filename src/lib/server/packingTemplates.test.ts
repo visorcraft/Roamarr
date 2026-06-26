@@ -11,6 +11,7 @@ import { saveTemplate, listTemplates, applyTemplate, saveChecklistTemplate, appl
 import { users, trips, packingTemplates, packingTemplateItems, tripChecklists, tripChecklistItems, tripShares } from './db/schema';
 import { eq } from 'drizzle-orm';
 import type { RequestEvent } from '@sveltejs/kit';
+import { makeFormData } from '../../../tests/eventHelpers';
 
 function makeEvent(user: { id: number }, tripId: number, formData: FormData): RequestEvent {
 	return {
@@ -18,14 +19,6 @@ function makeEvent(user: { id: number }, tripId: number, formData: FormData): Re
 		params: { id: String(tripId) },
 		request: { formData: async () => formData }
 	} as RequestEvent;
-}
-
-function formData(entries: Record<string, string>): FormData {
-	const f = new FormData();
-	for (const [key, value] of Object.entries(entries)) {
-		f.set(key, value);
-	}
-	return f;
 }
 
 test('saveTemplate creates a template from explicit items', () => {
@@ -186,7 +179,7 @@ test('saveChecklistTemplate action saves current checklist as template and redir
 
 	await expect(
 		saveChecklistTemplate(
-			makeEvent(u, t.id, formData({ name: 'Electronics', fromTripId: String(t.id) }))
+			makeEvent(u, t.id, makeFormData({ name: 'Electronics', fromTripId: String(t.id) }))
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
@@ -202,7 +195,7 @@ test('applyChecklistTemplate action applies a template and redirects', async () 
 	const templateId = saveTemplate(u.id, 'Kit', [{ label: 'Map' }]);
 
 	await expect(
-		applyChecklistTemplate(makeEvent(u, t.id, formData({ templateId: String(templateId) })))
+		applyChecklistTemplate(makeEvent(u, t.id, makeFormData({ templateId: String(templateId) })))
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
 	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, t.id)).get();
@@ -220,6 +213,6 @@ test('applyChecklistTemplate action rejects invalid template id', async () => {
 	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
 
 	await expect(
-		applyChecklistTemplate(makeEvent(u, t.id, formData({ templateId: 'abc' })))
+		applyChecklistTemplate(makeEvent(u, t.id, makeFormData({ templateId: 'abc' })))
 	).rejects.toMatchObject({ status: 400 });
 });

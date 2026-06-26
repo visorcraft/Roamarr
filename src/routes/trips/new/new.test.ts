@@ -10,22 +10,13 @@ vi.mock('$lib/server/db', async () => {
 import { actions } from './+page.server';
 import { users, trips } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-
-function locals(user: { id: number }) {
-	return { user } as App.Locals;
-}
-
-function formData(obj: Record<string, string>) {
-	const f = new FormData();
-	for (const [k, v] of Object.entries(obj)) f.append(k, v);
-	return f;
-}
+import { makeLocals, makeFormData } from '../../../../tests/eventHelpers';
 
 function makeEvent(form: FormData, params: Record<string, string> = {}, userId = 1) {
 	return {
 		request: new Request('http://localhost/trips/new', { method: 'POST', body: form }),
 		params,
-		locals: locals({ id: userId }),
+		locals: makeLocals({ id: userId }),
 		url: new URL('http://localhost/trips/new')
 	} as any;
 }
@@ -33,7 +24,7 @@ function makeEvent(form: FormData, params: Record<string, string> = {}, userId =
 test('creates a trip with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const form = formData({
+	const form = makeFormData({
 		name: 'Summer Escape',
 		destination: 'Lisbon',
 		startDate: '2026-07-01',
@@ -54,7 +45,7 @@ test('creates a trip with valid data', async () => {
 test('rejects missing name and invalid date range', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const form = formData({
+	const form = makeFormData({
 		name: '  ',
 		startDate: '2026-07-10',
 		endDate: '2026-07-01',
@@ -73,7 +64,7 @@ test('rejects missing name and invalid date range', async () => {
 test('rejects invalid visibility enum', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
-	const form = formData({ name: 'T', defaultVisibility: 'secret' });
+	const form = makeFormData({ name: 'T', defaultVisibility: 'secret' });
 	const result = (await actions.default(makeEvent(form, {}, u.id))) as {
 		status: number;
 		data: { errors: Record<string, string> };

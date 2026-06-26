@@ -7,7 +7,7 @@ import { logAudit } from './audit';
 import { requireOwnedTrip } from './ownership';
 import { sendMail } from './notify';
 
-export interface EmergencyContactInput {
+interface EmergencyContactInput {
 	name: string;
 	relationship?: string;
 	phone?: string;
@@ -15,7 +15,7 @@ export interface EmergencyContactInput {
 	isPrimary?: boolean;
 }
 
-export interface EmergencyContactRow {
+interface EmergencyContactRow {
 	id: number;
 	userId: number;
 	name: string;

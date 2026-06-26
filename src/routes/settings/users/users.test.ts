@@ -16,29 +16,12 @@ import { users } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
+import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from users;');
 	vi.mocked(deliver).mockClear();
 });
-
-function adminLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
-	return { user: u };
-}
-
-function userLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'user@x.c', passwordHash: 'x', displayName: 'User', role: 'user' })
-		.returning()
-		.get();
-	return { user: u };
-}
 
 function updateForm(overrides: Record<string, string> = {}) {
 	const form = new FormData();
@@ -55,7 +38,7 @@ function updateForm(overrides: Record<string, string> = {}) {
 
 test('load returns all users for admin', () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).run();
 	const result = load({ locals: admin } as any) as { users: Array<{ passwordHash?: string }> };
 	expect(result.users.length).toBe(2);
@@ -63,7 +46,7 @@ test('load returns all users for admin', () => {
 });
 
 test('load rejects non-admin', () => {
-	const u = userLocals();
+	const u = makeUserLocals((ctx as any).db);
 	try {
 		load({ locals: u } as any);
 		expect.fail('should have thrown');
@@ -74,7 +57,7 @@ test('load rejects non-admin', () => {
 
 test('update toggles role and disabled', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -101,7 +84,7 @@ test('update toggles role and disabled', async () => {
 
 test('update changes display name and email', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -127,7 +110,7 @@ test('update changes display name and email', async () => {
 });
 
 test('update prevents demoting the last admin', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const form = updateForm({
 		userId: String(admin.user.id),
 		displayName: 'Admin',
@@ -144,7 +127,7 @@ test('update prevents demoting the last admin', async () => {
 });
 
 test('update prevents disabling the last admin', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const form = updateForm({
 		userId: String(admin.user.id),
 		displayName: 'Admin',
@@ -160,7 +143,7 @@ test('update prevents disabling the last admin', async () => {
 });
 
 test('update rejects invalid role', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = (ctx as any).db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
@@ -176,7 +159,7 @@ test('update rejects invalid role', async () => {
 
 test('sendReset delivers a reset link', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -201,7 +184,7 @@ test('sendReset delivers a reset link', async () => {
 });
 
 test('create adds a new user with a temporary password', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const form = new FormData();
 	form.set('displayName', 'New User');
 	form.set('email', 'new@x.c');
@@ -225,7 +208,7 @@ test('create adds a new user with a temporary password', async () => {
 
 test('create rejects duplicate email', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	db.insert(users).values({ email: 'exists@x.c', passwordHash: 'x', displayName: 'Existing' }).run();
 
 	const form = new FormData();
@@ -243,7 +226,7 @@ test('create rejects duplicate email', async () => {
 });
 
 test('create rejects invalid role', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const form = new FormData();
 	form.set('displayName', 'Bad Role');
 	form.set('email', 'bad@x.c');
@@ -260,7 +243,7 @@ test('create rejects invalid role', async () => {
 
 test('delete removes a user', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -284,7 +267,7 @@ test('delete removes a user', async () => {
 });
 
 test('delete prevents deleting the last admin', async () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const form = new FormData();
 	form.set('userId', String(admin.user.id));
 

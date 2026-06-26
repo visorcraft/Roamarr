@@ -11,7 +11,7 @@ type TripOwnedTable = SQLiteTable & {
 	createdAt: AnySQLiteColumn;
 };
 
-export interface TripCrudOptions<
+interface TripCrudOptions<
 	TTable extends TripOwnedTable,
 	Input,
 	UpdateInput = never,
@@ -99,7 +99,7 @@ type UserOwnedTable = SQLiteTable & {
 	createdAt?: AnySQLiteColumn;
 };
 
-export interface UserCrudOptions<
+interface UserCrudOptions<
 	TTable extends UserOwnedTable,
 	Input,
 	UpdateInput = never,

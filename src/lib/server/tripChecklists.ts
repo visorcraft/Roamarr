@@ -19,7 +19,7 @@ interface ChecklistItem {
 	createdAt: string;
 }
 
-export interface ChecklistWithItems {
+interface ChecklistWithItems {
 	id: number;
 	tripId: number;
 	items: ChecklistItem[];

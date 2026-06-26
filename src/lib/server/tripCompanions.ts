@@ -2,7 +2,13 @@ import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { withTripAction } from '$lib/server/actions';
 import { db } from '$lib/server/db';
-import { tripCompanions, COMPANION_CATEGORIES, type CompanionCategory } from '$lib/server/db/schema';
+import {
+	tripCompanions,
+	COMPANION_CATEGORIES,
+	SEAT_PREFERENCES,
+	BED_PREFERENCES,
+	type CompanionCategory
+} from '$lib/server/db/schema';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
@@ -26,9 +32,6 @@ function requireCompanion(tripId: number, companionId: number) {
 	if (!c) throw error(404, 'Companion not found');
 	return c;
 }
-
-const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
-const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
 
 interface CompanionInput {
 	name: string;

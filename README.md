@@ -100,6 +100,7 @@ Only commit template files such as `.env.example` and `deploy/podman/roamarr.env
 ## Commands
 
 ```sh
+npm run dev              # Vite dev server on http://localhost:5173
 npm run check            # Svelte + TypeScript check
 npm run check:watch      # Svelte + TypeScript check in watch mode
 npm test                 # Vitest suite once

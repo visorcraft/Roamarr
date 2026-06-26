@@ -8,10 +8,10 @@ import { Validator } from './validation';
 import { logAudit } from './audit';
 
 export const BUDGET_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
-export type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
+type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
 type BudgetAlertLevel = 'ok' | 'near' | 'over';
 
-export interface BudgetWithSpent {
+interface BudgetWithSpent {
 	category: BudgetCategory;
 	amount: number | null;
 	currency: string;
@@ -20,7 +20,7 @@ export interface BudgetWithSpent {
 	alert: BudgetAlertLevel;
 }
 
-export interface BudgetExpense {
+interface BudgetExpense {
 	amount: number;
 	currency?: string | null;
 	category?: string | null;

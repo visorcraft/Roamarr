@@ -6,12 +6,17 @@ import { requireOwnedTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { listGroupsForUser } from '$lib/server/sharing';
 import { db } from '$lib/server/db';
-import { users, trips, tripShares, groups as groupsTable } from '$lib/server/db/schema';
+import {
+	users,
+	trips,
+	tripShares,
+	groups as groupsTable,
+	SHARE_PERMISSIONS
+} from '$lib/server/db/schema';
 import { normalizeEmail } from '$lib/server/users';
 import { parseTripId } from '$lib/server/params';
 import type { PageServerLoad } from './$types';
 
-const SHARE_PERMISSIONS = ['read', 'edit'] as const;
 type SharePermission = (typeof SHARE_PERMISSIONS)[number];
 
 function parsePermission(raw: unknown): SharePermission | undefined {

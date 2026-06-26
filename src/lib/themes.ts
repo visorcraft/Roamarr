@@ -108,8 +108,8 @@ export const THEMES = [
 	}
 ] as const;
 
-export type ThemeId = (typeof THEMES)[number]['id'];
-export type ThemeOption = (typeof THEMES)[number];
+type ThemeId = (typeof THEMES)[number]['id'];
+type ThemeOption = (typeof THEMES)[number];
 
 const themeIds = new Set<string>(THEMES.map((theme) => theme.id));
 

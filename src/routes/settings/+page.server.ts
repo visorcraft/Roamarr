@@ -6,14 +6,10 @@ import { encrypt } from '$lib/server/crypto';
 import { listAuditLogs, logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
-import { currency as parseCurrency } from '$lib/server/validation';
+import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { db } from '$lib/server/db';
 import { users, trips, segments, groups, notifications } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
-
-function validDefaultLead(n: number) {
-	return Number.isInteger(n) && n >= 0;
-}
 
 export function _saveAdminSettings(
 	userId: number,
@@ -32,9 +28,9 @@ export function _saveAdminSettings(
 		webhookUrl?: string;
 	}
 ) {
-	if (!validDefaultLead(i.defaultFlightCheckinLeadHours))
+	if (!nonNegativeInteger(i.defaultFlightCheckinLeadHours))
 		throw new Error('Default flight check-in lead must be a non-negative integer');
-	if (!validDefaultLead(i.defaultDocumentExpiryLeadDays))
+	if (!nonNegativeInteger(i.defaultDocumentExpiryLeadDays))
 		throw new Error('Default document expiry lead must be a non-negative integer');
 	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);

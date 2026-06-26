@@ -13,7 +13,7 @@ import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 
-export type AttendeeRow = {
+type AttendeeRow = {
 	id: number;
 	segmentId: number;
 	companionId: number;

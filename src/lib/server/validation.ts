@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import { fail } from '@sveltejs/kit';
 
 type FieldErrors = Record<string, string>;
-export type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
+type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
 export function sanitizeLast4(raw?: string): string | null {
 	if (!raw) return null;
@@ -162,6 +162,10 @@ export function currency(raw: FormDataEntryValue | null, field: string): Validat
 		return { ok: false, error: `${field} must be a 3-letter currency code` };
 	}
 	return { ok: true, value: str };
+}
+
+export function nonNegativeInteger(n: number): boolean {
+	return Number.isInteger(n) && n >= 0;
 }
 
 export function formFail(validator: Validator) {

@@ -26,7 +26,7 @@ interface PollOptionView {
 	voteCount: number;
 }
 
-export interface PollWithVotes {
+interface PollWithVotes {
 	id: number;
 	tripId: number;
 	question: string;

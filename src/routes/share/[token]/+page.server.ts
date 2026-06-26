@@ -5,11 +5,8 @@ import { trips, segments } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
 import { getSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { isExpired } from '$lib/server/dates';
 import type { PageServerLoad } from './$types';
-
-function isExpired(expiresAt: string | null | undefined) {
-	return expiresAt != null && new Date(expiresAt) <= new Date();
-}
 
 export function _loadByToken(token: string) {
 	if (!token) throw error(404, 'Not found');

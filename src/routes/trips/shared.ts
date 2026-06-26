@@ -12,7 +12,7 @@ type Trip = typeof tripsTable.$inferSelect;
 type Segment = typeof segmentsTable.$inferSelect;
 type Projection = ReturnType<typeof viewerProjection>;
 
-export type TripView =
+type TripView =
 	| { owner: true; editor: true; trip: Trip; segments: Segment[] }
 	| { owner: false; editor: true; trip: Trip; segments: Segment[] }
 	| { owner: false; editor: false; trip: Projection };

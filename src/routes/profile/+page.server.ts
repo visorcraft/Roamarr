@@ -8,7 +8,7 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
-import { currency as parseCurrency } from '$lib/server/validation';
+import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import {
 	listEmergencyContacts,
 	addEmergencyContact,
@@ -27,10 +27,6 @@ function validTimezone(tz: string) {
 	return DateTime.local().setZone(tz).isValid;
 }
 
-function validLead(n: number) {
-	return Number.isInteger(n) && n >= 0;
-}
-
 export function _updateProfile(
 	userId: number,
 	i: {
@@ -47,8 +43,8 @@ export function _updateProfile(
 	requireOwnedUser(userId);
 	if (!i.displayName) throw new Error('Display name is required');
 	if (!validTimezone(i.timezone)) throw new Error('Invalid timezone');
-	if (!validLead(i.flightCheckinLeadHours)) throw new Error('Flight check-in lead must be a non-negative integer');
-	if (!validLead(i.documentExpiryLeadDays)) throw new Error('Document expiry lead must be a non-negative integer');
+	if (!nonNegativeInteger(i.flightCheckinLeadHours)) throw new Error('Flight check-in lead must be a non-negative integer');
+	if (!nonNegativeInteger(i.documentExpiryLeadDays)) throw new Error('Document expiry lead must be a non-negative integer');
 	if (!isThemeId(i.themeId)) throw new Error('Invalid theme');
 	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);

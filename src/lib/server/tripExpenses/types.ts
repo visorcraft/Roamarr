@@ -1,3 +1,5 @@
+// Internal types used by tripExpenses/repository.ts and tripExpenses/summaries.ts.
+// They are intentionally not re-exported from the tripExpenses barrel.
 export interface TripExpenseView {
 	id: number;
 	tripId: number;

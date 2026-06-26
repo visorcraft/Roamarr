@@ -5,11 +5,8 @@ import { db } from '$lib/server/db';
 import { users, trips, tripShares, groupMembers } from '$lib/server/db/schema';
 import { loadTripFor } from '../../trips/shared';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { isExpired } from '$lib/server/dates';
 import type { RequestHandler } from './$types';
-
-function isExpired(expiresAt: string | null | undefined) {
-	return expiresAt != null && new Date(expiresAt) <= new Date();
-}
 
 function toCalendarInput(
 	view: ReturnType<typeof loadTripFor>

@@ -18,25 +18,9 @@ import {
 } from './tripExpenses';
 import { users, trips, tripCompanions, tripExpenses, auditLogs } from './db/schema';
 import { eq, and } from 'drizzle-orm';
+import { makeActionEvent } from '../../../tests/eventHelpers';
 
-function event(user: { id: number }, tripId: number, body: Record<string, string | string[]>) {
-	const params = new URLSearchParams();
-	for (const [key, value] of Object.entries(body)) {
-		if (Array.isArray(value)) {
-			for (const v of value) params.append(key, v);
-		} else {
-			params.append(key, value);
-		}
-	}
-	return {
-		locals: { user } as App.Locals,
-		params: { id: String(tripId) },
-		request: new Request('http://localhost/trips/' + tripId, {
-			method: 'POST',
-			body: params
-		})
-	} as any;
-}
+const event = makeActionEvent;
 
 test('listTripExpenses returns expenses with parsed splitAmong', () => {
 	const db = (ctx as { db: import('./db').DB }).db;

@@ -2,7 +2,7 @@ import { dev } from '$app/environment';
 import type { Cookies } from '@sveltejs/kit';
 import type { ToastVariant } from '$lib/toast';
 
-export type FlashMessage = {
+type FlashMessage = {
 	message: string;
 	variant?: ToastVariant;
 };

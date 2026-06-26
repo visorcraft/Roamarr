@@ -2,6 +2,11 @@ import { sqliteTable, integer, text, primaryKey, unique, uniqueIndex, index, che
 import { sql } from 'drizzle-orm';
 import { enumCheck } from './schemaHelpers';
 
+// Export policy for enum constants and derived types:
+// - Export the const array when it is consumed outside this file (validation, routes, tests).
+// - Keep the const unexported when it is only used for enumCheck constraints inside this file.
+// - Derived types are only exported when the corresponding const is exported and used externally.
+
 export const schedulerRuns = sqliteTable(
 	'scheduler_runs',
 	{
@@ -18,44 +23,31 @@ export const schedulerRuns = sqliteTable(
 
 const now = sql`(datetime('now'))`;
 
-export const ROLES = ['admin', 'user'] as const;
-export type Role = (typeof ROLES)[number];
+const ROLES = ['admin', 'user'] as const;
 
-export const VISIBILITIES = ['private', 'groups', 'public'] as const;
-export type Visibility = (typeof VISIBILITIES)[number];
+const VISIBILITIES = ['private', 'groups', 'public'] as const;
 
-export const TRIP_STATUSES = ['planning', 'booked', 'active', 'completed'] as const;
-export type TripStatus = (typeof TRIP_STATUSES)[number];
+const TRIP_STATUSES = ['planning', 'booked', 'active', 'completed'] as const;
 
 export const SHARE_PERMISSIONS = ['read', 'edit'] as const;
-export type SharePermission = (typeof SHARE_PERMISSIONS)[number];
 
-export const CARD_NETWORKS = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
-export type CardNetwork = (typeof CARD_NETWORKS)[number];
+const CARD_NETWORKS = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
 
-export const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
-export type BenefitType = (typeof BENEFIT_TYPES)[number];
+const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
 
-export const REMINDER_KINDS = ['flight_checkin', 'document_expiry', 'custom'] as const;
-export type ReminderKind = (typeof REMINDER_KINDS)[number];
+const REMINDER_KINDS = ['flight_checkin', 'document_expiry', 'custom'] as const;
 
-export const REMINDER_REF_TYPES = ['segment', 'document', 'trip'] as const;
-export type ReminderRefType = (typeof REMINDER_REF_TYPES)[number];
+const REMINDER_REF_TYPES = ['segment', 'document', 'trip'] as const;
 
-export const REMINDER_STATUSES = ['pending', 'sending', 'sent'] as const;
-export type ReminderStatus = (typeof REMINDER_STATUSES)[number];
+const REMINDER_STATUSES = ['pending', 'sending', 'sent'] as const;
 
-export const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
-export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
 
-export const WATCH_STATUSES = ['active', 'paused'] as const;
-export type WatchStatus = (typeof WATCH_STATUSES)[number];
+const WATCH_STATUSES = ['active', 'paused'] as const;
 
 export const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
-export type EntryRequirementType = (typeof ENTRY_REQUIREMENT_TYPES)[number];
 
 export const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
-export type EntryRequirementStatus = (typeof ENTRY_REQUIREMENT_STATUSES)[number];
 
 export const users = sqliteTable(
 	'users',
@@ -206,7 +198,6 @@ export const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 
 export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 
 export const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
-export type SegmentPaymentStatus = (typeof SEGMENT_PAYMENT_STATUSES)[number];
 
 export const segments = sqliteTable(
 	'segments',
@@ -529,10 +520,8 @@ export const COMPANION_CATEGORIES = ['adult', 'child', 'other'] as const;
 export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
 
 export const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
-export type SeatPreference = (typeof SEAT_PREFERENCES)[number];
 
 export const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
-export type BedPreference = (typeof BED_PREFERENCES)[number];
 
 export const tripCompanions = sqliteTable(
 	'trip_companions',

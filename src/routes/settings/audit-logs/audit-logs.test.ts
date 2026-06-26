@@ -11,33 +11,16 @@ import { load } from './+page.server';
 import { users } from '$lib/server/db/schema';
 import { logAudit } from '$lib/server/audit';
 import { beforeEach } from 'vitest';
+import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from audit_logs;');
 	(ctx as any).sqlite.exec('delete from users;');
 });
 
-function adminLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
-	return { user: u };
-}
-
-function userLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'user@x.c', passwordHash: 'x', displayName: 'User', role: 'user' })
-		.returning()
-		.get();
-	return { user: u };
-}
-
 test('load returns recent audit logs for admin', () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const target = db.insert(users).values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' }).returning().get();
 
 	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
@@ -53,7 +36,7 @@ test('load returns recent audit logs for admin', () => {
 });
 
 test('load rejects non-admin', () => {
-	const u = userLocals();
+	const u = makeUserLocals((ctx as any).db);
 	try {
 		load({ locals: u, url: new URL('http://localhost/settings/audit-logs') } as any);
 		expect.fail('should have thrown');
@@ -63,7 +46,7 @@ test('load rejects non-admin', () => {
 });
 
 test('load returns empty logs when no events exist', () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const result = load({ locals: admin, url: new URL('http://localhost/settings/audit-logs') } as any) as {
 		logs: unknown[];
 	};
@@ -71,7 +54,7 @@ test('load returns empty logs when no events exist', () => {
 });
 
 test('load returns CSV export when export=csv', () => {
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
 
 	const result = load({

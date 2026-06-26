@@ -22,6 +22,7 @@ import {
 } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
+import { makeLocals, makeFormData } from '../../../../../tests/eventHelpers';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec(
@@ -29,21 +30,11 @@ beforeEach(() => {
 	);
 });
 
-function locals(user: { id: number }) {
-	return { user } as App.Locals;
-}
-
-function formData(obj: Record<string, string>) {
-	const f = new FormData();
-	for (const [k, v] of Object.entries(obj)) f.append(k, v);
-	return f;
-}
-
 function makeEvent(form: FormData, params: Record<string, string>, userId: number) {
 	return {
 		request: new Request('http://localhost/trips/1/edit', { method: 'POST', body: form }),
 		params,
-		locals: locals({ id: userId }),
+		locals: makeLocals({ id: userId }),
 		url: new URL(`http://localhost/trips/${params.id}/edit`)
 	} as any;
 }
@@ -116,7 +107,7 @@ test('edit action updates a trip with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'edit-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const t = createTrip(a.id, { name: 'Old' });
-	const form = formData({
+	const form = makeFormData({
 		name: 'Updated',
 		destination: 'Tokyo',
 		startDate: '2026-08-01',
@@ -141,7 +132,7 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
 	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
 
-	const form = formData({
+	const form = makeFormData({
 		name: 'Editor Updated',
 		destination: 'Osaka',
 		startDate: '2026-08-01',
@@ -165,7 +156,7 @@ test('edit action updates trip status', async () => {
 	const a = db.insert(users).values({ email: 'edit-status@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const t = createTrip(a.id, { name: 'Trip' });
 
-	const form = formData({
+	const form = makeFormData({
 		name: 'Trip',
 		status: 'active'
 	});
@@ -188,7 +179,7 @@ test('edit action rejects invalid status values', async () => {
 	const a = db.insert(users).values({ email: 'edit-status-bad@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const t = createTrip(a.id, { name: 'Trip' });
 
-	const form = formData({
+	const form = makeFormData({
 		name: 'Trip',
 		status: 'foo'
 	});
@@ -207,7 +198,7 @@ test('edit action rejects invalid data and enforces ownership', async () => {
 	const b = db.insert(users).values({ email: 'edit-c@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 	const t = createTrip(a.id, { name: 'Trip' });
 
-	const form = formData({
+	const form = makeFormData({
 		name: '',
 		startDate: '2026-08-10',
 		endDate: '2026-08-01'

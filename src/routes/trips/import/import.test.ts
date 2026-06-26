@@ -10,10 +10,7 @@ vi.mock('$lib/server/db', async () => {
 import { actions } from './+page.server';
 import { users, trips, segments } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
-
-function locals(user: { id: number }) {
-	return { user } as App.Locals;
-}
+import { makeLocals } from '../../../../tests/eventHelpers';
 
 function makeEvent(file: File, format = 'json', userId = 1) {
 	const f = new FormData();
@@ -22,7 +19,7 @@ function makeEvent(file: File, format = 'json', userId = 1) {
 	return {
 		request: new Request('http://localhost/trips/import', { method: 'POST', body: f }),
 		params: {},
-		locals: locals({ id: userId }),
+		locals: makeLocals({ id: userId }),
 		url: new URL('http://localhost/trips/import')
 	} as any;
 }
@@ -76,7 +73,7 @@ test('rejects missing file', async () => {
 	const result = (await actions.default({
 		request: new Request('http://localhost/trips/import', { method: 'POST', body: f }),
 		params: {},
-		locals: locals({ id: 1 }),
+		locals: makeLocals({ id: 1 }),
 		url: new URL('http://localhost/trips/import')
 	} as any)) as { status: number; data: { error: string } };
 	expect(result.status).toBe(400);

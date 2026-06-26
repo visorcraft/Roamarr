@@ -20,7 +20,7 @@ interface TemplateItem {
 	createdAt: string;
 }
 
-export interface PackingTemplate {
+interface PackingTemplate {
 	id: number;
 	userId: number;
 	name: string;

@@ -17,7 +17,7 @@ export function listJournalEntries(tripId: number) {
 		.all();
 }
 
-export interface JournalEntryInput {
+interface JournalEntryInput {
 	entryDate: string;
 	title: string;
 	body: string;

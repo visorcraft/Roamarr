@@ -10,12 +10,7 @@ vi.mock('$lib/server/db', async () => {
 import { _addDocument, load, actions } from './+page.server';
 import { users, travelDocuments, trips, tripCompanions, auditLogs } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
-
-function formData(obj: Record<string, string>) {
-	const f = new FormData();
-	for (const [k, v] of Object.entries(obj)) f.append(k, v);
-	return f;
-}
+import { makeFormData } from '../../../../tests/eventHelpers';
 
 function makeEvent(form: FormData, userId = 1) {
 	return {
@@ -43,7 +38,7 @@ test('add action creates a document linked to a companion', async () => {
 		.returning()
 		.get();
 
-	const form = formData({
+	const form = makeFormData({
 		type: 'passport',
 		number: 'P12345',
 		issuingAuthority: 'US State Dept',
@@ -109,7 +104,7 @@ test('add action rejects a companion from another user', async () => {
 		.returning()
 		.get();
 
-	const form = formData({
+	const form = makeFormData({
 		type: 'passport',
 		number: 'P999',
 		companionId: String(otherCompanion.id)
@@ -125,7 +120,7 @@ test('add action rejects a companion from another user', async () => {
 test('add action rejects an invalid document type', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'd@x.c', passwordHash: 'x', displayName: 'D' }).returning().get();
-	const form = formData({ type: 'not_a_type', number: 'P000' });
+	const form = makeFormData({ type: 'not_a_type', number: 'P000' });
 
 	const result = await actions.add(makeEvent(form, u.id));
 	expect(result).toMatchObject({ status: 400, data: { error: expect.any(String) } });
@@ -145,7 +140,7 @@ test('update action changes a document and its companion', async () => {
 		expiresOn: '2030-01-01'
 	});
 
-	const form = formData({
+	const form = makeFormData({
 		id: String(doc.id),
 		type: 'visa',
 		number: 'V54321',
@@ -182,7 +177,7 @@ test('update action encrypts the document number', async () => {
 	const u = db.insert(users).values({ email: 'f@x.c', passwordHash: 'x', displayName: 'F' }).returning().get();
 	const doc = _addDocument(u.id, { type: 'passport', number: 'OLDNUM' });
 
-	const form = formData({ id: String(doc.id), type: 'passport', number: 'NEWSECRET' });
+	const form = makeFormData({ id: String(doc.id), type: 'passport', number: 'NEWSECRET' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 303 });
 
 	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
@@ -196,7 +191,7 @@ test('delete action removes the document', async () => {
 	const u = db.insert(users).values({ email: 'g@x.c', passwordHash: 'x', displayName: 'G' }).returning().get();
 	const doc = _addDocument(u.id, { type: 'passport' });
 
-	const form = formData({ id: String(doc.id) });
+	const form = makeFormData({ id: String(doc.id) });
 	await expect(actions.delete(makeEvent(form, u.id))).rejects.toMatchObject({
 		status: 303,
 		location: '/profile/documents'
@@ -219,7 +214,7 @@ test('update action rejects access to another users document', async () => {
 	const other = db.insert(users).values({ email: 'i@x.c', passwordHash: 'x', displayName: 'I' }).returning().get();
 	const doc = _addDocument(other.id, { type: 'passport' });
 
-	const form = formData({ id: String(doc.id), type: 'visa' });
+	const form = makeFormData({ id: String(doc.id), type: 'visa' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
 	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
@@ -232,7 +227,7 @@ test('delete action rejects access to another users document', async () => {
 	const other = db.insert(users).values({ email: 'k@x.c', passwordHash: 'x', displayName: 'K' }).returning().get();
 	const doc = _addDocument(other.id, { type: 'passport' });
 
-	const form = formData({ id: String(doc.id) });
+	const form = makeFormData({ id: String(doc.id) });
 	await expect(actions.delete(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
 	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).all()).toHaveLength(1);
@@ -241,7 +236,7 @@ test('delete action rejects access to another users document', async () => {
 test('add action rejects an invalid companionId format', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'l@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
-	const form = formData({ type: 'passport', companionId: 'not-a-number' });
+	const form = makeFormData({ type: 'passport', companionId: 'not-a-number' });
 
 	await expect(actions.add(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
 	expect(db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).all()).toHaveLength(0);
@@ -251,7 +246,7 @@ test('update action rejects an invalid companionId format', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
 	const doc = _addDocument(u.id, { type: 'passport' });
-	const form = formData({ id: String(doc.id), type: 'passport', companionId: '-5' });
+	const form = makeFormData({ id: String(doc.id), type: 'passport', companionId: '-5' });
 
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
 	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;

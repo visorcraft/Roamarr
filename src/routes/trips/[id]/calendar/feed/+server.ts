@@ -6,11 +6,8 @@ import { db } from '$lib/server/db';
 import { segments, trips } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { isExpired } from '$lib/server/dates';
 import type { RequestHandler } from './$types';
-
-function isExpired(expiresAt: string | null | undefined) {
-	return expiresAt != null && new Date(expiresAt) <= new Date();
-}
 
 export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 	const ip = getClientAddress();

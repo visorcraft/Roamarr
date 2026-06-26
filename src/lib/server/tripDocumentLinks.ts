@@ -7,13 +7,13 @@ import { logAudit } from './audit';
 import { Validator, httpUrl, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
 
-export type DocumentLinkInput = {
+type DocumentLinkInput = {
 	label: string;
 	url: string;
 	notes?: string | null;
 };
 
-export type DocumentLinkRow = typeof tripDocumentLinks.$inferSelect;
+type DocumentLinkRow = typeof tripDocumentLinks.$inferSelect;
 
 export function listDocumentLinks(tripId: number): DocumentLinkRow[] {
 	return db

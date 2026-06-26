@@ -11,31 +11,14 @@ import { load, actions } from './+page.server';
 import { schedulerRuns, users } from '$lib/server/db/schema';
 import { sql } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
+import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from users; delete from scheduler_runs;');
 });
 
-function adminLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
-	return { user: u };
-}
-
-function userLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: 'user@x.c', passwordHash: 'x', displayName: 'User', role: 'user' })
-		.returning()
-		.get();
-	return { user: u };
-}
-
 test('load rejects non-admin', () => {
-	const u = userLocals();
+	const u = makeUserLocals((ctx as any).db);
 	try {
 		load({ locals: u } as any);
 		expect.fail('should have thrown');
@@ -46,7 +29,7 @@ test('load rejects non-admin', () => {
 
 test('load returns recent scheduler runs newest first', () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	db.insert(schedulerRuns)
 		.values([
 			{
@@ -74,7 +57,7 @@ test('load returns recent scheduler runs newest first', () => {
 
 test('load limits to 50 runs', () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const base = new Date('2026-06-01T00:00:00.000Z').getTime();
 	const values = Array.from({ length: 55 }, (_, i) => ({
 		startedAt: new Date(base + i * 1000).toISOString(),
@@ -90,7 +73,7 @@ test('load limits to 50 runs', () => {
 
 test('runNow action triggers a scheduler tick and redirects', async () => {
 	const db = (ctx as any).db;
-	const admin = adminLocals();
+	const admin = makeAdminLocals((ctx as any).db);
 	const before = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
 	await expect(actions.runNow({ locals: admin } as any)).rejects.toMatchObject({
 		status: 303,

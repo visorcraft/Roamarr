@@ -2,21 +2,39 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
 <p align="center">
-  <img src="static/icon-512.png" alt="Roamarr logo" width="250">
+  <img src="static/icon-512.png" alt="Roamarr logo" width="250" />
 </p>
 
 <h1 align="center">Roamarr</h1>
 
 <p align="center">
-  <strong>A self-hosted travel organizer for trips, families, documents, reminders, and expenses.</strong>
+  <b>A private, self-hosted travel organizer for every moving part of a trip.</b>
+  <br />
+  Keep flights, stays, documents, companions, reminders, expenses, and sharing in one SQLite-backed itinerary hub.
+  <br />
+  SvelteKit app shell · single-container deploy · encrypted sensitive fields · no hosted travel account required.
 </p>
 
 <p align="center">
-  A SvelteKit and SQLite itinerary hub for keeping every moving part of a trip
-  in one private place: flights, hotels, trains, documents, companions,
-  checklists, sharing, notifications, and the small details that usually get
-  scattered across email threads and notes apps.
+  <a href="https://github.com/visorcraft/Roamarr/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/Roamarr?sort=semver" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only" /></a>
+  <img src="https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 2" />
+  <img src="https://img.shields.io/badge/SQLite-Drizzle-003b57?logo=sqlite&amp;logoColor=white" alt="SQLite with Drizzle ORM" />
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D22.12-339933?logo=node.js&amp;logoColor=white" alt="Node.js 22.12 or newer" />
+  <img src="https://img.shields.io/badge/container-Docker%20%2F%20Podman-892ca0?logo=podman&amp;logoColor=white" alt="Docker or Podman container" />
 </p>
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Roamarr dashboard with upcoming trips, reminders, and travel planning metrics" width="800" />
+  <br />
+  <em>Dashboard overview for a demo Roamarr instance with trips, reminders, documents, and operational settings.</em>
+</p>
+
+---
 
 ## What is Roamarr?
 
@@ -101,8 +119,8 @@ standard C/C++ build tools before running `npm ci`.
 ### From source
 
 ```bash
-git clone https://github.com/visorcraft/roamarr.git
-cd roamarr
+git clone https://github.com/visorcraft/Roamarr.git
+cd Roamarr
 
 npm ci
 cp .env.example .env
@@ -166,8 +184,8 @@ admin settings are configured inside the app after setup.
 | SvelteKit build cache | `./.svelte-kit/` |
 
 Local `.env` files, databases, logs, build output, dependencies, Playwright
-artifacts, and screenshots are ignored by Git. Commit only templates such as
-`.env.example`.
+artifacts, and local QA screenshots are ignored by Git. Commit only templates
+such as `.env.example`.
 
 ## Tweak Roamarr
 
@@ -248,8 +266,8 @@ pull request requirements.
 The short version:
 
 ```bash
-git clone https://github.com/<you>/roamarr.git
-cd roamarr
+git clone https://github.com/<you>/Roamarr.git
+cd Roamarr
 git checkout -b fix-or-feature-name
 
 npm ci

@@ -22,6 +22,8 @@
 	let showAddCompanionNotes = $state(false);
 	let selectedCompanionByPoll = $state<Record<number, string>>({});
 	let selectedTypes = $state<Set<SegmentType>>(new Set());
+	let selectedSegmentIds = $state<Set<number>>(new Set());
+	let segmentQuery = $state('');
 
 	function toggleType(type: SegmentType) {
 		const next = new Set(selectedTypes);
@@ -78,6 +80,51 @@
 		return Math.max(1, Math.ceil(e.diff(s, 'days').days) + 1);
 	}
 
+	function exportExpensesCsv() {
+		const headers = ['Description', 'Amount', 'Currency', 'Category', 'Paid by', 'Date'];
+		const rows = (data.expenses ?? []).map((e) => [
+			e.description,
+			(e.amount / 100).toFixed(2),
+			e.currency,
+			e.category,
+			e.paidBy === 'owner' ? 'You' : companionNameMap.get(e.paidBy) ?? 'Unknown',
+			e.createdAt ?? ''
+		]);
+		const csv = [headers, ...rows]
+			.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+			.join('\n');
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+			a.href = url;
+			a.download = `expenses-${trip.id}.csv`;
+			a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function formatSegmentDuration(start: string | null | undefined, end: string | null | undefined) {
+		if (!start || !end) return null;
+		const s = DateTime.fromISO(start, { zone: 'utc' });
+		const e = DateTime.fromISO(end, { zone: 'utc' });
+		if (!s.isValid || !e.isValid) return null;
+		const mins = Math.max(0, Math.round(e.diff(s, 'minutes').minutes));
+		if (mins < 60) return `${mins}m`;
+		const hours = Math.floor(mins / 60);
+		const remMins = mins % 60;
+		if (hours < 24) return remMins ? `${hours}h ${remMins}m` : `${hours}h`;
+		const days = Math.floor(hours / 24);
+		const remHours = hours % 24;
+		return remHours ? `${days}d ${remHours}h` : `${days}d`;
+	}
+
+	function daysUntilStart(start: string | null | undefined) {
+		if (!start) return null;
+		const s = DateTime.fromISO(start).startOf('day');
+		const now = DateTime.now().startOf('day');
+		if (!s.isValid || s <= now) return null;
+		return Math.ceil(s.diff(now, 'days').days);
+	}
+
 	function tripStatus(start: string | null | undefined, end: string | null | undefined) {
 		const today = DateTime.now().toISODate()!;
 		if (!start && !end) return 'unknown';
@@ -129,16 +176,41 @@
 	const trip = $derived(data.trip);
 	const isEditor = $derived(data.editor === true);
 	const ownerTrip = $derived(data.owner === true ? (trip as typeof trips.$inferSelect) : undefined);
+	const baseCurrency = $derived(ownerTrip?.baseCurrency ?? (trip as typeof trips.$inferSelect).baseCurrency ?? 'USD');
 	const segmentList = $derived(
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);
+
+	function toggleSegmentId(id: number) {
+		const next = new Set(selectedSegmentIds);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		selectedSegmentIds = next;
+	}
+
+	const allSegmentsSelected = $derived(
+		segmentList.length > 0 && segmentList.every((s) => s.id != null && selectedSegmentIds.has(s.id))
+	);
+	function setAllSegmentsSelected(value: boolean) {
+		selectedSegmentIds = value
+			? new Set(segmentList.map((s) => s.id).filter((id): id is number => id != null))
+			: new Set();
+	}
+	const normalizedSegmentQuery = $derived(segmentQuery.trim().toLowerCase());
 	const filteredSegmentList = $derived(
-		selectedTypes.size === 0
-			? segmentList
-			: segmentList.filter((s) => selectedTypes.has(s.type as SegmentType))
+		segmentList.filter((s) => {
+			if (selectedTypes.size > 0 && !selectedTypes.has(s.type as SegmentType)) return false;
+			if (!normalizedSegmentQuery) return true;
+			const hay = [s.title, s.location, s.confirmationNumber, s.meetingPoint]
+				.filter(Boolean)
+				.join(' ')
+				.toLowerCase();
+			return hay.includes(normalizedSegmentQuery);
+		})
 	);
 	const dayGroups = $derived(groupSegmentsByDay(filteredSegmentList));
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
+	const daysUntil = $derived(daysUntilStart(trip.startDate));
 	const status = $derived(tripStatus(trip.startDate, trip.endDate));
 	const heroAccent = $derived(heroHue(trip.destination ?? trip.name));
 	const typeCounts = $derived(
@@ -147,6 +219,23 @@
 			count: segmentList.filter((s) => s.type === type).length
 		})).filter((t) => t.count > 0)
 	);
+
+	const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
+	const categorySpending = $derived(
+		EXPENSE_CATEGORIES.map((cat) => {
+			const amount = (data.expenses ?? [])
+				.filter((e) => e.category === cat)
+				.reduce((sum, e) => sum + e.baseAmount, 0);
+			return {
+				category: cat,
+				amount,
+				label: cat.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+			};
+		})
+			.filter((c) => c.amount > 0)
+			.sort((a, b) => b.amount - a.amount)
+	);
+	const maxCategorySpend = $derived(Math.max(...categorySpending.map((c) => c.amount), 1));
 </script>
 
 <div class="trip-detail">
@@ -204,6 +293,9 @@
 						{/if}
 						{#if days}
 							<span class="trip-meta-pill">{days} day{days === 1 ? '' : 's'}</span>
+						{/if}
+						{#if daysUntil != null}
+							<span class="trip-meta-pill">Starts in {daysUntil} day{daysUntil === 1 ? '' : 's'}</span>
 						{/if}
 						<span class="trip-meta-pill">{segmentList.length} segment{segmentList.length === 1 ? '' : 's'}</span>
 					</div>
@@ -286,12 +378,43 @@
 			<section>
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h2 class="section-title">Itinerary</h2>
-					{#if isEditor}
-						<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary">
-							<Icon name="plus" class="h-4 w-4" />
-							Add segment
-						</a>
-					{/if}
+					<div class="flex flex-wrap items-center gap-2">
+						<input
+							type="text"
+							class="input text-sm w-40"
+							placeholder="Search segments…"
+							bind:value={segmentQuery}
+						/>
+						{#if isEditor && segmentList.length}
+							<form id="bulkDeleteForm" method="POST" action={`/trips/${trip.id}/segments?/deleteMany`} class="flex items-center gap-2">
+								<label class="checkbox-label text-xs">
+									<input
+										type="checkbox"
+										class="checkbox"
+										checked={allSegmentsSelected}
+										indeterminate={selectedSegmentIds.size > 0 && !allSegmentsSelected}
+										onchange={(e) => setAllSegmentsSelected(e.currentTarget.checked)}
+									/>
+									Select all
+								</label>
+								{#if selectedSegmentIds.size}
+									<button
+										class="btn btn-ghost btn-ghost-danger btn-xs"
+										type="submit"
+										onclick={(e) => { if (!confirm(`Delete ${selectedSegmentIds.size} selected segment(s)?`)) e.preventDefault(); }}
+									>
+										Delete {selectedSegmentIds.size}
+									</button>
+								{/if}
+							</form>
+						{/if}
+						{#if isEditor}
+							<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary">
+								<Icon name="plus" class="h-4 w-4" />
+								Add segment
+							</a>
+						{/if}
+					</div>
 				</div>
 
 				{#if dayGroups.length}
@@ -305,6 +428,7 @@
 
 								<div class="trip-timeline-track space-y-3">
 									{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}
+										{@const duration = formatSegmentDuration(s.startAt, s.endAt)}
 										<div class="relative">
 											<span class="trip-timeline-node">
 												<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg>
@@ -397,6 +521,17 @@
 														{/if}
 														<div class="min-w-0 flex-1">
 															<div class="flex flex-wrap items-center gap-2">
+																{#if isEditor && s.id}
+																	<input
+																		type="checkbox"
+																		name="segmentId"
+																		value={s.id}
+																		form="bulkDeleteForm"
+																		class="checkbox"
+																		checked={selectedSegmentIds.has(s.id!)}
+																		onchange={() => toggleSegmentId(s.id!)}
+																	/>
+																{/if}
 																<span class="badge badge-slate">{SEG[s.type as keyof typeof SEG]?.label ?? s.type}</span>
 																<h3 class="font-semibold text-white">{s.title}</h3>
 																{#if isEditor && s.id}
@@ -422,6 +557,7 @@
 															{#if s.endAt}
 																<p class="mt-1 font-mono text-xs text-slate-500">
 																	Until {formatTime(s.endAt, s.endTz ?? s.startTz ?? 'UTC')}
+																	{#if duration}<span class="ml-1.5 text-slate-600">· {duration}</span>{/if}
 																</p>
 															{/if}
 															{#if s.location}
@@ -531,8 +667,8 @@
 							<Icon name="flight" class="h-6 w-6" />
 						</div>
 						<p class="text-slate-300">
-							{#if selectedTypes.size > 0}
-								No segments match the selected filters.
+							{#if selectedTypes.size > 0 || segmentQuery.trim()}
+								No segments match your filters.
 							{:else}
 								{isEditor ? 'No segments yet — add your first flight, stay, or activity.' : 'No itinerary shared.'}
 							{/if}
@@ -548,10 +684,22 @@
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Packing checklist</h2>
-						{#if data.checklist?.items?.length}
-							{@const packed = data.checklist.items.filter((i) => i.packed).length}
-							<span class="font-mono text-xs text-slate-500">{packed}/{data.checklist.items.length}</span>
-						{/if}
+						<div class="flex items-center gap-2">
+							{#if isEditor && data.checklist?.items?.length}
+								<form method="POST" action="?/setAllChecklistItems">
+									<input type="hidden" name="packed" value="true" />
+									<button class="btn btn-ghost btn-xs" type="submit">Pack all</button>
+								</form>
+								<form method="POST" action="?/setAllChecklistItems">
+									<input type="hidden" name="packed" value="false" />
+									<button class="btn btn-ghost btn-xs" type="submit">Unpack all</button>
+								</form>
+							{/if}
+							{#if data.checklist?.items?.length}
+								{@const packed = data.checklist.items.filter((i) => i.packed).length}
+								<span class="font-mono text-xs text-slate-500">{packed}/{data.checklist.items.length}</span>
+							{/if}
+						</div>
 					</div>
 					{#if data.checklist?.items?.length}
 						<ul class="space-y-2">
@@ -620,8 +768,12 @@
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Expenses</h2>
-						{#if Object.keys(data.expenseSummary?.totalsByCurrency ?? {}).length}
-							<div class="flex flex-wrap gap-2">
+						<div class="flex flex-wrap items-center gap-2">
+							{#if data.expenses?.length}
+								<button class="btn btn-ghost btn-xs" type="button" onclick={exportExpensesCsv}>Export CSV</button>
+							{/if}
+							{#if Object.keys(data.expenseSummary?.totalsByCurrency ?? {}).length}
+								<div class="flex flex-wrap gap-2">
 								{#each Object.entries(data.expenseSummary.totalsByCurrency) as [currency, amount]}
 									<span class="badge badge-slate badge-compact font-mono">{currency} {(amount / 100).toFixed(2)}</span>
 									{#if data.expenseSummary.baseTotal}
@@ -631,6 +783,28 @@
 							</div>
 						{/if}
 					</div>
+				</div>
+
+					{#if categorySpending.length}
+						<div class="mt-4 space-y-2">
+							<h3 class="subsection-title">Spending by category</h3>
+							{#each categorySpending as c (c.category)}
+								<div class="flex items-center gap-3 text-sm">
+									<span class="w-20 shrink-0 text-slate-300">{c.label}</span>
+									<div class="h-3 flex-1 rounded-full bg-surface2">
+										<div
+											class="h-3 rounded-full bg-indigo-500/80"
+											style="width: {Math.round((c.amount / maxCategorySpend) * 100)}%;"
+										></div>
+									</div>
+									<span class="w-24 shrink-0 text-right font-mono text-xs text-slate-400">
+										{formatCents(c.amount, baseCurrency)}
+									</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
 					{#if data.expenses?.length}
 						<ul class="space-y-2">
 							{#each data.expenses as e (e.id)}
@@ -1275,6 +1449,34 @@
 					{/if}
 				</dl>
 			</div>
+
+			{#if data.stats}
+				<div class="trip-sidebar-card">
+					<h2 class="subsection-title mb-3">Trip stats</h2>
+					<dl class="trip-sidebar-dl">
+						<div>
+							<dt>Segments</dt>
+							<dd>{data.stats.totalSegments} ({data.stats.scheduledSegments} scheduled)</dd>
+						</div>
+						<div>
+							<dt>Paid</dt>
+							<dd>{data.stats.paidSegments}/{data.stats.totalSegments}</dd>
+						</div>
+						<div>
+							<dt>Expenses</dt>
+							<dd>{formatCents(data.stats.totalExpenses, data.stats.totalExpensesCurrency ?? baseCurrency)}</dd>
+						</div>
+						<div>
+							<dt>Budget cap</dt>
+							<dd>{formatCents(data.stats.budgetCap, baseCurrency)}</dd>
+						</div>
+						<div>
+							<dt>Packing</dt>
+							<dd>{data.stats.checklistPacked}/{data.stats.checklistTotal}</dd>
+						</div>
+					</dl>
+				</div>
+			{/if}
 
 			{#if typeCounts.length}
 				<div class="trip-sidebar-card">

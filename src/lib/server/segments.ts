@@ -112,6 +112,21 @@ export function deleteSegment(userId: number, tripId: number, segId: number) {
 	cancelRemindersFor('segment', segId);
 }
 
+export function deleteSegments(userId: number, tripId: number, segIds: number[]) {
+	requireEditableTrip(userId, tripId);
+	const unique = Array.from(new Set(segIds.filter((id) => Number.isInteger(id) && id > 0)));
+	if (unique.length === 0) return 0;
+	const deleted = db
+		.delete(segments)
+		.where(and(eq(segments.tripId, tripId), sql`${segments.id} IN (${sql.join(unique, sql`, `)})`))
+		.run();
+	for (const id of unique) {
+		cancelRemindersFor('segment', id);
+	}
+	logAudit(userId, 'delete_many', 'segment', tripId, { count: unique.length });
+	return deleted.changes ?? unique.length;
+}
+
 export function updateSegment(
 	userId: number,
 	tripId: number,

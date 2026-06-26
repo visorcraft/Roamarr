@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem } from './tripChecklists';
+import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem, setAllItemsPacked } from './tripChecklists';
 import { users, trips, tripCompanions, tripChecklists, tripChecklistItems } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { makeLocals } from '../../../tests/eventHelpers';
@@ -152,4 +152,20 @@ test('mutation helpers require editable trip', () => {
 	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
 
 	expect(() => addItem(b.id, t.id, 'Thing')).toThrow();
+});
+
+test('setAllItemsPacked packs and unpacks every item', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'all@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	addItem(u.id, t.id, 'A');
+	addItem(u.id, t.id, 'B');
+
+	setAllItemsPacked(u.id, t.id, true);
+	let checklist = loadChecklist(t.id);
+	expect(checklist.items.every((i) => i.packed)).toBe(true);
+
+	setAllItemsPacked(u.id, t.id, false);
+	checklist = loadChecklist(t.id);
+	expect(checklist.items.every((i) => !i.packed)).toBe(true);
 });

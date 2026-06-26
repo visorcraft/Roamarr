@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import {
@@ -6,7 +6,11 @@ import {
 	fareWatches,
 	notifications,
 	segments,
-	travelDocuments
+	travelDocuments,
+	tripComments,
+	tripJournalEntries,
+	trips,
+	users
 } from '$lib/server/db/schema';
 import { listViewableTrips } from '$lib/server/sharing';
 import { DateTime } from 'luxon';
@@ -133,6 +137,7 @@ export const load: PageServerLoad = ({ locals }) => {
 	const today = DateTime.utc().toISODate()!;
 	const soon = DateTime.utc().plus({ days: u.documentExpiryLeadDays }).toISODate()!;
 
+	const viewable = listViewableTrips(u.id);
 	const upcoming = listViewableTrips(u.id, { startDateGte: today });
 	const unreadRow = db
 		.select({ count: count() })
@@ -157,9 +162,94 @@ export const load: PageServerLoad = ({ locals }) => {
 		.where(eq(fareProviders.userId, u.id))
 		.get();
 
+	const viewableIds = viewable.map((t) => t.id);
+	const paymentsDue =
+		viewableIds.length > 0
+			? db
+					.select({
+						segmentId: segments.id,
+						tripId: segments.tripId,
+						tripName: trips.name,
+						title: segments.title,
+						paymentDueDate: segments.paymentDueDate,
+						paymentStatus: segments.paymentStatus
+					})
+					.from(segments)
+					.innerJoin(trips, eq(segments.tripId, trips.id))
+					.where(
+						and(
+							inArray(segments.tripId, viewableIds),
+							ne(segments.paymentStatus, 'fully_paid'),
+							isNotNull(segments.paymentDueDate),
+							lte(segments.paymentDueDate, soon),
+							gt(segments.paymentDueDate, today)
+						)
+					)
+					.orderBy(segments.paymentDueDate)
+					.all()
+			: [];
+
+	const recentComments =
+		viewableIds.length > 0
+			? db
+					.select({
+						id: tripComments.id,
+						tripId: tripComments.tripId,
+						tripName: trips.name,
+						body: tripComments.body,
+						createdAt: tripComments.createdAt,
+						displayName: users.displayName
+					})
+					.from(tripComments)
+					.innerJoin(trips, eq(tripComments.tripId, trips.id))
+					.innerJoin(users, eq(tripComments.userId, users.id))
+					.where(inArray(tripComments.tripId, viewableIds))
+					.orderBy(desc(tripComments.createdAt))
+					.limit(10)
+					.all()
+			: [];
+
+	const recentJournal =
+		viewableIds.length > 0
+			? db
+					.select({
+						id: tripJournalEntries.id,
+						tripId: tripJournalEntries.tripId,
+						tripName: trips.name,
+						title: tripJournalEntries.title,
+						body: tripJournalEntries.body,
+						createdAt: tripJournalEntries.createdAt
+					})
+					.from(tripJournalEntries)
+					.innerJoin(trips, eq(tripJournalEntries.tripId, trips.id))
+					.where(inArray(tripJournalEntries.tripId, viewableIds))
+					.orderBy(desc(tripJournalEntries.createdAt))
+					.limit(10)
+					.all()
+			: [];
+
+	type ActivityItem = {
+		kind: 'comment' | 'journal';
+		id: number;
+		tripId: number;
+		tripName: string;
+		createdAt: string;
+		body?: string;
+		displayName?: string;
+		title?: string;
+	};
+	const activity: ActivityItem[] = [
+		...recentComments.map((c) => ({ kind: 'comment' as const, ...c })),
+		...recentJournal.map((j) => ({ kind: 'journal' as const, ...j }))
+	]
+		.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+		.slice(0, 10);
+
 	return {
 		upcoming,
 		expiring,
+		paymentsDue,
+		activity,
 		stats: {
 			upcoming: upcoming.length,
 			unread: unreadRow?.count ?? 0,

@@ -2,7 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
-import { deleteSegment, updateSegment } from '$lib/server/segments';
+import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
 
 export const actions: Actions = {
@@ -13,6 +13,17 @@ export const actions: Actions = {
 		const segmentId = v.positiveId(f.get('segmentId'), 'segmentId');
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 		deleteSegment(u.id, parseTripId(params), segmentId!);
+		throw redirect(303, `/trips/${params.id}`);
+	},
+	deleteMany: async ({ request, locals, params }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const v = new Validator();
+		const ids = f.getAll('segmentId').map((raw) => v.positiveId(raw, 'segmentId')).filter((id): id is number => id != null);
+		if (!v.ok() || ids.length === 0) {
+			return fail(400, { error: 'Select at least one segment to delete', errors: v.errors });
+		}
+		deleteSegments(u.id, parseTripId(params), ids);
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	update: async ({ request, locals, params }) => {

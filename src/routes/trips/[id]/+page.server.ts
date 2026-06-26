@@ -5,7 +5,8 @@ import { addCompanion, updateCompanion } from '$lib/server/tripCompanions';
 import {
 	addChecklistItem,
 	toggleChecklistItem,
-	deleteChecklistItem
+	deleteChecklistItem,
+	setAllChecklistItems
 } from '$lib/server/tripChecklists';
 import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
 import { setAttendee } from '$lib/server/segmentAttendees';
@@ -78,6 +79,7 @@ export const actions: Actions = {
 	addChecklistItem,
 	toggleChecklistItem,
 	deleteChecklistItem,
+	setAllChecklistItems,
 	addExpense,
 	deleteExpense,
 	setAttendee,

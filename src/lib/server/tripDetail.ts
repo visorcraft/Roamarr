@@ -21,6 +21,31 @@ import { listMedications } from './tripMedications';
 import { listEntryRequirements } from './tripEntryRequirements';
 import { listImportantItems } from './tripImportantItems';
 
+function computeTripStats(
+	segmentsList: (typeof segments.$inferSelect)[],
+	expenseSummary: ReturnType<typeof summarizeTripExpenses>,
+	checklist: ReturnType<typeof loadChecklist>,
+	budgets: ReturnType<typeof listBudgetsWithSpent>
+) {
+	const total = segmentsList.length;
+	const scheduled = segmentsList.filter((s) => s.startAt).length;
+	const paid = segmentsList.filter((s) => s.paymentStatus === 'fully_paid').length;
+	const packed = checklist.items.filter((i) => i.packed).length;
+	const budgeted = budgets.reduce((sum, b) => sum + (b.amount ?? 0), 0);
+	return {
+		totalSegments: total,
+		scheduledSegments: scheduled,
+		unscheduledSegments: total - scheduled,
+		paidSegments: paid,
+		unpaidSegments: total - paid,
+		totalExpenses: expenseSummary.baseTotal?.amount ?? 0,
+		totalExpensesCurrency: expenseSummary.baseTotal?.currency ?? null,
+		budgetCap: budgeted,
+		checklistTotal: checklist.items.length,
+		checklistPacked: packed
+	};
+}
+
 export function buildTripDetail(u: { id: number; defaultCurrency?: string | null }, tripId: number, url: URL) {
 	const view = loadTripFor(u.id, tripId);
 	const baseCurrency = ((view.trip as typeof trips.$inferSelect).baseCurrency as string | undefined) ?? 'USD';
@@ -59,6 +84,12 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 	const medications = listMedications(view.trip.id);
 	const entryRequirements = listEntryRequirements(view.trip.id);
 	const importantItems = listImportantItems(view.trip.id);
+	const stats = computeTripStats(
+		view.editor ? view.segments : [],
+		expenseSummary,
+		checklist,
+		budgets
+	);
 	let attendeesBySegment = new Map<
 		number,
 		ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never
@@ -137,7 +168,8 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 			homeTasks,
 			medications,
 			entryRequirements,
-			importantItems
+			importantItems,
+			stats
 		};
 	}
 	return {
@@ -156,6 +188,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		homeTasks,
 		medications,
 		entryRequirements,
-		importantItems
+		importantItems,
+		stats
 	};
 }

@@ -108,6 +108,16 @@ export function deleteItem(userId: number, tripId: number, itemId: number) {
 	logAudit(userId, 'checklist_item_delete', 'trip_checklist_item', itemId, { tripId });
 }
 
+export function setAllItemsPacked(userId: number, tripId: number, packed: boolean) {
+	requireEditableTrip(userId, tripId);
+	const checklist = getOrCreateChecklist(tripId);
+	db.update(tripChecklistItems)
+		.set({ packed })
+		.where(eq(tripChecklistItems.checklistId, checklist.id))
+		.run();
+	logAudit(userId, 'checklist_set_all', 'trip_checklist', checklist.id, { tripId, packed });
+}
+
 export async function addChecklistItem({ locals, params, request }: RequestEvent) {
 	const u = requireUser(locals);
 	const tripId = parseTripId(params);
@@ -135,5 +145,13 @@ export async function deleteChecklistItem({ locals, params, request }: RequestEv
 	const itemId = Number((await request.formData()).get('itemId'));
 	if (!Number.isFinite(itemId) || itemId <= 0) throw error(400, 'Invalid item');
 	deleteItem(u.id, tripId, itemId);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function setAllChecklistItems({ locals, params, request }: RequestEvent) {
+	const u = requireUser(locals);
+	const tripId = parseTripId(params);
+	const packed = String((await request.formData()).get('packed')).trim() === 'true';
+	setAllItemsPacked(u.id, tripId, packed);
 	throw redirect(303, `/trips/${tripId}`);
 }

@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus } from './segments';
+import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -393,4 +393,18 @@ test('updateSegment preserves existing payment status when omitted', () => {
 	const row = db.select().from(segments).where(eq(segments.id, s.id)).get()!;
 	expect(row.paymentStatus).toBe('fully_paid');
 	expect(row.title).toBe('UA1 renamed');
+});
+
+test('deleteSegments removes multiple segments and ignores invalid ids', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'bulk@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s1 = db.insert(segments).values({ tripId: t.id, type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' }).returning().get();
+	const s2 = db.insert(segments).values({ tripId: t.id, type: 'hotel', title: 'B', startAt: '2026-01-01T14:00:00Z', startTz: 'UTC' }).returning().get();
+	const s3 = db.insert(segments).values({ tripId: t.id, type: 'food', title: 'C', startAt: '2026-01-01T18:00:00Z', startTz: 'UTC' }).returning().get();
+
+	deleteSegments(u.id, t.id, [s1.id, s2.id, 9999, -1]);
+
+	const remaining = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	expect(remaining.map((r) => r.id)).toEqual([s3.id]);
 });

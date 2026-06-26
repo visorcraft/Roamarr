@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Icon from '$lib/components/Icon.svelte';
+
 	let { data } = $props();
 </script>
 
@@ -100,3 +102,33 @@
 		</div>
 	</section>
 {/if}
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Licenses & Credits</h2>
+	<p class="page-subtitle">
+		Bundled attribution records for Roamarr, third-party npm packages, acknowledgements, and
+		runtime components.
+	</p>
+	<div class="mt-5 grid gap-3 sm:grid-cols-2">
+		<a class="choice-card" href="/settings/about/licenses">
+			<span class="choice-icon">
+				<Icon name="document" class="h-5 w-5" />
+			</span>
+			<span class="min-w-0 flex-1">
+				<span class="choice-title block">Licenses</span>
+				<span class="row-subtitle">Project, third-party, acknowledgements, and runtime text.</span>
+			</span>
+			<Icon name="arrow-right" class="h-4 w-4" />
+		</a>
+		<a class="choice-card" href="/settings/about/credits">
+			<span class="choice-icon">
+				<Icon name="info" class="h-5 w-5" />
+			</span>
+			<span class="min-w-0 flex-1">
+				<span class="choice-title block">Credits</span>
+				<span class="row-subtitle">Filterable package and runtime component attribution table.</span>
+			</span>
+			<Icon name="arrow-right" class="h-4 w-4" />
+		</a>
+	</div>
+</section>

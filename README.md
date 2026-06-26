@@ -107,6 +107,7 @@ npm test                 # Vitest suite once
 npm run test:watch       # Vitest watch mode
 npm run build            # production build to ./build
 npm run preview          # preview production build locally
+npm run credits:generate # regenerate bundled license and credits data
 npm run db:generate      # generate SQL migrations after schema changes
 npm run db:push          # push schema directly to the configured DB; use carefully
 ```
@@ -140,6 +141,7 @@ Migrations are applied automatically during application boot before the schedule
 - Per-user color themes from the profile page, including a High Contrast
   accessibility theme. The registry lives in `src/lib/themes.ts`.
 - Admin settings for user creation/deletion, audit logs, scheduled jobs, backups/restores, demo-data seeding, instance stats, registration control, and a settings-style About page.
+- Settings/About license and credits pages with bundled project-license status, third-party npm license text, acknowledgements, runtime components, and filterable package credits.
 - Profile management with session revocation, password change, self-service email change, and aggregate calendar feed token.
 - Shared UI components (`Icon`, `Toast` with variants, loading states), theme-aware shell controls, and mobile sidebar accessibility.
 - Health and deep-health endpoints plus PWA manifest/icons.
@@ -162,4 +164,5 @@ Sensitive fields currently encrypted at rest are travel document numbers, fare-p
 - Keep global shell controls theme-aware: sticky search bar, top-right user menu, and sidebar app/version footer should work across all registered themes.
 - Keep route actions thin: validate input, enforce ownership/authorization, call server modules, and return SvelteKit `fail`, `redirect`, or `error` responses.
 - Add or update tests for non-trivial server logic, route actions, schema changes, auth/authorization paths, and security-sensitive behavior.
+- After dependency changes, run `npm run credits:generate` so Settings/About attributions stay current.
 - When changing the schema, edit `src/lib/server/db/schema.ts`, run `npm run db:generate`, review the generated SQL in `drizzle/`, and run tests.

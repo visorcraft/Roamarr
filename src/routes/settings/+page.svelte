@@ -3,6 +3,8 @@
 
 	let { data, form } = $props();
 	const s = $derived(data.settings);
+
+	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
 </script>
 
 <header>
@@ -76,6 +78,18 @@
 					<p class="field-help">The display name for this Roamarr instance.</p>
 				</div>
 				<input id="instanceName" name="instanceName" value={s.instanceName} class="input" />
+			</div>
+
+			<div class="settings-row">
+				<div>
+					<label class="label" for="defaultCurrency">Default currency</label>
+					<p class="field-help">Default currency for expenses and budgets.</p>
+				</div>
+				<select id="defaultCurrency" name="defaultCurrency" value={s.defaultCurrency} class="input" required>
+					{#each currencyOptions as currency}
+						<option value={currency}>{currency}</option>
+					{/each}
+				</select>
 			</div>
 
 			<div class="settings-row">

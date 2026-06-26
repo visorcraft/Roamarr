@@ -463,7 +463,7 @@
 																</form>
 																<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="flex items-center gap-1">
 																	<input type="hidden" name="segmentId" value={s.id} />
-																	<select name="offsetMinutes" class="input input-compact w-auto">
+																	<select name="offsetMinutes" class="input text-sm w-auto">
 																		{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}
 																			<option value={offset.minutes}>{offset.shortLabel}</option>
 																		{/each}
@@ -563,8 +563,8 @@
 					{/if}
 					{#if isEditor}
 						<form method="POST" action="?/addChecklistItem" class="mt-4 flex flex-wrap items-end gap-2">
-							<input name="text" class="input input-compact min-w-0 flex-1" placeholder="Add an item..." required />
-							<select name="assignedToCompanionId" class="input input-compact w-auto">
+							<input name="text" class="input text-sm min-w-0 flex-1" placeholder="Add an item..." required />
+							<select name="assignedToCompanionId" class="input text-sm w-auto">
 								<option value="">Unassigned</option>
 								{#each data.companions ?? [] as c (c.id)}
 									<option value={c.id}>{c.name}</option>

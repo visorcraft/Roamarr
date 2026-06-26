@@ -120,6 +120,7 @@ export const settings = sqliteTable('settings', {
 	setupComplete: integer('setup_complete', { mode: 'boolean' }).notNull().default(false),
 	allowRegistration: integer('allow_registration', { mode: 'boolean' }).notNull().default(false),
 	defaultTimezone: text('default_timezone').notNull().default('UTC'),
+	defaultCurrency: text('default_currency').notNull().default('USD'),
 	defaultFlightCheckinLeadHours: integer('default_flight_checkin_lead_hours').notNull().default(24),
 	defaultDocumentExpiryLeadDays: integer('default_document_expiry_lead_days').notNull().default(90),
 	smtpHost: text('smtp_host'),

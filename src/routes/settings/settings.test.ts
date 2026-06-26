@@ -25,6 +25,7 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 		instanceName: 'R',
 		allowRegistration: true,
 		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
 		defaultFlightCheckinLeadHours: 48,
 		defaultDocumentExpiryLeadDays: 60,
 		smtpHost: 'smtp.x',
@@ -36,6 +37,7 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 	});
 	const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
 	expect(s.allowRegistration).toBe(true);
+	expect(s.defaultCurrency).toBe('USD');
 	expect(s.defaultFlightCheckinLeadHours).toBe(48);
 	expect(s.defaultDocumentExpiryLeadDays).toBe(60);
 	expect(decrypt(s.smtpPass!)).toBe('pw');
@@ -55,6 +57,7 @@ test('rejects invalid default reminder leads', () => {
 			instanceName: 'R',
 			allowRegistration: true,
 			defaultTimezone: 'UTC',
+			defaultCurrency: 'USD',
 			defaultFlightCheckinLeadHours: -1,
 			defaultDocumentExpiryLeadDays: 90
 		})
@@ -64,6 +67,7 @@ test('rejects invalid default reminder leads', () => {
 			instanceName: 'R',
 			allowRegistration: true,
 			defaultTimezone: 'UTC',
+			defaultCurrency: 'USD',
 			defaultFlightCheckinLeadHours: 24,
 			defaultDocumentExpiryLeadDays: 1.5
 		})
@@ -78,6 +82,7 @@ test('omitting smtpPass preserves the existing encrypted value', () => {
 		instanceName: 'R2',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
+		defaultCurrency: 'EUR',
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90
 	});
@@ -96,6 +101,7 @@ test('saves empty webhookUrl as null', () => {
 		instanceName: 'R',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
+		defaultCurrency: 'GBP',
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90,
 		webhookUrl: ''
@@ -111,6 +117,7 @@ test('load includes recent audit log entries for admins', () => {
 		instanceName: 'R',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90
 	});
@@ -130,6 +137,7 @@ test('default action sets a flash cookie and redirects', async () => {
 			instanceName: 'R',
 			allowRegistration: 'on',
 			defaultTimezone: 'UTC',
+			defaultCurrency: 'USD',
 			defaultFlightCheckinLeadHours: '24',
 			defaultDocumentExpiryLeadDays: '90'
 		})

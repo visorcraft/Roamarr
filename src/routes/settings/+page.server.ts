@@ -6,6 +6,7 @@ import { encrypt } from '$lib/server/crypto';
 import { listAuditLogs, logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
+import { currency as parseCurrency } from '$lib/server/validation';
 import { db } from '$lib/server/db';
 import { users, trips, segments, groups, notifications } from '$lib/server/db/schema';
 import type { PageServerLoad } from './$types';
@@ -20,6 +21,7 @@ export function _saveAdminSettings(
 		instanceName: string;
 		allowRegistration: boolean;
 		defaultTimezone: string;
+		defaultCurrency: string;
 		defaultFlightCheckinLeadHours: number;
 		defaultDocumentExpiryLeadDays: number;
 		smtpHost?: string;
@@ -34,10 +36,13 @@ export function _saveAdminSettings(
 		throw new Error('Default flight check-in lead must be a non-negative integer');
 	if (!validDefaultLead(i.defaultDocumentExpiryLeadDays))
 		throw new Error('Default document expiry lead must be a non-negative integer');
+	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
+	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
 	const patch: Record<string, unknown> = {
 		instanceName: i.instanceName,
 		allowRegistration: i.allowRegistration,
 		defaultTimezone: i.defaultTimezone,
+		defaultCurrency: defaultCurrency.value,
 		defaultFlightCheckinLeadHours: i.defaultFlightCheckinLeadHours,
 		defaultDocumentExpiryLeadDays: i.defaultDocumentExpiryLeadDays,
 		smtpHost: i.smtpHost || null,
@@ -92,6 +97,7 @@ export const actions: Actions = {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
 			allowRegistration: f.get('allowRegistration') === 'on',
 			defaultTimezone: String(f.get('defaultTimezone') || 'UTC'),
+			defaultCurrency: String(f.get('defaultCurrency') || ''),
 			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
 			smtpHost: String(f.get('smtpHost') || '') || undefined,

@@ -12,6 +12,7 @@
 
 	let { data, children } = $props();
 	let open = $state(false);
+	let userMenuDetails = $state<HTMLDetailsElement | null>(null);
 	let hamburgerButton = $state<HTMLButtonElement | null>(null);
 	let firstNavLink = $state<HTMLAnchorElement | null>(null);
 	let searchInput = $state<HTMLInputElement | null>(null);
@@ -27,7 +28,18 @@
 			: 'success'
 	);
 
-	onMount(() => installPickerInputs());
+	onMount(() => {
+		installPickerInputs();
+		if (!browser) return;
+		function handleDocumentClick(event: MouseEvent) {
+			if (!userMenuDetails) return;
+			if (userMenuDetails.open && !userMenuDetails.contains(event.target as Node)) {
+				userMenuDetails.open = false;
+			}
+		}
+		document.addEventListener('click', handleDocumentClick);
+		return () => document.removeEventListener('click', handleDocumentClick);
+	});
 
 	onDestroy(() => {
 		if (searchTimer) clearTimeout(searchTimer);
@@ -173,7 +185,7 @@
 {/snippet}
 
 {#snippet userMenu()}
-	<details class="app-user-menu relative">
+	<details class="app-user-menu relative" bind:this={userMenuDetails}>
 		<summary
 			class="app-user-summary flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-1.5 transition"
 			aria-label="User menu"

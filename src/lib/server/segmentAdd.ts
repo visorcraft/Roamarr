@@ -4,6 +4,7 @@ import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
 import type { SegmentType } from '$lib/server/db/schema';
 import { addSegment, hasOverlappingSegment } from '$lib/server/segments';
+import { findCity } from '$lib/server/cities';
 import { localToUtc } from '$lib/server/tz';
 import { setFlash } from '$lib/server/flash';
 
@@ -45,6 +46,24 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 	const endAt = readEndAt(v, f);
 	const endTz = v.timezone(f.get('endTz') || startTz, 'endTz');
 	const location = v.optionalString(f.get('location'), 'location', { max: 200 });
+	const countryCode =
+		f.get('countryCode') && String(f.get('countryCode')).trim()
+			? v.countryCode(f.get('countryCode'), 'countryCode')
+			: undefined;
+	const cityName = v.optionalString(f.get('cityName'), 'cityName', { max: 200 });
+	const cityLat = f.get('cityLat') ? v.latitude(f.get('cityLat'), 'cityLat') : undefined;
+	const cityLng = f.get('cityLng') ? v.longitude(f.get('cityLng'), 'cityLng') : undefined;
+	const venue = v.optionalString(f.get('venue'), 'venue', { max: 200 });
+
+	if (countryCode && cityName) {
+		const city = findCity(countryCode, cityName);
+		if (!city) {
+			v.addError('cityName', 'Selected city was not found in the GeoNames database');
+		} else if (cityLat == null || cityLng == null) {
+			v.addError('cityName', 'City coordinates are missing');
+		}
+	}
+
 	const confirmationNumber = v.optionalString(f.get('confirmationNumber'), 'confirmationNumber', {
 		max: 100
 	});
@@ -82,6 +101,11 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		endAt: endAt ?? undefined,
 		endTz: endTz ?? undefined,
 		location,
+		countryCode,
+		cityName,
+		cityLat,
+		cityLng,
+		venue,
 		confirmationNumber,
 		meetingPoint,
 		meetingAt: meetingAt ?? undefined,

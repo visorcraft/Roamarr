@@ -117,6 +117,33 @@ export class Validator {
 		return n;
 	}
 
+	countryCode(raw: unknown, field: string): string | undefined {
+		const v = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+		if (!/^[A-Z]{2}$/.test(v)) {
+			this.errors[field] = `${field} must be a 2-letter country code`;
+			return undefined;
+		}
+		return v;
+	}
+
+	latitude(raw: unknown, field: string): number | undefined {
+		const n = Number(raw);
+		if (!Number.isFinite(n) || n < -90 || n > 90) {
+			this.errors[field] = `${field} must be a valid latitude`;
+			return undefined;
+		}
+		return n;
+	}
+
+	longitude(raw: unknown, field: string): number | undefined {
+		const n = Number(raw);
+		if (!Number.isFinite(n) || n < -180 || n > 180) {
+			this.errors[field] = `${field} must be a valid longitude`;
+			return undefined;
+		}
+		return n;
+	}
+
 	dateRange(
 		start: string | undefined,
 		end: string | undefined,

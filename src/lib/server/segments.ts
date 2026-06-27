@@ -37,6 +37,11 @@ export function addSegment(
 		endAt?: string;
 		endTz?: string;
 		location?: string;
+		countryCode?: string;
+		cityName?: string;
+		cityLat?: number;
+		cityLng?: number;
+		venue?: string;
 		confirmationNumber?: string;
 		cardId?: number;
 		details?: object;
@@ -62,6 +67,11 @@ export function addSegment(
 			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
 			endTz,
 			location: i.location ?? null,
+			countryCode: i.countryCode ?? null,
+			cityName: i.cityName ?? null,
+			cityLat: i.cityLat ?? null,
+			cityLng: i.cityLng ?? null,
+			venue: i.venue ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
 			detailsJson: i.details ? JSON.stringify(i.details) : null,
@@ -138,6 +148,11 @@ export function updateSegment(
 		endAt?: string;
 		endTz?: string;
 		location?: string;
+		countryCode?: string;
+		cityName?: string;
+		cityLat?: number;
+		cityLng?: number;
+		venue?: string;
 		confirmationNumber?: string;
 		cardId?: number;
 		details?: object;
@@ -167,6 +182,11 @@ export function updateSegment(
 			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
 			endTz,
 			location: i.location ?? null,
+			countryCode: i.countryCode ?? null,
+			cityName: i.cityName ?? null,
+			cityLat: i.cityLat ?? null,
+			cityLng: i.cityLng ?? null,
+			venue: i.venue ?? null,
 			confirmationNumber: i.confirmationNumber ?? null,
 			cardId: i.cardId ?? null,
 			detailsJson: i.details ? JSON.stringify(i.details) : null,
@@ -256,6 +276,11 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 			endAt: shiftUtcBy24h(existing.endAt),
 			endTz: existing.endTz ?? existing.startTz,
 			location: existing.location,
+			countryCode: existing.countryCode,
+			cityName: existing.cityName,
+			cityLat: existing.cityLat,
+			cityLng: existing.cityLng,
+			venue: existing.venue,
 			confirmationNumber: null,
 			cardId: existing.cardId,
 			detailsJson: existing.detailsJson,

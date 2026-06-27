@@ -5,6 +5,7 @@ import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
+import { findCity } from '$lib/server/cities';
 
 export const load: PageServerLoad = ({ params }) => {
 	throw redirect(308, `/trips/${params.id}`);
@@ -51,6 +52,24 @@ export const actions: Actions = {
 		const endAt = v.dateTime(f.get('endAt'), 'endAt');
 		const endTz = v.timezone(f.get('endTz') || startTz, 'endTz');
 		const location = v.optionalString(f.get('location'), 'location', { max: 200 });
+		const countryCode =
+			f.get('countryCode') && String(f.get('countryCode')).trim()
+				? v.countryCode(f.get('countryCode'), 'countryCode')
+				: undefined;
+		const cityName = v.optionalString(f.get('cityName'), 'cityName', { max: 200 });
+		const cityLat = f.get('cityLat') ? v.latitude(f.get('cityLat'), 'cityLat') : undefined;
+		const cityLng = f.get('cityLng') ? v.longitude(f.get('cityLng'), 'cityLng') : undefined;
+		const venue = v.optionalString(f.get('venue'), 'venue', { max: 200 });
+
+		if (countryCode && cityName) {
+			const city = findCity(countryCode, cityName);
+			if (!city) {
+				v.addError('cityName', 'Selected city was not found in the GeoNames database');
+			} else if (cityLat == null || cityLng == null) {
+				v.addError('cityName', 'City coordinates are missing');
+			}
+		}
+
 		const confirmationNumber = v.optionalString(
 			f.get('confirmationNumber'),
 			'confirmationNumber',
@@ -79,6 +98,11 @@ export const actions: Actions = {
 			endAt: endAt ?? undefined,
 			endTz: endTz ?? undefined,
 			location,
+			countryCode,
+			cityName,
+			cityLat,
+			cityLng,
+			venue,
 			confirmationNumber,
 			meetingPoint,
 			meetingAt: meetingAt ?? undefined,

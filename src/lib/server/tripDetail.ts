@@ -20,6 +20,9 @@ import { listHomeTasks } from './tripHomeTasks';
 import { listMedications } from './tripMedications';
 import { listEntryRequirements } from './tripEntryRequirements';
 import { listImportantItems } from './tripImportantItems';
+import { selectNextSegmentCity } from './tripMap';
+import { resolveTileConfig } from './mapTiles';
+import { getMapSettings } from './settings';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -142,6 +145,9 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		const packingTemplates = listTemplates(u.id);
 		const tripTemplates = listTripTemplates(u.id);
 		const emergencyContacts = listEmergencyContacts(u.id);
+		const mapEnabled = getMapSettings().mapsEnabled;
+		const nextCity = mapEnabled ? selectNextSegmentCity(view.trip.id) : null;
+		const tileConfig = mapEnabled ? resolveTileConfig() : null;
 		return {
 			...view,
 			companions,
@@ -169,9 +175,12 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 			medications,
 			entryRequirements,
 			importantItems,
-			stats
+			stats,
+			nextCity,
+			tileConfig
 		};
 	}
+	const mapEnabled = getMapSettings().mapsEnabled;
 	return {
 		...view,
 		companions,
@@ -189,6 +198,8 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		medications,
 		entryRequirements,
 		importantItems,
-		stats
+		stats,
+		nextCity: mapEnabled ? selectNextSegmentCity(view.trip.id) : null,
+		tileConfig: mapEnabled ? resolveTileConfig() : null
 	};
 }

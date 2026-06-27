@@ -20,6 +20,7 @@
 	import { visibilityBadgeClass } from '$lib/visibility';
 	import { onMount, tick } from 'svelte';
 	import type { PageData, SubmitFunction } from './$types';
+	import TripMap from '$lib/components/TripMap.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
@@ -523,6 +524,18 @@
 	</section>
 
 	{#if form?.error}<p class="notice notice-error trip-detail-body mt-6">{form.error}</p>{/if}
+
+	{#if data.nextCity && data.tileConfig}
+		<section class="trip-detail-body mt-6">
+			<TripMap
+				lat={data.nextCity.lat}
+				lng={data.nextCity.lng}
+				cityName={data.nextCity.cityName}
+				tileUrls={data.tileConfig.tileUrls}
+				attribution={data.tileConfig.attribution}
+			/>
+		</section>
+	{/if}
 
 	<div class="trip-detail-body mt-6">
 		<nav class="trip-tab-list" aria-label="Trip sections">

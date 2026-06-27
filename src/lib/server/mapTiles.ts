@@ -1,3 +1,5 @@
+import { getSettings } from './settings';
+
 export const MAP_TILE_PROVIDERS = [
 	'openstreetmap',
 	'carto',
@@ -35,4 +37,31 @@ export function defaultTileAttribution(provider: MapTileProvider): string {
 
 export function providerNeedsApiKey(provider: MapTileProvider): boolean {
 	return ['maptiler', 'stadia', 'thunderforest', 'jawg', 'protomaps'].includes(provider);
+}
+
+export interface ResolvedTileConfig {
+	provider: string;
+	tileUrls: string[];
+	attribution: string;
+	apiKey: string | null;
+}
+
+function expandTileUrl(url: string): string[] {
+	if (!url.includes('{s}')) return [url];
+	return ['a', 'b', 'c', 'd'].map((s) => url.replace('{s}', s));
+}
+
+export function resolveTileConfig(): ResolvedTileConfig | null {
+	const s = getSettings();
+	const provider = s.mapsTileProvider as MapTileProvider;
+	const rawUrl = s.mapsTileUrl || defaultTileUrl(provider);
+	const attribution = s.mapsTileAttribution || defaultTileAttribution(provider);
+	if (!rawUrl) return null;
+	const url = s.mapsTileApiKey ? rawUrl.replace('{key}', s.mapsTileApiKey) : rawUrl;
+	return {
+		provider,
+		tileUrls: expandTileUrl(url),
+		attribution: `${attribution} | City data © <a href="https://www.geonames.org/">GeoNames.org</a>, CC-BY 4.0`,
+		apiKey: s.mapsTileApiKey
+	};
 }

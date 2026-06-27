@@ -142,6 +142,10 @@
 			<button class="btn btn-secondary" type="submit">Import from file</button>
 		</form>
 	{/if}
+	<p class="mt-4 text-xs text-slate-500">
+		Map data © <a class="underline" href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames.org</a>, CC-BY 4.0.
+		Tile provider attribution is shown on each map.
+	</p>
 </section>
 
 <form method="POST" action="?/save" class="mt-6 grid gap-6">

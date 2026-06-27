@@ -30,6 +30,16 @@ export function defaultTileAttribution(provider: MapTileProvider): string {
 			return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 		case 'carto':
 			return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/attributions">CARTO</a>';
+		case 'maptiler':
+			return '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+		case 'stadia':
+			return '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+		case 'thunderforest':
+			return '&copy; <a href="https://www.thunderforest.com/">Thunderforest</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+		case 'jawg':
+			return '&copy; <a href="https://www.jawg.io/">Jawg Maps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+		case 'protomaps':
+			return '&copy; <a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 		default:
 			return '';
 	}

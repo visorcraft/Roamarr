@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import { and, eq, ne, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
-import { localToUtc } from '$lib/server/tz';
+import { localToUtc, nowIso } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { db } from '$lib/server/db';
@@ -229,7 +229,7 @@ export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
 	}
 	return db
 		.update(segments)
-		.set({ status, updatedAt: DateTime.utc().toISO() })
+		.set({ status, updatedAt: nowIso() })
 		.where(eq(segments.id, segmentId))
 		.returning()
 		.get();

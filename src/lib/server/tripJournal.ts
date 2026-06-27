@@ -1,12 +1,12 @@
 import { desc, eq } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { DateTime } from 'luxon';
 import { db } from './db';
 import { tripJournalEntries } from './db/schema';
 import { logAudit } from './audit';
 import { requireEditableTrip } from './ownership';
 import { Validator, formFail, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
+import { nowIso } from './tz';
 
 export function listJournalEntries(tripId: number) {
 	return db
@@ -66,7 +66,7 @@ export function modifyJournalEntry(
 	requireEditableTrip(userId, existing.tripId);
 	const entry = db
 		.update(tripJournalEntries)
-		.set({ entryDate, title, body, updatedAt: DateTime.utc().toISO() })
+		.set({ entryDate, title, body, updatedAt: nowIso() })
 		.where(eq(tripJournalEntries.id, entryId))
 		.returning()
 		.get();

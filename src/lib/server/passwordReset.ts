@@ -4,6 +4,7 @@ import { DateTime } from 'luxon';
 import { db } from './db';
 import { users, passwordResetTokens } from './db/schema';
 import { hashPassword } from './auth';
+import { nowIso } from './tz';
 
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
 const TOKEN_TTL_MINUTES = 60;
@@ -24,7 +25,7 @@ export function validatePasswordResetToken(token: string) {
 		.where(eq(passwordResetTokens.tokenHash, th(token)))
 		.get();
 	if (!row) return null;
-	if (row.expiresAt < DateTime.utc().toISO()!) {
+	if (row.expiresAt < nowIso()) {
 		db.delete(passwordResetTokens).where(eq(passwordResetTokens.id, row.id)).run();
 		return null;
 	}

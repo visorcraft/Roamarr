@@ -9,12 +9,8 @@ import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
-import {
-	listEmergencyContacts,
-	addEmergencyContact,
-	updateEmergencyContact,
-	deleteEmergencyContact
-} from '$lib/server/emergencyContacts';
+import { listEmergencyContacts, addEmergencyContact, updateEmergencyContact, deleteEmergencyContact } from '$lib/server/emergencyContacts';
+import { nowIso } from '$lib/server/tz';
 import { THEMES, isThemeId, normalizeThemeId } from '$lib/themes';
 import { normalizeEmail } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
@@ -126,7 +122,7 @@ export const load: PageServerLoad = ({ locals, cookies, url }) => {
 		.where(eq(sessions.userId, u.id))
 		.all();
 	const userSessions = sessionRows
-		.filter((s) => s.expiresAt >= DateTime.utc().toISO()!)
+		.filter((s) => s.expiresAt >= nowIso())
 		.map((s) => ({ ...s, current: s.tokenHash === currentHash }));
 	const feedUrl = u.calendarToken
 		? `${url.origin}/calendar/feed?token=${encodeURIComponent(u.calendarToken)}`

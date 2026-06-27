@@ -6,6 +6,7 @@ import { error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { db } from './db';
 import { users, sessions } from './db/schema';
+import { nowIso } from './tz';
 
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
@@ -32,7 +33,7 @@ export function createSession(userId: number, ip?: string, userAgent?: string) {
 export async function validateSession(token?: string) {
 	if (!token) return null;
 	const s = db.select().from(sessions).where(eq(sessions.tokenHash, th(token))).get();
-	if (!s || s.expiresAt < DateTime.utc().toISO()!) return null;
+	if (!s || s.expiresAt < nowIso()) return null;
 	const u = db.select().from(users).where(eq(users.id, s.userId)).get();
 	if (!u || u.disabled) return null;
 	return u;
@@ -61,7 +62,7 @@ export function invalidateOtherSessions(userId: number, token: string) {
 }
 
 export function purgeExpiredSessions() {
-	db.delete(sessions).where(lt(sessions.expiresAt, DateTime.utc().toISO()!)).run();
+	db.delete(sessions).where(lt(sessions.expiresAt, nowIso())).run();
 }
 
 export function requireUser(locals: App.Locals) {

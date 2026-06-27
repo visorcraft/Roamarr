@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, primaryKey, unique, uniqueIndex, index, check } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, real, primaryKey, unique, uniqueIndex, index, check } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 import { enumCheck } from './schemaHelpers';
 
@@ -48,6 +48,17 @@ const WATCH_STATUSES = ['active', 'paused'] as const;
 export const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 
 export const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
+
+const MAPS_TILE_PROVIDERS = [
+	'openstreetmap',
+	'carto',
+	'maptiler',
+	'stadia',
+	'thunderforest',
+	'jawg',
+	'protomaps',
+	'custom'
+] as const;
 
 export const users = sqliteTable(
 	'users',
@@ -120,8 +131,37 @@ export const settings = sqliteTable('settings', {
 	smtpUser: text('smtp_user'),
 	smtpPass: text('smtp_pass'),
 	smtpFrom: text('smtp_from'),
-	webhookUrl: text('webhook_url')
-});
+	webhookUrl: text('webhook_url'),
+	mapsEnabled: integer('maps_enabled', { mode: 'boolean' }).notNull().default(false),
+	mapsGeonamesImportedAt: text('maps_geonames_imported_at'),
+	mapsTileProvider: text('maps_tile_provider').notNull().default('openstreetmap'),
+	mapsTileUrl: text('maps_tile_url'),
+	mapsTileAttribution: text('maps_tile_attribution'),
+	mapsTileApiKey: text('maps_tile_api_key')
+},
+(t) => ({
+	tileProviderCk: enumCheck(t.mapsTileProvider, MAPS_TILE_PROVIDERS, {
+		constraintName: 'settings_tile_provider_ck'
+	})
+}));
+
+export const geonamesCities = sqliteTable(
+	'geonames_cities',
+	{
+		geonameId: integer('geoname_id').primaryKey(),
+		name: text('name').notNull(),
+		asciiName: text('ascii_name').notNull(),
+		countryCode: text('country_code').notNull(),
+		lat: real('lat').notNull(),
+		lng: real('lng').notNull(),
+		population: integer('population'),
+		timezone: text('timezone')
+	},
+	(t) => ({
+		countryNameIdx: index('geonames_country_name_idx').on(t.countryCode, t.name),
+		countryAsciiIdx: index('geonames_country_ascii_idx').on(t.countryCode, t.asciiName)
+	})
+);
 
 export const trips = sqliteTable(
 	'trips',
@@ -213,7 +253,16 @@ export const segments = sqliteTable(
 		endAt: text('end_at'),
 		endTz: text('end_tz'),
 		status: text('status').notNull().default('planned'),
+		// Location fields:
+		// - `location` is the legacy free-text field (deprecated, retained during migration window).
+		// - `countryCode`, `cityName`, `cityLat`, `cityLng` are the normalized map city from GeoNames.
+		// - `venue` is the optional specific place (hotel, airport, address, etc.).
 		location: text('location'),
+		countryCode: text('country_code'),
+		cityName: text('city_name'),
+		cityLat: real('city_lat'),
+		cityLng: real('city_lng'),
+		venue: text('venue'),
 		confirmationNumber: text('confirmation_number'),
 		detailsJson: text('details_json'),
 		meetingPoint: text('meeting_point'),

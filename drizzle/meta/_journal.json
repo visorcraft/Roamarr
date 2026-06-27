@@ -8,6 +8,13 @@
       "when": 1782481514507,
       "tag": "0000_quick_medusa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1782600687150,
+      "tag": "0001_open_azazel",
+      "breakpoints": true
     }
   ]
 }

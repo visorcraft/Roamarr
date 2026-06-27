@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { applyAction, enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
@@ -13,7 +15,8 @@
 	import { SEGMENT_STATUSES, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
 	import { tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
-	import type { PageData } from './$types';
+	import { tick } from 'svelte';
+	import type { PageData, SubmitFunction } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let editingId = $state<number | null>(null);
@@ -258,6 +261,20 @@
 		moveSegmentDateForm.requestSubmit();
 	}
 
+	const preserveScrollOnMove: SubmitFunction = () => {
+		const x = window.scrollX;
+		const y = window.scrollY;
+		return async ({ result }) => {
+			if (result.type === 'redirect' || result.type === 'success') {
+				await invalidateAll();
+				await tick();
+				window.scrollTo(x, y);
+				return;
+			}
+			await applyAction(result);
+		};
+	};
+
 	function endSegmentDrag() {
 		draggingSegmentId = null;
 		draggingSegmentDate = null;
@@ -494,7 +511,13 @@
 					</div>
 
 					{#if isEditor}
-						<form method="POST" action="?/moveSegmentDate" class="hidden" bind:this={moveSegmentDateForm}>
+						<form
+							method="POST"
+							action="?/moveSegmentDate"
+							class="hidden"
+							bind:this={moveSegmentDateForm}
+							use:enhance={preserveScrollOnMove}
+						>
 							<input type="hidden" name="segmentId" bind:this={moveSegmentIdInput} />
 							<input type="hidden" name="targetDate" bind:this={moveTargetDateInput} />
 						</form>

@@ -169,13 +169,13 @@
 				: 'h-8 w-8'}"
 		>
 			<img
-				src="/logo-transparent.png?v=0.3.2"
+				src="/logo-transparent.png?v=0.3.3"
 				alt=""
 				class="brand-logo brand-logo-default h-full w-full object-contain"
 				aria-hidden="true"
 			/>
 			<img
-				src="/alt-logo-transparent.png?v=0.3.2"
+				src="/alt-logo-transparent.png?v=0.3.3"
 				alt=""
 				class="brand-logo brand-logo-alt h-full w-full object-contain"
 				aria-hidden="true"

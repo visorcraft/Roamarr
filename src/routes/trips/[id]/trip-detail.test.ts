@@ -382,6 +382,37 @@ test('setSegmentStatus action rejects a non-editor', async () => {
 	await expect(actions.setSegmentStatus({ ...event(other, t.id), request })).rejects.toMatchObject({ status: 404 });
 });
 
+test('moveSegmentDate action moves a segment to a new local date', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = db.insert(users).values({ email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'food',
+			title: 'Lunch',
+			startAt: '2026-09-16T03:30:00.000Z',
+			startTz: 'Asia/Tokyo',
+			endAt: '2026-09-16T04:30:00.000Z',
+			endTz: 'Asia/Tokyo'
+		})
+		.returning()
+		.get();
+
+	const f = new FormData();
+	f.set('segmentId', String(s.id));
+	f.set('targetDate', '2026-09-15');
+	await expect(actions.moveSegmentDate(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	expect(row?.startAt).toBe('2026-09-15T03:30:00.000Z');
+	expect(row?.endAt).toBe('2026-09-15T04:30:00.000Z');
+});
+
 test('saveTripTemplate action saves a template and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'stpl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();

@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments } from './segments';
+import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -188,6 +188,35 @@ test('duplicateSegment copies meeting point and shifts rally time by 24h', () =>
 	const copy = duplicateSegment(u.id, t.id, s.id);
 	expect(copy.meetingPoint).toBe('Lobby');
 	expect(copy.meetingAt).toBe('2026-07-02T13:30:00.000Z');
+});
+
+test('moveSegmentToDate preserves local time, duration and rally offset', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'move-date@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const s = db
+		.insert(segments)
+		.values({
+			tripId: t.id,
+			type: 'food',
+			title: 'Lunch',
+			startAt: '2026-09-16T03:30:00.000Z',
+			startTz: 'Asia/Tokyo',
+			endAt: '2026-09-16T04:30:00.000Z',
+			endTz: 'Asia/Tokyo',
+			meetingAt: '2026-09-16T03:15:00.000Z'
+		})
+		.returning()
+		.get();
+
+	const moved = moveSegmentToDate(u.id, t.id, s.id, '2026-09-15');
+	expect(moved.startAt).toBe('2026-09-15T03:30:00.000Z');
+	expect(moved.endAt).toBe('2026-09-15T04:30:00.000Z');
+	expect(moved.meetingAt).toBe('2026-09-15T03:15:00.000Z');
+
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('move_date');
 });
 
 test('addSegment stores endTz and defaults to startTz', () => {

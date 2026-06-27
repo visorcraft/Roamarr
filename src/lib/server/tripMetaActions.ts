@@ -5,13 +5,13 @@ import { trips, segments } from './db/schema';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { regenerateCalendarToken, revokeCalendarToken, duplicateTrip } from '../../routes/trips/shared';
 import { upsertCustomReminder } from './reminders';
-import { duplicateSegment, setSegmentStatus } from './segments';
+import { duplicateSegment, moveSegmentToDate, setSegmentStatus } from './segments';
 import { attachPolicyToTrip, detachPolicyFromTrip } from './insurance';
 import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
 import { saveTripTemplate } from './tripTemplates';
-import { positiveIdFromForm } from './validation';
+import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
 
 export async function regenerateCalendarFeed(event: RequestEvent) {
@@ -93,6 +93,16 @@ export async function setSegmentStatusAction(event: RequestEvent) {
 	const status = String(formData.get('status') || '');
 	if (!status) throw error(400, 'Invalid status');
 	setSegmentStatus(user.id, tripId, segmentIdResult.value, status as import('./db/schema').SegmentStatus);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function moveSegmentDateAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const v = new Validator();
+	const segmentId = v.positiveId(formData.get('segmentId'), 'segmentId');
+	const targetDate = v.requiredDate(formData.get('targetDate'), 'targetDate');
+	if (!v.ok()) throw error(400, v.failMessage());
+	moveSegmentToDate(user.id, tripId, segmentId!, targetDate!);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

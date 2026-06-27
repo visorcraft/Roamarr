@@ -182,6 +182,54 @@ export function updateSegment(
 	return seg;
 }
 
+export function moveSegmentToDate(userId: number, tripId: number, segId: number, targetDate: string) {
+	requireEditableTrip(userId, tripId);
+	const existing = db
+		.select()
+		.from(segments)
+		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
+		.get();
+	if (!existing) throw error(404, 'Not found');
+
+	const start = DateTime.fromISO(existing.startAt, { zone: 'utc' });
+	const startLocal = start.setZone(existing.startTz || 'UTC');
+	const targetLocalDate = DateTime.fromISO(targetDate, { zone: existing.startTz || 'UTC' });
+	if (!start.isValid || !startLocal.isValid || !targetLocalDate.isValid) {
+		throw error(400, 'Invalid segment date');
+	}
+
+	const movedStart = targetLocalDate
+		.set({
+			hour: startLocal.hour,
+			minute: startLocal.minute,
+			second: startLocal.second,
+			millisecond: startLocal.millisecond
+		})
+		.toUTC();
+	const delta = movedStart.diff(start);
+	const movedEndAt = existing.endAt
+		? DateTime.fromISO(existing.endAt, { zone: 'utc' }).plus(delta).toUTC().toISO()
+		: null;
+	const movedMeetingAt = existing.meetingAt
+		? DateTime.fromISO(existing.meetingAt, { zone: 'utc' }).plus(delta).toUTC().toISO()
+		: null;
+
+	const seg = db
+		.update(segments)
+		.set({
+			startAt: movedStart.toISO()!,
+			endAt: movedEndAt,
+			meetingAt: movedMeetingAt,
+			updatedAt: nowIso()
+		})
+		.where(eq(segments.id, segId))
+		.returning()
+		.get();
+	upsertRemindersForSegment(seg);
+	logAudit(userId, 'move_date', 'segment', segId, { targetDate });
+	return seg;
+}
+
 function shiftUtcBy24h(iso: string | null) {
 	if (!iso) return null;
 	return DateTime.fromISO(iso, { zone: 'utc' }).plus({ hours: 24 }).toUTC().toISO()!;

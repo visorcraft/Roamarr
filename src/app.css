@@ -1496,6 +1496,23 @@ button.card:hover,
 	.trip-timeline-card-selectable {
 		cursor: pointer;
 	}
+	.trip-timeline-card-selectable[draggable='true'] {
+		cursor: grab;
+	}
+	.trip-timeline-card-dragging {
+		opacity: 0.55;
+		cursor: grabbing;
+		transform: scale(0.995);
+	}
+	.trip-timeline-day-group {
+		@apply rounded-lg transition;
+	}
+	.trip-timeline-day-group-drop {
+		background: color-mix(in oklab, var(--theme-brand) 8%, transparent);
+		box-shadow:
+			0 0 0 2px color-mix(in oklab, var(--theme-brand) 55%, transparent),
+			0 18px 42px color-mix(in oklab, var(--theme-brand) 12%, transparent);
+	}
 
 	.segment-form-section {
 		@apply border-t border-white/10 pt-4;

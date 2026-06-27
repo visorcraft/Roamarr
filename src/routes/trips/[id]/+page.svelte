@@ -24,6 +24,12 @@
 	let selectedTypes = $state<Set<SegmentType>>(new Set());
 	let selectedSegmentIds = $state<Set<number>>(new Set());
 	let segmentQuery = $state('');
+	let draggingSegmentId = $state<number | null>(null);
+	let draggingSegmentDate = $state<string | null>(null);
+	let dragOverDate = $state<string | null>(null);
+	let moveSegmentDateForm = $state<HTMLFormElement | null>(null);
+	let moveSegmentIdInput = $state<HTMLInputElement | null>(null);
+	let moveTargetDateInput = $state<HTMLInputElement | null>(null);
 
 	function toggleType(type: SegmentType) {
 		const next = new Set(selectedTypes);
@@ -149,19 +155,29 @@
 			.join('');
 	}
 
+	function segmentLocalDateTime(segment: SegmentRow) {
+		if (!segment.startAt) return null;
+		const dt = DateTime.fromISO(segment.startAt, { zone: 'utc' }).setZone(segment.startTz ?? 'UTC');
+		return dt.isValid ? dt : null;
+	}
+
 	function groupSegmentsByDay(segments: SegmentRow[]) {
-		const sorted = [...segments].sort((a, b) => (a.startAt ?? '').localeCompare(b.startAt ?? ''));
+		const sorted = [...segments].sort((a, b) => {
+			const aLocal = segmentLocalDateTime(a);
+			const bLocal = segmentLocalDateTime(b);
+			const aKey = aLocal?.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS") ?? (a.startAt ?? '');
+			const bKey = bLocal?.toFormat("yyyy-MM-dd'T'HH:mm:ss.SSS") ?? (b.startAt ?? '');
+			return aKey.localeCompare(bKey);
+		});
 		const groups: { key: string; label: string; segments: SegmentRow[] }[] = [];
 		const index = new Map<string, number>();
 		for (const s of sorted) {
 			let key = 'unscheduled';
 			let label = 'Unscheduled';
-			if (s.startAt) {
-				const dt = DateTime.fromISO(s.startAt, { zone: 'utc' }).setZone(s.startTz ?? 'UTC');
-				if (dt.isValid) {
-					key = dt.toISODate()!;
-					label = dt.toFormat('EEEE, MMMM d, yyyy');
-				}
+			const dt = segmentLocalDateTime(s);
+			if (dt) {
+				key = dt.toISODate()!;
+				label = dt.toFormat('EEEE, MMMM d, yyyy');
 			}
 			const existing = index.get(key);
 			if (existing != null) groups[existing].segments.push(s);
@@ -193,6 +209,59 @@
 		if (!(target instanceof HTMLElement)) return;
 		if (target.closest('button, a, input, select, textarea, label, [role="button"], form')) return;
 		toggleSegmentId(id);
+	}
+
+	function startSegmentDrag(segmentId: number, dateKey: string, event: DragEvent) {
+		draggingSegmentId = segmentId;
+		draggingSegmentDate = dateKey;
+		event.dataTransfer?.setData('application/x-roamarr-segment-id', String(segmentId));
+		event.dataTransfer?.setData('text/plain', String(segmentId));
+		if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+	}
+
+	function draggedSegmentId(event: DragEvent) {
+		const raw =
+			event.dataTransfer?.getData('application/x-roamarr-segment-id') ||
+			event.dataTransfer?.getData('text/plain') ||
+			(draggingSegmentId != null ? String(draggingSegmentId) : '');
+		const id = Number(raw);
+		return Number.isInteger(id) && id > 0 ? id : null;
+	}
+
+	function allowDayDrop(event: DragEvent, dateKey: string) {
+		if (!isEditor || dateKey === 'unscheduled') return;
+		if (draggingSegmentId == null && !event.dataTransfer?.types.includes('application/x-roamarr-segment-id')) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		if (draggingSegmentDate !== dateKey) dragOverDate = dateKey;
+	}
+
+	function leaveDayDrop(event: DragEvent, dateKey: string) {
+		const current = event.currentTarget;
+		const related = event.relatedTarget;
+		if (current instanceof HTMLElement && related instanceof Node && current.contains(related)) return;
+		if (dragOverDate === dateKey) dragOverDate = null;
+	}
+
+	function dropSegmentOnDay(event: DragEvent, dateKey: string) {
+		if (!isEditor || dateKey === 'unscheduled') return;
+		event.preventDefault();
+		const segmentId = draggedSegmentId(event);
+		dragOverDate = null;
+		draggingSegmentId = null;
+		const sourceDate = draggingSegmentDate;
+		draggingSegmentDate = null;
+		if (!segmentId || sourceDate === dateKey) return;
+		if (!moveSegmentDateForm || !moveSegmentIdInput || !moveTargetDateInput) return;
+		moveSegmentIdInput.value = String(segmentId);
+		moveTargetDateInput.value = dateKey;
+		moveSegmentDateForm.requestSubmit();
+	}
+
+	function endSegmentDrag() {
+		draggingSegmentId = null;
+		draggingSegmentDate = null;
+		dragOverDate = null;
 	}
 
 	const allSegmentsSelected = $derived(
@@ -422,15 +491,30 @@
 							</a>
 						{/if}
 					</div>
-				</div>
+					</div>
 
-				{#if dayGroups.length}
-					<div class="trip-timeline-groups space-y-8">
-						{#each dayGroups as group (group.key)}
-							<div>
-								<div class="trip-timeline-day">
-									<span class="subsection-title">{group.label}</span>
-									<span class="text-[0.938rem] text-slate-500">{group.segments.length} item{group.segments.length === 1 ? '' : 's'}</span>
+					{#if isEditor}
+						<form method="POST" action="?/moveSegmentDate" class="hidden" bind:this={moveSegmentDateForm}>
+							<input type="hidden" name="segmentId" bind:this={moveSegmentIdInput} />
+							<input type="hidden" name="targetDate" bind:this={moveTargetDateInput} />
+						</form>
+					{/if}
+
+					{#if dayGroups.length}
+						<div class="trip-timeline-groups space-y-8">
+							{#each dayGroups as group (group.key)}
+								<div
+									class="trip-timeline-day-group {dragOverDate === group.key ? 'trip-timeline-day-group-drop' : ''}"
+									role="list"
+									aria-label={`${group.label} itinerary plans`}
+									ondragover={(e) => allowDayDrop(e, group.key)}
+									ondragenter={(e) => allowDayDrop(e, group.key)}
+									ondragleave={(e) => leaveDayDrop(e, group.key)}
+									ondrop={(e) => dropSegmentOnDay(e, group.key)}
+								>
+									<div class="trip-timeline-day">
+										<span class="subsection-title">{group.label}</span>
+										<span class="text-[0.938rem] text-slate-500">{group.segments.length} item{group.segments.length === 1 ? '' : 's'}</span>
 								</div>
 
 								<div class="trip-timeline-track space-y-3">
@@ -521,10 +605,13 @@
 											{:else}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-										<article
-											class="trip-timeline-card {isEditor && s.id && selectedSegmentIds.has(s.id) ? 'trip-timeline-card-selected' : ''} {isEditor && s.id ? 'trip-timeline-card-selectable' : ''}"
-											onclick={(e) => isEditor && s.id != null && handleSegmentCardClick(s.id, e)}
-										>
+											<article
+												class="trip-timeline-card {isEditor && s.id && selectedSegmentIds.has(s.id) ? 'trip-timeline-card-selected' : ''} {isEditor && s.id ? 'trip-timeline-card-selectable' : ''} {draggingSegmentId === s.id ? 'trip-timeline-card-dragging' : ''}"
+												onclick={(e) => isEditor && s.id != null && handleSegmentCardClick(s.id, e)}
+												draggable={isEditor && s.id != null}
+												ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)}
+												ondragend={endSegmentDrag}
+											>
 												<div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start">
 												{#if s.startAt}
 													<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">

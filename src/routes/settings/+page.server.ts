@@ -1,7 +1,8 @@
 import { count } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
+import { Readable } from 'node:stream';
 import { requireAdmin } from '$lib/server/auth';
-import { getSettings, updateSettings } from '$lib/server/settings';
+import { getMapSettings, getSettings, updateSettings } from '$lib/server/settings';
 import { encrypt } from '$lib/server/crypto';
 import { listAuditLogs, logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
@@ -9,6 +10,8 @@ import { deliver } from '$lib/server/notify';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { db } from '$lib/server/db';
 import { users, trips, segments, groups, notifications } from '$lib/server/db/schema';
+import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
+import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import type { PageServerLoad } from './$types';
 
 export function _saveAdminSettings(
@@ -26,6 +29,10 @@ export function _saveAdminSettings(
 		smtpPass?: string;
 		smtpFrom?: string;
 		webhookUrl?: string;
+		mapsTileProvider?: MapTileProvider;
+		mapsTileUrl?: string | null;
+		mapsTileAttribution?: string | null;
+		mapsTileApiKey?: string | null;
 	}
 ) {
 	if (!nonNegativeInteger(i.defaultFlightCheckinLeadHours))
@@ -45,7 +52,11 @@ export function _saveAdminSettings(
 		smtpPort: i.smtpPort ?? null,
 		smtpUser: i.smtpUser || null,
 		smtpFrom: i.smtpFrom || null,
-		webhookUrl: i.webhookUrl || null
+		webhookUrl: i.webhookUrl || null,
+		mapsTileProvider: i.mapsTileProvider ?? 'openstreetmap',
+		mapsTileUrl: i.mapsTileUrl ?? null,
+		mapsTileAttribution: i.mapsTileAttribution ?? null,
+		mapsTileApiKey: i.mapsTileApiKey ?? null
 	};
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
 	updateSettings(patch);
@@ -66,7 +77,8 @@ export const load: PageServerLoad = ({ locals }) => {
 		notifications: db.select({ count: count() }).from(notifications).get()?.count ?? 0
 	};
 	const recentLogs = listAuditLogs({ limit: 5 }).logs;
-	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats, recentLogs };
+	const mapSettings = getMapSettings();
+	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats, recentLogs, mapSettings };
 };
 
 function parseLead(value: FormDataEntryValue | null, fallback: number): number {
@@ -88,6 +100,10 @@ export const actions: Actions = {
 	save: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
+		const mapsTileProvider = String(f.get('mapsTileProvider') || 'openstreetmap');
+		if (!(MAP_TILE_PROVIDERS as readonly string[]).includes(mapsTileProvider)) {
+			return fail(400, { error: 'Invalid tile provider' });
+		}
 		const pass = String(f.get('smtpPass') || '');
 		_saveAdminSettings(u.id, {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
@@ -101,9 +117,40 @@ export const actions: Actions = {
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
 			smtpPass: pass && pass !== '********' ? pass : undefined,
 			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
-			webhookUrl: String(f.get('webhookUrl') || '') || undefined
+			webhookUrl: String(f.get('webhookUrl') || '') || undefined,
+			mapsTileProvider: mapsTileProvider as MapTileProvider,
+			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
+			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
+			mapsTileApiKey: String(f.get('mapsTileApiKey') || '') || null
 		});
 		setFlash(cookies, 'Settings saved.');
+		throw redirect(303, '/settings');
+	},
+	enableMaps: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		try {
+			const { imported } = await importCitiesFromUrl();
+			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'download', imported });
+			setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities). Maps enabled.`);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import GeoNames data' });
+		}
+		throw redirect(303, '/settings');
+	},
+	importGeonames: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const file = f.get('cities1000');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { error: 'cities1000.zip is required' });
+		}
+		try {
+			const { imported } = await importCitiesFromReadable(Readable.fromWeb(file.stream() as any));
+			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'upload', imported });
+			setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities).`);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import GeoNames data' });
+		}
 		throw redirect(303, '/settings');
 	}
 };

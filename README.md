@@ -43,14 +43,14 @@
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/trip-prep.png" alt="Roamarr trip prep tab with packing checklist and trip preparation controls" />
+      <img src="docs/screenshots/loyalty.png" alt="Roamarr loyalty programs page with airline and hotel membership balances" />
       <br />
-      <sub><b>Trip prep</b> — packing checklist and before-you-go controls.</sub>
+      <sub><b>Loyalty programs</b> — memberships, balances, notes, and travel rewards.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/trip-documents.png" alt="Roamarr trip documents tab with linked trip files and insurance sections" />
+      <img src="docs/screenshots/insurance.png" alt="Roamarr insurance policies page with coverage dates, policy numbers, and add-policy controls" />
       <br />
-      <sub><b>Trip documents</b> — linked files, notes, and insurance context.</sub>
+      <sub><b>Insurance policies</b> — coverage details, policy dates, and trip protection.</sub>
     </td>
   </tr>
 </table>

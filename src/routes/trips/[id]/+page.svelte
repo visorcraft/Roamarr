@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, replaceState } from '$app/navigation';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { trips } from '$lib/server/db/schema';
@@ -15,14 +16,19 @@
 	import { SEGMENT_STATUSES, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
 	import { tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import type { PageData, SubmitFunction } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
+	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
+	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents', 'tools'] as const;
+
 	let editingId = $state<number | null>(null);
 	let editingCompanionId = $state<number | null>(null);
 	let showCompanionNotesId = $state<number | null>(null);
 	let showAddCompanionNotes = $state(false);
+	let activeTab = $state<TripTab>('itinerary');
 	let selectedCompanionByPoll = $state<Record<number, string>>({});
 	let selectedTypes = $state<Set<SegmentType>>(new Set());
 	let selectedSegmentIds = $state<Set<number>>(new Set());
@@ -43,6 +49,27 @@
 		}
 		selectedTypes = next;
 	}
+
+	function isTripTab(value: string | null | undefined): value is TripTab {
+		return TRIP_TAB_IDS.includes(value as TripTab);
+	}
+
+	function selectTripTab(tab: TripTab) {
+		activeTab = tab;
+		if (typeof window === 'undefined') return;
+		window.localStorage.setItem(`roamarr:trip:${trip.id}:tab`, tab);
+		replaceState(`${window.location.pathname}${window.location.search}#${tab}`, {});
+	}
+
+	onMount(() => {
+		const hashTab = window.location.hash.slice(1);
+		const savedTab = window.localStorage.getItem(`roamarr:trip:${trip.id}:tab`);
+		if (isTripTab(hashTab)) {
+			activeTab = hashTab;
+		} else if (isTripTab(savedTab)) {
+			activeTab = savedTab;
+		}
+	});
 
 	type SharedSegment = {
 		type: string;
@@ -140,12 +167,6 @@
 		if (end && end < today) return 'past';
 		if (start && start > today) return 'upcoming';
 		return 'active';
-	}
-
-	function heroHue(text: string) {
-		let h = 0;
-		for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) % 360;
-		return h;
 	}
 
 	function posterInitials(name: string, destination: string | null | undefined) {
@@ -305,13 +326,57 @@
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 	const daysUntil = $derived(daysUntilStart(trip.startDate));
 	const status = $derived(tripStatus(trip.startDate, trip.endDate));
-	const heroAccent = $derived(heroHue(trip.destination ?? trip.name));
 	const typeCounts = $derived(
 		SEGMENT_TYPES.map((type) => ({
 			type,
 			count: segmentList.filter((s) => s.type === type).length
 		})).filter((t) => t.count > 0)
 	);
+	const prepItemCount = $derived(
+		(data.checklist?.items?.length ?? 0) +
+			(data.homeTasks?.length ?? 0) +
+			(data.medications?.length ?? 0) +
+			(data.entryRequirements?.length ?? 0) +
+			(data.importantItems?.length ?? 0)
+	);
+	const budgetCapCount = $derived(data.budgets?.filter((b) => b.amount != null).length ?? 0);
+	const moneyItemCount = $derived((data.expenses?.length ?? 0) + budgetCapCount + (data.watches?.length ?? 0));
+	const peopleItemCount = $derived((data.companions?.length ?? 0) + (data.polls?.length ?? 0));
+	const notesItemCount = $derived((data.journalEntries?.length ?? 0) + (data.comments?.length ?? 0));
+	const documentsItemCount = $derived(
+		(data.documentLinks?.length ?? 0) + (data.policies?.length ?? 0)
+	);
+	const hasPrepTab = $derived(isEditor || prepItemCount > 0);
+	const hasMoneyTab = $derived(
+		isEditor || moneyItemCount > 0 || data.budgets?.some((b) => b.amount != null) === true
+	);
+	const hasPeopleTab = $derived(
+		isEditor || peopleItemCount > 0 || (data.owner === true && (data.emergencyContacts?.length ?? 0) > 0)
+	);
+	const hasNotesTab = $derived(isEditor || notesItemCount > 0);
+	const hasDocumentsTab = $derived(isEditor || documentsItemCount > 0 || (data.availablePolicies?.length ?? 0) > 0);
+	const hasToolsTab = $derived(isEditor);
+	const tripTabs = $derived(
+		([
+			{ id: 'itinerary', label: 'Itinerary', icon: 'trips', count: segmentList.length, visible: true },
+			{ id: 'prep', label: 'Prep', icon: 'check', count: prepItemCount, visible: hasPrepTab },
+			{ id: 'money', label: 'Money', icon: 'budget', count: moneyItemCount, visible: hasMoneyTab },
+			{ id: 'people', label: 'People', icon: 'users', count: peopleItemCount, visible: hasPeopleTab },
+			{ id: 'notes', label: 'Notes', icon: 'edit', count: notesItemCount, visible: hasNotesTab },
+			{ id: 'documents', label: 'Documents', icon: 'document', count: documentsItemCount, visible: hasDocumentsTab },
+			{ id: 'tools', label: 'Tools', icon: 'settings', count: null, visible: hasToolsTab }
+		] satisfies TripTabLink[]).filter((tab) => tab.visible)
+	);
+	const activeTabHasSidebar = $derived(
+		activeTab === 'itinerary' || activeTab === 'people' || activeTab === 'documents' || activeTab === 'tools'
+	);
+	const activeTabMainHidden = $derived(
+		activeTab === 'documents' || (activeTab === 'tools' && data.owner !== true)
+	);
+
+	$effect(() => {
+		if (!tripTabs.some((tab) => tab.id === activeTab)) activeTab = 'itinerary';
+	});
 
 	const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
 	const categorySpending = $derived(
@@ -334,10 +399,7 @@
 <div class="trip-detail">
 	<!-- Hero -->
 	<section class="trip-hero">
-		<div
-			class="trip-hero-backdrop"
-			style="background-image: linear-gradient(135deg, hsl({heroAccent} 45% 30% / 0.58) 0%, hsl({heroAccent} 40% 22% / 0.5) 42%, hsl({(heroAccent + 40) % 360} 35% 14%) 100%);"
-		></div>
+		<div class="trip-hero-backdrop"></div>
 		<div class="trip-hero-scrim"></div>
 
 		<div class="relative px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
@@ -347,13 +409,10 @@
 			</a>
 
 			<div class="flex flex-col gap-6 sm:flex-row sm:items-end">
-				<div
-					class="trip-poster grid place-items-center bg-gradient-to-br from-indigo-500/30 via-surface2 to-fuchsia-500/20"
-					style="background-image: linear-gradient(145deg, hsl({heroAccent} 45% 28% / 0.5), hsl({(heroAccent + 50) % 360} 35% 16% / 0.8));"
-				>
+				<div class="trip-poster grid place-items-center">
 					<div class="text-center">
-						<Icon name="location" class="mx-auto h-8 w-8 text-white/70" />
-						<p class="mt-2 font-display text-2xl font-bold text-white">{posterInitials(trip.name, trip.destination)}</p>
+						<Icon name="location" class="trip-poster-icon mx-auto h-8 w-8" />
+						<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destination)}</p>
 					</div>
 				</div>
 
@@ -368,7 +427,7 @@
 						{/if}
 					</div>
 
-					<h1 class="mt-2 text-3xl font-extrabold text-white sm:text-4xl">{trip.name}</h1>
+					<h1 class="trip-hero-title mt-2 text-3xl font-extrabold sm:text-4xl">{trip.name}</h1>
 
 					<div class="mt-3 flex flex-wrap gap-2">
 						{#if trip.destination}
@@ -458,17 +517,38 @@
 
 	{#if form?.error}<p class="notice notice-error trip-detail-body mt-6">{form.error}</p>{/if}
 
-	<div class="trip-detail-body mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_17.5rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+	<div class="trip-detail-body mt-6">
+		<nav class="trip-tab-list" aria-label="Trip sections">
+			{#each tripTabs as tab (tab.id)}
+				<button
+					type="button"
+					id={`trip-tab-${tab.id}`}
+					aria-current={activeTab === tab.id ? 'page' : undefined}
+					class="trip-tab-link {activeTab === tab.id ? 'trip-tab-link-active' : ''}"
+					onclick={() => selectTripTab(tab.id)}
+				>
+					<Icon name={tab.icon} class="h-4 w-4" />
+					<span>{tab.label}</span>
+					{#if tab.count != null && tab.count > 0}
+						<span class="trip-tab-count">{tab.count}</span>
+					{/if}
+				</button>
+			{/each}
+		</nav>
+	</div>
+
+	<div class="trip-detail-body mt-6 trip-tab-layout {activeTabHasSidebar ? 'trip-tab-layout-with-sidebar' : ''}">
 		<!-- Main column -->
-		<div class="min-w-0 space-y-8">
-			{#if ownerTrip?.notes}
+		<div class="min-w-0 space-y-8 {activeTabHasSidebar ? '' : 'trip-tab-main-wide'} {activeTabMainHidden ? 'hidden' : ''}">
+			{#if activeTab === 'itinerary' && ownerTrip?.notes}
 				<section>
 					<h2 class="section-title mb-3">Overview</h2>
 					<div class="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300">{@html renderMarkdown(ownerTrip.notes)}</div>
 				</section>
 			{/if}
 
-			<section>
+			{#if activeTab === 'itinerary'}
+			<section id="trip-panel-itinerary">
 				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<h2 class="section-title">Itinerary</h2>
 					<div class="flex flex-wrap items-center gap-2">
@@ -802,8 +882,9 @@
 					</div>
 				{/if}
 			</section>
+			{/if}
 
-			{#if data.checklist?.items?.length || isEditor}
+			{#if activeTab === 'prep' && (data.checklist?.items?.length || isEditor)}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Packing checklist</h2>
@@ -887,7 +968,7 @@
 				</section>
 			{/if}
 
-			{#if data.expenses?.length || isEditor}
+			{#if activeTab === 'money' && (data.expenses?.length || isEditor)}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Expenses</h2>
@@ -1047,7 +1128,7 @@
 				</section>
 			{/if}
 
-			{#if isEditor || data.budgets?.some((b) => b.amount != null)}
+			{#if activeTab === 'money' && (isEditor || data.budgets?.some((b) => b.amount != null))}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">
@@ -1102,7 +1183,7 @@
 				</section>
 			{/if}
 
-			{#if data.journalEntries?.length || isEditor}
+			{#if activeTab === 'notes' && (data.journalEntries?.length || isEditor)}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Journal</h2>
@@ -1139,7 +1220,7 @@
 				</section>
 			{/if}
 
-			{#if data.polls?.length || isEditor}
+			{#if activeTab === 'people' && (data.polls?.length || isEditor)}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">
@@ -1241,7 +1322,7 @@
 				</section>
 			{/if}
 
-			{#if isEditor && data.owner === true && (data.providers?.length || data.watches?.length)}
+			{#if activeTab === 'money' && isEditor && data.owner === true && (data.providers?.length || data.watches?.length)}
 				<section class="card p-5">
 					<div class="mb-3 flex flex-wrap items-center gap-3">
 						<h2 class="section-title mr-auto">Fare watch</h2>
@@ -1304,7 +1385,7 @@
 				</section>
 			{/if}
 
-			{#if isEditor && data.owner === true}
+			{#if activeTab === 'tools' && isEditor && data.owner === true}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Save as template</h2>
 					<form method="POST" action="?/saveTripTemplate" class="flex flex-wrap items-end gap-2">
@@ -1314,7 +1395,7 @@
 				</section>
 			{/if}
 
-			{#if data.homeTasks?.length || isEditor}
+			{#if activeTab === 'prep' && (data.homeTasks?.length || isEditor)}
 				<section class="card p-5">
 					<div class="panel-header">
 						<h2 class="section-title">Home prep</h2>
@@ -1358,7 +1439,7 @@
 				</section>
 			{/if}
 
-			{#if data.medications?.length || isEditor}
+			{#if activeTab === 'prep' && (data.medications?.length || isEditor)}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Medications</h2>
 				{#if data.medications?.length}
@@ -1401,7 +1482,7 @@
 				</section>
 			{/if}
 
-			{#if data.entryRequirements?.length || isEditor}
+			{#if activeTab === 'prep' && (data.entryRequirements?.length || isEditor)}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Entry requirements</h2>
 				{#if data.entryRequirements?.length}
@@ -1454,7 +1535,7 @@
 				</section>
 			{/if}
 
-			{#if data.importantItems?.length || isEditor}
+			{#if activeTab === 'prep' && (data.importantItems?.length || isEditor)}
 				<section class="card p-5">
 					<h2 class="section-title mb-3">Important items</h2>
 				{#if data.importantItems?.length}
@@ -1495,6 +1576,7 @@
 				</section>
 			{/if}
 
+			{#if activeTab === 'notes'}
 			<section class="card p-5">
 				<h2 class="section-title mb-3">Activity</h2>
 				{#if data.comments?.length}
@@ -1529,10 +1611,13 @@
 					</form>
 				{/if}
 			</section>
+			{/if}
 		</div>
 
 		<!-- Sidebar -->
-		<aside class="space-y-4 lg:sticky lg:top-6 lg:self-start">
+		{#if activeTabHasSidebar}
+		<aside class="space-y-4 {activeTabMainHidden ? 'trip-tab-main-wide' : ''} lg:sticky lg:top-6 lg:self-start">
+			{#if activeTab === 'itinerary'}
 			<div class="trip-sidebar-card">
 				<h2 class="subsection-title mb-3">Trip details</h2>
 				<dl class="trip-sidebar-dl">
@@ -1622,8 +1707,9 @@
 					</div>
 				</div>
 			{/if}
+			{/if}
 
-			{#if data.companions?.length || isEditor}
+			{#if activeTab === 'people' && (data.companions?.length || isEditor)}
 				<div class="trip-sidebar-card">
 					<div class="panel-header">
 						<h2 class="subsection-title">Travelers</h2>
@@ -1804,7 +1890,7 @@
 		</div>
 	{/if}
 
-			{#if isEditor && data.owner === true}
+			{#if activeTab === 'tools' && isEditor && data.owner === true}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Calendar feed</h2>
 					{#if data.feedUrl}
@@ -1834,7 +1920,7 @@
 				</div>
 			{/if}
 
-				{#if isEditor && data.owner === true && trip.startDate}
+				{#if activeTab === 'tools' && isEditor && data.owner === true && trip.startDate}
 					<div class="trip-sidebar-card">
 						<h2 class="subsection-title mb-3">Custom reminder</h2>
 						<form method="POST" action="?/customReminder" class="flex flex-col gap-2">
@@ -1849,7 +1935,7 @@
 					</div>
 				{/if}
 
-			{#if isEditor}
+			{#if activeTab === 'tools' && isEditor}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Quick links</h2>
 					<nav class="flex flex-col gap-1">
@@ -1862,7 +1948,7 @@
 				</div>
 			{/if}
 
-			{#if data.owner === true && data.emergencyContacts?.length}
+			{#if activeTab === 'people' && data.owner === true && data.emergencyContacts?.length}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">
 						<Icon name="share" class="inline h-4 w-4 mr-1.5" />
@@ -1880,7 +1966,7 @@
 				</div>
 			{/if}
 
-			{#if data.documentLinks?.length || isEditor}
+			{#if activeTab === 'documents' && (data.documentLinks?.length || isEditor)}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Trip documents</h2>
 					{#if data.documentLinks?.length}
@@ -1912,7 +1998,7 @@
 				</div>
 			{/if}
 
-			{#if isEditor && (data.policies?.length || data.availablePolicies?.length)}
+			{#if activeTab === 'documents' && isEditor && (data.policies?.length || data.availablePolicies?.length)}
 				<div class="trip-sidebar-card">
 					<h2 class="subsection-title mb-3">Insurance</h2>
 					{#if data.policies?.length}
@@ -1946,5 +2032,6 @@
 				</div>
 			{/if}
 		</aside>
+		{/if}
 	</div>
 </div>

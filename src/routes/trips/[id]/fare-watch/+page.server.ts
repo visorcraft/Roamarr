@@ -1,8 +1,13 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/auth';
 import { parseTripId } from '$lib/server/params';
 import { pauseWatch, resumeWatch, deleteWatch, toggleWatch, checkWatch } from '$lib/server/fareproviders';
 import { positiveIdFromForm } from '$lib/server/validation';
+
+export const load: PageServerLoad = ({ params }) => {
+	throw redirect(308, `/trips/${params.id}`);
+};
 
 export const actions: Actions = {
 	enable: async ({ request, locals, params }) => {

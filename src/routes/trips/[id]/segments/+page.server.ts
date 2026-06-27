@@ -1,9 +1,14 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 import { requireUser } from '$lib/server/auth';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
+
+export const load: PageServerLoad = ({ params }) => {
+	throw redirect(308, `/trips/${params.id}`);
+};
 
 export const actions: Actions = {
 	delete: async ({ request, locals, params }) => {

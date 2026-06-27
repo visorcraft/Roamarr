@@ -188,6 +188,13 @@
 		selectedSegmentIds = next;
 	}
 
+	function handleSegmentCardClick(id: number, event: MouseEvent) {
+		const target = event.target;
+		if (!(target instanceof HTMLElement)) return;
+		if (target.closest('button, a, input, select, textarea, label, [role="button"], form')) return;
+		toggleSegmentId(id);
+	}
+
 	const allSegmentsSelected = $derived(
 		segmentList.length > 0 && segmentList.every((s) => s.id != null && selectedSegmentIds.has(s.id))
 	);
@@ -512,26 +519,32 @@
 													</div>
 												</form>
 											{:else}
-												<article class="trip-timeline-card">
-													<div class="flex flex-col gap-3 lg:flex-row lg:items-start">
-														{#if s.startAt}
-															<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">
-																{formatTime(s.startAt, s.startTz ?? 'UTC')}
-															</div>
+										<!-- svelte-ignore a11y_click_events_have_key_events -->
+										<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+										<article
+											class="trip-timeline-card {isEditor && s.id && selectedSegmentIds.has(s.id) ? 'trip-timeline-card-selected' : ''} {isEditor && s.id ? 'trip-timeline-card-selectable' : ''}"
+											onclick={(e) => isEditor && s.id != null && handleSegmentCardClick(s.id, e)}
+										>
+											<div class="flex flex-col gap-3 lg:flex-row lg:items-start">
+												{#if s.startAt}
+													<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">
+														{formatTime(s.startAt, s.startTz ?? 'UTC')}
+													</div>
+												{/if}
+												<div class="min-w-0 flex-1">
+													<div class="flex flex-wrap items-center gap-2">
+														{#if isEditor && s.id}
+															<input
+																type="checkbox"
+																name="segmentId"
+																value={s.id}
+																form="bulkDeleteForm"
+																class="sr-only"
+																aria-label="Select segment"
+																checked={selectedSegmentIds.has(s.id!)}
+																onchange={() => toggleSegmentId(s.id!)}
+															/>
 														{/if}
-														<div class="min-w-0 flex-1">
-															<div class="flex flex-wrap items-center gap-2">
-																{#if isEditor && s.id}
-																	<input
-																		type="checkbox"
-																		name="segmentId"
-																		value={s.id}
-																		form="bulkDeleteForm"
-																		class="checkbox"
-																		checked={selectedSegmentIds.has(s.id!)}
-																		onchange={() => toggleSegmentId(s.id!)}
-																	/>
-																{/if}
 																<span class="badge badge-slate">{SEG[s.type as keyof typeof SEG]?.label ?? s.type}</span>
 																<h3 class="font-semibold text-white">{s.title}</h3>
 																{#if isEditor && s.id}

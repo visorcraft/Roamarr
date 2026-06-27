@@ -1485,6 +1485,13 @@ button.card:hover,
 		background: var(--theme-subtle-hover);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
 	}
+	.trip-timeline-card-selected {
+		background: var(--theme-active);
+		box-shadow: inset 0 0 0 2px var(--theme-brand);
+	}
+	.trip-timeline-card-selectable {
+		cursor: pointer;
+	}
 
 	.segment-form-section {
 		@apply border-t border-white/10 pt-4;

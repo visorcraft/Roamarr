@@ -3,8 +3,40 @@
 
 	let { data, form } = $props();
 	const s = $derived(data.settings);
+	const m = $derived(data.mapSettings);
 
 	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
+
+	const tileProviders = [
+		{ value: 'openstreetmap', label: 'OpenStreetMap' },
+		{ value: 'carto', label: 'CARTO Voyager' },
+		{ value: 'maptiler', label: 'MapTiler' },
+		{ value: 'stadia', label: 'Stadia Maps' },
+		{ value: 'thunderforest', label: 'Thunderforest' },
+		{ value: 'jawg', label: 'Jawg Maps' },
+		{ value: 'protomaps', label: 'Protomaps' },
+		{ value: 'custom', label: 'Custom' }
+	];
+
+	function getInitialTiles() {
+		const ms = data.mapSettings;
+		return {
+			provider: ms.mapsTileProvider,
+			url: ms.mapsTileUrl ?? '',
+			attribution: ms.mapsTileAttribution ?? '',
+			apiKey: ms.mapsTileApiKey ?? ''
+		};
+	}
+	const initialTiles = getInitialTiles();
+	let selectedProvider = $state(initialTiles.provider);
+	let tileUrl = $state(initialTiles.url);
+	let tileAttribution = $state(initialTiles.attribution);
+	let tileApiKey = $state(initialTiles.apiKey);
+
+	const apiKeyVisible = $derived(
+		['maptiler', 'stadia', 'thunderforest', 'jawg', 'protomaps'].includes(selectedProvider)
+	);
+	const customVisible = $derived(selectedProvider === 'custom');
 </script>
 
 <header>
@@ -65,6 +97,50 @@
 		<div class="mt-4">
 			<a href="/settings/audit-logs" class="btn btn-secondary">View full audit log</a>
 		</div>
+	{/if}
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Maps</h2>
+	<p class="mt-1 text-sm text-slate-400">
+		Show a map of the next upcoming city on each trip page. City data comes from GeoNames.
+	</p>
+
+	{#if m.mapsEnabled && m.cityCount > 0}
+		<p class="notice notice-success mt-4">
+			Maps are enabled. City database: {m.cityCount.toLocaleString()} cities imported
+			{#if m.mapsGeonamesImportedAt}
+				on {new Date(m.mapsGeonamesImportedAt).toLocaleString()}.
+			{/if}
+		</p>
+		<form method="POST" action="?/enableMaps" class="mt-4">
+			<button class="btn btn-secondary" type="submit">Re-import city database</button>
+		</form>
+	{:else}
+		<p class="notice mt-4">No city database imported.</p>
+		<form method="POST" action="?/enableMaps" class="mt-4">
+			<button class="btn btn-primary" type="submit">Enable Maps</button>
+		</form>
+		<p class="mt-4 text-sm text-slate-400">
+			Automatic download not working? Download
+			<a
+				class="link"
+				href="https://download.geonames.org/export/dump/cities1000.zip"
+				target="_blank"
+				rel="noopener">cities1000.zip</a>
+			and upload it below.
+		</p>
+		<form
+			method="POST"
+			action="?/importGeonames"
+			enctype="multipart/form-data"
+			class="mt-3 flex flex-wrap items-end gap-3">
+			<div class="field">
+				<label class="label" for="cities1000">cities1000.zip</label>
+				<input id="cities1000" name="cities1000" type="file" accept=".zip" class="input" required />
+			</div>
+			<button class="btn btn-secondary" type="submit">Import from file</button>
+		</form>
 	{/if}
 </section>
 
@@ -213,6 +289,71 @@
 					class="input"
 				/>
 			</div>
+		</div>
+	</section>
+
+	<section class="card p-5 sm:p-6">
+		<h2 class="section-title">Map Tiles</h2>
+		<div class="settings-rows">
+			<div class="settings-row">
+				<div>
+					<label class="label" for="mapsTileProvider">Provider</label>
+					<p class="field-help">Tile provider used for maps on trip pages.</p>
+				</div>
+				<select id="mapsTileProvider" name="mapsTileProvider" bind:value={selectedProvider} class="input" required>
+					{#each tileProviders as provider}
+						<option value={provider.value}>{provider.label}</option>
+					{/each}
+				</select>
+			</div>
+
+			{#if apiKeyVisible}
+				<div class="settings-row">
+					<div>
+						<label class="label" for="mapsTileApiKey">API key</label>
+						<p class="field-help">Required by this provider for map tiles.</p>
+					</div>
+					<input
+						id="mapsTileApiKey"
+						name="mapsTileApiKey"
+						type="password"
+						bind:value={tileApiKey}
+						placeholder="API key"
+						class="input"
+					/>
+				</div>
+			{/if}
+
+			{#if customVisible}
+				<div class="settings-row">
+					<div>
+						<label class="label" for="mapsTileUrl">Tile URL template</label>
+						<p class="field-help">Tile URL template with `{'{z}'}`, `{'{x}'}`, and `{'{y}'}` placeholders.</p>
+					</div>
+					<input
+						id="mapsTileUrl"
+						name="mapsTileUrl"
+						type="url"
+						bind:value={tileUrl}
+						placeholder={'https://example.com/tiles/{z}/{x}/{y}.png'}
+						class="input"
+					/>
+				</div>
+
+				<div class="settings-row">
+					<div>
+						<label class="label" for="mapsTileAttribution">Attribution</label>
+						<p class="field-help">Attribution HTML shown on the map.</p>
+					</div>
+					<input
+						id="mapsTileAttribution"
+						name="mapsTileAttribution"
+						bind:value={tileAttribution}
+						placeholder="&copy; Map data contributors"
+						class="input"
+					/>
+				</div>
+			{/if}
 		</div>
 	</section>
 

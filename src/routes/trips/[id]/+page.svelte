@@ -4,7 +4,9 @@
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
+	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { COUNTRIES } from '$lib/countries';
 	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
@@ -77,6 +79,11 @@
 		startAt: string | null;
 		endAt: string | null;
 		location: string | null;
+		countryCode?: string | null;
+		cityName?: string | null;
+		cityLat?: number | null;
+		cityLng?: number | null;
+		venue?: string | null;
 		status?: string | null;
 		confirmationNumber?: string | null;
 		detailsJson?: string | null;
@@ -656,11 +663,22 @@
 													<TimezoneSelect id={`endTz-${s.id}`} name="endTz" value={s.endTz ?? s.startTz} class="input {form?.errors?.endTz ? 'input-error' : ''}" />
 													{#if form?.errors?.endTz}<p class="field-error">{form.errors.endTz}</p>{/if}
 												</div>
-												<div class="field">
-													<label class="label" for={`location-${s.id}`}>Location</label>
-														<input id={`location-${s.id}`} name="location" value={s.location ?? ''} class="input {form?.errors?.location ? 'input-error' : ''}" />
-														{#if form?.errors?.location}<p class="field-error">{form.errors.location}</p>{/if}
-													</div>
+															<div class="field">
+																<label class="label" for={`countryCode-${s.id}`}>Country</label>
+																<select id={`countryCode-${s.id}`} name="countryCode" class="input {form?.errors?.countryCode ? 'input-error' : ''}">
+																	<option value="" selected={!s.countryCode}>Select country</option>
+																	{#each COUNTRIES as c}
+																		<option value={c.code} selected={c.code === s.countryCode}>{c.name}</option>
+																	{/each}
+																</select>
+																{#if form?.errors?.countryCode}<p class="field-error">{form.errors.countryCode}</p>{/if}
+															</div>
+															<CityAutocomplete countryCode={s.countryCode ?? ''} name="cityName" value={s.cityName ?? ''} latName="cityLat" lngName="cityLng" errors={form?.errors} />
+															<div class="field sm:col-span-2">
+																<label class="label" for={`venue-${s.id}`}>Venue</label>
+																<input id={`venue-${s.id}`} name="venue" value={s.venue ?? ''} class="input {form?.errors?.venue ? 'input-error' : ''}" />
+																{#if form?.errors?.venue}<p class="field-error">{form.errors.venue}</p>{/if}
+															</div>
 													<div class="field">
 														<label class="label" for={`confirmationNumber-${s.id}`}>Confirmation #</label>
 														<input id={`confirmationNumber-${s.id}`} name="confirmationNumber" value={s.confirmationNumber ?? ''} class="input {form?.errors?.confirmationNumber ? 'input-error' : ''}" />
@@ -763,9 +781,16 @@
 																	{#if duration}<span class="ml-1.5 text-slate-600">· {duration}</span>{/if}
 																</p>
 															{/if}
-															{#if s.location}
-																<p class="mt-1.5 text-sm text-slate-400">{s.location}</p>
-															{/if}
+																		{#if s.cityName || s.venue}
+																			<p class="mt-1.5 text-sm text-slate-400">
+																				{#if s.cityName}{s.cityName}{#if s.countryCode}, {s.countryCode.toUpperCase()}{/if}{/if}
+																				{#if s.cityName && s.venue}<span class="mx-1 text-slate-500">·</span>{/if}
+																				{#if s.venue}{s.venue}{/if}
+																			</p>
+																		{/if}
+																		{#if s.location && !s.cityName}
+																			<p class="mt-1.5 text-sm text-slate-500 italic">Legacy location: {s.location}</p>
+																		{/if}
 															{#if isEditor && s.confirmationNumber}
 																<p class="mt-1 font-mono text-xs text-slate-500">Confirmation {s.confirmationNumber}</p>
 															{/if}

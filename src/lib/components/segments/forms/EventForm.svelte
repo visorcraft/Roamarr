@@ -2,8 +2,22 @@
 	import CollapseSection from '../CollapseSection.svelte';
 	import DateTimeRangeFields from '../DateTimeRangeFields.svelte';
 	import BookedRow from '../BookedRow.svelte';
+	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import { COUNTRIES } from '$lib/countries';
 
-	let { errors = {} }: { errors?: Record<string, string> } = $props();
+	let {
+		errors = {},
+		countryCode = '',
+		cityName = '',
+		venue = '',
+		venueLabel = 'Venue'
+	}: {
+		errors?: Record<string, string>;
+		countryCode?: string;
+		cityName?: string;
+		venue?: string;
+		venueLabel?: string;
+	} = $props();
 	let moreOpen = $state(false);
 	let attendeesOpen = $state(false);
 	let bookingOpen = $state(true);
@@ -23,14 +37,29 @@
 
 <DateTimeRangeFields {errors} idPrefix="event" />
 
-<div class="field sm:col-span-2">
-	<label class="label" for="detail_venue">Venue</label>
-	<input id="detail_venue" name="detail_venue" placeholder="Enter venue" class="input" />
+<div class="field">
+	<label class="label" for="countryCode">Country</label>
+	<select id="countryCode" name="countryCode" class="input {errors.countryCode ? 'input-error' : ''}">
+		<option value="" selected={!countryCode}>Select country</option>
+		{#each COUNTRIES as c}
+			<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
+		{/each}
+	</select>
+	{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
 </div>
+
+<CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
+
 <div class="field sm:col-span-2">
-	<label class="label" for="location">Address</label>
-	<input id="location" name="location" placeholder="Enter address" class="input {errors.location ? 'input-error' : ''}" />
-	{#if errors.location}<p class="field-error">{errors.location}</p>{/if}
+	<label class="label" for="venue">{venueLabel}</label>
+	<input
+		id="venue"
+		name="venue"
+		placeholder="Enter venue"
+		value={venue}
+		class="input {errors.venue ? 'input-error' : ''}"
+	/>
+	{#if errors.venue}<p class="field-error">{errors.venue}</p>{/if}
 </div>
 <div class="field sm:col-span-2">
 	<label class="label" for="detail_phone">Phone</label>

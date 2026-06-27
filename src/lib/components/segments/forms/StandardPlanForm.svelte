@@ -1,13 +1,18 @@
 <script lang="ts">
 	import DateTimeRangeFields from '../DateTimeRangeFields.svelte';
 	import BookedRow from '../BookedRow.svelte';
+	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import { COUNTRIES } from '$lib/countries';
 
 	let {
 		errors = {},
 		titleLabel = 'Title',
 		titlePlaceholder = 'Enter title',
-		locationLabel = 'Location',
-		locationPlaceholder = 'Enter location',
+		locationLabel = 'Venue',
+		locationPlaceholder = 'Enter venue',
+		countryCode = '',
+		cityName = '',
+		venue = '',
 		requireEnd = false
 	}: {
 		errors?: Record<string, string>;
@@ -15,6 +20,9 @@
 		titlePlaceholder?: string;
 		locationLabel?: string;
 		locationPlaceholder?: string;
+		countryCode?: string;
+		cityName?: string;
+		venue?: string;
 		requireEnd?: boolean;
 	} = $props();
 </script>
@@ -33,15 +41,29 @@
 
 <DateTimeRangeFields {errors} {requireEnd} />
 
+<div class="field">
+	<label class="label" for="countryCode">Country</label>
+	<select id="countryCode" name="countryCode" class="input {errors.countryCode ? 'input-error' : ''}">
+		<option value="" selected={!countryCode}>Select country</option>
+		{#each COUNTRIES as c}
+			<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
+		{/each}
+	</select>
+	{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
+</div>
+
+<CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
+
 <div class="field sm:col-span-2">
-	<label class="label" for="location">{locationLabel}</label>
+	<label class="label" for="venue">{locationLabel}</label>
 	<input
-		id="location"
-		name="location"
+		id="venue"
+		name="venue"
 		placeholder={locationPlaceholder}
-		class="input {errors.location ? 'input-error' : ''}"
+		value={venue}
+		class="input {errors.venue ? 'input-error' : ''}"
 	/>
-	{#if errors.location}<p class="field-error">{errors.location}</p>{/if}
+	{#if errors.venue}<p class="field-error">{errors.venue}</p>{/if}
 </div>
 
 <div class="field sm:col-span-2">

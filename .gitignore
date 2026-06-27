@@ -26,6 +26,9 @@ GEMINI.md
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
+# Local dev container
+compose.local.yml
+
 # SQLite
 *.db
 *.db-wal

@@ -717,7 +717,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.row-subtitle {
-		@apply block truncate text-sm;
+		@apply block min-w-0 truncate text-sm;
 		color: var(--theme-readable-muted);
 	}
 	.row-meta {
@@ -796,7 +796,7 @@ button.card:hover,
 		color: var(--theme-brand-readable);
 	}
 	.choice-card {
-		@apply flex items-center gap-3 rounded-lg p-3.5 text-left transition;
+		@apply flex min-w-0 items-center gap-3 rounded-lg p-3.5 text-left transition;
 		background: var(--theme-panel);
 		box-shadow:
 			0 18px 38px color-mix(in oklab, var(--theme-shadow) 18%, transparent),
@@ -870,7 +870,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.tab-list {
-		@apply -mb-px flex gap-6 overflow-x-auto border-b border-white/10 text-sm font-medium;
+		@apply -mb-px flex max-w-full gap-6 overflow-x-auto border-b border-white/10 text-sm font-medium;
 		border-color: var(--theme-line);
 	}
 	.tab-link {

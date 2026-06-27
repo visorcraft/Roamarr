@@ -73,7 +73,7 @@ test('addExpense action stores category', async () => {
 		addExpense(
 			event(u, t.id, {
 				description: 'Train',
-				amount: '12000',
+				amount: '120.00',
 				currency: 'USD',
 				category: 'transport',
 				paidByCompanionId: '',
@@ -232,7 +232,7 @@ test('addExpense action creates an expense and redirects', async () => {
 		addExpense(
 			event(u, t.id, {
 				description: 'Lunch',
-				amount: '4500',
+				amount: '45.00',
 				currency: 'USD',
 				paidByCompanionId: '',
 				splitAmong: [String(a.id)]
@@ -383,7 +383,7 @@ test('addExpense action accepts owner split participant and redirects', async ()
 		addExpense(
 			event(u, t.id, {
 				description: 'Toll',
-				amount: '3000',
+				amount: '30.00',
 				currency: 'USD',
 				paidByCompanionId: '',
 				splitAmong: ['owner', String(a.id)]
@@ -464,7 +464,7 @@ test('addExpense action accepts an exchange rate and stores base amount', async 
 		addExpense(
 			event(u, t.id, {
 				description: 'Taxi',
-				amount: '5000',
+				amount: '50.00',
 				currency: 'GBP',
 				exchangeRate: '1.27'
 			})
@@ -485,7 +485,7 @@ test('addExpense action rejects a non-positive exchange rate', async () => {
 	const result = await addExpense(
 		event(u, t.id, {
 			description: 'X',
-			amount: '1000',
+			amount: '10.00',
 			currency: 'USD',
 			exchangeRate: '-1'
 		})

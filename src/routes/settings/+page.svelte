@@ -68,7 +68,7 @@
 	{/if}
 </section>
 
-<form method="POST" class="mt-6 grid gap-6">
+<form method="POST" action="?/save" class="mt-6 grid gap-6">
 	<section class="card p-5 sm:p-6">
 		<h2 class="section-title">General</h2>
 		<div class="settings-rows">

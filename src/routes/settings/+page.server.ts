@@ -85,7 +85,7 @@ export const actions: Actions = {
 		}
 		throw redirect(303, '/settings');
 	},
-	default: async ({ request, locals, cookies }) => {
+	save: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
 		const pass = String(f.get('smtpPass') || '');

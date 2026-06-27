@@ -4,11 +4,30 @@ import { Validator } from '../validation';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
 import { addTripExpense, deleteTripExpense } from './repository';
 
+function moneyToCents(raw: unknown, field: string, v: Validator): number | undefined {
+	const str = String(raw ?? '').trim();
+	if (!str) {
+		v.addError(field, `${field} is required`);
+		return undefined;
+	}
+	if (!/^\d+(\.\d{1,2})?$/.test(str)) {
+		v.addError(field, `${field} must be a positive amount with up to 2 decimals`);
+		return undefined;
+	}
+	const [whole, fraction = ''] = str.split('.');
+	const cents = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+	if (!Number.isSafeInteger(cents) || cents <= 0) {
+		v.addError(field, `${field} must be a positive amount`);
+		return undefined;
+	}
+	return cents;
+}
+
 export async function addExpense(event: RequestEvent) {
 	const { user: u, tripId, formData: f } = await withTripAction(event);
 	const v = new Validator();
 	const description = v.requiredString(f.get('description'), 'description', { max: 200 });
-	const amount = v.positiveId(f.get('amount'), 'amount');
+	const amount = moneyToCents(f.get('amount'), 'amount', v);
 
 	const currencyRaw = typeof f.get('currency') === 'string' ? String(f.get('currency')) : 'USD';
 	const currency = currencyRaw.trim().toUpperCase();

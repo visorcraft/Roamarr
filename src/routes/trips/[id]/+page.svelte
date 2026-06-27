@@ -857,16 +857,16 @@
 					{#if isEditor}
 						<form method="POST" action="?/addExpense" class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto] sm:items-end">
 							<input name="description" class="input text-sm" placeholder="Description" required />
-							<input name="amount" type="number" min="1" step="1" class="input w-32 text-sm" placeholder="Cents" required />
+							<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="input w-32 text-sm" placeholder="Amount" required />
 							<input name="currency" class="input w-24 text-sm" placeholder="USD" value="USD" required />
 							<input name="exchangeRate" type="number" min="0.0001" step="0.0001" class="input w-28 text-sm" placeholder="Rate" title="Exchange rate to trip base currency" />
-								<select name="category" class="input w-auto text-sm">
-									<option value="lodging">Lodging</option>
-									<option value="transport">Transport</option>
-									<option value="food">Food</option>
-									<option value="activities">Activities</option>
-									<option value="other" selected>Other</option>
-								</select>
+							<select name="category" class="input w-auto text-sm">
+								<option value="lodging">Lodging</option>
+								<option value="transport">Transport</option>
+								<option value="food">Food</option>
+								<option value="activities">Activities</option>
+								<option value="other" selected>Other</option>
+							</select>
 							<select name="paidByCompanionId" class="input w-auto text-sm">
 								<option value="">You</option>
 								{#each data.companions ?? [] as c (c.id)}
@@ -1513,182 +1513,186 @@
 				</div>
 			{/if}
 
-			{#if data.companions?.length}
+			{#if data.companions?.length || isEditor}
 				<div class="trip-sidebar-card">
 					<div class="panel-header">
 						<h2 class="subsection-title">Travelers</h2>
-						<span class="font-mono text-xs text-slate-500">{data.companions.length}</span>
+						<span class="font-mono text-xs text-slate-500">{data.companions?.length ?? 0}</span>
 					</div>
-					<ul class="space-y-2">
-						{#each data.companions as c (c.id)}
+					{#if data.companions?.length}
+						<ul class="space-y-2">
+							{#each data.companions as c (c.id)}
 							<li class="list-item-compact text-sm">
-								{#if editingCompanionId === c.id}
-									<form method="POST" action="?/updateCompanion" class="flex flex-col gap-2">
-										<input type="hidden" name="companionId" value={c.id} />
-										<input name="name" class="input text-sm" value={c.name} placeholder="Name" required />
-										<div class="flex gap-2">
-											<select name="category" class="input text-sm">
-												<option value="adult" selected={c.category === 'adult'}>Adult</option>
-												<option value="child" selected={c.category === 'child'}>Child</option>
-												<option value="other" selected={c.category === 'other'}>Other</option>
-											</select>
-											<button class="btn btn-primary btn-sm shrink-0">Save</button>
-										</div>
-										<button
-											type="button"
-											class="btn btn-ghost btn-xs self-start"
-											onclick={() => (showCompanionNotesId = showCompanionNotesId === c.id ? null : c.id)}
-										>
-											Notes {showCompanionNotesId === c.id ? '▲' : '▼'}
-										</button>
-										{#if showCompanionNotesId === c.id}
-											<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" value={c.dietary ?? ''} />
-											<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" value={c.allergies ?? ''} />
-											<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2">{c.medicalNotes ?? ''}</textarea>
-											{#if c.category === 'child'}
-												<div class="flex flex-wrap gap-3 text-xs">
-													<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" checked={c.needsCarSeat} class="checkbox" /> Car seat</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" checked={c.needsStroller} class="checkbox" /> Stroller</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" checked={c.needsCrib} class="checkbox" /> Crib</label>
-													<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" checked={c.needsKidsMeal} class="checkbox" /> Kids meal</label>
-												</div>
-												<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" value={c.childTicketDiscount ?? ''} />
-											{/if}
-											<select name="seatPreference" class="input text-sm">
-												<option value="" selected={!c.seatPreference}>Seat preference…</option>
-												<option value="aisle" selected={c.seatPreference === 'aisle'}>Aisle</option>
-												<option value="window" selected={c.seatPreference === 'window'}>Window</option>
-												<option value="middle" selected={c.seatPreference === 'middle'}>Middle</option>
-												<option value="none" selected={c.seatPreference === 'none'}>No preference</option>
-											</select>
-											<select name="bedPreference" class="input text-sm">
-												<option value="" selected={!c.bedPreference}>Bed preference…</option>
-												<option value="king" selected={c.bedPreference === 'king'}>King</option>
-												<option value="queen" selected={c.bedPreference === 'queen'}>Queen</option>
-												<option value="twin" selected={c.bedPreference === 'twin'}>Twin</option>
-												<option value="two_doubles" selected={c.bedPreference === 'two_doubles'}>Two doubles</option>
-												<option value="other" selected={c.bedPreference === 'other'}>Other</option>
-											</select>
-											<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" value={c.accessibilityNeeds ?? ''} />
-											<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" value={c.roomNotes ?? ''} />
-											<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
-										{/if}
-										<button
-											type="button"
-											class="btn btn-ghost btn-xs self-start"
-											onclick={() => (editingCompanionId = null)}
-										>
-											Cancel
-										</button>
-									</form>
-								{:else}
-									<div class="flex items-center justify-between gap-2">
-										<span class="font-medium text-slate-200">{c.name}</span>
-										<div class="flex items-center gap-1">
-											<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
-											{#if isEditor}
-												<button
-													type="button"
-													class="icon-button icon-button-sm"
-													aria-label="Edit companion"
-													onclick={() => (editingCompanionId = c.id)}
-												>
-													<Icon name="edit" class="h-3.5 w-3.5" />
-												</button>
-											{/if}
-										</div>
+							{#if editingCompanionId === c.id}
+								<form method="POST" action="?/updateCompanion" class="flex flex-col gap-2">
+									<input type="hidden" name="companionId" value={c.id} />
+									<input name="name" class="input text-sm" value={c.name} placeholder="Name" required />
+									<div class="flex gap-2">
+										<select name="category" class="input text-sm">
+											<option value="adult" selected={c.category === 'adult'}>Adult</option>
+											<option value="child" selected={c.category === 'child'}>Child</option>
+											<option value="other" selected={c.category === 'other'}>Other</option>
+										</select>
+										<button class="btn btn-primary btn-sm shrink-0">Save</button>
 									</div>
-									{#if c.dietary || c.allergies || c.medicalNotes || c.notes}
-										<div class="mt-1 flex flex-wrap gap-1">
-											{#if c.dietary}
-												<span class="badge badge-compact badge-amber" title={c.dietary}>
-													<Icon name="dietary" class="h-3 w-3" />
-													Dietary
-												</span>
-											{/if}
-											{#if c.allergies}
-												<span class="badge badge-compact badge-red" title={c.allergies}>
-													<Icon name="allergies" class="h-3 w-3" />
-													Allergies
-												</span>
-											{/if}
-											{#if c.medicalNotes}
-												<span class="badge badge-compact badge-brand" title={c.medicalNotes}>
-													<Icon name="medical" class="h-3 w-3" />
-													Medical
-												</span>
-											{/if}
-											{#if c.notes}
-												<span class="badge badge-compact badge-slate" title={c.notes}>Notes</span>
-											{/if}
-											{#if c.category === 'child' && (c.needsCarSeat || c.needsStroller || c.needsCrib || c.needsKidsMeal)}
-												<span class="badge badge-compact badge-brand" title="Kid gear">
-													{#if c.needsCarSeat}car seat{/if}{#if c.needsStroller}{#if c.needsCarSeat}, {/if}stroller{/if}{#if c.needsCrib}{#if c.needsCarSeat || c.needsStroller}, {/if}crib{/if}{#if c.needsKidsMeal}{#if c.needsCarSeat || c.needsStroller || c.needsCrib}, {/if}kids meal{/if}
-												</span>
-											{/if}
-											{#if c.seatPreference}
-												<span class="badge badge-compact badge-slate" title="Seat preference">{c.seatPreference}</span>
-											{/if}
-											{#if c.bedPreference}
-												<span class="badge badge-compact badge-slate" title="Bed preference">{c.bedPreference.replace('_', ' ')}</span>
-											{/if}</div>
+									<button
+										type="button"
+										class="btn btn-ghost btn-xs self-start"
+										onclick={() => (showCompanionNotesId = showCompanionNotesId === c.id ? null : c.id)}
+									>
+										Notes {showCompanionNotesId === c.id ? '▲' : '▼'}
+									</button>
+									{#if showCompanionNotesId === c.id}
+										<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" value={c.dietary ?? ''} />
+										<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" value={c.allergies ?? ''} />
+										<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2">{c.medicalNotes ?? ''}</textarea>
+										{#if c.category === 'child'}
+											<div class="flex flex-wrap gap-3 text-xs">
+												<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" checked={c.needsCarSeat} class="checkbox" /> Car seat</label>
+												<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" checked={c.needsStroller} class="checkbox" /> Stroller</label>
+												<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" checked={c.needsCrib} class="checkbox" /> Crib</label>
+												<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" checked={c.needsKidsMeal} class="checkbox" /> Kids meal</label>
+											</div>
+											<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" value={c.childTicketDiscount ?? ''} />
+										{/if}
+										<select name="seatPreference" class="input text-sm">
+											<option value="" selected={!c.seatPreference}>Seat preference…</option>
+											<option value="aisle" selected={c.seatPreference === 'aisle'}>Aisle</option>
+											<option value="window" selected={c.seatPreference === 'window'}>Window</option>
+											<option value="middle" selected={c.seatPreference === 'middle'}>Middle</option>
+											<option value="none" selected={c.seatPreference === 'none'}>No preference</option>
+										</select>
+										<select name="bedPreference" class="input text-sm">
+											<option value="" selected={!c.bedPreference}>Bed preference…</option>
+											<option value="king" selected={c.bedPreference === 'king'}>King</option>
+											<option value="queen" selected={c.bedPreference === 'queen'}>Queen</option>
+											<option value="twin" selected={c.bedPreference === 'twin'}>Twin</option>
+											<option value="two_doubles" selected={c.bedPreference === 'two_doubles'}>Two doubles</option>
+											<option value="other" selected={c.bedPreference === 'other'}>Other</option>
+										</select>
+										<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" value={c.accessibilityNeeds ?? ''} />
+										<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" value={c.roomNotes ?? ''} />
+										<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
 									{/if}
-								{/if}
-							</li>
-						{/each}
-					</ul>
-					{#if isEditor}
-						<form method="POST" action="?/addCompanion" class="mt-3 flex flex-col gap-2">
-							<input name="name" class="input text-sm" placeholder="Name" required />
-							<div class="flex gap-2">
-								<select name="category" class="input text-sm">
-									<option value="adult">Adult</option>
-									<option value="child">Child</option>
-									<option value="other">Other</option>
-								</select>
-								<button class="btn btn-primary btn-sm shrink-0">Add</button>
-							</div>
-							<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
-							<button
-								type="button"
-								class="btn btn-ghost btn-xs self-start"
-								onclick={() => (showAddCompanionNotes = !showAddCompanionNotes)}
-							>
-								Dietary / allergy / medical {showAddCompanionNotes ? '▲' : '▼'}
-							</button>
-							{#if showAddCompanionNotes}
-								<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" />
-								<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" />
-								<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2"></textarea>
-								<div class="flex flex-wrap gap-3 text-xs">
-									<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" class="checkbox" /> Car seat</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" class="checkbox" /> Stroller</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" class="checkbox" /> Crib</label>
-									<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" class="checkbox" /> Kids meal</label>
+									<button
+										type="button"
+										class="btn btn-ghost btn-xs self-start"
+										onclick={() => (editingCompanionId = null)}
+									>
+										Cancel
+									</button>
+								</form>
+							{:else}
+								<div class="flex items-center justify-between gap-2">
+									<span class="font-medium text-slate-200">{c.name}</span>
+									<div class="flex items-center gap-1">
+										<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
+										{#if isEditor}
+											<button
+												type="button"
+												class="icon-button icon-button-sm"
+												aria-label="Edit companion"
+												onclick={() => (editingCompanionId = c.id)}
+											>
+												<Icon name="edit" class="h-3.5 w-3.5" />
+											</button>
+										{/if}
+									</div>
 								</div>
-								<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" />
-								<select name="seatPreference" class="input text-sm">
-									<option value="">Seat preference…</option>
-									<option value="aisle">Aisle</option>
-									<option value="window">Window</option>
-									<option value="middle">Middle</option>
-									<option value="none">No preference</option>
-								</select>
-								<select name="bedPreference" class="input text-sm">
-									<option value="">Bed preference…</option>
-									<option value="king">King</option>
-									<option value="queen">Queen</option>
-									<option value="twin">Twin</option>
-									<option value="two_doubles">Two doubles</option>
-									<option value="other">Other</option>
-								</select>
-								<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" />
-								<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" />
+								{#if c.dietary || c.allergies || c.medicalNotes || c.notes}
+									<div class="mt-1 flex flex-wrap gap-1">
+										{#if c.dietary}
+											<span class="badge badge-compact badge-amber" title={c.dietary}>
+												<Icon name="dietary" class="h-3 w-3" />
+												Dietary
+											</span>
+										{/if}
+										{#if c.allergies}
+											<span class="badge badge-compact badge-red" title={c.allergies}>
+												<Icon name="allergies" class="h-3 w-3" />
+												Allergies
+											</span>
+										{/if}
+										{#if c.medicalNotes}
+											<span class="badge badge-compact badge-brand" title={c.medicalNotes}>
+												<Icon name="medical" class="h-3 w-3" />
+												Medical
+											</span>
+										{/if}
+										{#if c.notes}
+											<span class="badge badge-compact badge-slate" title={c.notes}>Notes</span>
+										{/if}
+										{#if c.category === 'child' && (c.needsCarSeat || c.needsStroller || c.needsCrib || c.needsKidsMeal)}
+											<span class="badge badge-compact badge-brand" title="Kid gear">
+												{#if c.needsCarSeat}car seat{/if}{#if c.needsStroller}{#if c.needsCarSeat}, {/if}stroller{/if}{#if c.needsCrib}{#if c.needsCarSeat || c.needsStroller}, {/if}crib{/if}{#if c.needsKidsMeal}{#if c.needsCarSeat || c.needsStroller || c.needsCrib}, {/if}kids meal{/if}
+											</span>
+										{/if}
+										{#if c.seatPreference}
+											<span class="badge badge-compact badge-slate" title="Seat preference">{c.seatPreference}</span>
+										{/if}
+										{#if c.bedPreference}
+											<span class="badge badge-compact badge-slate" title="Bed preference">{c.bedPreference.replace('_', ' ')}</span>
+										{/if}</div>
+								{/if}
 							{/if}
-						</form>
-					{/if}
-				</div>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="empty-text py-2">No travelers yet.</p>
 			{/if}
+			{#if isEditor}
+				<form method="POST" action="?/addCompanion" class="mt-3 flex flex-col gap-2">
+					<input name="name" class="input text-sm" placeholder="Name" required />
+					<div class="flex gap-2">
+						<select name="category" class="input text-sm">
+							<option value="adult">Adult</option>
+							<option value="child">Child</option>
+							<option value="other">Other</option>
+						</select>
+						<button class="btn btn-primary btn-sm shrink-0">Add</button>
+					</div>
+					<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
+					<button
+						type="button"
+						class="btn btn-ghost btn-xs self-start"
+						onclick={() => (showAddCompanionNotes = !showAddCompanionNotes)}
+					>
+						Dietary / allergy / medical {showAddCompanionNotes ? '▲' : '▼'}
+					</button>
+					{#if showAddCompanionNotes}
+						<input name="dietary" class="input text-sm" placeholder="Dietary (optional)" />
+						<input name="allergies" class="input text-sm" placeholder="Allergies (optional)" />
+						<textarea name="medicalNotes" class="input text-sm" placeholder="Medical notes (optional)" rows="2"></textarea>
+						<div class="flex flex-wrap gap-3 text-xs">
+							<label class="checkbox-label"><input type="checkbox" name="needsCarSeat" value="true" class="checkbox" /> Car seat</label>
+							<label class="checkbox-label"><input type="checkbox" name="needsStroller" value="true" class="checkbox" /> Stroller</label>
+							<label class="checkbox-label"><input type="checkbox" name="needsCrib" value="true" class="checkbox" /> Crib</label>
+							<label class="checkbox-label"><input type="checkbox" name="needsKidsMeal" value="true" class="checkbox" /> Kids meal</label>
+						</div>
+						<input name="childTicketDiscount" class="input text-sm" placeholder="Child ticket discount (optional)" />
+						<select name="seatPreference" class="input text-sm">
+							<option value="">Seat preference…</option>
+							<option value="aisle">Aisle</option>
+							<option value="window">Window</option>
+							<option value="middle">Middle</option>
+							<option value="none">No preference</option>
+						</select>
+						<select name="bedPreference" class="input text-sm">
+							<option value="">Bed preference…</option>
+							<option value="king">King</option>
+							<option value="queen">Queen</option>
+							<option value="twin">Twin</option>
+							<option value="two_doubles">Two doubles</option>
+							<option value="other">Other</option>
+						</select>
+						<input name="accessibilityNeeds" class="input text-sm" placeholder="Accessibility needs (optional)" />
+						<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" />
+					{/if}
+				</form>
+			{/if}
+		</div>
+	{/if}
 
 			{#if isEditor && data.owner === true}
 				<div class="trip-sidebar-card">
@@ -1784,6 +1788,8 @@
 								</li>
 							{/each}
 						</ul>
+					{:else}
+						<p class="empty-text py-2">No documents linked yet.</p>
 					{/if}
 					{#if isEditor}
 						<form method="POST" action="?/addDocumentLink" class="mt-3 flex flex-col gap-2">

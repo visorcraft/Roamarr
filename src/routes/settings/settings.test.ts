@@ -127,7 +127,7 @@ test('load includes recent audit log entries for admins', () => {
 	expect(data.recentLogs[0].action).toBe('settings_update');
 });
 
-test('default action sets a flash cookie and redirects', async () => {
+test('save action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(db, { email: 'admin@x.c', role: 'admin' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
@@ -143,7 +143,7 @@ test('default action sets a flash cookie and redirects', async () => {
 		})
 	});
 	const locals = { user: u } as App.Locals;
-	await expect(actions.default({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(actions.save({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/settings'
 	});

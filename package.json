@@ -29,6 +29,7 @@
 		"@types/better-sqlite3": "^7.6.13",
 		"@types/luxon": "^3.7.2",
 		"@types/nodemailer": "^8.0.1",
+		"@types/unzipper": "^0.10.11",
 		"drizzle-kit": "^0.31.10",
 		"svelte": "^5.56.4",
 		"svelte-check": "^4.7.1",
@@ -42,7 +43,8 @@
 		"better-sqlite3": "^12.11.1",
 		"drizzle-orm": "^0.45.2",
 		"luxon": "^3.7.2",
-		"nodemailer": "^9.0.1"
+		"nodemailer": "^9.0.1",
+		"unzipper": "^0.12.5"
 	},
 	"overrides": {
 		"cookie": "^0.7.0",

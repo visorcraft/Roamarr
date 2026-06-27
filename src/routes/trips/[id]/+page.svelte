@@ -525,7 +525,7 @@
 											class="trip-timeline-card {isEditor && s.id && selectedSegmentIds.has(s.id) ? 'trip-timeline-card-selected' : ''} {isEditor && s.id ? 'trip-timeline-card-selectable' : ''}"
 											onclick={(e) => isEditor && s.id != null && handleSegmentCardClick(s.id, e)}
 										>
-											<div class="flex flex-col gap-3 lg:flex-row lg:items-start">
+												<div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start">
 												{#if s.startAt}
 													<div class="w-16 shrink-0 pt-0.5 text-right font-mono text-xs text-indigo-300/90">
 														{formatTime(s.startAt, s.startTz ?? 'UTC')}
@@ -605,7 +605,7 @@
 												{#if data.companions?.length && s.id}
 													{@const attendees = data.attendeesBySegment?.get(s.id) ?? []}
 													{#if attendees.length}
-														<div class="mt-2 flex flex-wrap gap-1.5">
+															<div class="mt-2 flex w-full flex-wrap gap-1.5 lg:basis-full lg:pl-20">
 															{#each attendees as a (a.id)}
 																<span class="badge badge-compact {a.status === 'going' ? 'badge-green' : a.status === 'maybe' ? 'badge-amber' : 'badge-slate'} capitalize">
 																	{a.name}
@@ -616,7 +616,7 @@
 													{/if}
 												{/if}
 																												{#if isEditor && s.id}
-																<div class="flex w-full flex-wrap items-center gap-1 lg:w-auto lg:shrink-0 lg:justify-end">
+																	<div class="flex w-full flex-wrap items-center gap-1 lg:basis-full lg:pl-20">
 																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
 													<form method="POST" action="?/duplicateSegment">
 														<input type="hidden" name="segmentId" value={s.id} />

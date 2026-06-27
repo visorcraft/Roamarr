@@ -437,3 +437,58 @@ test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 	const remaining = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 	expect(remaining.map((r) => r.id)).toEqual([s3.id]);
 });
+
+test('addSegment stores country, city, coordinates, and venue', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'loc@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+
+	const seg = addSegment(u.id, t.id, {
+		type: 'hotel',
+		title: 'Grand Hotel',
+		localStart: '2026-08-01T15:00:00',
+		startTz: 'Europe/Paris',
+		countryCode: 'FR',
+		cityName: 'Paris',
+		cityLat: 48.8534,
+		cityLng: 2.3488,
+		venue: '1 Rue Example'
+	});
+
+	expect(seg.countryCode).toBe('FR');
+	expect(seg.cityName).toBe('Paris');
+	expect(seg.cityLat).toBe(48.8534);
+	expect(seg.cityLng).toBe(2.3488);
+	expect(seg.venue).toBe('1 Rue Example');
+});
+
+test('updateSegment updates city fields and clears venue when omitted', () => {
+	const db = (ctx as { db: import('./db').DB }).db;
+	const u = db.insert(users).values({ email: 'loc-up@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const seg = addSegment(u.id, t.id, {
+		type: 'food',
+		title: 'Lunch',
+		localStart: '2026-08-01T12:00:00',
+		startTz: 'UTC',
+		countryCode: 'FR',
+		cityName: 'Paris',
+		cityLat: 48.85,
+		cityLng: 2.35,
+		venue: 'Bistro'
+	});
+
+	const updated = updateSegment(u.id, t.id, seg.id, {
+		title: 'Lunch',
+		localStart: '2026-08-01T12:00:00',
+		startTz: 'UTC',
+		countryCode: 'JP',
+		cityName: 'Tokyo',
+		cityLat: 35.68,
+		cityLng: 139.76
+	});
+
+	expect(updated.countryCode).toBe('JP');
+	expect(updated.cityName).toBe('Tokyo');
+	expect(updated.venue).toBeNull();
+});

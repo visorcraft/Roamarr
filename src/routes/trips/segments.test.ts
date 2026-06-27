@@ -11,13 +11,13 @@ vi.mock('$lib/server/db', async () => {
 import { actions } from './[id]/segments/+page.server';
 import { addSegment, updateSegment } from '$lib/server/segments';
 import { newSegmentPage } from '$lib/server/segmentNewPage';
-import { users, trips, cards, segments, reminders, tripShares } from '$lib/server/db/schema';
+import { users, trips, cards, segments, reminders, tripShares, geonamesCities } from '$lib/server/db/schema';
 import { actions as tripActions } from './[id]/+page.server';
 import { makeLocals, makeFormData } from '../../../tests/eventHelpers';
 
 beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users; delete from cards;'
+		'delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users; delete from cards; delete from geonames_cities;'
 	);
 });
 
@@ -290,6 +290,45 @@ test('update action validates segmentId and required fields', async () => {
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.errors.title).toBe('title is required');
+});
+
+test('update action stores country, city, and venue', async () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const a = db.insert(users).values({ email: 'city@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	db.insert(geonamesCities)
+		.values({ geonameId: 1, name: 'Paris', asciiName: 'Paris', countryCode: 'FR', lat: 48.85, lng: 2.35 })
+		.run();
+
+	const seg = addSegment(a.id, t.id, {
+		type: 'hotel',
+		title: 'H',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+
+	const form = makeFormData({
+		segmentId: String(seg.id),
+		title: 'H',
+		localStart: '2026-07-01T15:00',
+		startTz: 'UTC',
+		countryCode: 'FR',
+		cityName: 'Paris',
+		cityLat: '48.85',
+		cityLng: '2.35',
+		venue: 'Grand Hotel'
+	});
+
+	await expect(actions.update(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const row = db.select().from(segments).where(eq(segments.id, seg.id)).get()!;
+	expect(row.countryCode).toBe('FR');
+	expect(row.cityName).toBe('Paris');
+	expect(row.cityLat).toBe(48.85);
+	expect(row.venue).toBe('Grand Hotel');
 });
 
 test('shared editor can add, update and delete segments; read-only viewer cannot', async () => {

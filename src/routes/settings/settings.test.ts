@@ -8,6 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
+import { getMapSettings, updateSettings } from '$lib/server/settings';
 import { settings, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { makeUser } from '../../../tests/helpers';
@@ -148,4 +149,12 @@ test('save action sets a flash cookie and redirects', async () => {
 		location: '/settings'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Settings saved.', expect.any(Object));
+});
+
+test('getMapSettings reflects imported city count', () => {
+	updateSettings({ mapsEnabled: true, mapsTileProvider: 'carto' });
+	const m = getMapSettings();
+	expect(m.mapsEnabled).toBe(true);
+	expect(m.mapsTileProvider).toBe('carto');
+	expect(m.cityCount).toBe(0);
 });

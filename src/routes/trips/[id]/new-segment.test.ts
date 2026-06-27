@@ -17,10 +17,12 @@ test('new flight segment page highlights invalid fields', () => {
 	const { body } = render(NewFlightSegmentPage, {
 		props: makeData({
 			title: 'title is required',
-			localStart: 'localStart must be a valid datetime'
+			cityName: 'cityName is required'
 		})
 	});
 	expect(body).toContain('input-error');
 	expect(body).toContain('title is required');
-	expect(body).toContain('localStart must be a valid datetime');
+	expect(body).toContain('cityName is required');
+	expect(body).toContain('Country');
+	expect(body).toContain('City');
 });

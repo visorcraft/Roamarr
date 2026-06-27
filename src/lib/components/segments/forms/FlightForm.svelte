@@ -3,6 +3,8 @@
 	import CollapseSection from '../CollapseSection.svelte';
 	import BookedCheckbox from '../BookedCheckbox.svelte';
 	import BookingInfoSection from '../BookingInfoSection.svelte';
+	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import { COUNTRIES } from '$lib/countries';
 
 	let { errors = {} }: { errors?: Record<string, string> } = $props();
 
@@ -11,6 +13,8 @@
 	let aircraftOpen = $state(false);
 	let passengersOpen = $state(false);
 	let bookingOpen = $state(true);
+	let countryCode = $state('');
+	let cityName = $state('');
 
 	function expandAll() {
 		manualOpen = true;
@@ -105,6 +109,25 @@
 		</div>
 
 		{#if index === 0}
+			<div class="field">
+				<label class="label" for="countryCode">Country</label>
+				<select id="countryCode" name="countryCode" bind:value={countryCode} class="input {errors.countryCode ? 'input-error' : ''}">
+					<option value="" selected={!countryCode}>Select country</option>
+					{#each COUNTRIES as c}
+						<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
+					{/each}
+				</select>
+				{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
+			</div>
+
+			<CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
+
+			<div class="field sm:col-span-2">
+				<label class="label" for="venue">Venue</label>
+				<input id="venue" name="venue" placeholder="Airport or terminal" class="input {errors.venue ? 'input-error' : ''}" />
+				{#if errors.venue}<p class="field-error">{errors.venue}</p>{/if}
+			</div>
+
 			<CollapseSection title="Manually edit flight" bind:open={manualOpen}>
 				<div class="field">
 					<label class="label" for="detail_departAirport">Departure airport</label>

@@ -33,6 +33,12 @@ test('parseCities1000Line returns null for malformed lines', () => {
 	expect(parseCities1000Line('1\tOnlyName')).toBeNull();
 });
 
+test('parseCities1000Line rejects invalid numbers', () => {
+	expect(parseCities1000Line('1\tX\tX\t\tx\t2.0\tP\tPPLC\tFR\t\t\t11\t\t\t100\t\t\tEurope/Paris')).toBeNull();
+	expect(parseCities1000Line('1\tX\tX\t\t1.0\ty\tP\tPPLC\tFR\t\t\t11\t\t\t100\t\t\tEurope/Paris')).toBeNull();
+	expect(parseCities1000Line('1\tX\tX\t\t1.0\t2.0\tP\tPPLC\tFR\t\t\t11\t\t\tbadpop\t\t\tEurope/Paris')).toBeNull();
+});
+
 test('bulkInsertCities replaces existing data and inserts rows', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	db.insert(geonamesCities)

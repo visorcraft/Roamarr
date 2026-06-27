@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { finished, pipeline } from 'node:stream/promises';
+import { pipeline } from 'node:stream/promises';
 import { createInterface } from 'node:readline';
 import unzipper from 'unzipper';
 import { eq } from 'drizzle-orm';
@@ -35,7 +35,8 @@ export function parseCities1000Line(line: string): GeonamesCityRow | null {
 	const countryCode = parts[8];
 	const lat = Number(parts[4]);
 	const lng = Number(parts[5]);
-	const population = parts[14] ? Number(parts[14]) : null;
+	const populationRaw = parts[14];
+	const population = populationRaw ? Number(populationRaw) : null;
 	const timezone = parts[17] || null;
 	if (
 		!Number.isFinite(geonameId) ||
@@ -43,7 +44,8 @@ export function parseCities1000Line(line: string): GeonamesCityRow | null {
 		!asciiName ||
 		!countryCode ||
 		!Number.isFinite(lat) ||
-		!Number.isFinite(lng)
+		!Number.isFinite(lng) ||
+		(population !== null && !Number.isFinite(population))
 	) {
 		return null;
 	}
@@ -52,52 +54,35 @@ export function parseCities1000Line(line: string): GeonamesCityRow | null {
 
 const INSERT_BATCH_SIZE = 2000;
 
-function insertBatch(batch: GeonamesCityRow[]) {
-	if (batch.length === 0) return;
-	db.insert(geonamesCities).values(batch).run();
-}
-
 export function bulkInsertCities(cities: GeonamesCityRow[]): number {
 	if (cities.length === 0) return 0;
 	db.delete(geonamesCities).run();
 	sqlite.transaction(() => {
 		for (let i = 0; i < cities.length; i += INSERT_BATCH_SIZE) {
 			const batch = cities.slice(i, i + INSERT_BATCH_SIZE);
-			insertBatch(batch);
+			if (batch.length > 0) db.insert(geonamesCities).values(batch).run();
 		}
 	})();
 	return cities.length;
 }
 
 async function importCitiesFromTextFile(txtPath: string): Promise<{ imported: number }> {
-	db.delete(geonamesCities).run();
-
-	let imported = 0;
-	const batch: GeonamesCityRow[] = [];
-	const insertBatchTx = sqlite.transaction((rows: GeonamesCityRow[]) => insertBatch(rows));
-
+	const cities: GeonamesCityRow[] = [];
 	const rl = createInterface({
 		input: createReadStream(txtPath),
 		crlfDelay: Infinity
 	});
 
-	for await (const line of rl) {
-		const city = parseCities1000Line(line);
-		if (!city) continue;
-		batch.push(city);
-		if (batch.length >= INSERT_BATCH_SIZE) {
-			insertBatchTx(batch);
-			imported += batch.length;
-			batch.length = 0;
+	try {
+		for await (const line of rl) {
+			const city = parseCities1000Line(line);
+			if (city) cities.push(city);
 		}
+	} finally {
+		rl.close();
 	}
 
-	if (batch.length > 0) {
-		insertBatchTx(batch);
-		imported += batch.length;
-	}
-
-	return { imported };
+	return { imported: bulkInsertCities(cities) };
 }
 
 async function importCitiesFromZipFile(zipPath: string): Promise<{ imported: number }> {
@@ -132,14 +117,25 @@ export async function importCitiesFromPath(zipPath: string): Promise<{ imported:
 	return importCitiesFromZipFile(zipPath);
 }
 
+const IMPORT_TIMEOUT_MS = 5 * 60 * 1000;
+
 export async function importCitiesFromUrl(url = GEONAMES_DOWNLOAD_URL): Promise<{ imported: number }> {
-	const res = await fetch(url, { redirect: 'follow' });
-	if (!res.ok) throw new Error(`GeoNames download failed: ${res.status} ${res.statusText}`);
-	if (!res.body) throw new Error('GeoNames download returned no body');
-	const result = await importCitiesFromReadable(Readable.fromWeb(res.body as any));
-	db.update(settings)
-		.set({ mapsEnabled: true, mapsGeonamesImportedAt: nowIso() })
-		.where(eq(settings.id, 1))
-		.run();
-	return result;
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), IMPORT_TIMEOUT_MS);
+	try {
+		const res = await fetch(url, { redirect: 'follow', signal: controller.signal });
+		if (!res.ok) throw new Error(`GeoNames download failed: ${res.status} ${res.statusText}`);
+		if (!res.body) throw new Error('GeoNames download returned no body');
+		const result = await importCitiesFromReadable(
+			// Node/DOM ReadableStream types differ; cast is required.
+			Readable.fromWeb(res.body as unknown as import('node:stream/web').ReadableStream)
+		);
+		db.update(settings)
+			.set({ mapsEnabled: true, mapsGeonamesImportedAt: nowIso() })
+			.where(eq(settings.id, 1))
+			.run();
+		return result;
+	} finally {
+		clearTimeout(timeout);
+	}
 }

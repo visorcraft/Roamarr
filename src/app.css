@@ -75,6 +75,12 @@
 		--theme-brand-readable: #a8d2ff;
 		--theme-brand-2: #96caff;
 		--theme-accent-text: #0a1628;
+		--theme-primary-top-override: #a8d2ff;
+		--theme-primary-bottom-override: #80bcff;
+		--theme-primary-hover-top-override: #bfdfff;
+		--theme-primary-hover-bottom-override: #8fc8ff;
+		--theme-primary-shadow-override: color-mix(in oklab, #80bcff 16%, transparent);
+		--theme-primary-border-override: color-mix(in oklab, #a8d2ff 28%, transparent);
 		--theme-wash: rgba(255, 255, 255, 0.03);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='light'] {
@@ -164,11 +170,11 @@
 		--theme-brand-readable: #8db7ff;
 		--theme-brand-2: #7aa7ff;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #2b73d9;
-		--theme-primary-bottom-override: #1856b8;
-		--theme-primary-hover-top-override: #367fe6;
-		--theme-primary-hover-bottom-override: #2067d0;
-		--theme-primary-shadow-override: color-mix(in oklab, #1b5fc8 20%, transparent);
+		--theme-primary-top-override: #0f4c9a;
+		--theme-primary-bottom-override: #0b3f86;
+		--theme-primary-hover-top-override: #165cad;
+		--theme-primary-hover-bottom-override: #0f4c9a;
+		--theme-primary-shadow-override: color-mix(in oklab, #0b3f86 22%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ffffff 12%, transparent);
 		--theme-wash: rgba(255, 255, 255, 0.025);
 	}
@@ -910,14 +916,16 @@ button.card:hover,
 	}
 	.btn-primary {
 		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
-		background: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
+		background-color: var(--theme-primary-bottom);
+		background-image: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
 		box-shadow:
 			0 12px 24px var(--theme-primary-shadow),
 			inset 0 0 0 1px var(--theme-primary-border);
 		color: var(--theme-primary-text);
 	}
 	.btn-primary:hover {
-		background: linear-gradient(180deg, var(--theme-primary-hover-top), var(--theme-primary-hover-bottom));
+		background-color: var(--theme-primary-hover-bottom);
+		background-image: linear-gradient(180deg, var(--theme-primary-hover-top), var(--theme-primary-hover-bottom));
 	}
 	.btn-secondary {
 		@apply bg-slate-200/10 text-slate-100 ring-1 ring-white/15 ring-inset hover:bg-slate-200/15 hover:text-white active:translate-y-px;
@@ -1228,7 +1236,7 @@ button.card:hover,
 		@apply bg-indigo-500/15 text-indigo-300 ring-indigo-400/30;
 		background: var(--theme-active);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 30%, transparent);
-		color: var(--theme-brand-readable);
+		color: var(--theme-strong);
 	}
 	.badge-green {
 		@apply bg-emerald-500/15 text-emerald-300 ring-emerald-400/30;
@@ -1243,13 +1251,13 @@ button.card:hover,
 		@apply bg-slate-500/15 text-slate-300 ring-slate-400/30;
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
-		color: var(--theme-readable-muted);
+		color: var(--theme-ink);
 	}
 	.tag {
 		@apply inline-flex items-center gap-1.5 rounded-full bg-white/[0.04] px-2.5 py-1 text-xs text-slate-300 ring-1 ring-white/10 ring-inset;
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
-		color: var(--theme-readable-muted);
+		color: var(--theme-ink);
 	}
 
 	:where(
@@ -1401,10 +1409,10 @@ button.card:hover,
 
 	/* Trip detail — Seerr-inspired hero + TripIt timeline */
 	.trip-detail {
-		@apply -mx-4 -mt-6 sm:-mx-6 lg:-mx-10 lg:-mt-10;
+		@apply -mt-6 lg:-mt-8;
 	}
 	.trip-detail-body {
-		@apply px-4 pb-6 sm:px-6 lg:px-10 lg:pb-10;
+		@apply pb-6 lg:pb-10;
 	}
 	.trip-tab-layout {
 		@apply grid gap-8;
@@ -1439,7 +1447,8 @@ button.card:hover,
 	}
 	.trip-hero {
 		@apply relative overflow-visible border-b border-white/10;
-		background:
+		background-color: var(--theme-panel);
+		background-image:
 			linear-gradient(
 				135deg,
 				color-mix(in oklab, var(--theme-panel-raised) 84%, var(--theme-brand) 16%),
@@ -1478,19 +1487,20 @@ button.card:hover,
 	}
 	.trip-poster {
 		@apply relative aspect-[2/3] w-28 shrink-0 overflow-hidden rounded-lg bg-surface2 shadow-2xl shadow-black/50 ring-1 ring-white/15 sm:w-36;
-		background:
+		background-color: var(--theme-panel-raised);
+		background-image:
 			linear-gradient(
 				145deg,
-				color-mix(in oklab, var(--theme-brand) 70%, var(--theme-panel) 30%),
-				color-mix(in oklab, var(--theme-brand-2) 52%, var(--theme-panel-raised) 48%)
+				color-mix(in oklab, var(--theme-panel-raised) 82%, var(--theme-brand) 18%),
+				color-mix(in oklab, var(--theme-panel-raised) 86%, var(--theme-brand-2) 14%)
 			);
 		box-shadow:
 			0 24px 44px color-mix(in oklab, var(--theme-shadow) 24%, transparent),
 			inset 0 0 0 1px color-mix(in oklab, var(--theme-strong) 18%, var(--theme-line));
-		color: var(--theme-accent-text);
+		color: var(--trip-readable-strong);
 	}
 	.trip-poster-icon {
-		color: color-mix(in oklab, currentColor 72%, transparent);
+		color: currentColor;
 	}
 	.trip-poster-initials {
 		color: currentColor;
@@ -1500,22 +1510,27 @@ button.card:hover,
 	}
 	.trip-meta-pill {
 		@apply inline-flex items-center gap-2 rounded-md bg-white/5 px-3 py-1.5 text-[0.938rem] font-medium leading-snug text-slate-300 ring-1 ring-white/10 ring-inset;
-		background: var(--theme-subtle);
+		background: color-mix(in oklab, var(--theme-panel-solid) 88%, transparent);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
+		color: var(--theme-ink);
 	}
 	.trip-meta-pill-arrow {
 		@apply h-[0.9375rem] w-[0.9375rem] shrink-0 -translate-y-px text-slate-500;
+		color: var(--theme-ink);
 	}
 	.trip-sidebar-card {
 		@apply rounded-lg bg-surface/60 p-4 ring-1 ring-white/10;
 		background: var(--theme-panel);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
+		color: var(--theme-ink);
 	}
 	.trip-sidebar-dl dt {
 		@apply text-xs font-medium tracking-wide text-slate-500 uppercase;
+		color: var(--theme-ink);
 	}
 	.trip-sidebar-dl dd {
 		@apply mt-0.5 text-sm text-slate-200;
+		color: var(--theme-strong);
 	}
 	.trip-sidebar-dl > div + div {
 		@apply mt-3 border-t border-white/5 pt-3;
@@ -1525,6 +1540,7 @@ button.card:hover,
 		@apply sticky top-0 z-10 -mx-1 mb-3 flex items-center justify-between gap-3 rounded-lg bg-surface2/90 px-[0.938rem] py-2.5 ring-1 ring-white/10 backdrop-blur-sm;
 		background: color-mix(in oklab, var(--theme-panel-raised) 90%, transparent);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
+		color: var(--theme-ink);
 	}
 	.trip-timeline-groups {
 		@apply relative;
@@ -1552,6 +1568,7 @@ button.card:hover,
 		@apply rounded-lg bg-white/[0.03] p-3 ring-1 ring-white/5 transition hover:bg-white/[0.05] hover:ring-white/10;
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-line) 72%, transparent);
+		color: var(--theme-ink);
 	}
 	.trip-timeline-card:hover {
 		background: var(--theme-subtle-hover);
@@ -1595,5 +1612,128 @@ button.card:hover,
 	}
 	.segment-form-section-body {
 		@apply mt-4;
+	}
+}
+
+@layer utilities {
+	.theme-root main:has(> div > .trip-detail) {
+		padding-inline: 0;
+	}
+
+	.theme-root main:has(> div > .trip-detail) > div {
+		max-width: none;
+	}
+
+	.trip-detail {
+		--trip-readable: light-dark(#111111, #ffffff);
+		--trip-readable-strong: light-dark(#111111, #ffffff);
+		--trip-readable-danger: light-dark(#111111, #ffffff);
+		--trip-readable-warning: light-dark(#111111, #ffffff);
+		--trip-readable-success: light-dark(#111111, #ffffff);
+	}
+
+	.trip-detail :where(.text-white, .text-slate-100, .text-slate-200, .text-slate-300) {
+		color: var(--trip-readable-strong);
+	}
+
+	.trip-detail
+		:where(
+			.text-muted,
+			.text-slate-400,
+			.text-slate-500,
+			.text-slate-600,
+			.text-indigo-300,
+			.text-indigo-300\/80,
+			.text-indigo-300\/90
+		) {
+		color: var(--trip-readable);
+	}
+
+	.trip-detail :where(.text-emerald-300) {
+		color: var(--trip-readable-success);
+	}
+
+	.trip-detail :where(.text-amber-300) {
+		color: var(--trip-readable-warning);
+	}
+
+	.trip-detail :where(.text-red-300, .text-rose-300) {
+		color: var(--trip-readable-danger);
+	}
+
+	.trip-detail :where(.trip-meta-pill, .trip-meta-pill svg, .trip-meta-pill-arrow) {
+		color: var(--trip-readable);
+	}
+
+	.trip-detail :where(.trip-tab-link, .trip-tab-count, .back-link, .nav-link) {
+		color: var(--trip-readable);
+	}
+
+	.trip-detail :where(.trip-tab-link-active) {
+		color: var(--trip-readable-strong);
+	}
+
+	.trip-detail :where(.btn-primary) {
+		background-color: var(--theme-primary-bottom);
+		background-image: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
+		color: var(--theme-primary-text);
+	}
+
+	.trip-detail :where(.btn-primary *) {
+		color: var(--theme-primary-text);
+	}
+
+	.trip-detail
+		:where(
+			.app-user-menu-item,
+			.check-label,
+			.check-label-done,
+			.checkbox-label,
+			.code-chip,
+			.empty-text,
+			.field-help,
+			.label,
+			.meta,
+			.meta-strong,
+			.trip-sidebar-dl dt,
+			.trip-sidebar-dl dd,
+			.btn-ghost,
+			.btn-ghost-muted,
+			.btn-ghost-indigo,
+			.btn-ghost-danger,
+			.btn-ghost-amber,
+			.btn-ghost-success,
+			.icon-button
+		) {
+		color: var(--trip-readable);
+	}
+
+	.trip-detail
+		:where(
+			.btn-ghost:hover,
+			.btn-ghost-muted:hover,
+			.btn-ghost-indigo:hover,
+			.btn-ghost-danger:hover,
+			.btn-ghost-amber:hover,
+			.btn-ghost-success:hover,
+			.icon-button:hover
+		) {
+		color: var(--trip-readable-strong);
+	}
+
+	.trip-detail :where(.badge-brand, .badge-slate, .tag) {
+		color: var(--trip-readable-strong);
+	}
+
+	.trip-detail :where(.badge-green) {
+		color: var(--trip-readable-success);
+	}
+
+	.trip-detail :where(.badge-amber) {
+		color: var(--trip-readable-warning);
+	}
+
+	.trip-detail :where(.badge-red) {
+		color: var(--trip-readable-danger);
 	}
 }

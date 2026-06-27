@@ -28,11 +28,32 @@
 
 ## Screenshots
 
-<p align="center">
-  <img src="docs/screenshots/dashboard.png" alt="Roamarr dashboard with upcoming trips, reminders, and travel planning metrics" width="800" />
-  <br />
-  <em>Dashboard overview for a demo Roamarr instance with trips, reminders, documents, and operational settings.</em>
-</p>
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/dashboard.png" alt="Roamarr dashboard with upcoming trips, reminders, and travel planning metrics" />
+      <br />
+      <sub><b>Dashboard</b> — trips, reminders, documents, and recent activity.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/trip-itinerary.png" alt="Roamarr trip itinerary tab with hero details, timeline cards, and trip stats" />
+      <br />
+      <sub><b>Trip itinerary</b> — hero details, tabs, timeline cards, and stats.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/trip-prep.png" alt="Roamarr trip prep tab with packing checklist and trip preparation controls" />
+      <br />
+      <sub><b>Trip prep</b> — packing checklist and before-you-go controls.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/trip-documents.png" alt="Roamarr trip documents tab with linked trip files and insurance sections" />
+      <br />
+      <sub><b>Trip documents</b> — linked files, notes, and insurance context.</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 

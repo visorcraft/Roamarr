@@ -537,7 +537,7 @@
 		</nav>
 	</div>
 
-	<div class="trip-detail-body mt-6 trip-tab-layout {activeTabHasSidebar ? 'trip-tab-layout-with-sidebar' : ''}">
+	<div class="trip-detail-body px-4 trip-tab-layout {activeTabHasSidebar ? 'trip-tab-layout-with-sidebar' : ''}">
 		<!-- Main column -->
 		<div class="min-w-0 space-y-8 {activeTabHasSidebar ? '' : 'trip-tab-main-wide'} {activeTabMainHidden ? 'hidden' : ''}">
 			{#if activeTab === 'itinerary' && ownerTrip?.notes}

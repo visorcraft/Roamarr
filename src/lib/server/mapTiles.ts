@@ -1,4 +1,5 @@
 import { getSettings } from './settings';
+import { decrypt } from './crypto';
 
 export const MAP_TILE_PROVIDERS = [
 	'openstreetmap',
@@ -67,11 +68,12 @@ export function resolveTileConfig(): ResolvedTileConfig | null {
 	const rawUrl = s.mapsTileUrl || defaultTileUrl(provider);
 	const attribution = s.mapsTileAttribution || defaultTileAttribution(provider);
 	if (!rawUrl) return null;
-	const url = s.mapsTileApiKey ? rawUrl.replace('{key}', s.mapsTileApiKey) : rawUrl;
+	const apiKey = s.mapsTileApiKey ? decrypt(s.mapsTileApiKey) : null;
+	const url = apiKey ? rawUrl.replace('{key}', apiKey) : rawUrl;
 	return {
 		provider,
 		tileUrls: expandTileUrl(url),
 		attribution: `${attribution} | City data © <a href="https://www.geonames.org/">GeoNames.org</a>, CC-BY 4.0`,
-		apiKey: s.mapsTileApiKey
+		apiKey
 	};
 }

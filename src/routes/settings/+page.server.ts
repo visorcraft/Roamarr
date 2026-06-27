@@ -32,7 +32,7 @@ export function _saveAdminSettings(
 		mapsTileProvider?: MapTileProvider;
 		mapsTileUrl?: string | null;
 		mapsTileAttribution?: string | null;
-		mapsTileApiKey?: string | null;
+		mapsTileApiKey?: string;
 	}
 ) {
 	if (!nonNegativeInteger(i.defaultFlightCheckinLeadHours))
@@ -59,6 +59,7 @@ export function _saveAdminSettings(
 		mapsTileApiKey: i.mapsTileApiKey ?? null
 	};
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
+	if (i.mapsTileApiKey !== undefined) patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
 	updateSettings(patch);
 	logAudit(userId, 'settings_update', 'settings', 1, {
 		changed: Object.keys(patch).filter((k) => k !== 'smtpPass'),
@@ -105,6 +106,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid tile provider' });
 		}
 		const pass = String(f.get('smtpPass') || '');
+		const tileApiKey = String(f.get('mapsTileApiKey') || '');
 		_saveAdminSettings(u.id, {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
 			allowRegistration: f.get('allowRegistration') === 'on',
@@ -121,7 +123,7 @@ export const actions: Actions = {
 			mapsTileProvider: mapsTileProvider as MapTileProvider,
 			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
 			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
-			mapsTileApiKey: String(f.get('mapsTileApiKey') || '') || null
+			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined
 		});
 		setFlash(cookies, 'Settings saved.');
 		throw redirect(303, '/settings');

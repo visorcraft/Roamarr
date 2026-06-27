@@ -23,7 +23,7 @@ export function getMapSettings() {
 		mapsTileProvider: s.mapsTileProvider,
 		mapsTileUrl: s.mapsTileUrl,
 		mapsTileAttribution: s.mapsTileAttribution,
-		mapsTileApiKey: s.mapsTileApiKey,
+		mapsTileApiKey: s.mapsTileApiKey ? '********' : '',
 		cityCount
 	};
 }

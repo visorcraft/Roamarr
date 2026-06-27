@@ -11,6 +11,7 @@ import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.
 import { getMapSettings, updateSettings } from '$lib/server/settings';
 import { settings, auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
+import { resolveTileConfig } from '$lib/server/mapTiles';
 import { makeUser } from '../../../tests/helpers';
 import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
@@ -157,4 +158,26 @@ test('getMapSettings reflects imported city count', () => {
 	expect(m.mapsEnabled).toBe(true);
 	expect(m.mapsTileProvider).toBe('carto');
 	expect(m.cityCount).toBe(0);
+});
+
+test('map tile API key is encrypted at rest and decrypts for tile config', () => {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const u = makeUser(db, { email: 'tilekey@x.c' });
+	saveAdminSettings(u.id, {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90,
+		mapsTileApiKey: 'secret-tile-key'
+	});
+
+	const raw = db.select().from(settings).where(eq(settings.id, 1)).get()!.mapsTileApiKey;
+	expect(raw).not.toBe('secret-tile-key');
+	expect(decrypt(raw!)).toBe('secret-tile-key');
+
+	const config = resolveTileConfig();
+	expect(config?.apiKey).toBe('secret-tile-key');
+	expect(getMapSettings().mapsTileApiKey).toBe('********');
 });

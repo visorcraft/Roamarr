@@ -67,7 +67,8 @@ marketing dashboard.
 Roamarr can:
 
 - Track trips, itinerary segments, dates, timezones, booking status, notes,
-  tags, favorites, archives, comments, and printable itineraries.
+  tags, favorites, archives, comments, printable itineraries, and trip-page maps
+  of the next upcoming city.
 - Manage flights, hotels, trains, rental cars, rideshares, shuttles, boats,
   food plans, events, parking, directions, points of interest, todos, and free
   form notes.
@@ -86,7 +87,8 @@ Roamarr can:
 - Send reminders and operational notifications in app, by SMTP, or through
   signed webhooks.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
-  jobs, backups, restores, demo data, instance stats, and health checks.
+  jobs, backups, restores, demo data, instance stats, health checks, and map
+  configuration (GeoNames city import and raster tile providers).
 - Surface license text, runtime credits, package attribution, and app version
   details from the Settings -> About area.
 
@@ -260,7 +262,7 @@ Use Profile for:
 
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
 `@sveltejs/adapter-node`, Tailwind CSS v4, Drizzle ORM, SQLite, Luxon,
-Nodemailer, and Vitest.
+Nodemailer, MapLibre GL JS, and Vitest.
 
 Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies
 migrations, ensures default settings and benefit templates exist, then starts a
@@ -275,7 +277,9 @@ share and calendar-feed routes expose only a reduced viewer projection.
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and
 formatting helpers live under `src/lib/`. Database schema and migrations live
-under `src/lib/server/db/` and `drizzle/`.
+under `src/lib/server/db/` and `drizzle/`. Map rendering uses MapLibre GL JS
+with configurable raster tile providers; city data is imported from GeoNames
+`cities1000.zip`.
 
 ## Contribute
 

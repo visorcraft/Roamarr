@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import maplibregl from 'maplibre-gl';
-	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { onDestroy, onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import type { Map as MapType } from 'maplibre-gl';
 
 	let {
 		lat,
@@ -18,11 +18,15 @@
 	} = $props();
 
 	let container = $state<HTMLDivElement | null>(null);
-	let map = $state<maplibregl.Map | null>(null);
+	let map = $state<MapType | null>(null);
 
-	$effect(() => {
-		if (!container || map) return;
-		map = new maplibregl.Map({
+	onMount(async () => {
+		if (!browser || !container) return;
+
+		const maplibregl = (await import('maplibre-gl')).default as typeof import('maplibre-gl');
+		await import('maplibre-gl/dist/maplibre-gl.css');
+
+		const instance = new maplibregl.Map({
 			container,
 			style: {
 				version: 8,
@@ -39,11 +43,18 @@
 			center: [lng, lat],
 			zoom: 12
 		});
-		new maplibregl.Marker().setLngLat([lng, lat]).addTo(map);
-		return () => {
-			map?.remove();
-			map = null;
-		};
+		new maplibregl.Marker().setLngLat([lng, lat]).addTo(instance);
+		map = instance;
+	});
+
+	onDestroy(() => {
+		map?.remove();
+		map = null;
+	});
+
+	$effect(() => {
+		if (!map) return;
+		map.setCenter([lng, lat]);
 	});
 </script>
 

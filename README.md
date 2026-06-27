@@ -10,7 +10,7 @@
 <p align="center">
   <b>A private, self-hosted travel organizer for every moving part of a trip.</b>
   <br />
-  Keep flights, stays, documents, companions, reminders, expenses, and sharing in one SQLite-backed itinerary hub.
+  Keep flights, stays, documents, companions, reminders, expenses, and sharing in one itinerary hub.
   <br />
   SvelteKit app shell · single-container deploy · encrypted sensitive fields · no hosted travel account required.
 </p>

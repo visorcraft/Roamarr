@@ -1533,8 +1533,28 @@ button.card:hover,
 	.trip-hero--map .trip-hero-title {
 		color: #fff;
 	}
+	/* Back-link as a solid chip so it reads over any part of the map, in any theme. */
 	.trip-hero--map .back-link {
-		color: rgba(255, 255, 255, 0.9);
+		align-self: flex-start;
+		color: #fff;
+		background: rgba(3, 7, 18, 0.6);
+		padding: 0.3rem 0.7rem;
+		border-radius: 9999px;
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+		backdrop-filter: blur(2px);
+		text-shadow: none;
+	}
+	.trip-hero--map .back-link:hover {
+		color: #fff;
+		background: rgba(3, 7, 18, 0.74);
+	}
+	/* Badges sit on imagery; give them a solid dark chip so they read in any theme.
+	   !important because the .trip-detail badge rules out-cascade scoped selectors. */
+	.trip-hero--map .badge {
+		background: rgba(3, 7, 18, 0.6) !important;
+		color: #fff !important;
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25) !important;
+		backdrop-filter: blur(2px);
 	}
 	.trip-hero--map .trip-meta-pill {
 		background: rgba(3, 7, 18, 0.62);

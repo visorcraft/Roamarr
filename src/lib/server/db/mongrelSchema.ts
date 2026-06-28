@@ -646,7 +646,11 @@ export const tripExpenses = table('trip_expenses', {
 		text('description'),
 		int('amount'),
 		text('currency', { default: staticDefault('USD') }),
-		text('category', { enumValues: [...EXPENSE_CATEGORIES], default: staticDefault('other') }),
+		text('category', {
+				enumValues: [...EXPENSE_CATEGORIES],
+				default: staticDefault('other'),
+				nullable: true
+			}),
 		int('exchange_rate', { default: staticDefault(10000n) }),
 		int('base_amount', { default: staticDefault(0n) }),
 		int('paid_by_companion_id', { nullable: true }),

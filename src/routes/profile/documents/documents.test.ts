@@ -43,13 +43,7 @@ function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
 
 function makeCompanion(tripId: number, name: string) {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const c = db.insert(tripCompanions).values({ tripId, name }).returning().get();
-	ctx.kit.insertInto(kitTripCompanions).values({
-		id: BigInt(c.id),
-		trip_id: BigInt(tripId),
-		name
-	} as any).executeSync();
-	return c;
+	return db.insert(tripCompanions).values({ id: 100 + Math.floor(Math.random() * 1000000), tripId, name }).returning().get();
 }
 
 beforeEach(() => {

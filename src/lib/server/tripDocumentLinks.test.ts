@@ -112,7 +112,7 @@ test('editDocumentLink updates a link and audits', () => {
 	expect(updated.notes).toBe('Updated note');
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
-	expect(logs.some((l) => l.action === 'document_link_update')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_update')).toBe(true);
 });
 
 test('editDocumentLink is scoped to the trip', () => {
@@ -151,7 +151,7 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, link.id)).get()).toBeUndefined();
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
-	expect(logs.some((l) => l.action === 'document_link_delete')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_delete')).toBe(true);
 });
 
 test('addDocumentLink action creates a link and redirects', async () => {

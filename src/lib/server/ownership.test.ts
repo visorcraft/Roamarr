@@ -12,26 +12,22 @@ vi.mock('./db', async () => {
 });
 
 import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, requireOwnedTripRow } from './ownership';
-import { users, trips, tripHomeTasks } from './db/schema';
-import { eq } from 'drizzle-orm';
-import {
-	cards as kitCards,
-	trips as kitTrips,
-	users as kitUsers
-} from './db/mongrelSchema';
+import { users, trips, tripHomeTasks, cards as kitCards, trips as kitTrips, users as kitUsers } from './db/mongrelSchema';
+import { eq as kitEq } from '@mongreldb/kit';
+
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { createTrip } from './repositories/tripsRepo';
 import { createCard } from './repositories/profileRepo';
 
-function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
-	const db = (ctx as { db: import('./db').DB }).db;
+function makeTestUser(over: Partial<Record<string, unknown>> = {}) {
 	const kitUser = makeKitUser({
-		email: over.email,
-		password_hash: over.passwordHash,
-		display_name: over.displayName,
+		email: over.email as string | undefined,
+		password_hash: over.passwordHash as string | undefined,
+		display_name: over.displayName as string | undefined,
 		role: (over.role as 'admin' | 'user') ?? 'user'
 	});
-	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	const row = ctx.kit.selectFrom(users).where(kitEq(users.id, kitUser.id)).executeSync()[0];
+	return { ...(row as unknown as Record<string, unknown>), id: Number(row.id) };
 }
 
 beforeEach(() => {
@@ -55,7 +51,7 @@ test('blocks cross-owner trip and card access', () => {
 
 test('requireOwnedUser returns the user row or throws', () => {
 	const a = makeTestUser({ email: 'u@x.c' });
-	expect(requireOwnedUser(a.id).id).toBe(a.id);
+	expect(Number(requireOwnedUser(a.id).id)).toBe(a.id);
 	expect(() => requireOwnedUser(999999)).toThrow();
 });
 
@@ -63,8 +59,8 @@ test('requireOwnedTripRow returns row owned by trip or throws 404', () => {
 	const a = makeTestUser({ email: 'row@x.c' });
 	const t1 = createTrip(a.id, { name: 'T1' });
 	const t2 = createTrip(a.id, { name: 'T2' });
-	const row = ctx.db.insert(tripHomeTasks).values({ tripId: t1.id, text: 'A' }).returning().get();
-	expect(requireOwnedTripRow(tripHomeTasks, t1.id, row.id).id).toBe(row.id);
-	expect(() => requireOwnedTripRow(tripHomeTasks, t2.id, row.id)).toThrow();
+	const row = ctx.kit.insertInto(tripHomeTasks).values({ trip_id: BigInt(t1.id), text: 'A' } as never).executeSync();
+	expect(Number(requireOwnedTripRow(tripHomeTasks, t1.id, Number(row.id)).id)).toBe(Number(row.id));
+	expect(() => requireOwnedTripRow(tripHomeTasks, t2.id, Number(row.id))).toThrow();
 	expect(() => requireOwnedTripRow(tripHomeTasks, t1.id, 999999)).toThrow();
 });

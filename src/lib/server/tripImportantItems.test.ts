@@ -19,8 +19,7 @@ import { eq } from 'drizzle-orm';
 import {
 	makeSyncedUser,
 	makeSyncedTrip,
-	makeSyncedCompanion,
-	resetTables
+	makeSyncedCompanion
 } from '../../../tests/helpers';
 
 function getDb() {
@@ -32,15 +31,7 @@ function getKit() {
 }
 
 beforeEach(() => {
-	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
 	const kit = getKit();
-	resetTables(
-		sqlite,
-		'trip_important_items',
-		'trip_companions',
-		'trips',
-		'users'
-	);
 	kit.deleteFrom(kitTripImportantItems).executeSync();
 	kit.deleteFrom(kitTripCompanions).executeSync();
 	kit.deleteFrom(kitTrips).executeSync();

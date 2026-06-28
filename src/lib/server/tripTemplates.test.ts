@@ -63,7 +63,7 @@ test('saveTripTemplate snapshots trip segments and tags', () => {
 	expect(JSON.stringify(tpl.snapshot)).toContain('UA1');
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, tpl.id)).all();
-	expect(logs.map((l) => l.action)).toContain('create');
+	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
 });
 
 test('createTripFromTemplate copies segments and metadata', () => {

@@ -28,8 +28,8 @@ export async function _registerUser(email: string, password: string, displayName
 		disabled: false,
 		must_reset_password: false,
 		timezone: defaults.defaultTimezone,
-		flight_checkin_lead_hours: defaults.defaultFlightCheckinLeadHours,
-		document_expiry_lead_days: defaults.defaultDocumentExpiryLeadDays,
+		flight_checkin_lead_hours: BigInt(defaults.defaultFlightCheckinLeadHours),
+		document_expiry_lead_days: BigInt(defaults.defaultDocumentExpiryLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
 		theme_id: 'midnight-travels',
@@ -41,7 +41,10 @@ export async function _registerUser(email: string, password: string, displayName
 		id: Number(u.id),
 		email: u.email,
 		displayName: u.display_name ?? '',
-		role: u.role
+		role: u.role,
+		timezone: u.timezone,
+		flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
+		documentExpiryLeadDays: Number(u.document_expiry_lead_days)
 	};
 }
 

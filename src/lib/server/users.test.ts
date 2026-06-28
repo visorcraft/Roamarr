@@ -123,12 +123,12 @@ test('adminCreateUser creates a user with a random password and forced reset', a
 		email: 'new@x.c'
 	});
 
-	expect(created.displayName).toBe('New User');
+	expect(created.display_name).toBe('New User');
 	expect(created.email).toBe('new@x.c');
 	expect(created.role).toBe('user');
-	expect(created.mustResetPassword).toBe(true);
+	expect(created.must_reset_password).toBe(true);
 	expect(temporaryPassword.length).toBeGreaterThanOrEqual(16);
-	expect(await verifyPassword(created.passwordHash, temporaryPassword)).toBe(true);
+	expect(await verifyPassword(created.password_hash, temporaryPassword)).toBe(true);
 });
 
 test('adminCreateUser rejects duplicate email', async () => {

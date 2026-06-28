@@ -242,7 +242,7 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 
 	const rows = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 	expect(rows).toHaveLength(2);
-	const copy = rows.find((r) => r.id !== s.id)!;
+	const copy = rows.find((r: Record<string, unknown>) => r.id !== s.id)!;
 	expect(copy.title).toBe('City tour');
 	expect(copy.startAt).toBe('2026-09-02T14:00:00.000Z');
 	expect(copy.endAt).toBe('2026-09-02T16:00:00.000Z');

@@ -110,8 +110,8 @@ test('user unshare does not delete group shares and vice versa', () => {
 		.from(tripShares)
 		.where(eq(tripShares.tripId, t.id))
 		.all();
-	const userShare = allShares.find((s) => s.sharedWithUserId === friend.id)!;
-	const groupShare = allShares.find((s) => s.sharedWithGroupId === g.id)!;
+	const userShare = allShares.find((s: Record<string, unknown>) => s.sharedWithUserId === friend.id)!;
+	const groupShare = allShares.find((s: Record<string, unknown>) => s.sharedWithGroupId === g.id)!;
 
 	unshareUser(owner.id, t.id, userShare.id);
 	expect(
@@ -120,7 +120,7 @@ test('user unshare does not delete group shares and vice versa', () => {
 			.from(tripShares)
 			.where(eq(tripShares.tripId, t.id))
 			.all()
-			.map((s) => s.id)
+			.map((s: Record<string, unknown>) => s.id)
 	).toEqual([groupShare.id]);
 	unshareGroup(owner.id, t.id, groupShare.id);
 	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
@@ -149,8 +149,8 @@ test('share functions default to read and accept edit permission', () => {
 	shareWithUserEmail(owner.id, t.id, editor.email, 'edit');
 
 	const shares = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all();
-	expect(shares.find((s) => s.sharedWithUserId === reader.id)?.permission).toBe('read');
-	expect(shares.find((s) => s.sharedWithUserId === editor.id)?.permission).toBe('edit');
+	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === reader.id)?.permission).toBe('read');
+	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === editor.id)?.permission).toBe('edit');
 	expect(canEdit(reader.id, t)).toBe(false);
 	expect(canEdit(editor.id, t)).toBe(true);
 });
@@ -186,7 +186,7 @@ test('owner can toggle showDetails on a share; non-owner cannot', () => {
 	expect(db.select().from(tripShares).where(eq(tripShares.id, share.id)).get()!.showDetails).toBe(true);
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
-	expect(logs.some((l) => l.action === 'trip_share_set_show_details')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_share_set_show_details')).toBe(true);
 });
 
 
@@ -240,7 +240,7 @@ test('public token can be minted with showDetails enabled', () => {
 	expect(updated.publicShowDetails).toBe(true);
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
-	expect(logs.some((l) => l.action === 'trip_public_token_mint' && JSON.parse(l.metaJson).publicShowDetails === true)).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_token_mint' && JSON.parse(String(l.metaJson)).publicShowDetails === true)).toBe(true);
 });
 
 test('owner can toggle publicShowDetails; non-owner cannot', () => {
@@ -256,5 +256,5 @@ test('owner can toggle publicShowDetails; non-owner cannot', () => {
 
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
-	expect(logs.some((l) => l.action === 'trip_public_set_show_details')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_set_show_details')).toBe(true);
 });

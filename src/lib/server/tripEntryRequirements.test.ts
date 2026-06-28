@@ -20,7 +20,7 @@ import {
 	users as kitUsers
 } from './db/mongrelSchema';
 import { eq } from 'drizzle-orm';
-import { makeSyncedUser, makeSyncedTrip, resetTables } from '../../../tests/helpers';
+import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getDb() {
 	return (ctx as { db: import('./db').DB }).db;
@@ -31,9 +31,7 @@ function getKit() {
 }
 
 beforeEach(() => {
-	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
 	const kit = getKit();
-	resetTables(sqlite, 'trip_entry_requirements', 'trips', 'users');
 	kit.deleteFrom(kitTripEntryRequirements).executeSync();
 	kit.deleteFrom(kitTrips).executeSync();
 	kit.deleteFrom(kitUsers).executeSync();

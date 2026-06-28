@@ -143,7 +143,7 @@ test('deleteTripExpense removes expense for trip editor and logs audit', async (
 		.where(and(eq(auditLogs.entityType, 'trip_expense'), eq(auditLogs.entityId, e.id)))
 		.all();
 	expect(audit).toHaveLength(2);
-	expect(audit.some((a) => a.action === 'delete')).toBe(true);
+	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
 
 	const e2 = addTripExpense(owner.id, t.id, { description: 'Bus', amount: 1500, currency: 'USD' });
 	expect(() => deleteTripExpense(other.id, e2.id)).toThrowError(expect.objectContaining({ status: 404 }));

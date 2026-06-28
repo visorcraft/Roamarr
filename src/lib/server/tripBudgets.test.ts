@@ -190,6 +190,6 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 		.from(auditLogs)
 		.where(and(eq(auditLogs.entityType, 'trip_budget_category'), eq(auditLogs.userId, owner.id)))
 		.all();
-	expect(audit.some((a) => a.action === 'set')).toBe(true);
-	expect(audit.some((a) => a.action === 'delete')).toBe(true);
+	expect(audit.some((a: Record<string, unknown>) => a.action === 'set')).toBe(true);
+	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
 });

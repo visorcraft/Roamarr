@@ -6,8 +6,6 @@ import {
 	desc as kitDesc,
 	lte as kitLte,
 	lt as kitLt,
-	isNull as kitIsNull,
-	isNotNull as kitIsNotNull
 } from '@mongreldb/kit';
 import { kit } from '$lib/server/db';
 import {
@@ -242,7 +240,7 @@ export function listNotificationsForUser(userId: number, opts: ListNotifications
 	const limit = opts.limit;
 
 	const conditions = [kitEq(kitNotifications.user_id, toBigInt(userId))];
-	if (!includeRead) conditions.push(kitIsNull(kitNotifications.read_at));
+	if (!includeRead) conditions.push(kitEq(kitNotifications.read_at, ''));
 
 	const rows = kit
 		.selectFrom(kitNotifications)
@@ -262,7 +260,7 @@ export function countNotificationsForUser(userId: number, opts: { unreadOnly?: b
 	const unreadOnly = opts.unreadOnly ?? false;
 	const predicates = [kitEq(kitNotifications.user_id, toBigInt(userId))];
 	if (unreadOnly) {
-		predicates.push(kitIsNull(kitNotifications.read_at));
+		predicates.push(kitEq(kitNotifications.read_at, ''));
 	}
 	return Number(
 		kit

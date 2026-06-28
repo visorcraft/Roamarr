@@ -51,7 +51,10 @@ export async function adminCreateUser(actorId: number, input: AdminCreateUserInp
 	const created = usersRepo.createUser({
 		email,
 		password_hash: passwordHash,
-		display_name: displayName
+		display_name: displayName,
+		must_reset_password: true,
+		calendar_token: null,
+		calendar_token_expires_at: null
 	} as usersRepo.CreateUserInput);
 	if (role === 'admin') {
 		usersRepo.updateUser(Number(created.id), { role: 'admin' });

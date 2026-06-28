@@ -128,7 +128,7 @@ test('updateEmergencyContact edits a contact and shifts primary status', () => {
 	expect(updatedB.name).toBe('B-updated');
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
-	expect(logs.some((l) => l.action === 'emergency_contact_update')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'emergency_contact_update')).toBe(true);
 });
 
 test('updateEmergencyContact is user-scoped', () => {
@@ -200,7 +200,7 @@ test('shareItineraryWithContact sends link and audits', async () => {
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
 	expect(
 		logs.some(
-			(l) => l.action === 'emergency_share' && l.entityType === 'trip' && l.entityId === trip.id
+			(l: Record<string, unknown>) => l.action === 'emergency_share' && l.entityType === 'trip' && l.entityId === trip.id
 		)
 	).toBe(true);
 });

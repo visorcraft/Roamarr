@@ -13,7 +13,7 @@ import { makeUser, makeSegment, makeShare } from '../../../../../tests/helpers';
 
 import { GET } from './+server';
 import { createTrip } from '../../shared';
-import { users, segments, tripShares } from '$lib/server/db/schema';
+import type { AppUser } from '$lib/server/auth';
 
 function event(locals: App.Locals, params: { id: string }) {
 	return { locals, params, url: new URL(`http://localhost/trips/${params.id}/calendar`), request: new Request('http://localhost') } as any;
@@ -33,7 +33,7 @@ test('owner receives a text/calendar download', async () => {
 			confirmationNumber: 'OWNER-CONF'
 		});
 
-	const res = await GET(event({ user: a }, { id: String(t.id) }));
+	const res = await GET(event({ user: a as AppUser }, { id: String(t.id) }));
 	expect(res.status).toBe(200);
 	expect(res.headers.get('content-type')).toContain('text/calendar');
 	expect(res.headers.get('content-disposition')).toContain(`roamarr-trip-${t.id}.ics`);
@@ -68,7 +68,7 @@ test('shared viewer receives a calendar without private fields', async () => {
 		});
 	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id });
 
-	const res = await GET(event({ user: b }, { id: String(t.id) }));
+	const res = await GET(event({ user: b as AppUser }, { id: String(t.id) }));
 	expect(res.status).toBe(200);
 	const body = await res.text();
 	expect(body).toContain('SUMMARY:Hotel: Hotel');
@@ -84,7 +84,7 @@ test('unshared user gets 404', async () => {
 	const t = createTrip(a.id, { name: 'Private Trip' });
 
 	try {
-		await GET(event({ user: b }, { id: String(t.id) }));
+		await GET(event({ user: b as AppUser }, { id: String(t.id) }));
 		expect.fail('expected error');
 	} catch (e: any) {
 		expect(e.status).toBe(404);

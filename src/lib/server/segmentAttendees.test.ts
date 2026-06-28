@@ -67,7 +67,7 @@ test('deletes an attendee', () => {
 	expect(listAttendeesForSegment(s.id)).toHaveLength(0);
 
 	const audit = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
-	expect(audit.some((a) => a.action === 'remove_attendee')).toBe(true);
+	expect(audit.some((a: Record<string, unknown>) => a.action === 'remove_attendee')).toBe(true);
 });
 
 test('loads attendees grouped by segment', () => {

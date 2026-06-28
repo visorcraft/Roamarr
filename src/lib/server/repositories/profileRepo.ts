@@ -1,4 +1,4 @@
-import { eq, and, ne, asc, desc, inList, lte, isNotNull } from '@mongreldb/kit';
+import { eq, and, ne, asc, desc, inList, lte } from '@mongreldb/kit';
 import { error } from '@sveltejs/kit';
 import { kit } from '$lib/server/db';
 import {
@@ -121,7 +121,7 @@ export function listTravelDocumentsExpiringBefore(
 		.where(
 			and(
 				eq(travelDocuments.user_id, toBigInt(userId)),
-				isNotNull(travelDocuments.expires_on),
+				ne(travelDocuments.expires_on, ''),
 				lte(travelDocuments.expires_on, beforeOrOn)
 			)
 		)

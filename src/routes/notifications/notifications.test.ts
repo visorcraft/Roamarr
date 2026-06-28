@@ -70,9 +70,9 @@ test('markAllRead only affects the caller’s unread notifications', () => {
 	markRead(a.id, nA1.id);
 	markAllRead(a.id);
 	const rows = db.select().from(notifications).all();
-	expect(rows.find((r) => r.id === nA1.id)!.readAt).not.toBeNull();
-	expect(rows.find((r) => r.id === nA2.id)!.readAt).not.toBeNull();
-	expect(rows.find((r) => r.id === nB.id)!.readAt).toBeNull();
+	expect(rows.find((r: Record<string, unknown>) => r.id === nA1.id)!.readAt).not.toBeNull();
+	expect(rows.find((r: Record<string, unknown>) => r.id === nA2.id)!.readAt).not.toBeNull();
+	expect(rows.find((r: Record<string, unknown>) => r.id === nB.id)!.readAt).toBeNull();
 });
 
 test('markAllRead action sets a flash cookie and redirects', async () => {

@@ -75,7 +75,7 @@ test('saveTemplate creates a template from explicit items', () => {
 	expect(template?.userId).toBe(Number(u.id));
 
 	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.templateId, id)).all();
-	expect(items.map((i) => ({ label: i.label, category: i.category }))).toEqual([
+	expect(items.map((i: Record<string, unknown>) => ({ label: i.label, category: i.category }))).toEqual([
 		{ label: 'Toothbrush', category: 'toiletries' },
 		{ label: 'Socks', category: 'clothing' }
 	]);
@@ -116,7 +116,7 @@ test('saveTemplate populates from a trip checklist', () => {
 	const id = saveTemplate(Number(u.id), 'Flight', [], t.id);
 
 	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.templateId, id)).all();
-	expect(items.map((i) => i.label)).toEqual(['Boarding pass', 'Passport']);
+	expect(items.map((i: Record<string, unknown>) => i.label)).toEqual(['Boarding pass', 'Passport']);
 });
 
 test('saveTemplate requires editable trip when populating from trip', () => {
@@ -164,7 +164,7 @@ test('applyTemplate copies template items to trip checklist', () => {
 		.from(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklistId, checklist!.id))
 		.all();
-	expect(items.map((i) => i.text)).toEqual(['Tent', 'Stove']);
+	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Tent', 'Stove']);
 });
 
 test('applyTemplate guards against non-editable trips', () => {
@@ -203,7 +203,7 @@ test('applyTemplate allows editor shared with edit permission', () => {
 		.from(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklistId, checklist!.id))
 		.all();
-	expect(items.map((i) => i.text)).toEqual(['X']);
+	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['X']);
 });
 
 test('saveChecklistTemplate action saves current checklist as template and redirects', async () => {
@@ -240,7 +240,7 @@ test('applyChecklistTemplate action applies a template and redirects', async () 
 		.from(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklistId, checklist!.id))
 		.all();
-	expect(items.map((i) => i.text)).toEqual(['Map']);
+	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Map']);
 });
 
 test('applyChecklistTemplate action rejects invalid template id', async () => {

@@ -154,9 +154,9 @@ test('deletePoll removes poll, options, and votes and logs audit', () => {
 		.from(auditLogs)
 		.where(and(eq(auditLogs.entityType, 'trip_poll'), eq(auditLogs.entityId, poll.id)))
 		.all();
-	expect(logs.some((l) => l.action === 'create')).toBe(true);
-	expect(logs.some((l) => l.action === 'vote')).toBe(true);
-	expect(logs.some((l) => l.action === 'delete')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'create')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'vote')).toBe(true);
+	expect(logs.some((l: Record<string, unknown>) => l.action === 'delete')).toBe(true);
 });
 
 test('non-editor cannot create, vote, or delete polls', () => {

@@ -12,7 +12,7 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 
 import { tripCrudFactory } from './crud';
-import { users, trips, tripHomeTasks } from './db/schema';
+import { tripHomeTasks } from './db/mongrelSchema';
 import { Validator, formFail } from './validation';
 
 test('tripCrudFactory lists, adds and removes rows scoped to a trip', () => {
@@ -28,14 +28,14 @@ test('tripCrudFactory lists, adds and removes rows scoped to a trip', () => {
 			v.requiredString(input.text, 'text', { max: 200 });
 			if (!v.ok()) throw formFail(v);
 		},
-		buildInsert: (input, tripId) => ({ tripId, text: input.text })
+		buildInsert: (input, tripId) => ({ trip_id: BigInt(tripId), text: input.text } as never)
 	});
 
 	expect(crud.list(trip.id)).toHaveLength(0);
 	const inserted = crud.add(user.id, trip.id, { text: 'Pack' });
 	expect(inserted.text).toBe('Pack');
 	expect(crud.list(trip.id)).toHaveLength(1);
-	crud.remove(user.id, trip.id, inserted.id);
+	crud.remove(user.id, trip.id, Number(inserted.id));
 	expect(crud.list(trip.id)).toHaveLength(0);
 });
 
@@ -48,7 +48,7 @@ test('tripCrudFactory validate throws on bad input', () => {
 			v.requiredString(input.text, 'text', { max: 200 });
 			if (!v.ok()) throw formFail(v);
 		},
-		buildInsert: (input, tripId) => ({ tripId, text: input.text })
+		buildInsert: (input, tripId) => ({ trip_id: BigInt(tripId), text: input.text } as never)
 	});
 	expect(() => crud.add(1, 1, { text: '' })).toThrow();
 });

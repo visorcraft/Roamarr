@@ -386,7 +386,7 @@ test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 	deleteSegments(u.id, t.id, [s1.id, s2.id, 9999, -1]);
 
 	const remaining = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
-	expect(remaining.map((r) => r.id)).toEqual([s3.id]);
+	expect(remaining.map((r: Record<string, unknown>) => r.id)).toEqual([s3.id]);
 });
 
 test('addSegment stores country, city, coordinates, and venue', () => {

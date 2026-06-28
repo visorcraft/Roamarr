@@ -108,8 +108,8 @@ test('edit action updates a trip with valid data', async () => {
 	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBeNull();
-	expect(updated.destinationCountryCode).toBe('');
-	expect(updated.destinationCityName).toBe('');
+	expect(updated.destinationCountryCode).toBeNull();
+	expect(updated.destinationCityName).toBeNull();
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {

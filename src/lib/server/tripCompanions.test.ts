@@ -84,8 +84,8 @@ test('mutations bump trip updated_at and write audit logs', () => {
 
 	removeTripCompanion(u.id, t.id, c.id);
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
-	expect(logs.map((l) => l.action)).toContain('create');
-	expect(logs.map((l) => l.action)).toContain('delete');
+	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
+	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('delete');
 });
 
 test('non-editor cannot mutate companions', () => {

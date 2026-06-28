@@ -58,7 +58,7 @@ test('arms a pending reminder 24h before a future flight', () => {
 			startAt: '2099-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	const r = db.select().from(reminders).get();
 	expect(r!.fireAt).toBe('2099-01-01T00:00:00.000Z');
 	expect(r!.status).toBe('pending');
@@ -72,7 +72,7 @@ test('atomic run delivers due, marks sent, no double-deliver on re-run', async (
 			startAt: '2000-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	db.update(reminders).set({ status: 'pending' }).run();
 	await runDueReminders(new Date('2000-02-01T00:00:00Z'));
 	await runDueReminders(new Date('2000-02-01T00:00:00Z'));
@@ -88,7 +88,7 @@ test('reclaims a reminder orphaned in "sending" by a prior crash', async () => {
 			startAt: '2000-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	// Simulate a crash mid-delivery: the row is stuck in 'sending', never sent.
 	db.update(reminders).set({ status: 'sending' }).run();
 	await runDueReminders(new Date('2000-02-01T00:00:00Z'));
@@ -104,7 +104,7 @@ test('cancel removes the reminder', () => {
 			startAt: '2099-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	cancelRemindersFor('segment', seg.id);
 	expect(db.select().from(reminders).all().length).toBe(0);
 });
@@ -118,7 +118,7 @@ test('non-flight segments do not arm reminders', () => {
 				startAt: '2099-01-02T00:00:00.000Z',
 				startTz: 'UTC'
 			});
-		upsertRemindersForSegment(seg);
+		upsertRemindersForSegment(seg as any);
 	}
 	expect(db.select().from(reminders).all().length).toBe(0);
 });
@@ -131,11 +131,11 @@ test('changing a flight to a non-flight cancels its reminder', () => {
 			startAt: '2099-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	expect(db.select().from(reminders).all().length).toBe(1);
 
 	const lodging = { ...seg, type: 'hotel' as const };
-	upsertRemindersForSegment(lodging);
+	upsertRemindersForSegment(lodging as any);
 	expect(db.select().from(reminders).all().length).toBe(0);
 });
 
@@ -148,7 +148,7 @@ test('arms a reminder using the owners configured flight check-in lead', () => {
 			startAt: '2099-01-02T00:00:00.000Z',
 			startTz: 'UTC'
 		});
-	upsertRemindersForSegment(seg);
+	upsertRemindersForSegment(seg as any);
 	const r = db.select().from(reminders).get();
 	expect(r!.fireAt).toBe('2098-12-31T00:00:00.000Z');
 });

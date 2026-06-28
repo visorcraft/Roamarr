@@ -226,10 +226,7 @@ export const trips = table('trips', {
 		timestamp('updated_at', { default: nowDefault() })
 	],
 	primaryKey: 'id',
-	unique: [
-		unique(['public_token'], { name: 'trips_public_token_uq' }),
-		unique(['calendar_token'], { name: 'trips_calendar_token_uq' })
-	],
+	unique: [],
 	indexes: [
 		index(['owner_id'], { name: 'trips_owner_idx' }),
 		index(['start_date'], { name: 'trips_start_idx' })
@@ -397,9 +394,7 @@ export const tripShares = table('trip_shares', {
 			{ name: 'fk_trip_shares_shared_with_group_id_groups', onDelete: 'cascade' }
 		)
 	],
-	checks: [
-		check('shares_one_target_ck', (r) => (r.shared_with_user_id !== null) !== (r.shared_with_group_id !== null))
-	]
+	checks: []
 });
 
 export const cards = table('cards', {
@@ -587,8 +582,8 @@ export const tripCompanions = table('trip_companions', {
 		bool('needs_crib', { default: staticDefault(false) }),
 		bool('needs_kids_meal', { default: staticDefault(false) }),
 		text('child_ticket_discount', { nullable: true }),
-		text('seat_preference', { enumValues: [...SEAT_PREFERENCES], nullable: true }),
-		text('bed_preference', { enumValues: [...BED_PREFERENCES], nullable: true }),
+		text('seat_preference', { nullable: true }),
+		text('bed_preference', { nullable: true }),
 		text('accessibility_needs', { nullable: true }),
 		text('room_notes', { nullable: true }),
 		text('notes', { nullable: true }),

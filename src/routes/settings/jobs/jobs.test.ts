@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 test('load rejects non-admin', () => {
-	const u = makeUserLocals((ctx as any).db);
+	const u = makeUserLocals((ctx as any).kit);
 	try {
 		load({ locals: u } as any);
 		expect.fail('should have thrown');
@@ -37,7 +37,7 @@ test('load rejects non-admin', () => {
 test('load returns recent scheduler runs newest first', () => {
 	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
-	const admin = makeAdminLocals(db);
+	const admin = makeAdminLocals(kit);
 	makeSchedulerRun(kit, {
 		startedAt: '2026-06-01T10:00:00.000Z',
 		finishedAt: '2026-06-01T10:00:01.000Z',
@@ -62,7 +62,7 @@ test('load returns recent scheduler runs newest first', () => {
 test('load limits to 50 runs', () => {
 	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
-	const admin = makeAdminLocals(db);
+	const admin = makeAdminLocals(kit);
 	const base = new Date('2026-06-01T00:00:00.000Z').getTime();
 	for (let i = 0; i < 55; i++) {
 		makeSchedulerRun(kit, {
@@ -78,7 +78,8 @@ test('load limits to 50 runs', () => {
 
 test('runNow action triggers a scheduler tick and redirects', async () => {
 	const db = (ctx as any).db;
-	const admin = makeAdminLocals(db);
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
 	const before = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
 	await expect(actions.runNow({ locals: admin } as any)).rejects.toMatchObject({
 		status: 303,

@@ -1,7 +1,8 @@
 import { test, expect, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
-vi.mock('./db', async () => {
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
@@ -9,34 +10,35 @@ vi.mock('./db', async () => {
 
 import { eq } from 'drizzle-orm';
 import { canView, canEdit, canViewDetails, viewerProjection, listViewableTrips } from './sharing';
-import { users, trips, segments, groups, groupMembers, tripShares } from './db/schema';
+import { users, segments, groups, groupMembers, tripShares } from './db/schema';
+import * as usersRepo from './repositories/usersRepo';
+import * as tripsRepo from './repositories/tripsRepo';
+
+function makeUser(email: string) {
+	const u = usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: email,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	return { ...u, id: Number(u.id) };
+}
+
+function makeTrip(ownerId: number, name: string) {
+	return tripsRepo.createTrip(ownerId, { name, calendarToken: randomUUID() });
+}
 
 test('view matrix + projection omits sensitive fields', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const c = db
-		.insert(users)
-		.values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' })
-		.returning()
-		.get();
-	const t = db
-		.insert(trips)
-		.values({ ownerId: a.id, name: 'T', notes: 'CONF ABC123' })
-		.returning()
-		.get();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: b.id }).run();
-	const g = db.insert(groups).values({ ownerId: a.id, name: 'fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: c.id }).run();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithGroupId: g.id }).run();
+	const a = makeUser('a@x.c');
+	const b = makeUser('b@x.c');
+	const c = makeUser('c@x.c');
+	const t = makeTrip(a.id, 'T');
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: b.id });
+	const g = tripsRepo.createGroup({ ownerId: a.id, name: 'fam' });
+	tripsRepo.addGroupMember(g.id, c.id);
+	tripsRepo.createShare({ tripId: t.id, sharedWithGroupId: g.id });
 
 	expect(canView(a.id, t)).toBe(true);
 	expect(canView(b.id, t)).toBe(true);
@@ -61,39 +63,18 @@ test('view matrix + projection omits sensitive fields', () => {
 });
 
 test('edit shares grant canEdit via user and group', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'edit-owner@x.c', passwordHash: 'x', displayName: 'O' })
-		.returning()
-		.get();
-	const userEditor = db
-		.insert(users)
-		.values({ email: 'edit-user@x.c', passwordHash: 'x', displayName: 'U' })
-		.returning()
-		.get();
-	const groupEditor = db
-		.insert(users)
-		.values({ email: 'edit-group@x.c', passwordHash: 'x', displayName: 'G' })
-		.returning()
-		.get();
-	const reader = db
-		.insert(users)
-		.values({ email: 'edit-reader@x.c', passwordHash: 'x', displayName: 'R' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('edit-owner@x.c');
+	const userEditor = makeUser('edit-user@x.c');
+	const groupEditor = makeUser('edit-group@x.c');
+	const reader = makeUser('edit-reader@x.c');
+	const t = makeTrip(owner.id, 'T');
 
-	db.insert(tripShares)
-		.values({ tripId: t.id, sharedWithUserId: userEditor.id, permission: 'edit' })
-		.run();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: userEditor.id, permission: 'edit' });
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' });
 
-	const grp = db.insert(groups).values({ ownerId: owner.id, name: 'editors' }).returning().get();
-	db.insert(groupMembers).values({ groupId: grp.id, userId: groupEditor.id }).run();
-	db.insert(tripShares)
-		.values({ tripId: t.id, sharedWithGroupId: grp.id, permission: 'edit' })
-		.run();
+	const grp = tripsRepo.createGroup({ ownerId: owner.id, name: 'editors' });
+	tripsRepo.addGroupMember(grp.id, groupEditor.id);
+	tripsRepo.createShare({ tripId: t.id, sharedWithGroupId: grp.id, permission: 'edit' });
 
 	expect(canEdit(owner.id, t)).toBe(true);
 	expect(canEdit(userEditor.id, t)).toBe(true);
@@ -104,23 +85,10 @@ test('edit shares grant canEdit via user and group', () => {
 });
 
 test('showDetails gate exposes confirmation numbers and details only when enabled', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'details-owner@x.c', passwordHash: 'x', displayName: 'O' })
-		.returning()
-		.get();
-	const reader = db
-		.insert(users)
-		.values({ email: 'details-reader@x.c', passwordHash: 'x', displayName: 'R' })
-		.returning()
-		.get();
-	const groupMember = db
-		.insert(users)
-		.values({ email: 'details-member@x.c', passwordHash: 'x', displayName: 'M' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('details-owner@x.c');
+	const reader = makeUser('details-reader@x.c');
+	const groupMember = makeUser('details-member@x.c');
+	const t = makeTrip(owner.id, 'T');
 
 	const seg = {
 		type: 'flight',
@@ -142,25 +110,21 @@ test('showDetails gate exposes confirmation numbers and details only when enable
 
 	expect(canViewDetails(owner.id, t)).toBe(true);
 
-	db.insert(tripShares)
-		.values({ tripId: t.id, sharedWithUserId: reader.id, showDetails: false })
-		.run();
+	const share = tripsRepo.createShare({ tripId: t.id, sharedWithUserId: reader.id, showDetails: false });
 	expect(canViewDetails(reader.id, t)).toBe(false);
-	db.update(tripShares).set({ showDetails: true }).where(eq(tripShares.tripId, t.id)).run();
+	tripsRepo.updateShare(share.id, { showDetails: true });
 	expect(canViewDetails(reader.id, t)).toBe(true);
 
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'details-fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: groupMember.id }).run();
-	db.insert(tripShares)
-		.values({ tripId: t.id, sharedWithGroupId: g.id, showDetails: true })
-		.run();
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'details-fam' });
+	tripsRepo.addGroupMember(g.id, groupMember.id);
+	tripsRepo.createShare({ tripId: t.id, sharedWithGroupId: g.id, showDetails: true });
 	expect(canViewDetails(groupMember.id, t)).toBe(true);
 });
 
 test('listViewableTrips searches segment titles and confirmation numbers for owners', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'search@x.c', passwordHash: 'x', displayName: 'S' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'Trip' }).returning().get();
+	const owner = makeUser('search@x.c');
+	const t = makeTrip(owner.id, 'Trip');
 	db.insert(segments)
 		.values({ tripId: t.id, type: 'flight', title: 'Delta 15', startAt: '2026-07-01T15:00:00Z', startTz: 'UTC', confirmationNumber: 'ABC999' })
 		.run();

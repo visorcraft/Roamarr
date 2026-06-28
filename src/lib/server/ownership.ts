@@ -1,7 +1,8 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
-import { trips, cards, fareProviders, segments, groups, travelDocuments, users, tripCompanions } from './db/schema';
+import { cards, fareProviders, segments, groups, travelDocuments, users, tripCompanions } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
 import { canEdit } from './sharing';
 import type { SQLiteTable, AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
@@ -12,28 +13,20 @@ export function requireOwnedUser(userId: number) {
 }
 
 export function requireOwnedTrip(userId: number, tripId: number) {
-	const t = db
-		.select()
-		.from(trips)
-		.where(and(eq(trips.id, tripId), eq(trips.ownerId, userId)))
-		.get();
-	if (!t) throw error(404, 'Not found');
+	const t = tripsRepo.getTripById(tripId);
+	if (!t || t.ownerId !== userId) throw error(404, 'Not found');
 	return t;
 }
 
 export function requireEditableTrip(userId: number, tripId: number) {
-	const t = db.select().from(trips).where(eq(trips.id, tripId)).get();
+	const t = tripsRepo.getTripById(tripId);
 	if (!t || !canEdit(userId, t)) throw error(404, 'Not found');
 	return t;
 }
 
 export function requireOwnedGroup(userId: number, groupId: number) {
-	const g = db
-		.select()
-		.from(groups)
-		.where(and(eq(groups.id, groupId), eq(groups.ownerId, userId)))
-		.get();
-	if (!g) throw error(404, 'Not found');
+	const g = tripsRepo.getGroupById(groupId);
+	if (!g || g.ownerId !== userId) throw error(404, 'Not found');
 	return g;
 }
 

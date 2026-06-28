@@ -1,18 +1,17 @@
 import { error } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { trips, segments } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
 import { getSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { isExpired } from '$lib/server/dates';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import type { PageServerLoad } from './$types';
 
 export function _loadByToken(token: string) {
 	if (!token) throw error(404, 'Not found');
-	const t = db.select().from(trips).where(eq(trips.publicToken, token)).get();
+	const t = tripsRepo.getTripByPublicToken(token);
 	if (!t || isExpired(t.publicTokenExpiresAt)) throw error(404, 'Not found');
-	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const segs = listSegmentsForTrip(t.id);
 	return { instanceName: getSettings().instanceName, trip: viewerProjection(t, segs, t.publicShowDetails) };
 }
 

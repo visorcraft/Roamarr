@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -18,68 +19,55 @@ import {
 	_deleteGroup as deleteGroup
 } from './+page.server';
 import { canView } from '$lib/server/sharing';
-import { users, trips, groups, groupMembers } from '$lib/server/db/schema';
+import { groups, groupMembers } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+
+function makeUser(email: string) {
+	const u = usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: email,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	return { ...u, id: Number(u.id) };
+}
+
+function makeTrip(ownerId: number, name: string) {
+	return tripsRepo.createTrip(ownerId, { name, calendarToken: randomUUID() });
+}
 
 test('sharing with a user grants canView; public token is set', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser('a@x.c');
+	const b = makeUser('b@x.c');
+	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'B@X.c');
-	expect(canView(b.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+	expect(canView(b.id, t)).toBe(true);
 	const token = mintPublicToken(a.id, t.id);
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()!.publicToken).toBe(token);
+	expect(tripsRepo.getTripById(t.id)!.publicToken).toBe(token);
 });
 
 test('group share requires the group to belong to the sharer', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' })
-		.returning()
-		.get();
-	const other = db
-		.insert(users)
-		.values({ email: 'g@x.c', passwordHash: 'x', displayName: 'G' })
-		.returning()
-		.get();
-	const member = db
-		.insert(users)
-		.values({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const foreign = db.insert(groups).values({ ownerId: other.id, name: 'theirs' }).returning().get();
+	const owner = makeUser('o@x.c');
+	const other = makeUser('g@x.c');
+	const member = makeUser('m@x.c');
+	const t = makeTrip(owner.id, 'T');
+	const foreign = tripsRepo.createGroup({ ownerId: other.id, name: 'theirs' });
 	expect(() => shareWithGroup(owner.id, t.id, foreign.id)).toThrow();
 
-	const mine = db.insert(groups).values({ ownerId: owner.id, name: 'mine' }).returning().get();
-	db.insert(groupMembers).values({ groupId: mine.id, userId: member.id }).run();
+	const mine = tripsRepo.createGroup({ ownerId: owner.id, name: 'mine' });
+	tripsRepo.addGroupMember(mine.id, member.id);
 	shareWithGroup(owner.id, t.id, mine.id);
-	expect(canView(member.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+	expect(canView(member.id, t)).toBe(true);
 });
 
 test('group owner can remove a member and delete the group', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' })
-		.returning()
-		.get();
-	const member = db
-		.insert(users)
-		.values({ email: 'm2@x.c', passwordHash: 'x', displayName: 'M2' })
-		.returning()
-		.get();
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'team' }).returning().get();
+	const owner = makeUser('o2@x.c');
+	const member = makeUser('m2@x.c');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
 	addMember(owner.id, g.id, 'm2@x.c');
 	expect(db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id)).all()).toHaveLength(1);
 
@@ -92,23 +80,11 @@ test('group owner can remove a member and delete the group', () => {
 
 test('non-owner cannot remove members or delete a group', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a2@x.c', passwordHash: 'x', displayName: 'A2' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b2@x.c', passwordHash: 'x', displayName: 'B2' })
-		.returning()
-		.get();
-	const member = db
-		.insert(users)
-		.values({ email: 'm3@x.c', passwordHash: 'x', displayName: 'M3' })
-		.returning()
-		.get();
-	const g = db.insert(groups).values({ ownerId: a.id, name: 'private' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
+	const a = makeUser('a2@x.c');
+	const b = makeUser('b2@x.c');
+	const member = makeUser('m3@x.c');
+	const g = tripsRepo.createGroup({ ownerId: a.id, name: 'private' });
+	tripsRepo.addGroupMember(g.id, member.id);
 
 	expect(() => removeMember(b.id, g.id, member.id)).toThrow();
 	expect(() => deleteGroup(b.id, g.id)).toThrow();

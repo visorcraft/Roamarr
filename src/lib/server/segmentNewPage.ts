@@ -1,11 +1,12 @@
 import { error, type Actions, type RequestEvent } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { ADD_SEGMENT_WIZARD_TYPES, SEG, type SegmentType } from '$lib/segmentLabels';
 import { requireUser } from '$lib/server/auth';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
-import { trips, cards } from '$lib/server/db/schema';
+import { cards } from '$lib/server/db/schema';
+import { eq } from 'drizzle-orm';
 import { submitAddSegment } from '$lib/server/segmentAdd';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
 const WIZARD_TYPES = new Set<SegmentType>(ADD_SEGMENT_WIZARD_TYPES.map((entry) => entry.type));
 
@@ -18,13 +19,9 @@ export function loadNewSegmentPicker(event: RequestEvent) {
 	const tripId = Number(event.params.id);
 	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
 	requireEditableTrip(u.id, tripId);
-	const trip = db
-		.select({ id: trips.id, name: trips.name })
-		.from(trips)
-		.where(eq(trips.id, tripId))
-		.get();
+	const trip = tripsRepo.getTripById(tripId);
 	if (!trip) throw error(404, 'Not found');
-	return { trip };
+	return { trip: { id: trip.id, name: trip.name } };
 }
 
 function loadNewSegmentForm(event: RequestEvent, type: SegmentType) {

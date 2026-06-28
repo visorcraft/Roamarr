@@ -1,54 +1,59 @@
 import { sql } from 'drizzle-orm';
-import { db } from './db';
+import { ne as kitNe } from '@mongreldb/kit';
+import { db, kit } from './db';
 import {
 	users,
-	trips,
+	trips as drizzleTrips,
+	tripComments as drizzleTripComments,
+	tripShares as drizzleTripShares,
 	segments,
 	cards,
 	insurancePolicies,
-	loyaltyPrograms,
-	tripShares,
-	tripComments
+	loyaltyPrograms
 } from './db/schema';
+import { trips, tripShares, tripComments } from './db/mongrelSchema';
+import * as tripsRepo from './repositories/tripsRepo';
+import * as usersRepo from './repositories/usersRepo';
+
+function kitId(id: number): bigint {
+	return BigInt(id);
+}
 
 export function seedDemoData(adminId: number) {
-	db.delete(tripComments).run();
-	db.delete(tripShares).run();
+	// Clean legacy tables.
+	db.delete(drizzleTripComments).run();
+	db.delete(drizzleTripShares).run();
 	db.delete(segments).run();
-	db.delete(trips).where(sql`${trips.ownerId} != ${adminId}`).run();
+	db.delete(drizzleTrips).where(sql`${drizzleTrips.ownerId} != ${adminId}`).run();
 	db.delete(cards).where(sql`${cards.userId} != ${adminId}`).run();
 	db.delete(insurancePolicies).where(sql`${insurancePolicies.userId} != ${adminId}`).run();
 	db.delete(loyaltyPrograms).where(sql`${loyaltyPrograms.userId} != ${adminId}`).run();
 	db.delete(users).where(sql`${users.id} != ${adminId}`).run();
 
-	const demoUser = db
-		.insert(users)
-		.values({
-			email: 'demo.traveler@example.com',
-			passwordHash: 'disabled-demo-account',
-			displayName: 'Demo Traveler',
-			role: 'user'
-		})
-		.returning()
-		.get();
+	// Clean kit tables.
+	kit.deleteFrom(tripComments).executeSync();
+	kit.deleteFrom(tripShares).executeSync();
+	kit.deleteFrom(trips).where(kitNe(trips.owner_id, kitId(adminId))).executeSync();
 
-	const t1 = db
-		.insert(trips)
-		.values({
-			ownerId: adminId,
-			name: 'Demo Trip to Tokyo',
-			destination: null,
-			destinationCountryCode: 'JP',
-			destinationCityName: 'Tokyo',
-			destinationCityLat: 35.6762,
-			destinationCityLng: 139.6503,
-			startDate: '2026-09-15',
-			endDate: '2026-09-22',
-			notes: 'A sample walking-skeleton trip.',
-			tags: JSON.stringify(['demo', 'asia'])
-		})
-		.returning()
-		.get();
+	const demoUser = usersRepo.createUser({
+		email: 'demo.traveler@example.com',
+		password_hash: 'disabled-demo-account',
+		display_name: 'Demo Traveler',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+
+	const t1 = tripsRepo.createTrip(adminId, {
+		name: 'Demo Trip to Tokyo',
+		destinationCountryCode: 'JP',
+		destinationCityName: 'Tokyo',
+		destinationCityLat: 35.6762,
+		destinationCityLng: 139.6503,
+		startDate: '2026-09-15',
+		endDate: '2026-09-22',
+		notes: 'A sample walking-skeleton trip.',
+		tags: JSON.stringify(['demo', 'asia'])
+	});
 
 	db.insert(segments).values([
 		{
@@ -79,24 +84,22 @@ export function seedDemoData(adminId: number) {
 		}
 	]).run();
 
-	const t2 = db
-		.insert(trips)
-		.values({
-			ownerId: demoUser.id,
-			name: 'Shared demo trip',
-			destination: null,
-			destinationCountryCode: 'FR',
-			destinationCityName: 'Paris',
-			destinationCityLat: 48.8566,
-			destinationCityLng: 2.3522,
-			startDate: '2026-10-01',
-			endDate: '2026-10-05',
-			tags: JSON.stringify(['demo', 'europe'])
-		})
-		.returning()
-		.get();
+	const t2 = tripsRepo.createTrip(Number(demoUser.id), {
+		name: 'Shared demo trip',
+		destinationCountryCode: 'FR',
+		destinationCityName: 'Paris',
+		destinationCityLat: 48.8566,
+		destinationCityLng: 2.3522,
+		startDate: '2026-10-01',
+		endDate: '2026-10-05',
+		tags: JSON.stringify(['demo', 'europe'])
+	});
 
-	db.insert(tripShares).values({ tripId: t2.id, sharedWithUserId: adminId, permission: 'read' }).run();
+	tripsRepo.createShare({
+		tripId: t2.id,
+		sharedWithUserId: adminId,
+		permission: 'read'
+	});
 
 	db.insert(cards).values({
 		userId: adminId,

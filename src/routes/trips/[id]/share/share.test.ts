@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -17,20 +18,37 @@ import {
 	_setPublicShowDetails as setPublicShowDetails
 } from './+page.server';
 import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
-import { users, trips, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
+import { users, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+
+function makeUser(email: string) {
+	const u = usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: email,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	return { ...u, id: Number(u.id) };
+}
+
+function makeTrip(ownerId: number, name: string) {
+	return tripsRepo.createTrip(ownerId, { name, calendarToken: randomUUID() });
+}
 
 test('owner can revoke a user share', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser('a@x.c');
+	const b = makeUser('b@x.c');
+	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'b@x.c');
 	expect(canView(b.id, t)).toBe(true);
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	unshareUser(a.id, t.id, share.id);
 	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
-	expect(canView(b.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(false);
+	expect(canView(b.id, t)).toBe(false);
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
 	expect(logs).toHaveLength(2);
@@ -42,18 +60,18 @@ test('owner can revoke a user share', () => {
 
 test('owner can revoke a group share', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const member = db.insert(users).values({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
+	const owner = makeUser('o@x.c');
+	const member = makeUser('m@x.c');
+	const t = makeTrip(owner.id, 'T');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'fam' });
+	tripsRepo.addGroupMember(g.id, member.id);
 	shareWithGroup(owner.id, t.id, g.id);
-	expect(canView(member.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+	expect(canView(member.id, t)).toBe(true);
 
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	unshareGroup(owner.id, t.id, share.id);
 	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
-	expect(canView(member.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(false);
+	expect(canView(member.id, t)).toBe(false);
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
 	expect(logs).toHaveLength(2);
@@ -64,9 +82,9 @@ test('owner can revoke a group share', () => {
 
 test('non-owner cannot revoke a share', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'no-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'no-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser('no-a@x.c');
+	const b = makeUser('no-b@x.c');
+	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'no-b@x.c');
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	expect(() => unshareUser(b.id, t.id, share.id)).toThrow();
@@ -80,10 +98,10 @@ test('non-owner cannot revoke a share', () => {
 
 test('user unshare does not delete group shares and vice versa', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'mix-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const friend = db.insert(users).values({ email: 'mix-f@x.c', passwordHash: 'x', displayName: 'F' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'fam' }).returning().get();
+	const owner = makeUser('mix-o@x.c');
+	const friend = makeUser('mix-f@x.c');
+	const t = makeTrip(owner.id, 'T');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'fam' });
 
 	shareWithUserEmail(owner.id, t.id, 'mix-f@x.c');
 	shareWithGroup(owner.id, t.id, g.id);
@@ -110,8 +128,8 @@ test('user unshare does not delete group shares and vice versa', () => {
 
 test('minting a public token is audited', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'pub-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('pub-o@x.c');
+	const t = makeTrip(owner.id, 'T');
 	mintPublicToken(owner.id, t.id);
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
 	expect(logs).toHaveLength(1);
@@ -122,10 +140,10 @@ test('minting a public token is audited', () => {
 
 test('share functions default to read and accept edit permission', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'perm-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const reader = db.insert(users).values({ email: 'perm-r@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
-	const editor = db.insert(users).values({ email: 'perm-e@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('perm-o@x.c');
+	const reader = makeUser('perm-r@x.c');
+	const editor = makeUser('perm-e@x.c');
+	const t = makeTrip(owner.id, 'T');
 
 	shareWithUserEmail(owner.id, t.id, reader.email);
 	shareWithUserEmail(owner.id, t.id, editor.email, 'edit');
@@ -139,23 +157,23 @@ test('share functions default to read and accept edit permission', () => {
 
 test('group share can be created with edit permission', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'gperm-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const member = db.insert(users).values({ email: 'gperm-m@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'editors' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
+	const owner = makeUser('gperm-o@x.c');
+	const member = makeUser('gperm-m@x.c');
+	const t = makeTrip(owner.id, 'T');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'editors' });
+	tripsRepo.addGroupMember(g.id, member.id);
 
 	shareWithGroup(owner.id, t.id, g.id, 'edit');
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	expect(share.permission).toBe('edit');
-	expect(canEdit(member.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+	expect(canEdit(member.id, t)).toBe(true);
 });
 
 test('owner can toggle showDetails on a share; non-owner cannot', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'details-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const friend = db.insert(users).values({ email: 'details-f@x.c', passwordHash: 'x', displayName: 'F' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('details-o@x.c');
+	const friend = makeUser('details-f@x.c');
+	const t = makeTrip(owner.id, 'T');
 	shareWithUserEmail(owner.id, t.id, friend.email);
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	expect(share.showDetails).toBe(false);
@@ -174,39 +192,38 @@ test('owner can toggle showDetails on a share; non-owner cannot', () => {
 
 test('member can share their own trip into a group they belong to', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'mem-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const member = db.insert(users).values({ email: 'mem-m@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const other = db.insert(users).values({ email: 'mem-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
-	db.insert(groupMembers).values({ groupId: g.id, userId: other.id }).run();
-	const t = db.insert(trips).values({ ownerId: member.id, name: 'Member Trip' }).returning().get();
+	const owner = makeUser('mem-o@x.c');
+	const member = makeUser('mem-m@x.c');
+	const other = makeUser('mem-other@x.c');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'fam' });
+	tripsRepo.addGroupMember(g.id, member.id);
+	tripsRepo.addGroupMember(g.id, other.id);
+	const t = makeTrip(member.id, 'Member Trip');
 
 	shareWithGroup(member.id, t.id, g.id);
 	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
 	expect(share.sharedWithGroupId).toBe(g.id);
-	expect(canView(other.id, db.select().from(trips).where(eq(trips.id, t.id)).get()!)).toBe(true);
+	expect(canView(other.id, t)).toBe(true);
 });
 
 test('user cannot share into a group they do not belong to', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'no-mem-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'no-mem-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const g = db.insert(groups).values({ ownerId: a.id, name: 'private' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: b.id, name: 'B Trip' }).returning().get();
+	const a = makeUser('no-mem-a@x.c');
+	const b = makeUser('no-mem-b@x.c');
+	const g = tripsRepo.createGroup({ ownerId: a.id, name: 'private' });
+	const t = makeTrip(b.id, 'B Trip');
 
 	expect(() => shareWithGroup(b.id, t.id, g.id)).toThrow();
 	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all()).toHaveLength(0);
 });
 
 test('listGroupsForUser returns owned and member groups', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'lg-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'lg-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	db.insert(groups).values({ ownerId: a.id, name: 'Owned' }).run();
-	const memberGroup = db.insert(groups).values({ ownerId: b.id, name: 'Member' }).returning().get();
-	db.insert(groupMembers).values({ groupId: memberGroup.id, userId: a.id }).run();
-	db.insert(groups).values({ ownerId: b.id, name: 'Other' }).run();
+	const a = makeUser('lg-a@x.c');
+	const b = makeUser('lg-b@x.c');
+	tripsRepo.createGroup({ ownerId: a.id, name: 'Owned' });
+	const memberGroup = tripsRepo.createGroup({ ownerId: b.id, name: 'Member' });
+	tripsRepo.addGroupMember(memberGroup.id, a.id);
+	tripsRepo.createGroup({ ownerId: b.id, name: 'Other' });
 
 	const list = listGroupsForUser(a.id);
 	expect(list.map((g) => g.name).sort()).toEqual(['Member', 'Owned']);
@@ -214,11 +231,11 @@ test('listGroupsForUser returns owned and member groups', () => {
 
 test('public token can be minted with showDetails enabled', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'pub-det-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeUser('pub-det-o@x.c');
+	const t = makeTrip(owner.id, 'T');
 
 	mintPublicToken(owner.id, t.id, true);
-	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	const updated = tripsRepo.getTripById(t.id)!;
 	expect(updated.publicToken).toBeTruthy();
 	expect(updated.publicShowDetails).toBe(true);
 
@@ -227,17 +244,17 @@ test('public token can be minted with showDetails enabled', () => {
 });
 
 test('owner can toggle publicShowDetails; non-owner cannot', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'pub-toggle-o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'pub-toggle-x@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T', publicShowDetails: false }).returning().get();
+	const owner = makeUser('pub-toggle-o@x.c');
+	const other = makeUser('pub-toggle-x@x.c');
+	const t = makeTrip(owner.id, 'T');
 
 	setPublicShowDetails(owner.id, t.id, true);
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()!.publicShowDetails).toBe(true);
+	expect(tripsRepo.getTripById(t.id)!.publicShowDetails).toBe(true);
 
 	expect(() => setPublicShowDetails(other.id, t.id, false)).toThrow();
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()!.publicShowDetails).toBe(true);
+	expect(tripsRepo.getTripById(t.id)!.publicShowDetails).toBe(true);
 
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
 	expect(logs.some((l) => l.action === 'trip_public_set_show_details')).toBe(true);
 });

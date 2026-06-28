@@ -1,12 +1,11 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedGroup } from '$lib/server/ownership';
 import { listGroupsForUser } from '$lib/server/sharing';
-import { db } from '$lib/server/db';
-import { users, groups, groupMembers } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { positiveIdFromForm } from '$lib/server/validation';
 import { normalizeEmail } from '$lib/server/users';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -15,40 +14,31 @@ export const load: PageServerLoad = ({ locals }) => {
 	return {
 		groups: all.map((g) => ({
 			...g,
-			members: db
-				.select({ id: users.id, email: users.email })
-				.from(groupMembers)
-				.innerJoin(users, eq(groupMembers.userId, users.id))
-				.where(eq(groupMembers.groupId, g.id))
-				.all()
+			members: tripsRepo.listMembersForGroup(g.id)
 		}))
 	};
 };
 
 export function _addMember(ownerId: number, groupId: number, email: string) {
 	requireOwnedGroup(ownerId, groupId);
-	const m = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
-	if (m) db.insert(groupMembers).values({ groupId, userId: m.id }).onConflictDoNothing().run();
+	const m = usersRepo.getUserByEmail(normalizeEmail(email));
+	if (m) tripsRepo.addGroupMember(groupId, Number(m.id));
 }
 
 export function _removeMember(ownerId: number, groupId: number, userId: number) {
 	requireOwnedGroup(ownerId, groupId);
-	db.delete(groupMembers)
-		.where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, userId)))
-		.run();
+	tripsRepo.removeGroupMember(groupId, userId);
 }
 
 export function _deleteGroup(ownerId: number, groupId: number) {
 	requireOwnedGroup(ownerId, groupId);
-	db.delete(groups).where(eq(groups.id, groupId)).run();
+	tripsRepo.deleteGroup(groupId);
 }
 
 export const actions: Actions = {
 	create: async ({ request, locals }) => {
 		const u = requireUser(locals);
-		db.insert(groups)
-			.values({ ownerId: u.id, name: String((await request.formData()).get('name')) })
-			.run();
+		tripsRepo.createGroup({ ownerId: u.id, name: String((await request.formData()).get('name')) });
 		throw redirect(303, '/groups');
 	},
 	addMember: async ({ request, locals }) => {

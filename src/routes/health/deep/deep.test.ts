@@ -1,16 +1,33 @@
-import { test, expect, vi } from 'vitest';
-
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
-vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
-});
+import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { KitDatabase } from '@mongreldb/kit';
+import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
+import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 
 vi.mock('$lib/server/scheduler', () => ({ isSchedulerRunning: vi.fn() }));
 
 import { GET } from './+server';
 import { isSchedulerRunning } from '$lib/server/scheduler';
+
+let dbDir: string;
+let originalMongrelDatabasePath: string | undefined;
+
+beforeEach(() => {
+	dbDir = join(tmpdir(), `roamarr-health-deep-test-${Date.now()}.kitdb`);
+	const kitInstance = KitDatabase.openSync(dbDir, kitSchema);
+	kitInstance.migrateSync(kitSchema, kitMigrations);
+	kitInstance.close();
+	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
+	process.env.MONGREL_DATABASE_PATH = dbDir;
+});
+
+afterEach(() => {
+	rmSync(dbDir, { recursive: true, force: true });
+	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
+	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+});
 
 test('deep health returns 200 when db and scheduler are healthy', () => {
 	(isSchedulerRunning as any).mockReturnValue(true);

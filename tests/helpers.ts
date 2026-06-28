@@ -81,7 +81,7 @@ export function freshDb() {
 	};
 	process.once('exit', cleanup);
 
-	return { db, sqlite, kit: kitInstance, getDb: () => kitInstance, close };
+	return { db, sqlite, kit: kitInstance, getDb: () => kitInstance, dir, close };
 }
 
 export function freshKitDb() {

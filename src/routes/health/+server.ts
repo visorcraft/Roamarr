@@ -1,12 +1,13 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { sqlite } from '$lib/server/db';
+import { existsSync, statSync } from 'node:fs';
+import { getDatabasePath } from '$lib/server/db/paths';
 import { isSchedulerRunning } from '$lib/server/scheduler';
 
 export const GET: RequestHandler = () => {
 	let dbOk = false;
 	try {
-		const result = sqlite.pragma('quick_check', { simple: true });
-		dbOk = result === 'ok';
+		const path = getDatabasePath();
+		dbOk = existsSync(path) && statSync(path).isDirectory();
 	} catch {
 		dbOk = false;
 	}

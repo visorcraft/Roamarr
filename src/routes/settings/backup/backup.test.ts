@@ -1,7 +1,13 @@
-import { test, expect, vi } from 'vitest';
-import { existsSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createGunzip } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
+import tar from 'tar-fs';
+import { KitDatabase } from '@mongreldb/kit';
+import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
+import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -10,8 +16,21 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
+import { GET } from './+server';
 import { actions } from './+page.server';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+import { applyPendingRestore, getRestoreMarkerPath } from '$lib/server/restore';
+
+let testRoot: string;
+let originalMongrelDatabasePath: string | undefined;
+
+function makeDbDir(): string {
+	const dir = join(testRoot, `roamarr-${Date.now()}.kitdb`);
+	const kitInstance = KitDatabase.openSync(dir, kitSchema);
+	kitInstance.migrateSync(kitSchema, kitMigrations);
+	kitInstance.close();
+	return dir;
+}
 
 function adminLocals() {
 	const u = usersRepo.createUser({
@@ -26,42 +45,112 @@ function adminLocals() {
 }
 
 function fileFrom(path: string, name: string): File {
-	const buf = new Uint8Array(require('node:fs').readFileSync(path));
-	return new File([buf], name, { type: 'application/octet-stream' });
+	const buf = new Uint8Array(readFileSync(path));
+	return new File([buf], name, { type: 'application/gzip' });
 }
 
-test('restore rejects an invalid SQLite file', async () => {
-	const admin = adminLocals();
-	const invalid = new File([Buffer.from('not a database')], 'bad.db', { type: 'application/octet-stream' });
+async function createBackupArchive(dbDir: string, attachmentsDir?: string): Promise<string> {
+	const archivePath = join(tmpdir(), `roamarr-backup-test-${Date.now()}.mongreldb.tar.gz`);
+	const parent = join(dbDir, '..');
+	const entries: string[] = [];
+
+	const dbRel = relative(parent, dbDir);
+	entries.push(dbRel);
+
+	if (attachmentsDir) {
+		const attachmentsRel = relative(parent, attachmentsDir);
+		if (!attachmentsRel.startsWith(dbRel + sep)) {
+			entries.push(attachmentsRel);
+		}
+	}
+
+	const { createGzip } = await import('node:zlib');
+	await pipeline(tar.pack(parent, { entries }), createGzip(), createWriteStream(archivePath));
+	return archivePath;
+}
+
+async function extractArchive(archivePath: string, extractDir: string): Promise<void> {
+	mkdirSync(extractDir, { recursive: true });
+	await pipeline(createReadStream(archivePath), createGunzip(), tar.extract(extractDir));
+}
+
+beforeEach(() => {
+	testRoot = join(tmpdir(), `roamarr-backup-test-${Date.now()}`);
+	mkdirSync(testRoot, { recursive: true });
+	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
+});
+
+afterEach(() => {
+	rmSync(testRoot, { recursive: true, force: true });
+	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
+	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+});
+
+test('backup downloads a tar.gz archive of the database directory and attachments', async () => {
+	const dbDir = makeDbDir();
+	process.env.MONGREL_DATABASE_PATH = dbDir;
+
+	const attachmentsDir = join(dbDir, 'attachments');
+	mkdirSync(attachmentsDir, { recursive: true });
+	writeFileSync(join(attachmentsDir, 'sample.txt'), 'hello');
+
+	const res = await GET({ locals: adminLocals() } as any);
+	expect(res.status).toBe(200);
+	expect(res.headers.get('Content-Disposition')).toContain('.mongreldb.tar.gz');
+
+	const archivePath = join(testRoot, 'downloaded.tar.gz');
+	writeFileSync(archivePath, Buffer.from(await res.arrayBuffer()));
+
+	const extractDir = join(testRoot, 'extracted');
+	await extractArchive(archivePath, extractDir);
+
+	const extractedDb = join(extractDir, dbDir.split('/').pop()!);
+	expect(existsSync(join(extractedDb, 'CATALOG'))).toBe(true);
+	expect(existsSync(join(extractedDb, 'tables'))).toBe(true);
+	expect(existsSync(join(extractedDb, 'attachments', 'sample.txt'))).toBe(true);
+});
+
+test('restore rejects an invalid archive', async () => {
+	const dbDir = makeDbDir();
+	process.env.MONGREL_DATABASE_PATH = dbDir;
+
+	const invalid = new File([Buffer.from('not a valid tar.gz')], 'bad.mongreldb.tar.gz', {
+		type: 'application/gzip'
+	});
 	const form = new FormData();
 	form.append('file', invalid);
 	const request = new Request('http://localhost/settings/backup', { method: 'POST', body: form });
-	const result = await actions.restore({ locals: admin, request, cookies: { set: vi.fn() } } as any);
+	const result = await actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any);
 	expect(result?.status).toBe(400);
 });
 
-test('restore accepts a valid Roamarr database', async () => {
-	const admin = adminLocals();
-	const tmp = join(tmpdir(), `roamarr-restore-test-${Date.now()}.db`);
-	const restorePath = join(tmpdir(), `roamarr-restore-target-${Date.now()}.db`);
-	const originalPath = process.env.DATABASE_PATH;
-	process.env.DATABASE_PATH = restorePath;
+test('restore accepts a valid backup and writes a pending restore marker', async () => {
+	const sourceDbDir = makeDbDir();
+	const attachmentsDir = join(sourceDbDir, 'attachments');
+	mkdirSync(attachmentsDir, { recursive: true });
+	writeFileSync(join(attachmentsDir, 'sample.txt'), 'hello');
 
-	const { createDb } = await import('$lib/server/db/createDb');
-	const { sqlite } = createDb(tmp);
-	sqlite.exec('CREATE TABLE users (id INTEGER PRIMARY KEY);');
-	sqlite.close();
+	const targetRoot = join(testRoot, 'target');
+	mkdirSync(targetRoot, { recursive: true });
+	const targetDbDir = join(targetRoot, 'roamarr.kitdb');
+	process.env.MONGREL_DATABASE_PATH = targetDbDir;
+
+	const archivePath = await createBackupArchive(sourceDbDir);
 
 	const form = new FormData();
-	form.append('file', fileFrom(tmp, 'restore.db'));
+	form.append('file', fileFrom(archivePath, 'backup.mongreldb.tar.gz'));
 	const request = new Request('http://localhost/settings/backup', { method: 'POST', body: form });
 	await expect(
-		actions.restore({ locals: admin, request, cookies: { set: vi.fn() } } as any)
+		actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any)
 	).rejects.toMatchObject({ status: 303, location: '/settings/backup' });
 
-	expect(existsSync(restorePath)).toBe(true);
-	unlinkSync(tmp);
-	unlinkSync(restorePath);
-	if (originalPath !== undefined) process.env.DATABASE_PATH = originalPath;
-	else delete process.env.DATABASE_PATH;
+	const markerPath = getRestoreMarkerPath(targetDbDir);
+	expect(existsSync(markerPath)).toBe(true);
+
+	applyPendingRestore(targetDbDir);
+
+	expect(existsSync(join(targetDbDir, 'CATALOG'))).toBe(true);
+	expect(existsSync(join(targetDbDir, 'tables'))).toBe(true);
+	expect(existsSync(join(targetDbDir, 'attachments', 'sample.txt'))).toBe(true);
+	expect(existsSync(markerPath)).toBe(false);
 });

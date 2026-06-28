@@ -1,12 +1,27 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { writeFileSync, copyFileSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { createReadStream, mkdtempSync, writeFileSync, unlinkSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import Database from 'better-sqlite3';
+import { createGunzip } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
 import { requireAdmin } from '$lib/server/auth';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
-import { getDatabasePath } from '$lib/server/paths';
+import { getDatabasePath } from '$lib/server/db/paths';
+import {
+	getAttachmentsPath,
+	findMongrelDbDirectory,
+	findAttachmentsDirectory,
+	validateRestoredDirectory,
+	writeRestoreMarker
+} from '$lib/server/restore';
+import tar from 'tar-fs';
+
+const ALLOWED_BACKUP_EXTENSIONS = ['.mongreldb.tar.gz', '.tar.gz'];
+
+function isBackupFilename(name: string): boolean {
+	return ALLOWED_BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
 
 export const actions: Actions = {
 	restore: async ({ locals, request, cookies }) => {
@@ -14,32 +29,47 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const file = f.get('file');
 		if (!(file instanceof File)) return fail(400, { error: 'Upload a file' });
-		if (!file.name.endsWith('.db') && !file.name.endsWith('.sqlite') && !file.name.endsWith('.sqlite3')) {
-			return fail(400, { error: 'Upload a SQLite database file' });
+		if (!isBackupFilename(file.name.toLowerCase())) {
+			return fail(400, { error: 'Upload a Roamarr MongrelDB backup (.mongreldb.tar.gz)' });
 		}
 
-		const dbPath = getDatabasePath();
-		const tmpPath = join(tmpdir(), `roamarr-restore-${Date.now()}.db`);
+		const dbPath = resolve(getDatabasePath());
+		const dbParent = dirname(dbPath);
+		const archivePath = join(tmpdir(), `roamarr-restore-${Date.now()}.tar.gz`);
+		const extractRoot = mkdtempSync(join(dbParent, '.roamarr-restore-'));
+
 		try {
 			const buffer = Buffer.from(await file.arrayBuffer());
-			writeFileSync(tmpPath, buffer);
-			const check = new Database(tmpPath);
-			check.pragma('quick_check');
-			const hasUsers = check.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").get();
-			check.close();
-			if (!hasUsers) {
-				unlinkSync(tmpPath);
-				return fail(400, { error: 'Invalid Roamarr database' });
+			writeFileSync(archivePath, buffer);
+
+			await pipeline(createReadStream(archivePath), createGunzip(), tar.extract(extractRoot));
+
+			const restoredDbPath = findMongrelDbDirectory(extractRoot);
+			if (!restoredDbPath) {
+				return fail(400, { error: 'Backup does not contain a MongrelDB database directory' });
 			}
-			copyFileSync(tmpPath, dbPath);
-			unlinkSync(tmpPath);
+
+			try {
+				validateRestoredDirectory(restoredDbPath);
+			} catch (e) {
+				return fail(400, {
+					error: e instanceof Error ? e.message : 'Backup integrity check failed'
+				});
+			}
+
+			const restoredAttachmentsPath = findAttachmentsDirectory(extractRoot);
+			writeRestoreMarker(restoredDbPath, restoredAttachmentsPath ?? undefined, dbPath);
+
 			logAudit(u.id, 'db_restore', 'settings', 1);
-			setFlash(cookies, 'Database restored. Restart the app to complete.');
+			setFlash(cookies, 'Restore pending. Restart the app to complete.');
 			throw redirect(303, '/settings/backup');
 		} catch (e) {
-			try { unlinkSync(tmpPath); } catch {}
 			if (e && typeof e === 'object' && 'status' in e) throw e;
 			return fail(400, { error: e instanceof Error ? e.message : 'Restore failed' });
+		} finally {
+			try {
+				unlinkSync(archivePath);
+			} catch {}
 		}
 	}
 };

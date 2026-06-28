@@ -18,7 +18,10 @@ interface ExportedSegment {
 
 interface ExportedTrip {
 	name: string;
-	destination?: string;
+	destinationCountryCode?: string;
+	destinationCityName?: string;
+	destinationCityLat?: number;
+	destinationCityLng?: number;
 	startDate?: string;
 	endDate?: string;
 	notes?: string;
@@ -33,7 +36,10 @@ export function exportTrips(userId: number): ExportedTrip[] {
 		const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
 		return {
 			name: t.name,
-			destination: t.destination ?? undefined,
+			destinationCountryCode: t.destinationCountryCode ?? undefined,
+			destinationCityName: t.destinationCityName ?? undefined,
+			destinationCityLat: t.destinationCityLat ?? undefined,
+			destinationCityLng: t.destinationCityLng ?? undefined,
 			startDate: t.startDate ?? undefined,
 			endDate: t.endDate ?? undefined,
 			notes: t.notes ?? undefined,
@@ -70,7 +76,8 @@ export function exportTripsCsv(userId: number): string {
 	const rows = exportTrips(userId);
 	const headers = [
 		'name',
-		'destination',
+		'destinationCountryCode',
+		'destinationCityName',
 		'startDate',
 		'endDate',
 		'notes',
@@ -90,7 +97,8 @@ export function exportTripsCsv(userId: number): string {
 		for (const s of segs) {
 			lines.push([
 				csvEscape(t.name),
-				csvEscape(t.destination),
+				csvEscape(t.destinationCountryCode),
+				csvEscape(t.destinationCityName),
 				csvEscape(t.startDate),
 				csvEscape(t.endDate),
 				csvEscape(t.notes),

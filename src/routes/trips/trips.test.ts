@@ -43,19 +43,19 @@ test('trip list includes shared trips and labels them shared', () => {
 	const c = db.insert(users).values({ email: 'list-c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
 
 	db.insert(trips)
-		.values({ ownerId: a.id, name: 'Owned Trip', destination: 'Paris', startDate: '2026-07-01', notes: 'OWNER NOTE' })
+		.values({ ownerId: a.id, name: 'Owned Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01', notes: 'OWNER NOTE' })
 		.run();
 
 	const shared = db
 		.insert(trips)
-		.values({ ownerId: a.id, name: 'Shared Trip', destination: 'Tokyo', startDate: '2026-08-01', notes: 'SECRET' })
+		.values({ ownerId: a.id, name: 'Shared Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01', notes: 'SECRET' })
 		.returning()
 		.get();
 	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: b.id }).run();
 
 	const groupTrip = db
 		.insert(trips)
-		.values({ ownerId: a.id, name: 'Group Trip', destination: 'Berlin', startDate: '2026-09-01' })
+		.values({ ownerId: a.id, name: 'Group Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01' })
 		.returning()
 		.get();
 	const g = db.insert(groups).values({ ownerId: a.id, name: 'fam' }).returning().get();
@@ -81,9 +81,9 @@ test('trip list defaults to startDate ascending', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'sort-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Zulu', destination: 'Z', startDate: '2026-09-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Alpha', destination: 'A', startDate: '2026-07-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Mike', destination: 'M', startDate: '2026-08-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Zulu', startDate: '2026-09-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Alpha', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Mike', startDate: '2026-08-01' }).run();
 
 	const result = load(event(a)) as any;
 	expect(result.trips.map((t: any) => t.name)).toEqual(['Alpha', 'Mike', 'Zulu']);
@@ -96,9 +96,9 @@ test('trip list filters by query on name and destination', () => {
 	const a = db.insert(users).values({ email: 'q-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const b = db.insert(users).values({ email: 'q-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destination: 'Paris', startDate: '2026-07-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destination: 'Tokyo', startDate: '2026-08-01' }).run();
-	const shared = db.insert(trips).values({ ownerId: a.id, name: 'Berlin Trip', destination: 'Berlin', startDate: '2026-09-01', notes: 'SECRET' }).returning().get();
+	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' }).run();
+	const shared = db.insert(trips).values({ ownerId: a.id, name: 'Berlin Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01', notes: 'SECRET' }).returning().get();
 	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: b.id }).run();
 
 	const byName = load(event(a, '?q=tokyo')) as any;
@@ -116,9 +116,9 @@ test('trip list sorts by name and order', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'name-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Zebra', destination: 'Z', startDate: '2026-09-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Apple', destination: 'A', startDate: '2026-07-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Mango', destination: 'M', startDate: '2026-08-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Zebra', startDate: '2026-09-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Apple', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Mango', startDate: '2026-08-01' }).run();
 
 	const asc = load(event(a, '?sort=name&order=asc')) as any;
 	expect(asc.trips.map((t: any) => t.name)).toEqual(['Apple', 'Mango', 'Zebra']);
@@ -177,7 +177,7 @@ test('trip list rejects invalid status values', () => {
 test('trip list rejects invalid sort and order values', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	db.insert(trips).values({ ownerId: a.id, name: 'Only', destination: 'O', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Only', startDate: '2026-07-01' }).run();
 
 	const badSort = load(event(a, '?sort=ownerId&order=asc')) as any;
 	expect(badSort.trips.map((t: any) => t.name)).toEqual(['Only']);

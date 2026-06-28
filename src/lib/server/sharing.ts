@@ -137,7 +137,10 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 	return {
 		id: trip.id,
 		name: trip.name,
-		destination: trip.destination,
+		destinationCountryCode: trip.destinationCountryCode,
+		destinationCityName: trip.destinationCityName,
+		destinationCityLat: trip.destinationCityLat,
+		destinationCityLng: trip.destinationCityLng,
 		startDate: trip.startDate,
 		endDate: trip.endDate,
 		status: trip.status,
@@ -224,7 +227,10 @@ export function listViewableTrips(
 			: [];
 		const segmentTripIds = new Set(segmentMatches.map((s) => s.tripId));
 		result = result.filter((t) => {
-			const haystack = `${t.name ?? ''} ${t.destination ?? ''}`.toLowerCase();
+			const city = t.isShared
+				? (t as ReturnType<typeof viewerProjection>).destinationCityName ?? ''
+				: (t as Trip).destinationCityName ?? '';
+			const haystack = `${t.name ?? ''} ${city}`.toLowerCase();
 			if (haystack.includes(needle)) return true;
 			if (!t.isShared && segmentTripIds.has(t.id)) return true;
 			return false;

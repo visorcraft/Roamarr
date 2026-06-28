@@ -2,12 +2,14 @@
 	import { DateTime } from 'luxon';
 	import { SEG } from '$lib/segmentLabels';
 	import Icon from '$lib/components/Icon.svelte';
+	import { formatDestination } from '$lib/tripDestination';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const trip = $derived(data.trip);
 	const companions = $derived(data.companions ?? []);
+	const destinationLabel = $derived(formatDestination(trip.destinationCityName, trip.destinationCountryCode));
 
 	type SegmentRow = {
 		type: string;
@@ -99,10 +101,10 @@
 		<h1 class="print-title font-display text-3xl font-extrabold text-white" style="color: var(--theme-strong)">{trip.name}</h1>
 
 		<div class="print-meta mt-3 flex flex-wrap gap-3 text-sm text-slate-300" style="color: var(--theme-ink)">
-			{#if trip.destination}
+			{#if destinationLabel}
 				<span class="print-meta-item inline-flex items-center gap-1.5">
 					<Icon name="location" class="h-4 w-4" />
-					{trip.destination}
+					{destinationLabel}
 				</span>
 			{/if}
 			{#if trip.startDate || trip.endDate}

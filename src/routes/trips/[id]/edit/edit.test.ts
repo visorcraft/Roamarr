@@ -109,7 +109,6 @@ test('edit action updates a trip with valid data', async () => {
 	const t = createTrip(a.id, { name: 'Old' });
 	const form = makeFormData({
 		name: 'Updated',
-		destination: 'Tokyo',
 		startDate: '2026-08-01',
 		endDate: '2026-08-10',
 		notes: 'new notes'
@@ -120,7 +119,9 @@ test('edit action updates a trip with valid data', async () => {
 	});
 	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
 	expect(updated.name).toBe('Updated');
-	expect(updated.destination).toBe('Tokyo');
+	expect(updated.destination).toBeNull();
+	expect(updated.destinationCountryCode).toBeNull();
+	expect(updated.destinationCityName).toBeNull();
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {
@@ -134,7 +135,6 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 
 	const form = makeFormData({
 		name: 'Editor Updated',
-		destination: 'Osaka',
 		startDate: '2026-08-01',
 		endDate: '2026-08-10',
 		notes: 'editor notes'
@@ -223,17 +223,22 @@ test('edit trip form highlights invalid fields and shows per-field errors', () =
 	const trip = {
 		id: 1,
 		name: 'Trip',
-		destination: '',
+		destinationCountryCode: '',
+		destinationCityName: '',
+		destinationCityLat: null,
+		destinationCityLng: null,
 		startDate: '',
 		endDate: '',
 		notes: null,
 		tags: '[]',
 		status: 'booked' as const,
-			baseCurrency: 'USD'
+		baseCurrency: 'USD'
 		};
 	const { body } = render(EditTripPage, {
 		props: { data: { trip, owner: true }, form: { errors: { name: 'name is required' } } }
 	});
 	expect(body).toContain('input-error');
 	expect(body).toContain('name is required');
+	expect(body).toContain('destinationCountryCode');
+	expect(body).toContain('destinationCityName');
 });

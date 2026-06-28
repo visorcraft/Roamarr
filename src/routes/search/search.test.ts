@@ -27,7 +27,7 @@ test('search page requires a user', () => {
 test('search with no query returns empty results', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'search-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destination: 'Paris', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' }).run();
 
 	const result = load(event(a)) as any;
 	expect(result.trips).toHaveLength(0);
@@ -38,8 +38,8 @@ test('search filters trips by name and destination', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'search-b@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destination: 'Tokyo', startDate: '2026-08-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destination: 'Paris', startDate: '2026-07-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' }).run();
 
 	const result = load(event(a, '?q=tokyo')) as any;
 	expect(result.trips.map((t: any) => t.name)).toEqual(['Tokyo Trip']);
@@ -50,8 +50,8 @@ test('search excludes archived trips by default', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'search-c@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Active Tokyo', destination: 'Tokyo', startDate: '2026-08-01' }).run();
-	db.insert(trips).values({ ownerId: a.id, name: 'Archived Tokyo', destination: 'Tokyo', startDate: '2026-09-01', archived: true }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Active Tokyo', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Archived Tokyo', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-09-01', archived: true }).run();
 
 	const result = load(event(a, '?q=tokyo')) as any;
 	expect(result.trips.map((t: any) => t.name)).toEqual(['Active Tokyo']);
@@ -61,7 +61,7 @@ test('search trims whitespace-only queries', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'search-d@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 
-	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destination: 'Tokyo', startDate: '2026-08-01' }).run();
+	db.insert(trips).values({ ownerId: a.id, name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' }).run();
 
 	const result = load(event(a, '?q=%20%20')) as any;
 	expect(result.trips).toHaveLength(0);

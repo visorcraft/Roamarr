@@ -1,11 +1,13 @@
 import { DateTime } from 'luxon';
 import type { SegmentType } from './db/schema';
+import { formatDestination } from '$lib/tripDestination';
 import { nowIso } from './tz';
 
 export type CalendarTrip = {
 	id: number;
 	name: string;
-	destination?: string | null;
+	destinationCityName?: string | null;
+	destinationCountryCode?: string | null;
 	startDate?: string | null;
 	endDate?: string | null;
 };
@@ -98,8 +100,9 @@ function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number,
 	if (segment.location) {
 		lines.push(`LOCATION:${escapeText(segment.location)}`);
 	}
-	if (trip.destination) {
-		lines.push(`DESCRIPTION:${escapeText(trip.destination)}`);
+	const destinationLabel = formatDestination(trip.destinationCityName, trip.destinationCountryCode);
+	if (destinationLabel) {
+		lines.push(`DESCRIPTION:${escapeText(destinationLabel)}`);
 	}
 	lines.push('END:VEVENT');
 
@@ -110,6 +113,7 @@ function buildTripEvent(trip: CalendarTrip, stamp: string): string | null {
 	if (!trip.startDate) return null;
 	const uid = `roamarr-trip-${trip.id}@roamarr`;
 	const lines: string[] = [];
+	const destinationLabel = formatDestination(trip.destinationCityName, trip.destinationCountryCode);
 	lines.push('BEGIN:VEVENT');
 	lines.push(`UID:${uid}`);
 	lines.push(`DTSTAMP:${stamp}`);
@@ -119,8 +123,8 @@ function buildTripEvent(trip: CalendarTrip, stamp: string): string | null {
 		const end = DateTime.fromISO(trip.endDate, { zone: 'utc' }).plus({ days: 1 });
 		lines.push(`DTEND;VALUE=DATE:${end.toFormat('yyyyMMdd')}`);
 	}
-	if (trip.destination) {
-		lines.push(`DESCRIPTION:${escapeText(trip.destination)}`);
+	if (destinationLabel) {
+		lines.push(`DESCRIPTION:${escapeText(destinationLabel)}`);
 	}
 	lines.push('END:VEVENT');
 	return lines.map(foldLine).join('\r\n');

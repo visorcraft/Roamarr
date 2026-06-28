@@ -31,7 +31,10 @@ test('imports a valid JSON file', async () => {
 		trips: [
 			{
 				name: 'Imported Trip',
-				destination: 'Paris',
+				destinationCountryCode: 'FR',
+				destinationCityName: 'Paris',
+				destinationCityLat: 48.8566,
+				destinationCityLng: 2.3522,
 				startDate: '2026-09-01',
 				endDate: '2026-09-10',
 				segments: [{ type: 'flight', title: 'Out', localStart: '2026-09-01T08:00', startTz: 'UTC' }]
@@ -55,8 +58,8 @@ test('imports a valid CSV file', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 	const csv =
-		'name,destination,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\n' +
-		'CSV Trip,Rome,2026-10-01,2026-10-05,flight,Out,2026-10-01T09:00,UTC';
+		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\n' +
+		'CSV Trip,IT,Rome,41.9028,12.4964,2026-10-01,2026-10-05,flight,Out,2026-10-01T09:00,UTC';
 	const file = new File([csv], 'trips.csv', { type: 'text/csv' });
 	const result = (await actions.default(makeEvent(file, 'csv', u.id))) as {
 		success: boolean;

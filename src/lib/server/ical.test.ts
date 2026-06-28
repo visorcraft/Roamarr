@@ -4,7 +4,8 @@ import { buildCalendar, buildAggregateCalendar } from './ical';
 const trip = {
 	id: 1,
 	name: 'Summer Escape',
-	destination: 'Tokyo, Japan',
+	destinationCityName: 'Tokyo',
+	destinationCountryCode: 'JP',
 	startDate: '2026-07-01',
 	endDate: '2026-07-10'
 };
@@ -47,7 +48,7 @@ test('renders segment events with UTC datetimes', () => {
 
 test('escapes special iCal characters in text values', () => {
 	const ics = buildCalendar(
-		{ id: 2, name: 'Trip; with, newline\nand backslash \\', destination: 'Here; There' },
+		{ id: 2, name: 'Trip; with, newline\nand backslash \\', destinationCityName: 'Here; There', destinationCountryCode: null },
 		[
 			{
 				type: 'flight',

@@ -2,9 +2,15 @@
 	import { enhance } from '$app/forms';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
+	import { COUNTRIES } from '$lib/countries';
+	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destination: string | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
+	let destinationCountryCode = $state('');
+	$effect(() => {
+		destinationCountryCode = data.trip.destinationCountryCode ?? '';
+	});
 
 	const statusLabel: Record<TripStatus, string> = {
 		planning: 'Planning',
@@ -40,10 +46,32 @@
 			<input id="name" name="name" value={data.trip.name} class="input {form?.errors?.name ? 'input-error' : ''}" required disabled={submitting} />
 			{#if form?.errors?.name}<p class="field-error">{form.errors.name}</p>{/if}
 		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="destination">Destination</label>
-			<input id="destination" name="destination" value={data.trip.destination ?? ''} placeholder="Lisbon, Portugal" class="input {form?.errors?.destination ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.destination}<p class="field-error">{form.errors.destination}</p>{/if}
+		<div class="field">
+			<label class="label" for="destinationCountryCode">Destination country</label>
+			<select
+				id="destinationCountryCode"
+				name="destinationCountryCode"
+				class="input {form?.errors?.destinationCountryCode ? 'input-error' : ''}"
+				bind:value={destinationCountryCode}
+				disabled={submitting}
+			>
+				<option value="">Select country</option>
+				{#each COUNTRIES as c}
+					<option value={c.code} selected={c.code === destinationCountryCode}>{c.name}</option>
+				{/each}
+			</select>
+			{#if form?.errors?.destinationCountryCode}<p class="field-error">{form.errors.destinationCountryCode}</p>{/if}
+		</div>
+		<div class="field">
+			<CityAutocomplete
+				countryCode={destinationCountryCode}
+				name="destinationCityName"
+				value={data.trip.destinationCityName ?? ''}
+				latName="destinationCityLat"
+				lngName="destinationCityLng"
+				errors={form?.errors ?? {}}
+				disabled={submitting}
+			/>
 		</div>
 		<div class="field">
 			<label class="label" for="startDate">Start date</label>

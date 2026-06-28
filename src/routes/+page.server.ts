@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db } from '$lib/server/db';
+import { formatDestination } from '$lib/tripDestination';
 import {
 	fareProviders,
 	fareWatches,
@@ -39,7 +40,7 @@ type AgendaItem =
 			kind: 'trip';
 			id: number;
 			name: string;
-			destination: string | null;
+			destinationLabel: string | null;
 			isShared: boolean;
 	  };
 
@@ -57,7 +58,7 @@ type AgendaSortItem =
 			kind: 'trip';
 			id: number;
 			name: string;
-			destination: string | null;
+			destinationLabel: string | null;
 			isShared: boolean;
 	  };
 
@@ -75,7 +76,7 @@ function buildAgenda(userId: number, timezone: string): AgendaItem[] {
 				kind: 'trip',
 				id: t.id,
 				name: t.name,
-				destination: t.destination,
+				destinationLabel: formatDestination(t.destinationCityName, t.destinationCountryCode),
 				isShared: t.isShared
 			});
 		}
@@ -247,7 +248,10 @@ export const load: PageServerLoad = ({ locals }) => {
 		.slice(0, 10);
 
 	return {
-		upcoming,
+		upcoming: upcoming.map((t) => ({
+			...t,
+			destinationLabel: formatDestination(t.destinationCityName, t.destinationCountryCode)
+		})),
 		expiring,
 		paymentsDue,
 		activity,

@@ -38,7 +38,8 @@ export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 		{
 			id: projection.id,
 			name: projection.name,
-			destination: projection.destination,
+			destinationCityName: projection.destinationCityName,
+			destinationCountryCode: projection.destinationCountryCode,
 			startDate: projection.startDate,
 			endDate: projection.endDate
 		},

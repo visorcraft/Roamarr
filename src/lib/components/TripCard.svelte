@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { parseTags } from '$lib/tags';
+	import { formatDestination } from '$lib/tripDestination';
 	import type { TripStatus } from '$lib/tripStatus';
 
 	let {
@@ -10,7 +11,10 @@
 		trip: {
 			id: number;
 			name: string;
-			destination?: string | null;
+			destinationCountryCode?: string | null;
+			destinationCityName?: string | null;
+			destinationCityLat?: number | null;
+			destinationCityLng?: number | null;
 			startDate?: string | null;
 			endDate?: string | null;
 			tags: string | string[];
@@ -22,6 +26,10 @@
 		};
 		showCheckbox?: boolean;
 	} = $props();
+
+	const destinationLabel = $derived(
+		formatDestination(trip.destinationCityName, trip.destinationCountryCode)
+	);
 
 	const visBadge: Record<string, string> = {
 		private: 'badge-slate',
@@ -45,6 +53,11 @@
 </script>
 
 <div class="card group relative flex flex-col gap-3 p-5">
+	<a
+		href={`/trips/${trip.id}`}
+		aria-label={trip.name}
+		class="absolute inset-0 z-0 rounded-[inherit]"
+	></a>
 	{#if showCheckbox && !trip.isShared}
 		<input
 			type="checkbox"
@@ -55,8 +68,8 @@
 			onclick={(e) => e.stopPropagation()}
 		/>
 	{/if}
-	<a href={`/trips/${trip.id}`} class="contents">
-		<div class="flex items-start justify-between gap-3 {showCheckbox && !trip.isShared ? 'pr-7' : ''}">
+	<div class="flex flex-col gap-3 {showCheckbox && !trip.isShared ? 'pr-7' : ''}">
+		<div class="flex items-start justify-between gap-3">
 			<h2 class="section-title">
 				{#if trip.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
 				{trip.name}
@@ -71,10 +84,10 @@
 				{/if}
 			</div>
 		</div>
-		{#if trip.destination}
+		{#if destinationLabel}
 			<p class="flex items-center gap-1.5 text-sm text-slate-400">
 				<Icon name="location" class="h-4 w-4 text-slate-500" />
-				{trip.destination}
+				{destinationLabel}
 			</p>
 		{/if}
 		{#if parseTags(trip.tags).length}
@@ -91,5 +104,5 @@
 				<span class="leading-none">{trip.endDate || '—'}</span>
 			</p>
 		{/if}
-	</a>
+	</div>
 </div>

@@ -23,7 +23,7 @@ test('exportTrips returns only owned trips with segments', () => {
 	const other = db.insert(users).values({ email: 'x@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
 	const t1 = db
 		.insert(trips)
-		.values({ ownerId: owner.id, name: 'Mine', destination: 'Paris', startDate: '2026-07-01', tags: '["work"]' })
+		.values({ ownerId: owner.id, name: 'Mine', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01', tags: '["work"]' })
 		.returning()
 		.get();
 	db.insert(segments)

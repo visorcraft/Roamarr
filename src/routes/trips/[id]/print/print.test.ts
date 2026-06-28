@@ -22,7 +22,7 @@ test('load returns trip, day-grouped segments, and companions', () => {
 	const u = db.insert(users).values({ email: 'print@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
 	const t = db
 		.insert(trips)
-		.values({ ownerId: u.id, name: 'Japan trip', destination: 'Tokyo', startDate: '2026-04-01', endDate: '2026-04-03' })
+		.values({ ownerId: u.id, name: 'Japan trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-04-01', endDate: '2026-04-03' })
 		.returning()
 		.get();
 	db.insert(segments).values({

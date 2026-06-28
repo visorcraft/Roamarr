@@ -26,7 +26,6 @@ test('creates a trip with valid data', async () => {
 	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
 	const form = makeFormData({
 		name: 'Summer Escape',
-		destination: 'Lisbon',
 		startDate: '2026-07-01',
 		endDate: '2026-07-10',
 		notes: 'note',
@@ -89,4 +88,6 @@ test('new trip form highlights invalid fields and shows per-field errors', () =>
 	expect(body).toContain('input-error');
 	expect(body).toContain('name is required');
 	expect(body).toContain('startDate must be on or before endDate');
+	expect(body).toContain('destinationCountryCode');
+	expect(body).toContain('destinationCityName');
 });

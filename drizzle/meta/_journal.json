@@ -15,6 +15,13 @@
       "when": 1782600687150,
       "tag": "0001_open_azazel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1782605410054,
+      "tag": "0002_easy_hairball",
+      "breakpoints": true
     }
   ]
 }

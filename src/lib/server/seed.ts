@@ -37,7 +37,11 @@ export function seedDemoData(adminId: number) {
 		.values({
 			ownerId: adminId,
 			name: 'Demo Trip to Tokyo',
-			destination: 'Tokyo, Japan',
+			destination: null,
+			destinationCountryCode: 'JP',
+			destinationCityName: 'Tokyo',
+			destinationCityLat: 35.6762,
+			destinationCityLng: 139.6503,
 			startDate: '2026-09-15',
 			endDate: '2026-09-22',
 			notes: 'A sample walking-skeleton trip.',
@@ -80,7 +84,11 @@ export function seedDemoData(adminId: number) {
 		.values({
 			ownerId: demoUser.id,
 			name: 'Shared demo trip',
-			destination: 'Paris',
+			destination: null,
+			destinationCountryCode: 'FR',
+			destinationCityName: 'Paris',
+			destinationCityLat: 48.8566,
+			destinationCityLng: 2.3522,
 			startDate: '2026-10-01',
 			endDate: '2026-10-05',
 			tags: JSON.stringify(['demo', 'europe'])

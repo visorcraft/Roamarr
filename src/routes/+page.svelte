@@ -66,7 +66,7 @@ import { formatDate } from '$lib/dateFormat';
 									{#if item.isShared}<span class="badge badge-brand">Shared</span>{/if}
 									<span class="badge badge-slate">Trip</span>
 								</span>
-								{#if item.destination}<span class="row-subtitle">{item.destination}</span>{/if}
+								{#if item.destinationLabel}<span class="row-subtitle">{item.destinationLabel}</span>{/if}
 							</span>
 						</a>
 					{:else}
@@ -108,7 +108,7 @@ import { formatDate } from '$lib/dateFormat';
 									{#if t.isShared}<span class="badge badge-brand">Shared</span>{/if}
 									{#if until != null}<span class="badge badge-compact badge-brand">{until} day{until === 1 ? '' : 's'}</span>{/if}
 								</span>
-								{#if t.destination}<span class="row-subtitle">{t.destination}</span>{/if}
+								{#if t.destinationLabel}<span class="row-subtitle">{t.destinationLabel}</span>{/if}
 							</span>
 							{#if t.startDate}<span class="row-meta">{t.startDate}</span>{/if}
 						</a>

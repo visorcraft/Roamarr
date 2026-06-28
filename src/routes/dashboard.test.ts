@@ -27,7 +27,7 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 	// Owned by A, shared directly with B
 	const shared = db
 		.insert(trips)
-		.values({ ownerId: a.id, name: 'Shared Trip', destination: 'Paris', startDate: future, notes: 'SECRET' })
+		.values({ ownerId: a.id, name: 'Shared Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: future, notes: 'SECRET' })
 		.returning()
 		.get();
 	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: b.id }).run();
@@ -35,7 +35,7 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 	// Owned by A, shared with group containing C
 	const groupShared = db
 		.insert(trips)
-		.values({ ownerId: a.id, name: 'Group Trip', destination: 'Tokyo', startDate: future })
+		.values({ ownerId: a.id, name: 'Group Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: future })
 		.returning()
 		.get();
 	const g = db.insert(groups).values({ ownerId: a.id, name: 'fam' }).returning().get();
@@ -44,12 +44,12 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 
 	// Owned by A, not shared
 	db.insert(trips)
-		.values({ ownerId: a.id, name: 'Private Trip', destination: 'Berlin', startDate: future })
+		.values({ ownerId: a.id, name: 'Private Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: future })
 		.run();
 
 	// Past shared trip should not appear in upcoming list
 	db.insert(trips)
-		.values({ ownerId: a.id, name: 'Past Shared', destination: 'Rome', startDate: past })
+		.values({ ownerId: a.id, name: 'Past Shared', destinationCountryCode: 'IT', destinationCityName: 'Rome', destinationCityLat: 41.9028, destinationCityLng: 12.4964, startDate: past })
 		.run();
 	db.insert(tripShares).values({ tripId: 4, sharedWithUserId: b.id }).run();
 
@@ -112,7 +112,7 @@ test('dashboard agenda includes trips covering today and segments starting/endin
 	// Trip covering today in NY (2026-07-15)
 	const covering = db
 		.insert(trips)
-		.values({ ownerId: u.id, name: 'Summer Trip', destination: 'Boston', startDate: '2026-07-10', endDate: '2026-07-20' })
+		.values({ ownerId: u.id, name: 'Summer Trip', destinationCountryCode: 'US', destinationCityName: 'Boston', destinationCityLat: 42.3601, destinationCityLng: -71.0589, startDate: '2026-07-10', endDate: '2026-07-20' })
 		.returning()
 		.get();
 

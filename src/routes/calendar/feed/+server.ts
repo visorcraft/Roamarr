@@ -16,7 +16,8 @@ function toCalendarInput(
 			trip: {
 				id: view.trip.id,
 				name: view.trip.name,
-				destination: view.trip.destination,
+				destinationCityName: view.trip.destinationCityName,
+				destinationCountryCode: view.trip.destinationCountryCode,
 				startDate: view.trip.startDate,
 				endDate: view.trip.endDate
 			},
@@ -33,7 +34,8 @@ function toCalendarInput(
 		trip: {
 			id: view.trip.id,
 			name: view.trip.name,
-			destination: view.trip.destination,
+			destinationCityName: view.trip.destinationCityName,
+			destinationCountryCode: view.trip.destinationCountryCode,
 			startDate: view.trip.startDate,
 			endDate: view.trip.endDate
 		},

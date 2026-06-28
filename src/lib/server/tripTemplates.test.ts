@@ -20,7 +20,7 @@ beforeEach(() => {
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = db.insert(users).values({ email: 'tpl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'Source', destination: 'Paris' }).returning().get();
+	const t = db.insert(trips).values({ ownerId: u.id, name: 'Source', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522 }).returning().get();
 	return { db, u, t };
 }
 
@@ -66,7 +66,9 @@ test('createTripFromTemplate copies segments and metadata', () => {
 	});
 
 	expect(copy.name).toBe('Copied trip');
-	expect(copy.destination).toBe('Paris');
+	expect(copy.destination).toBeNull();
+	expect(copy.destinationCityName).toBe('Paris');
+	expect(copy.destinationCountryCode).toBe('FR');
 	expect(copy.startDate).toBe('2027-01-01');
 
 	const segs = db.select().from(segments).where(eq(segments.tripId, copy.id)).all();

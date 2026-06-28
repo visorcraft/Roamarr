@@ -21,7 +21,10 @@ export function createTrip(
 	userId: number,
 	i: {
 		name: string;
-		destination?: string;
+		destinationCountryCode?: string;
+		destinationCityName?: string;
+		destinationCityLat?: number;
+		destinationCityLng?: number;
 		startDate?: string;
 		endDate?: string;
 		notes?: string;
@@ -36,7 +39,11 @@ export function createTrip(
 		.values({
 			ownerId: userId,
 			name: i.name,
-			destination: i.destination,
+			destination: null,
+			destinationCountryCode: i.destinationCountryCode,
+			destinationCityName: i.destinationCityName,
+			destinationCityLat: i.destinationCityLat,
+			destinationCityLng: i.destinationCityLng,
 			startDate: i.startDate,
 			endDate: i.endDate,
 			notes: i.notes,
@@ -72,7 +79,11 @@ export function duplicateTrip(ownerId: number, tripId: number) {
 		.values({
 			ownerId,
 			name: `Copy of ${t.name}`,
-			destination: t.destination,
+			destination: null,
+			destinationCountryCode: t.destinationCountryCode,
+			destinationCityName: t.destinationCityName,
+			destinationCityLat: t.destinationCityLat,
+			destinationCityLng: t.destinationCityLng,
 			startDate: t.startDate,
 			endDate: t.endDate,
 			notes: t.notes,

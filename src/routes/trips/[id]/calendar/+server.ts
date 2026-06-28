@@ -25,7 +25,8 @@ export const GET: RequestHandler = ({ locals, params }) => {
 	const tripInput = {
 		id: view.trip.id,
 		name: view.trip.name,
-		destination: view.trip.destination,
+		destinationCityName: view.trip.destinationCityName,
+		destinationCountryCode: view.trip.destinationCountryCode,
 		startDate: view.trip.startDate,
 		endDate: view.trip.endDate
 	};

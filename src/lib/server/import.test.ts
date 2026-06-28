@@ -38,7 +38,7 @@ test('parseJson rejects malformed JSON', () => {
 });
 
 test('parseCsv accepts a header and data rows', () => {
-	const csv = 'name,destination,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\nTokyo,Japan,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC';
+	const csv = 'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\nTokyo,JP,Tokyo,35.6762,139.6503,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC';
 	const parsed = parseCsv(csv);
 	expect(parsed.trips).toHaveLength(1);
 	expect(parsed.trips[0]!.name).toBe('Tokyo');
@@ -47,10 +47,10 @@ test('parseCsv accepts a header and data rows', () => {
 });
 
 test('parseCsv handles commas inside quoted values', () => {
-	const csv = 'name,destination\n"Summer, Escape","Lisbon, Portugal"';
+	const csv = 'name,destinationCityName\n"Summer, Escape","Lisbon, Portugal"';
 	const parsed = parseCsv(csv);
 	expect(parsed.trips[0]!.name).toBe('Summer, Escape');
-	expect(parsed.trips[0]!.destination).toBe('Lisbon, Portugal');
+	expect(parsed.trips[0]!.destinationCityName).toBe('Lisbon, Portugal');
 });
 
 test('importTrips creates trips and segments', () => {
@@ -60,7 +60,10 @@ test('importTrips creates trips and segments', () => {
 		trips: [
 			{
 				name: 'Tokyo',
-				destination: 'Japan',
+				destinationCountryCode: 'JP',
+				destinationCityName: 'Tokyo',
+				destinationCityLat: 35.6762,
+				destinationCityLng: 139.6503,
 				startDate: '2026-08-01',
 				endDate: '2026-08-10',
 				segments: [
@@ -155,9 +158,9 @@ test('importTrips dryRun validates and previews without writing', () => {
 
 test('parseCsv groups multi-segment rows into one trip', () => {
 	const csv = [
-		'name,destination,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz',
-		'Tokyo,Japan,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC',
-		'Tokyo,Japan,2026-08-01,2026-08-10,hotel,Stay,2026-08-05T16:00,UTC'
+		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz',
+		'Tokyo,JP,Tokyo,35.6762,139.6503,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC',
+		'Tokyo,JP,Tokyo,35.6762,139.6503,2026-08-01,2026-08-10,hotel,Stay,2026-08-05T16:00,UTC'
 	].join('\n');
 	const parsed = parseCsv(csv);
 	expect(parsed.trips).toHaveLength(1);

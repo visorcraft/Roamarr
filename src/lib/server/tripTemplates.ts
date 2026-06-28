@@ -9,7 +9,10 @@ import { serializeTags, parseTags } from '$lib/tags';
 
 interface TripTemplateSnapshot {
 	name: string;
-	destination: string | null;
+	destinationCountryCode: string | null;
+	destinationCityName: string | null;
+	destinationCityLat: number | null;
+	destinationCityLng: number | null;
 	notes: string | null;
 	tags: string[];
 	segmentTemplates: Array<{ type: string; title: string; location: string | null }>;
@@ -31,7 +34,10 @@ export function saveTripTemplate(userId: number, sourceTripId: number, name: str
 		.all();
 	const snapshot: TripTemplateSnapshot = {
 		name: trip.name,
-		destination: trip.destination,
+		destinationCountryCode: trip.destinationCountryCode ?? null,
+		destinationCityName: trip.destinationCityName ?? null,
+		destinationCityLat: trip.destinationCityLat ?? null,
+		destinationCityLng: trip.destinationCityLng ?? null,
 		notes: trip.notes,
 		tags: parseTags(trip.tags),
 		segmentTemplates: segs.map((s) => ({ type: s.type, title: s.title, location: s.location }))
@@ -48,7 +54,15 @@ export function saveTripTemplate(userId: number, sourceTripId: number, name: str
 export function createTripFromTemplate(
 	userId: number,
 	templateId: number,
-	overrides: { name?: string; destination?: string | null; startDate?: string | null; endDate?: string | null }
+	overrides: {
+		name?: string;
+		destinationCountryCode?: string | null;
+		destinationCityName?: string | null;
+		destinationCityLat?: number | null;
+		destinationCityLng?: number | null;
+		startDate?: string | null;
+		endDate?: string | null;
+	}
 ) {
 	const template = db
 		.select()
@@ -56,14 +70,38 @@ export function createTripFromTemplate(
 		.where(and(eq(tripTemplates.id, templateId), eq(tripTemplates.userId, userId)))
 		.get();
 	if (!template) throw error(404, 'Template not found');
-	let snapshot: TripTemplateSnapshot = { name: template.name, destination: null, notes: null, tags: [], segmentTemplates: [] };
+	let snapshot: TripTemplateSnapshot = {
+		name: template.name,
+		destinationCountryCode: null,
+		destinationCityName: null,
+		destinationCityLat: null,
+		destinationCityLng: null,
+		notes: null,
+		tags: [],
+		segmentTemplates: []
+	};
 	try {
 		snapshot = JSON.parse(template.snapshotJson) as TripTemplateSnapshot;
 	} catch {
 		// ignore
 	}
 	const name = overrides.name?.trim() || snapshot.name;
-	const destination = overrides.destination !== undefined ? overrides.destination : snapshot.destination;
+	const destinationCountryCode =
+		overrides.destinationCountryCode !== undefined
+			? overrides.destinationCountryCode
+			: snapshot.destinationCountryCode;
+	const destinationCityName =
+		overrides.destinationCityName !== undefined
+			? overrides.destinationCityName
+			: snapshot.destinationCityName;
+	const destinationCityLat =
+		overrides.destinationCityLat !== undefined
+			? overrides.destinationCityLat
+			: snapshot.destinationCityLat;
+	const destinationCityLng =
+		overrides.destinationCityLng !== undefined
+			? overrides.destinationCityLng
+			: snapshot.destinationCityLng;
 	const startDate = overrides.startDate ?? null;
 	const endDate = overrides.endDate ?? null;
 
@@ -72,7 +110,11 @@ export function createTripFromTemplate(
 		.values({
 			ownerId: userId,
 			name,
-			destination,
+			destination: null,
+			destinationCountryCode,
+			destinationCityName,
+			destinationCityLat,
+			destinationCityLng,
 			startDate,
 			endDate,
 			notes: snapshot.notes,

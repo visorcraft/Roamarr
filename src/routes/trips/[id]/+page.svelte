@@ -13,6 +13,7 @@
 	import type { trips } from '$lib/server/db/schema';
 	import { renderMarkdown } from '$lib/markdown';
 	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
+	import { formatDestination } from '$lib/tripDestination';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
 	import { SEGMENT_STATUSES, segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
@@ -177,8 +178,8 @@
 		return 'active';
 	}
 
-	function posterInitials(name: string, destination: string | null | undefined) {
-		const src = destination?.trim() || name;
+	function posterInitials(name: string, cityName: string | null | undefined) {
+		const src = cityName?.trim() || name;
 		return src
 			.split(/[\s,]+/)
 			.filter(Boolean)
@@ -334,6 +335,7 @@
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 	const daysUntil = $derived(daysUntilStart(trip.startDate));
 	const status = $derived(tripStatus(trip.startDate, trip.endDate));
+	const destinationLabel = $derived(formatDestination(trip.destinationCityName, trip.destinationCountryCode));
 	const typeCounts = $derived(
 		SEGMENT_TYPES.map((type) => ({
 			type,
@@ -420,7 +422,7 @@
 				<div class="trip-poster grid place-items-center">
 					<div class="text-center">
 						<Icon name="location" class="trip-poster-icon mx-auto h-8 w-8" />
-						<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destination)}</p>
+						<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destinationCityName)}</p>
 					</div>
 				</div>
 
@@ -438,10 +440,10 @@
 					<h1 class="trip-hero-title mt-2 text-3xl font-extrabold sm:text-4xl">{trip.name}</h1>
 
 					<div class="mt-3 flex flex-wrap gap-2">
-						{#if trip.destination}
+						{#if destinationLabel}
 							<span class="trip-meta-pill">
 								<Icon name="location" class="h-3.5 w-3.5 text-slate-500" />
-								{trip.destination}
+								{destinationLabel}
 							</span>
 						{/if}
 						{#if trip.startDate || trip.endDate}
@@ -1681,10 +1683,10 @@
 							<dd>{days} day{days === 1 ? '' : 's'}</dd>
 						</div>
 					{/if}
-					{#if trip.destination}
+					{#if destinationLabel}
 						<div>
 							<dt>Destination</dt>
-							<dd>{trip.destination}</dd>
+							<dd>{destinationLabel}</dd>
 						</div>
 					{/if}
 					{#if ownerTrip}

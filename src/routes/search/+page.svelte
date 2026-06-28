@@ -7,7 +7,10 @@
 	type SearchTrip = {
 		id: number;
 		name: string;
-		destination?: string | null;
+		destinationCountryCode?: string | null;
+		destinationCityName?: string | null;
+		destinationCityLat?: number | null;
+		destinationCityLng?: number | null;
 		startDate?: string | null;
 		endDate?: string | null;
 		tags: string | string[];

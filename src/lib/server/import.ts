@@ -19,7 +19,10 @@ interface ImportSegment {
 
 interface ImportTrip {
 	name: string;
-	destination?: string;
+	destinationCountryCode?: string;
+	destinationCityName?: string;
+	destinationCityLat?: number;
+	destinationCityLng?: number;
 	startDate?: string;
 	endDate?: string;
 	notes?: string;
@@ -35,7 +38,10 @@ interface ImportError {
 
 interface ImportPreviewTrip {
 	name: string;
-	destination?: string;
+	destinationCountryCode?: string;
+	destinationCityName?: string;
+	destinationCityLat?: number;
+	destinationCityLng?: number;
 	startDate?: string;
 	endDate?: string;
 	segments: { type: SegmentType; title: string; localStart: string; startTz: string }[];
@@ -104,7 +110,10 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 		if (!trip) {
 			trip = {
 				name: obj.name || '',
-				destination: obj.destination || undefined,
+				destinationCountryCode: obj.destinationCountryCode || undefined,
+				destinationCityName: obj.destinationCityName || undefined,
+				destinationCityLat: obj.destinationCityLat ? Number(obj.destinationCityLat) : undefined,
+				destinationCityLng: obj.destinationCityLng ? Number(obj.destinationCityLng) : undefined,
 				startDate: obj.startDate || undefined,
 				endDate: obj.endDate || undefined,
 				notes: obj.notes || undefined,
@@ -131,7 +140,20 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 function validateTrip(input: ImportTrip): ImportError[] {
 	const v = new Validator();
 	v.requiredString(input.name, 'name', { max: 200 });
-	v.optionalString(input.destination, 'destination', { max: 200 });
+	const countryCode = input.destinationCountryCode
+		? v.countryCode(input.destinationCountryCode, 'destinationCountryCode')
+		: undefined;
+	const cityName = v.optionalString(input.destinationCityName, 'destinationCityName', { max: 200 });
+	const cityLat =
+		input.destinationCityLat != null ? v.latitude(input.destinationCityLat, 'destinationCityLat') : undefined;
+	const cityLng =
+		input.destinationCityLng != null ? v.longitude(input.destinationCityLng, 'destinationCityLng') : undefined;
+	if (cityName && (cityLat == null || cityLng == null)) {
+		v.addError('destinationCityLat', 'City latitude and longitude are required when a city is provided');
+	}
+	if (countryCode && !cityName) {
+		v.addError('destinationCityName', 'City name is required when a country is provided');
+	}
 	const startDate = v.date(input.startDate, 'startDate');
 	const endDate = v.date(input.endDate, 'endDate');
 	v.optionalString(input.notes, 'notes', { max: 5000 });
@@ -186,7 +208,10 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 		if (dryRun) {
 			result.preview!.push({
 				name: tripInput.name.trim(),
-				destination: tripInput.destination,
+				destinationCountryCode: tripInput.destinationCountryCode,
+				destinationCityName: tripInput.destinationCityName,
+				destinationCityLat: tripInput.destinationCityLat,
+				destinationCityLng: tripInput.destinationCityLng,
 				startDate: tripInput.startDate,
 				endDate: tripInput.endDate,
 				segments: validSegments.map((s) => ({
@@ -210,7 +235,11 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 			.values({
 				ownerId: userId,
 				name: tripInput.name.trim(),
-				destination: tripInput.destination,
+				destination: null,
+				destinationCountryCode: tripInput.destinationCountryCode ?? null,
+				destinationCityName: tripInput.destinationCityName ?? null,
+				destinationCityLat: tripInput.destinationCityLat ?? null,
+				destinationCityLng: tripInput.destinationCityLng ?? null,
 				startDate: tripInput.startDate,
 				endDate: tripInput.endDate,
 				notes: tripInput.notes,

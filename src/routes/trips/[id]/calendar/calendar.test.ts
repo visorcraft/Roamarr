@@ -18,7 +18,7 @@ function event(locals: App.Locals, params: { id: string }) {
 test('owner receives a text/calendar download', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = db.insert(users).values({ email: 'cal-owner@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = createTrip(a.id, { name: 'Owner Trip', destination: 'Paris', startDate: '2026-07-01' });
+	const t = createTrip(a.id, { name: 'Owner Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
 	db.insert(segments)
 		.values({
 			tripId: t.id,
@@ -50,7 +50,10 @@ test('shared viewer receives a calendar without private fields', async () => {
 	const b = db.insert(users).values({ email: 'cal-shared@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
 	const t = createTrip(a.id, {
 		name: 'Shared Trip',
-		destination: 'Berlin',
+		destinationCountryCode: 'DE',
+		destinationCityName: 'Berlin',
+		destinationCityLat: 52.52,
+		destinationCityLng: 13.405,
 		startDate: '2026-08-01',
 		notes: 'SECRET NOTES'
 	});

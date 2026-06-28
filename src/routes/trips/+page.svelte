@@ -5,7 +5,7 @@
 	import { parseTags } from '$lib/tags';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
-	let { data, form }: { data: { trips: { id: number; name: string; destination: string; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus }; form?: { error?: string } } = $props();
+	let { data, form }: { data: { trips: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus }; form?: { error?: string } } = $props();
 	let bulkMode = $state(false);
 
 	const allTags = $derived(

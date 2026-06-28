@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -15,17 +15,25 @@ import {
 	getAttachmentWithPath,
 	listAttachments
 } from './tripExpenseAttachments';
-import { tripExpenseAttachments, tripExpenses, trips, users } from './db/schema';
+import { tripExpenseAttachments } from './db/schema';
+import { tripExpenses as kitTripExpenses, users as kitUsers, trips as kitTrips } from './db/mongrelSchema';
 import { eq } from 'drizzle-orm';
+import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+import * as expensesRepo from './repositories/expensesRepo';
 
 function attachmentsDir() {
 	return path.resolve('./attachments');
 }
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	sqlite.exec(
 		'delete from trip_expense_attachments; delete from trip_expenses; delete from trips; delete from users;'
 	);
+	kit.deleteFrom(kitTripExpenses).executeSync();
+	kit.deleteFrom(kitTrips).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 afterEach(() => {
@@ -35,14 +43,16 @@ afterEach(() => {
 
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'att@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const e = db
-		.insert(tripExpenses)
-		.values({ tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' })
-		.returning()
-		.get();
-	return { db, u, t, e };
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'att@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const e = expensesRepo.createExpense({
+		tripId: t.id,
+		description: 'Dinner',
+		amount: 5000,
+		currency: 'USD'
+	});
+	return { db, kit, u, t, e };
 }
 
 test('addAttachment writes the file and database row', async () => {
@@ -96,8 +106,8 @@ test('deleteAttachment removes the row and file', async () => {
 });
 
 test('non-editor cannot add or delete attachments', async () => {
-	const { db, u, e } = seed();
-	const other = db.insert(users).values({ email: 'other@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
+	const { db, kit, u, e } = seed();
+	const other = makeSyncedUser(db, kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'O' });
 
 	await expect(
 		addAttachment(other.id, e.id, new File(['x'], 'x.png', { type: 'image/png' }))

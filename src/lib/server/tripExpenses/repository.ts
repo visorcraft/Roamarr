@@ -1,7 +1,5 @@
-import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
-import { db } from '../db';
-import { tripExpenses } from '../db/schema';
+import * as expensesRepo from '../repositories/expensesRepo';
 import { requireCompanionOnTrip, requireCompanionsOnTrip, requireEditableTrip } from '../ownership';
 import { logAudit } from '../audit';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
@@ -31,20 +29,20 @@ function normalizeCategory(category?: string | null): string {
 	return c;
 }
 
+function toExpenseView(row: expensesRepo.ExpenseRow): TripExpenseView {
+	return {
+		...row,
+		exchangeRate: row.exchangeRate ?? 10000,
+		baseAmount: row.baseAmount ?? 0,
+		paidBy: row.paidByCompanionId ?? 'owner',
+		splitAmong: parseSplitAmong(row.splitAmong)
+	};
+}
+
 export function listTripExpenses(tripId: number): TripExpenseView[] {
-	const rows = db
-		.select()
-		.from(tripExpenses)
-		.where(eq(tripExpenses.tripId, tripId))
-		.orderBy(tripExpenses.createdAt)
-		.all();
-	return rows.map((r) => ({
-		...r,
-		exchangeRate: r.exchangeRate ?? 10000,
-		baseAmount: r.baseAmount ?? 0,
-		paidBy: r.paidByCompanionId ?? 'owner',
-		splitAmong: parseSplitAmong(r.splitAmong)
-	}));
+	return expensesRepo
+		.listExpensesForTrip(tripId)
+		.map((r) => toExpenseView(r));
 }
 
 export function addTripExpense(
@@ -94,21 +92,17 @@ export function addTripExpense(
 	const splitCompanionIds = splitAmong.filter((n): n is number => typeof n === 'number');
 	requireCompanionsOnTrip(splitCompanionIds, tripId);
 
-	const inserted = db
-		.insert(tripExpenses)
-		.values({
-			tripId,
-			description,
-			amount: input.amount,
-			currency,
-			category,
-			exchangeRate,
-			baseAmount,
-			paidByCompanionId,
-			splitAmong: JSON.stringify(splitAmong)
-		})
-		.returning()
-		.get();
+	const inserted = expensesRepo.createExpense({
+		tripId,
+		description,
+		amount: input.amount,
+		currency,
+		category,
+		exchangeRate,
+		baseAmount,
+		paidByCompanionId,
+		splitAmong: JSON.stringify(splitAmong)
+	});
 
 	logAudit(userId, 'create', 'trip_expense', inserted.id, {
 		tripId,
@@ -117,17 +111,13 @@ export function addTripExpense(
 		category
 	});
 
-	return { ...inserted, paidBy: inserted.paidByCompanionId ?? 'owner', splitAmong };
+	return { ...toExpenseView(inserted), splitAmong };
 }
 
 export function deleteTripExpense(userId: number, expenseId: number) {
-	const expense = db
-		.select({ id: tripExpenses.id, tripId: tripExpenses.tripId })
-		.from(tripExpenses)
-		.where(eq(tripExpenses.id, expenseId))
-		.get();
+	const expense = expensesRepo.getExpenseById(expenseId);
 	if (!expense) throw error(404, 'Expense not found');
 	requireEditableTrip(userId, expense.tripId);
-	db.delete(tripExpenses).where(eq(tripExpenses.id, expenseId)).run();
+	expensesRepo.deleteExpense(expenseId);
 	logAudit(userId, 'delete', 'trip_expense', expenseId, { tripId: expense.tripId });
 }

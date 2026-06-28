@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -16,21 +16,19 @@ import {
 	addExpense,
 	deleteExpense
 } from './tripExpenses';
-import { users, trips, tripCompanions, tripExpenses, auditLogs } from './db/schema';
+import { tripExpenses, auditLogs } from './db/schema';
 import { eq, and } from 'drizzle-orm';
+import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 
 const event = makeActionEvent;
+const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 
 test('listTripExpenses returns expenses with parsed splitAmong', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'le@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = db
-		.insert(tripCompanions)
-		.values({ tripId: t.id, name: 'A', category: 'adult' })
-		.returning()
-		.get();
+	const u = makeSyncedUser(db, kit, { email: 'le@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Dinner',
@@ -50,8 +48,8 @@ test('listTripExpenses returns expenses with parsed splitAmong', () => {
 
 test('addTripExpense defaults and validates category', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'cat@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'cat@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const defaulted = addTripExpense(u.id, t.id, { description: 'X', amount: 1000, currency: 'USD' });
 	expect(defaulted.category).toBe('other');
@@ -66,8 +64,8 @@ test('addTripExpense defaults and validates category', () => {
 
 test('addExpense action stores category', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'acat@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'acat@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	await expect(
 		addExpense(
@@ -89,8 +87,8 @@ test('addExpense action stores category', async () => {
 
 test('addExpense action returns validation failures', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'iv@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'iv@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	expect(() =>
 		addTripExpense(u.id, t.id, { description: '   ', amount: 1000, currency: 'USD' })
@@ -105,14 +103,10 @@ test('addExpense action returns validation failures', async () => {
 
 test('addTripExpense rejects payer or split companions from another trip', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'oc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t1 = db.insert(trips).values({ ownerId: u.id, name: 'T1' }).returning().get();
-	const t2 = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
-	const other = db
-		.insert(tripCompanions)
-		.values({ tripId: t2.id, name: 'Other', category: 'adult' })
-		.returning()
-		.get();
+	const u = makeSyncedUser(db, kit, { email: 'oc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t1 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T1' });
+	const t2 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T2' });
+	const other = makeSyncedCompanion(db, kit, { tripId: t2.id, name: 'Other', category: 'adult' });
 
 	expect(() =>
 		addTripExpense(u.id, t1.id, {
@@ -135,9 +129,9 @@ test('addTripExpense rejects payer or split companions from another trip', async
 
 test('deleteTripExpense removes expense for trip editor and logs audit', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'oe@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'ne@x.c', passwordHash: 'x', displayName: 'N' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const owner = makeSyncedUser(db, kit, { email: 'oe@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeSyncedUser(db, kit, { email: 'ne@x.c', passwordHash: 'x', displayName: 'N' });
+	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
 	const e = addTripExpense(owner.id, t.id, { description: 'Taxi', amount: 2500, currency: 'USD' });
 
 	deleteTripExpense(owner.id, e.id);
@@ -157,10 +151,10 @@ test('deleteTripExpense removes expense for trip editor and logs audit', async (
 
 test('summarizeTripExpenses computes totals and split balances', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'sm@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
-	const b = db.insert(tripCompanions).values({ tripId: t.id, name: 'B', category: 'child' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'sm@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
+	const b = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'B', category: 'child' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Hotel',
@@ -195,9 +189,9 @@ test('summarizeTripExpenses computes totals and split balances', () => {
 
 test('summarizeTripExpenses handles empty splitAmong as solo payer expense', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ss@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, { description: 'Solo', amount: 5000, currency: 'USD' });
 	const expenses = listTripExpenses(t.id);
@@ -210,8 +204,8 @@ test('summarizeTripExpenses handles empty splitAmong as solo payer expense', () 
 
 test('summarizeTripExpenses handles multi-currency totals', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'mc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'mc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	addTripExpense(u.id, t.id, { description: 'EUR', amount: 10000, currency: 'EUR' });
 	addTripExpense(u.id, t.id, { description: 'USD', amount: 5000, currency: 'USD' });
@@ -224,9 +218,9 @@ test('summarizeTripExpenses handles multi-currency totals', () => {
 
 test('addExpense action creates an expense and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ae@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'ae@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	await expect(
 		addExpense(
@@ -247,8 +241,8 @@ test('addExpense action creates an expense and redirects', async () => {
 
 test('addExpense action returns validation failures', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'av@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'av@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const result = await addExpense(
 		event(u, t.id, { description: '', amount: '0', currency: 'US Dollar' })
@@ -259,8 +253,8 @@ test('addExpense action returns validation failures', async () => {
 
 test('deleteExpense action removes an expense and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'de@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'de@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const e = addTripExpense(u.id, t.id, { description: 'X', amount: 1000, currency: 'USD' });
 
 	await expect(deleteExpense(event(u, t.id, { expenseId: String(e.id) }))).rejects.toMatchObject({
@@ -272,9 +266,9 @@ test('deleteExpense action removes an expense and redirects', async () => {
 
 test('computeSettlement equal split between owner and companion', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ce@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'ce@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Dinner',
@@ -292,10 +286,10 @@ test('computeSettlement equal split between owner and companion', () => {
 
 test('computeSettlement uneven split across three people', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ue@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
-	const b = db.insert(tripCompanions).values({ tripId: t.id, name: 'B', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'ue@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
+	const b = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'B', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Taxi',
@@ -317,9 +311,9 @@ test('computeSettlement uneven split across three people', () => {
 
 test('computeSettlement single person expense has no payments', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'se@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'se@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Solo',
@@ -336,9 +330,9 @@ test('computeSettlement single person expense has no payments', () => {
 
 test('computeSettlement owner-only expense leaves companions neutral', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'oo@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'oo@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Owner-only',
@@ -356,9 +350,9 @@ test('computeSettlement owner-only expense leaves companions neutral', () => {
 
 test('addTripExpense accepts owner as a split participant', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'ao@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'ao@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	const e = addTripExpense(u.id, t.id, {
 		description: 'Gas',
@@ -375,9 +369,9 @@ test('addTripExpense accepts owner as a split participant', () => {
 
 test('addExpense action accepts owner split participant and redirects', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'as@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'as@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	await expect(
 		addExpense(
@@ -398,9 +392,9 @@ test('addExpense action accepts owner split participant and redirects', async ()
 
 test('summarizeTripExpenses splits expense among owner and companion', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'so@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'so@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Lunch',
@@ -419,9 +413,9 @@ test('summarizeTripExpenses splits expense among owner and companion', () => {
 
 test('computeSettlement with owner split participant produces correct payment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'cs@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const a = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'cs@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'A', category: 'adult' });
 
 	addTripExpense(u.id, t.id, {
 		description: 'Lunch',
@@ -439,8 +433,8 @@ test('computeSettlement with owner split participant produces correct payment', 
 
 test('addTripExpense computes base amount from exchange rate', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'fx@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'fx@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const e = addTripExpense(u.id, t.id, {
 		description: 'Hotel',
@@ -457,8 +451,8 @@ test('addTripExpense computes base amount from exchange rate', () => {
 
 test('addExpense action accepts an exchange rate and stores base amount', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'fxa@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'fxa@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	await expect(
 		addExpense(
@@ -479,8 +473,8 @@ test('addExpense action accepts an exchange rate and stores base amount', async 
 
 test('addExpense action rejects a non-positive exchange rate', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'fxb@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeSyncedUser(db, kit, { email: 'fxb@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const result = await addExpense(
 		event(u, t.id, {

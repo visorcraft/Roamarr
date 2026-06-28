@@ -1,7 +1,8 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { tripBudgetCategories, users } from './db/schema';
+import { users } from './db/schema';
+import * as expensesRepo from './repositories/expensesRepo';
 import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { Validator } from './validation';
@@ -81,22 +82,20 @@ export function setBudget(tripId: number, category: BudgetCategory, amount: numb
 	assertCategory(category);
 	assertAmount(amount);
 	const normalizedCurrency = assertCurrency(currency);
-	return db
-		.insert(tripBudgetCategories)
-		.values({ tripId, category, amount, currency: normalizedCurrency })
-		.onConflictDoUpdate({
-			target: [tripBudgetCategories.tripId, tripBudgetCategories.category],
-			set: { amount }
-		})
-		.returning()
-		.get();
+
+	const existing = expensesRepo.getBudgetCategoryByTripAndCategory(tripId, category);
+	if (existing) {
+		return expensesRepo.updateBudgetCategory(existing.id, { amount })!;
+	}
+	return expensesRepo.createBudgetCategory({ tripId, category, amount, currency: normalizedCurrency });
 }
 
 export function deleteBudget(tripId: number, category: BudgetCategory) {
 	assertCategory(category);
-	db.delete(tripBudgetCategories)
-		.where(and(eq(tripBudgetCategories.tripId, tripId), eq(tripBudgetCategories.category, category)))
-		.run();
+	const existing = expensesRepo.getBudgetCategoryByTripAndCategory(tripId, category);
+	if (existing) {
+		expensesRepo.deleteBudgetCategory(existing.id);
+	}
 }
 
 export function listBudgetsWithSpent(
@@ -105,11 +104,7 @@ export function listBudgetsWithSpent(
 	fallbackCurrency = 'USD'
 ): BudgetWithSpent[] {
 	const defaultCurrency = normalizeCurrency(fallbackCurrency);
-	const rows = db
-		.select()
-		.from(tripBudgetCategories)
-		.where(eq(tripBudgetCategories.tripId, tripId))
-		.all();
+	const rows = expensesRepo.listBudgetCategoriesForTrip(tripId);
 	const capByCategory = new Map<BudgetCategory, { amount: number; currency: string }>();
 	for (const r of rows) {
 		if (BUDGET_CATEGORIES.includes(r.category as BudgetCategory)) {

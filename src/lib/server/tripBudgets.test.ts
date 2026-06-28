@@ -1,6 +1,6 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -15,13 +15,27 @@ import {
 	setTripBudget,
 	deleteTripBudget
 } from './tripBudgets';
-import { users, trips, tripBudgetCategories, auditLogs } from './db/schema';
+import { tripBudgetCategories, auditLogs } from './db/schema';
+import { trips as kitTrips, users as kitUsers, tripBudgetCategories as kitTripBudgetCategories } from './db/mongrelSchema';
 import { eq, and } from 'drizzle-orm';
+import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+
+beforeEach(() => {
+	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	sqlite.exec(
+		'delete from trip_budget_categories; delete from trips; delete from users; delete from audit_logs;'
+	);
+	kit.deleteFrom(kitTripBudgetCategories).executeSync();
+	kit.deleteFrom(kitTrips).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
+});
 
 test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'b1@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'b1@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'food', 10000, 'EUR');
 	setBudget(t.id, 'lodging', 50000);
@@ -66,8 +80,9 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 
 test('listBudgetsWithSpent buckets null and unknown categories into other', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'b5@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'b5@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'other', 5000);
 
@@ -87,8 +102,9 @@ test('listBudgetsWithSpent buckets null and unknown categories into other', () =
 
 test('alert levels: ok, near, over', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'b2@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'b2@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'activities', 10000);
 	setBudget(t.id, 'transport', 10000);
@@ -107,8 +123,9 @@ test('alert levels: ok, near, over', () => {
 
 test('deleteBudget removes a cap', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'b3@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'b3@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'other', 5000);
 	deleteBudget(t.id, 'other');
@@ -123,8 +140,9 @@ test('deleteBudget removes a cap', () => {
 
 test('setBudget updates existing cap', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'b4@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = makeSyncedUser(db, kit, { email: 'b4@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'food', 10000);
 	setBudget(t.id, 'food', 15000, 'EUR');
@@ -140,9 +158,15 @@ test('setBudget updates existing cap', () => {
 
 test('setTripBudget snapshots the editing users default currency and deleteTripBudget enforces ownership', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'bo@x.c', passwordHash: 'x', displayName: 'O', defaultCurrency: 'GBP' }).returning().get();
-	const other = db.insert(users).values({ email: 'bn@x.c', passwordHash: 'x', displayName: 'N' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const owner = makeSyncedUser(db, kit, {
+		email: 'bo@x.c',
+		passwordHash: 'x',
+		displayName: 'O',
+		defaultCurrency: 'GBP'
+	});
+	const other = makeSyncedUser(db, kit, { email: 'bn@x.c', passwordHash: 'x', displayName: 'N' });
+	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
 
 	expect(() => setTripBudget(other.id, t.id, 'food', 10000)).toThrowError(
 		expect.objectContaining({ status: 404 })

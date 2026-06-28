@@ -8,11 +8,10 @@ vi.mock('./db', async () => {
 });
 
 import { tileCspOrigins } from './mapTiles';
-import { settings } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { updateSettings } from './settings';
 
 function setProvider(patch: Record<string, unknown>) {
-	(ctx as { db: import('./db').DB }).db.update(settings).set(patch).where(eq(settings.id, 1)).run();
+	updateSettings(patch as Parameters<typeof updateSettings>[0]);
 }
 
 beforeEach(() => {

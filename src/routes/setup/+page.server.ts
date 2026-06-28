@@ -1,8 +1,9 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { db, sqlite } from '$lib/server/db';
-import { users, settings } from '$lib/server/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { users } from '$lib/server/db/schema';
+import { sql } from 'drizzle-orm';
+import { getSettings, updateSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
@@ -12,8 +13,8 @@ export function _createAdmin(
 	passwordHash?: string
 ) {
 	const email = normalizeEmail(i.email);
+	const s = getSettings();
 	const tx = sqlite.transaction(() => {
-		const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
 		const n = db.select({ c: sql<number>`count(*)` }).from(users).get()!.c;
 		if (s.setupComplete || n > 0) throw new Error('already set up');
 		const u = db
@@ -29,17 +30,10 @@ export function _createAdmin(
 			})
 			.returning()
 			.get();
-		db.update(settings)
-			.set({
-				setupComplete: true,
-				instanceName: i.instanceName,
-				defaultTimezone: i.timezone
-			})
-			.where(eq(settings.id, 1))
-			.run();
 		return u;
 	});
 	const u = tx.immediate();
+	updateSettings({ setupComplete: true, instanceName: i.instanceName, defaultTimezone: i.timezone });
 	// Mirror the admin into the kit users table so kit auth/session resolution works.
 	usersRepo.createUser({
 		id: BigInt(u.id),

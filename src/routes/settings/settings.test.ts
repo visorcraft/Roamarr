@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
-import { getMapSettings, updateSettings } from '$lib/server/settings';
-import { settings, auditLogs } from '$lib/server/db/schema';
+import { getMapSettings, updateSettings, getSettings } from '$lib/server/settings';
+import { auditLogs } from '$lib/server/db/schema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
 import { makeUser } from '../../../tests/helpers';
@@ -37,7 +37,7 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 		smtpFrom: 'r@x.c',
 		webhookUrl: 'https://hooks.example.com/roamarr'
 	});
-	const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
+	const s = getSettings();
 	expect(s.allowRegistration).toBe(true);
 	expect(s.defaultCurrency).toBe('USD');
 	expect(s.defaultFlightCheckinLeadHours).toBe(48);
@@ -79,7 +79,7 @@ test('rejects invalid default reminder leads', () => {
 test('omitting smtpPass preserves the existing encrypted value', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(db, { email: 'preserve@x.c' });
-	const before = db.select().from(settings).where(eq(settings.id, 1)).get()!.smtpPass;
+	const before = getSettings().smtpPass;
 	saveAdminSettings(u.id, {
 		instanceName: 'R2',
 		allowRegistration: false,
@@ -88,7 +88,7 @@ test('omitting smtpPass preserves the existing encrypted value', () => {
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90
 	});
-	const after = db.select().from(settings).where(eq(settings.id, 1)).get()!.smtpPass;
+	const after = getSettings().smtpPass;
 	expect(after).toBe(before);
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
@@ -108,7 +108,7 @@ test('saves empty webhookUrl as null', () => {
 		defaultDocumentExpiryLeadDays: 90,
 		webhookUrl: ''
 	});
-	const s = db.select().from(settings).where(eq(settings.id, 1)).get()!;
+	const s = getSettings();
 	expect(s.webhookUrl).toBeNull();
 });
 
@@ -173,7 +173,7 @@ test('map tile API key is encrypted at rest and decrypts for tile config', () =>
 		mapsTileApiKey: 'secret-tile-key'
 	});
 
-	const raw = db.select().from(settings).where(eq(settings.id, 1)).get()!.mapsTileApiKey;
+	const raw = getSettings().mapsTileApiKey;
 	expect(raw).not.toBe('secret-tile-key');
 	expect(decrypt(raw!)).toBe('secret-tile-key');
 

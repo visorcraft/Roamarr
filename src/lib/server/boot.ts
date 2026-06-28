@@ -1,7 +1,6 @@
 import { db, kit } from './db';
 import { applyMigrations } from './db/migrate';
 import { startScheduler } from './scheduler';
-import { settings } from './db/schema';
 import { ensureDefaultBenefitTemplates } from './benefitTemplates';
 
 export function requireSecret(secret: string | undefined) {
@@ -23,7 +22,6 @@ export function bootApp() {
 	// Trigger lazy open/migrate of the MongrelDB Kit singleton.
 	kit.tableNames();
 	applyMigrations(db);
-	db.insert(settings).values({ id: 1 }).onConflictDoNothing().run();
-	ensureDefaultBenefitTemplates(db);
+	ensureDefaultBenefitTemplates();
 	startScheduler();
 }

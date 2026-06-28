@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -10,10 +10,13 @@ vi.mock('./db', async () => {
 import {
 	listBenefitTemplates,
 	getBenefitTemplate,
-	ensureDefaultBenefitTemplates
+	ensureDefaultBenefitTemplates,
+	createBenefitTemplate,
+	updateBenefitTemplate,
+	deleteBenefitTemplate
 } from './benefitTemplates';
-import { benefitTemplates } from './db/schema';
-import { count } from 'drizzle-orm';
+import { benefitTemplates } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 test('default templates are seeded by migrations', () => {
 	const templates = listBenefitTemplates();
@@ -33,9 +36,48 @@ test('getBenefitTemplate returns a template by id', () => {
 });
 
 test('ensureDefaultBenefitTemplates is idempotent', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	ensureDefaultBenefitTemplates(db);
-	ensureDefaultBenefitTemplates(db);
-	const total = db.select({ count: count() }).from(benefitTemplates).get()!.count;
+	ensureDefaultBenefitTemplates();
+	ensureDefaultBenefitTemplates();
+	const total = listBenefitTemplates().length;
 	expect(total).toBe(3);
+});
+
+test('create, update, and delete benefit templates', () => {
+	const created = createBenefitTemplate({
+		benefitType: 'other',
+		name: 'Custom benefit',
+		coverageAmount: 25000,
+		currency: 'EUR',
+		description: 'A custom template'
+	});
+	expect(created.name).toBe('Custom benefit');
+	expect(created.coverageAmount).toBe(25000);
+
+	const updated = updateBenefitTemplate(created.id, { name: 'Updated custom', coverageAmount: 30000 });
+	expect(updated?.name).toBe('Updated custom');
+	expect(updated?.coverageAmount).toBe(30000);
+
+	deleteBenefitTemplate(created.id);
+	expect(getBenefitTemplate(created.id)).toBeUndefined();
+});
+
+test('deleteBenefitTemplate returns the number of deleted rows', () => {
+	const rowsBefore = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(benefitTemplates)
+		.selectCount()
+		.executeSync();
+	const created = createBenefitTemplate({
+		benefitType: 'other',
+		name: 'To delete',
+		coverageAmount: 1,
+		currency: 'USD',
+		description: null
+	});
+	const deleted = deleteBenefitTemplate(created.id);
+	expect(deleted).toBe(1n);
+	const rowsAfter = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(benefitTemplates)
+		.selectCount()
+		.executeSync();
+	expect(rowsAfter).toBe(rowsBefore);
 });

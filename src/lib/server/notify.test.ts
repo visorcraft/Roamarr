@@ -19,9 +19,9 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 });
 
 import { deliver } from './notify';
-import { users, notifications, settings } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { users, notifications } from './db/schema';
 import { encrypt } from './crypto';
+import { updateSettings } from './settings';
 
 test('always writes in-app; emails only when SMTP configured', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -33,15 +33,12 @@ test('always writes in-app; emails only when SMTP configured', async () => {
 	await deliver(u.id, { title: 'Hi', body: 'There' });
 	expect(db.select().from(notifications).all().length).toBe(1);
 	expect(sent.length).toBe(0);
-	db.update(settings)
-		.set({
-			smtpHost: 'smtp.x',
-			smtpPort: 587,
-			smtpFrom: 'r@x.c',
-			smtpPass: encrypt('pw')
-		})
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({
+		smtpHost: 'smtp.x',
+		smtpPort: 587,
+		smtpFrom: 'r@x.c',
+		smtpPass: encrypt('pw')
+	});
 	await deliver(u.id, { title: 'Hi2', body: 'There2' });
 	expect(sent.length).toBe(1);
 	expect(sent[0].to).toBe('a@x.c');
@@ -54,10 +51,7 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
 		.returning()
 		.get();
-	db.update(settings)
-		.set({ webhookUrl: 'https://hooks.example.com/roamarr' })
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({ webhookUrl: 'https://hooks.example.com/roamarr' });
 	await deliver(u.id, { title: 'T', body: 'B', link: 'https://r/l' });
 	expect(fetches.length).toBe(1);
 	expect(fetches[0].url).toBe('https://hooks.example.com/roamarr');
@@ -80,10 +74,13 @@ test('respects user channel toggles', async () => {
 		.values({ email: 't@x.c', passwordHash: 'x', displayName: 'T', emailNotifications: false, webhookNotifications: false })
 		.returning()
 		.get();
-	db.update(settings)
-		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'r@x.c', smtpPass: encrypt('pw'), webhookUrl: 'https://hooks.example.com/roamarr' })
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({
+		smtpHost: 'smtp.x',
+		smtpPort: 587,
+		smtpFrom: 'r@x.c',
+		smtpPass: encrypt('pw'),
+		webhookUrl: 'https://hooks.example.com/roamarr'
+	});
 	const before = fetches.length;
 	const beforeSent = sent.length;
 	await deliver(u.id, { title: 'T', body: 'B' });
@@ -100,7 +97,7 @@ test('skips webhook when webhookUrl is not set', async () => {
 		.values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' })
 		.returning()
 		.get();
-	db.update(settings).set({ webhookUrl: null }).where(eq(settings.id, 1)).run();
+	updateSettings({ webhookUrl: null });
 	await deliver(u.id, { title: 'T', body: 'B' });
 	expect(fetches.length).toBe(before);
 });

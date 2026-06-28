@@ -21,8 +21,9 @@ import {
 	shareItineraryWithContact,
 	resetEmergencyShareRateLimit
 } from './emergencyContacts';
-import { emergencyContacts, users, auditLogs, trips, settings, tripShares } from './db/schema';
+import { emergencyContacts, users, auditLogs, trips, tripShares } from './db/schema';
 import { eq } from 'drizzle-orm';
+import { updateSettings } from './settings';
 
 test('addEmergencyContact creates a contact and audits', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -177,10 +178,7 @@ test('shareItineraryWithContact sends link and audits', async () => {
 		.values({ email: 'ec-share@x.c', passwordHash: 'x', displayName: 'U' })
 		.returning()
 		.get();
-	db.update(settings)
-		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' });
 	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
 	const trip = db
 		.insert(trips)
@@ -214,10 +212,7 @@ test('shareItineraryWithContact reuses existing public token', async () => {
 		.values({ email: 'ec-reuse@x.c', passwordHash: 'x', displayName: 'U' })
 		.returning()
 		.get();
-	db.update(settings)
-		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' });
 	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
 	const trip = db
 		.insert(trips)
@@ -332,10 +327,7 @@ test('shareItineraryWithContact rate limits repeat shares', async () => {
 		.values({ email: 'ec-rate@x.c', passwordHash: 'x', displayName: 'U' })
 		.returning()
 		.get();
-	db.update(settings)
-		.set({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' })
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' });
 	const contact = addEmergencyContact(u.id, { name: 'Emergency', email: 'em@x.c' });
 	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Rated Trip', defaultVisibility: 'private' }).returning().get();
 

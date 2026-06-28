@@ -6,9 +6,9 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createInterface } from 'node:readline';
 import unzipper from 'unzipper';
-import { eq } from 'drizzle-orm';
 import { db, sqlite } from './db';
-import { geonamesCities, settings } from './db/schema';
+import { geonamesCities } from './db/schema';
+import { updateSettings } from './settings';
 import { nowIso } from './tz';
 
 export const GEONAMES_DOWNLOAD_URL = 'https://download.geonames.org/export/dump/cities1000.zip';
@@ -130,10 +130,7 @@ export async function importCitiesFromUrl(url = GEONAMES_DOWNLOAD_URL): Promise<
 			// Node/DOM ReadableStream types differ; cast is required.
 			Readable.fromWeb(res.body as unknown as import('node:stream/web').ReadableStream)
 		);
-		db.update(settings)
-			.set({ mapsEnabled: true, mapsGeonamesImportedAt: nowIso() })
-			.where(eq(settings.id, 1))
-			.run();
+		updateSettings({ mapsEnabled: true, mapsGeonamesImportedAt: nowIso() });
 		return result;
 	} finally {
 		clearTimeout(timeout);

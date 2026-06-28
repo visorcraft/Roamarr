@@ -8,22 +8,17 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _registerUser as registerUser, actions } from './+page.server';
-import { settings } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { updateSettings } from '$lib/server/settings';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
 test('registers a normal user with normalized email and default leads; rejects dupes', async () => {
-	(ctx as any).db
-		.update(settings)
-		.set({
-			setupComplete: true,
-			allowRegistration: true,
-			defaultTimezone: 'America/New_York',
-			defaultFlightCheckinLeadHours: 48,
-			defaultDocumentExpiryLeadDays: 60
-		})
-		.where(eq(settings.id, 1))
-		.run();
+	updateSettings({
+		setupComplete: true,
+		allowRegistration: true,
+		defaultTimezone: 'America/New_York',
+		defaultFlightCheckinLeadHours: 48,
+		defaultDocumentExpiryLeadDays: 60
+	});
 	const u = await registerUser('New@User.com', 'correcthorse', 'New');
 	expect(u.role).toBe('user');
 	expect(u.email).toBe('new@user.com');

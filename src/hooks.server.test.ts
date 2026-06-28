@@ -9,8 +9,7 @@ vi.mock('./lib/server/db', async () => {
 
 import { handle } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
-import { settings } from './lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
 
 const ev = (path: string) => ({
@@ -33,7 +32,7 @@ test('redirects to /setup before setup is complete', async () => {
 });
 
 test('anonymous hitting a protected route is redirected to /login', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const res: any = await run('/trips');
 	expect(res.status).toBe(302);
 	expect(res.location).toBe('/login');
@@ -52,7 +51,7 @@ function parseCsp(header: string | null) {
 }
 
 test('sets baseline security and CSP headers on a public response', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const res = (await run('/login')) as Response;
 	expect(res.status).toBe(200);
 	expect(res.headers.get('X-Frame-Options')).toBe('DENY');
@@ -76,7 +75,7 @@ test('sets baseline security and CSP headers on a public response', async () => 
 });
 
 test('sets CSP headers on a public share link', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const res = (await run('/share/abc123')) as Response;
 	expect(res.status).toBe(200);
 	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
@@ -88,13 +87,13 @@ test('/health is public and not redirected before setup', async () => {
 });
 
 test('/health is public and not redirected after setup', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const res = (await run('/health')) as Response;
 	expect(res.status).toBe(200);
 });
 
 test('reads a flash cookie into locals and clears it', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const cookies = {
 		get: (name: string) => (name === 'flash' ? 'Saved.' : undefined),
 		set: vi.fn()
@@ -117,7 +116,7 @@ test('reads a flash cookie into locals and clears it', async () => {
 });
 
 test('parses a JSON flash cookie with a variant', async () => {
-	(ctx as any).db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const flashPayload = JSON.stringify({ message: 'Failed.', variant: 'error' });
 	const cookies = {
 		get: (name: string) => (name === 'flash' ? flashPayload : undefined),
@@ -141,8 +140,7 @@ test('parses a JSON flash cookie with a variant', async () => {
 });
 
 test('redirects users who must reset password', async () => {
-	const db = (ctx as any).db;
-	db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
+	updateSettings({ setupComplete: true });
 	const u = makeKitUser({
 		email: 'reset@x.c',
 		password_hash: 'x',

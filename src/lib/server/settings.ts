@@ -1,14 +1,18 @@
-import { count, eq } from 'drizzle-orm';
+import { count } from 'drizzle-orm';
 import { db } from './db';
-import { geonamesCities, settings } from './db/schema';
+import { geonamesCities } from './db/schema';
+import { getSettings as getKitSettings, updateSettings as updateKitSettings } from './repositories/settingsRepo';
 import { hasMapTexture, mapTextureImportedAt } from './mapsAssets';
+import type { SettingsPatch } from './repositories/settingsRepo';
+
+export type { Settings } from './repositories/settingsRepo';
 
 export function getSettings() {
-	return db.select().from(settings).where(eq(settings.id, 1)).get()!;
+	return getKitSettings();
 }
 
-export function updateSettings(patch: Partial<typeof settings.$inferInsert>) {
-	db.update(settings).set(patch).where(eq(settings.id, 1)).run();
+export function updateSettings(patch: SettingsPatch) {
+	updateKitSettings(patch);
 }
 
 export function isSetupComplete() {

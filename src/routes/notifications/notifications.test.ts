@@ -1,7 +1,7 @@
 import { test, expect, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -14,20 +14,24 @@ import {
 	markUnread,
 	markAllRead
 } from '$lib/server/notifications';
-import { users, notifications } from '$lib/server/db/schema';
+import { notifications } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+import { createNotification } from '$lib/server/repositories/remindersRepo';
 
 function makeUser(email: string, name: string) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	return db
-		.insert(users)
-		.values({ email, passwordHash: 'x', displayName: name })
-		.returning()
-		.get();
+	const u = usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: name,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	return { ...u, id: Number(u.id) };
 }
 
 function insertNotification(userId: number, title: string) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	return db.insert(notifications).values({ userId, title, body: 'b' }).returning().get();
+	const n = createNotification({ userId, title, body: 'b' });
+	return { ...n, id: n.id };
 }
 
 test('markRead only affects the caller’s own notification', () => {

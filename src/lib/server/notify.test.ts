@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -19,18 +19,29 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 });
 
 import { deliver } from './notify';
-import { users, notifications } from './db/schema';
+import { notifications } from './db/schema';
+import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
 import { updateSettings } from './settings';
 
+function makeUser(over: Partial<import('./repositories/usersRepo').CreateUserInput> = {}) {
+	const n = Math.random().toString(36).slice(2);
+	return usersRepo.createUser({
+		email: over.email ?? `u-${n}@x.c`,
+		password_hash: 'x',
+		display_name: over.display_name ?? `U${n}`,
+		calendar_token: null,
+		calendar_token_expires_at: null,
+		email_notifications: over.email_notifications ?? true,
+		webhook_notifications: over.webhook_notifications ?? true,
+		...over
+	} as import('./repositories/usersRepo').CreateUserInput);
+}
+
 test('always writes in-app; emails only when SMTP configured', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	await deliver(u.id, { title: 'Hi', body: 'There' });
+	const u = makeUser({ email: 'a@x.c', display_name: 'A' });
+	await deliver(Number(u.id), { title: 'Hi', body: 'There' });
 	expect(db.select().from(notifications).all().length).toBe(1);
 	expect(sent.length).toBe(0);
 	updateSettings({
@@ -39,20 +50,16 @@ test('always writes in-app; emails only when SMTP configured', async () => {
 		smtpFrom: 'r@x.c',
 		smtpPass: encrypt('pw')
 	});
-	await deliver(u.id, { title: 'Hi2', body: 'There2' });
+	await deliver(Number(u.id), { title: 'Hi2', body: 'There2' });
 	expect(sent.length).toBe(1);
 	expect(sent[0].to).toBe('a@x.c');
 });
 
 test('POSTs JSON to webhookUrl when configured', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
+	const u = makeUser({ email: 'b@x.c', display_name: 'B' });
 	updateSettings({ webhookUrl: 'https://hooks.example.com/roamarr' });
-	await deliver(u.id, { title: 'T', body: 'B', link: 'https://r/l' });
+	await deliver(Number(u.id), { title: 'T', body: 'B', link: 'https://r/l' });
 	expect(fetches.length).toBe(1);
 	expect(fetches[0].url).toBe('https://hooks.example.com/roamarr');
 	expect(fetches[0].init.method).toBe('POST');
@@ -69,11 +76,12 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 
 test('respects user channel toggles', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 't@x.c', passwordHash: 'x', displayName: 'T', emailNotifications: false, webhookNotifications: false })
-		.returning()
-		.get();
+	const u = makeUser({
+		email: 't@x.c',
+		display_name: 'T',
+		email_notifications: false,
+		webhook_notifications: false
+	});
 	updateSettings({
 		smtpHost: 'smtp.x',
 		smtpPort: 587,
@@ -83,7 +91,7 @@ test('respects user channel toggles', async () => {
 	});
 	const before = fetches.length;
 	const beforeSent = sent.length;
-	await deliver(u.id, { title: 'T', body: 'B' });
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
 	expect(db.select().from(notifications).all().length).toBeGreaterThan(0);
 	expect(fetches.length).toBe(before);
 	expect(sent.length).toBe(beforeSent);
@@ -92,12 +100,8 @@ test('respects user channel toggles', async () => {
 test('skips webhook when webhookUrl is not set', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const before = fetches.length;
-	const u = db
-		.insert(users)
-		.values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' })
-		.returning()
-		.get();
+	const u = makeUser({ email: 'c@x.c', display_name: 'C' });
 	updateSettings({ webhookUrl: null });
-	await deliver(u.id, { title: 'T', body: 'B' });
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
 	expect(fetches.length).toBe(before);
 });

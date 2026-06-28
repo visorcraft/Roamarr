@@ -1,9 +1,12 @@
-import { eq, desc, lt } from 'drizzle-orm';
 import { runDueReminders } from './reminders';
 import { runFareChecks } from './fareproviders';
 import { purgeExpiredSessions } from './auth';
-import { db } from './db';
-import { schedulerRuns } from './db/schema';
+import {
+	startSchedulerRun,
+	finishSchedulerRun,
+	listRecentSchedulerRuns,
+	pruneOldSchedulerRuns
+} from './repositories/remindersRepo';
 
 const SCHEDULER_FLAG = '__roamarr_scheduler';
 const KEEP_RUNS = 100;
@@ -13,42 +16,26 @@ const KEEP_RUNS = 100;
  * Exported so tests can invoke it directly.
  */
 export async function runTick(now: Date) {
-	const startedAt = now.toISOString();
-	let runId: number | undefined;
+	const run = startSchedulerRun();
 	try {
-		runId = db.insert(schedulerRuns).values({ startedAt }).returning({ id: schedulerRuns.id }).get().id;
 		await runDueReminders(now);
 		await runFareChecks(now);
 		purgeExpiredSessions();
-		db.update(schedulerRuns)
-			.set({ finishedAt: new Date().toISOString(), success: true })
-			.where(eq(schedulerRuns.id, runId))
-			.run();
+		finishSchedulerRun(run.id, { success: true });
 	} catch (e) {
 		console.error('[scheduler]', e);
-		if (runId) {
-			db.update(schedulerRuns)
-				.set({
-					finishedAt: new Date().toISOString(),
-					success: false,
-					errorMessage: e instanceof Error ? e.message : String(e)
-				})
-				.where(eq(schedulerRuns.id, runId))
-				.run();
-		}
+		finishSchedulerRun(run.id, {
+			success: false,
+			errorMessage: e instanceof Error ? e.message : String(e)
+		});
 	}
 
 	// Keep the most recent runs to avoid unbounded growth.
 	try {
-		const cutoff = db
-			.select({ id: schedulerRuns.id })
-			.from(schedulerRuns)
-			.orderBy(desc(schedulerRuns.id))
-			.limit(1)
-			.offset(KEEP_RUNS - 1)
-			.get();
+		const recent = listRecentSchedulerRuns(KEEP_RUNS);
+		const cutoff = recent[recent.length - 1];
 		if (cutoff) {
-			db.delete(schedulerRuns).where(lt(schedulerRuns.id, cutoff.id)).run();
+			pruneOldSchedulerRuns(cutoff.startedAt);
 		}
 	} catch (e) {
 		console.error('[scheduler] prune failed', e);

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -14,10 +14,12 @@ vi.mock('./auth', () => ({ purgeExpiredSessions: vi.fn() }));
 import { runDueReminders } from './reminders';
 import { startScheduler, runTick } from './scheduler';
 import { schedulerRuns } from './db/schema';
+import { schedulerRuns as kitSchedulerRuns } from './db/mongrelSchema';
 import { beforeEach } from 'vitest';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from scheduler_runs;');
+	(ctx as any).kit.deleteFrom(kitSchedulerRuns).executeSync();
 	(runDueReminders as any).mockReset?.();
 });
 
@@ -73,6 +75,6 @@ test('runTick prunes old runs keeping the most recent 100', async () => {
 	await runTick(new Date('2026-06-24T12:00:00.000Z'));
 
 	expect(db.select().from(schedulerRuns).all()).toHaveLength(100);
-	const oldest = db.select().from(schedulerRuns).orderBy(schedulerRuns.id).get();
+	const oldest = db.select().from(schedulerRuns).orderBy(schedulerRuns.startedAt).get();
 	expect(oldest!.startedAt).toBe('2026-06-01T00:00:11.000Z');
 });

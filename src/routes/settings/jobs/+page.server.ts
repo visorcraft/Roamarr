@@ -1,8 +1,6 @@
-import { desc } from 'drizzle-orm';
 import { redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import { schedulerRuns } from '$lib/server/db/schema';
+import { listRecentSchedulerRuns } from '$lib/server/repositories/remindersRepo';
 import { runTick } from '$lib/server/scheduler';
 import type { PageServerLoad } from './$types';
 
@@ -18,17 +16,6 @@ export const actions: Actions = {
 
 export const load: PageServerLoad = ({ locals }) => {
 	requireAdmin(locals);
-	const runs = db
-		.select({
-			id: schedulerRuns.id,
-			startedAt: schedulerRuns.startedAt,
-			finishedAt: schedulerRuns.finishedAt,
-			success: schedulerRuns.success,
-			errorMessage: schedulerRuns.errorMessage
-		})
-		.from(schedulerRuns)
-		.orderBy(desc(schedulerRuns.startedAt))
-		.limit(RECENT_LIMIT)
-		.all();
+	const runs = listRecentSchedulerRuns(RECENT_LIMIT);
 	return { runs };
 };

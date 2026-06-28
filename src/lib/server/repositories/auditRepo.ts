@@ -1,4 +1,5 @@
 import { eq as kitEq, and as kitAnd, gte as kitGte, lte as kitLte, desc as kitDesc } from '@mongreldb/kit';
+import { countNotifications } from './remindersRepo';
 import {
 	eq as drizzleEq,
 	and as drizzleAnd,
@@ -9,7 +10,7 @@ import {
 } from 'drizzle-orm';
 import { db, kit } from '$lib/server/db';
 import { auditLogs as kitAuditLogs, users as kitUsers } from '$lib/server/db/mongrelSchema';
-import { auditLogs as drizzleAuditLogs, users as drizzleUsers, trips, segments, groups, notifications } from '$lib/server/db/schema';
+import { auditLogs as drizzleAuditLogs, users as drizzleUsers, trips, segments, groups } from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 
 export type KitAuditLog = Row<typeof kitAuditLogs>;
@@ -332,6 +333,6 @@ export function getAdminStats(): AdminStats {
 		trips: db.select({ count: sql<number>`count(*)` }).from(trips).get()?.count ?? 0,
 		segments: db.select({ count: sql<number>`count(*)` }).from(segments).get()?.count ?? 0,
 		groups: db.select({ count: sql<number>`count(*)` }).from(groups).get()?.count ?? 0,
-		notifications: db.select({ count: sql<number>`count(*)` }).from(notifications).get()?.count ?? 0
+		notifications: countNotifications()
 	};
 }

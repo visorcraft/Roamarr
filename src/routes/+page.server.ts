@@ -5,7 +5,6 @@ import { formatDestination } from '$lib/tripDestination';
 import {
 	fareProviders,
 	fareWatches,
-	notifications,
 	segments,
 	tripComments,
 	tripJournalEntries,
@@ -13,6 +12,7 @@ import {
 	users
 } from '$lib/server/db/schema';
 import { listTravelDocumentsExpiringBefore } from '$lib/server/repositories/profileRepo';
+import { countUnreadNotificationsForUser } from '$lib/server/repositories/remindersRepo';
 import { listEditableTripIds, listViewableTrips } from '$lib/server/sharing';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
@@ -140,11 +140,7 @@ export const load: PageServerLoad = ({ locals }) => {
 
 	const viewable = listViewableTrips(u.id);
 	const upcoming = listViewableTrips(u.id, { startDateGte: today });
-	const unreadRow = db
-		.select({ count: count() })
-		.from(notifications)
-		.where(and(eq(notifications.userId, u.id), isNull(notifications.readAt)))
-		.get();
+	const unreadCount = countUnreadNotificationsForUser(u.id);
 	const expiring = listTravelDocumentsExpiringBefore(u.id, soon);
 	const watchesRow = db
 		.select({ count: count() })
@@ -247,7 +243,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		activity,
 		stats: {
 			upcoming: upcoming.length,
-			unread: unreadRow?.count ?? 0,
+			unread: unreadCount,
 			expiring: expiring.length,
 			watches: watchesRow?.count ?? 0
 		},

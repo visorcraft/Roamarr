@@ -1,14 +1,26 @@
 import { DateTime } from 'luxon';
-import { and, desc, eq, inArray, lte, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { db } from './db';
-import { reminders, segments, travelDocuments, trips, users } from './db/schema';
+import { segments, travelDocuments, trips, users } from './db/schema';
+import {
+	createReminder,
+	upsertReminderBySource,
+	deleteReminder,
+	deleteRemindersForRef,
+	listPendingRemindersBefore,
+	markReminderSent,
+	updateReminder,
+	getReminderById,
+	listRemindersForUser as listRemindersForUserFromRepo,
+	type ReminderRow
+} from './repositories/remindersRepo';
 import { deliver } from './notify';
 import { nowIso } from './tz';
 
 type Seg = typeof segments.$inferSelect;
 type Doc = typeof travelDocuments.$inferSelect;
-type Reminder = typeof reminders.$inferSelect;
+type Reminder = ReminderRow;
 
 export function computeFireAt(
 	kind: 'flight_checkin' | 'document_expiry' | 'custom',
@@ -43,18 +55,7 @@ function arm(
 ) {
 	const now = nowIso();
 	const status = fireAt > now ? 'pending' : 'sent';
-	db.insert(reminders)
-		.values({ userId, kind, refType, refId, fireAt, status })
-		.onConflictDoUpdate({
-			target: [reminders.kind, reminders.refType, reminders.refId],
-			set: {
-				fireAt,
-				status: sql`case when ${fireAt} > ${now} then 'pending' else 'sent' end`,
-				attempts: 0,
-				sentAt: null
-			}
-		})
-		.run();
+	upsertReminderBySource({ userId, kind, refType, refId, fireAt, status, attempts: 0, sentAt: null });
 }
 
 export function upsertRemindersForSegment(seg: Seg) {
@@ -114,51 +115,34 @@ export function upsertRemindersForDocument(doc: Doc) {
 }
 
 export function cancelRemindersFor(refType: 'segment' | 'document' | 'trip', refId: number) {
-	db.delete(reminders)
-		.where(and(eq(reminders.refType, refType), eq(reminders.refId, refId)))
-		.run();
+	deleteRemindersForRef(refType, refId);
 }
 
 export function listRemindersForUser(userId: number) {
-	return db
-		.select()
-		.from(reminders)
-		.where(eq(reminders.userId, userId))
-		.orderBy(desc(reminders.fireAt))
-		.all();
+	return listRemindersForUserFromRepo(userId);
 }
 
 export function cancelReminder(userId: number, reminderId: number) {
-	const r = db.select().from(reminders).where(eq(reminders.id, reminderId)).get();
+	const r = getReminderById(reminderId);
 	if (!r || r.userId !== userId) throw error(404, 'Not found');
-	db.delete(reminders).where(eq(reminders.id, reminderId)).run();
+	deleteReminder(reminderId);
 }
 
 export async function runDueReminders(now: Date) {
 	// Claim both fresh 'pending' rows and any 'sending' rows orphaned by a prior crash.
 	// Ticks never overlap (single process + scheduler running-guard), so any due
 	// 'sending' row at tick start is stale and safe to re-grab — at-least-once delivery.
-	const claimed = db
-		.update(reminders)
-		.set({ status: 'sending' })
-		.where(
-			and(inArray(reminders.status, ['pending', 'sending']), lte(reminders.fireAt, now.toISOString()))
-		)
-		.returning()
-		.all();
+	const claimed = listPendingRemindersBefore(now.toISOString()).filter(
+		(r) => r.status === 'pending' || r.status === 'sending'
+	);
 	for (const r of claimed) {
+		updateReminder(r.id, { status: 'sending' });
 		try {
 			await deliver(r.userId, messageFor(r));
-			db.update(reminders)
-				.set({ status: 'sent', sentAt: now.toISOString() })
-				.where(eq(reminders.id, r.id))
-				.run();
+			markReminderSent(r.id, now.toISOString());
 		} catch {
 			const next = r.attempts >= 5 ? 'sent' : 'pending';
-			db.update(reminders)
-				.set({ status: next, attempts: r.attempts + 1 })
-				.where(eq(reminders.id, r.id))
-				.run();
+			updateReminder(r.id, { status: next, attempts: r.attempts + 1 });
 		}
 	}
 }

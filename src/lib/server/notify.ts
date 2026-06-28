@@ -2,7 +2,8 @@ import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from './db';
-import { users, notifications } from './db/schema';
+import { users } from './db/schema';
+import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
 import { decrypt } from './crypto';
 
@@ -14,9 +15,7 @@ interface Channel {
 
 const inAppChannel: Channel = {
 	async send(userId, msg) {
-		db.insert(notifications)
-			.values({ userId, title: msg.title, body: msg.body, link: msg.link ?? null })
-			.run();
+		createNotification({ userId, title: msg.title, body: msg.body, link: msg.link ?? null });
 	}
 };
 

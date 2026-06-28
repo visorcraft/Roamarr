@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -11,21 +11,57 @@ vi.mock('./db', async () => {
 import { parseJson, parseCsv, importTrips } from './import';
 import { exportTripsCsv } from './export';
 import { users, trips, segments, reminders, auditLogs } from './db/schema';
+import { users as kitUsers, trips as kitTrips, segments as kitSegments } from './db/mongrelSchema';
+import * as usersRepo from './repositories/usersRepo';
+import * as tripsRepo from './repositories/tripsRepo';
+import * as segmentsRepo from './repositories/segmentsRepo';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from reminders; delete from segments; delete from trips; delete from users; delete from audit_logs;'
-	);
+	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	db.delete(reminders).run();
+	db.delete(segments).run();
+	db.delete(trips).run();
+	db.delete(users).run();
+	db.delete(auditLogs).run();
+	kit.deleteFrom(kitSegments).executeSync();
+	kit.deleteFrom(kitTrips).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 function makeUser(email = 'u@x.c') {
-	const db = (ctx as { db: import('./db').DB }).db;
-	return db.insert(users).values({ email, passwordHash: 'x', displayName: 'U' }).returning().get();
+	return usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: 'U',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+}
+
+function makeTrip(ownerId: number, name: string) {
+	return tripsRepo.createTrip(ownerId, { name, startDate: '2026-08-01', endDate: '2026-08-10' });
+}
+
+function makeSegment(tripId: number, type: string, title: string, startAt: string) {
+	return segmentsRepo.createSegment({
+		trip_id: BigInt(tripId),
+		type: type as any,
+		title,
+		start_at: startAt,
+		start_tz: 'UTC'
+	});
 }
 
 test('parseJson accepts a trips array', () => {
 	const input = JSON.stringify({
-		trips: [{ name: 'Tokyo', startDate: '2026-08-01', segments: [{ type: 'flight', title: 'Out', localStart: '2026-08-01T10:00', startTz: 'UTC' }] }]
+		trips: [
+			{
+				name: 'Tokyo',
+				startDate: '2026-08-01',
+				segments: [{ type: 'flight', title: 'Out', localStart: '2026-08-01T10:00', startTz: 'UTC' }]
+			}
+		]
 	});
 	const parsed = parseJson(input);
 	expect(parsed.trips).toHaveLength(1);
@@ -38,7 +74,8 @@ test('parseJson rejects malformed JSON', () => {
 });
 
 test('parseCsv accepts a header and data rows', () => {
-	const csv = 'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\nTokyo,JP,Tokyo,35.6762,139.6503,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC';
+	const csv =
+		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\nTokyo,JP,Tokyo,35.6762,139.6503,2026-08-01,2026-08-10,flight,Out,2026-08-01T10:00,UTC';
 	const parsed = parseCsv(csv);
 	expect(parsed.trips).toHaveLength(1);
 	expect(parsed.trips[0]!.name).toBe('Tokyo');
@@ -56,7 +93,7 @@ test('parseCsv handles commas inside quoted values', () => {
 test('importTrips creates trips and segments', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser();
-	const result = importTrips(u.id, {
+	const result = importTrips(Number(u.id), {
 		trips: [
 			{
 				name: 'Tokyo',
@@ -81,7 +118,7 @@ test('importTrips creates trips and segments', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors).toHaveLength(0);
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
+	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Tokyo');
 	const s = db.select().from(segments).where(eq(segments.tripId, t!.id)).get();
@@ -94,17 +131,17 @@ test('importTrips creates trips and segments', () => {
 test('importTrips mints public token for public visibility', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser();
-	importTrips(u.id, {
+	importTrips(Number(u.id), {
 		trips: [{ name: 'Public Trip', defaultVisibility: 'public' }]
 	});
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
+	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
 	expect(t!.publicToken).toBeTruthy();
 });
 
 test('importTrips collects validation errors without creating invalid trips', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser();
-	const result = importTrips(u.id, {
+	const result = importTrips(Number(u.id), {
 		trips: [
 			{ name: '', startDate: 'bad', endDate: '2026-01-01' },
 			{ name: 'Good', startDate: '2026-08-01', endDate: '2026-08-10' }
@@ -112,13 +149,13 @@ test('importTrips collects validation errors without creating invalid trips', ()
 	});
 	expect(result.imported).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all()).toHaveLength(1);
+	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all()).toHaveLength(1);
 });
 
 test('importTrips skips invalid segments but keeps the trip', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser();
-	const result = importTrips(u.id, {
+	const result = importTrips(Number(u.id), {
 		trips: [
 			{
 				name: 'Mixed',
@@ -132,18 +169,24 @@ test('importTrips skips invalid segments but keeps the trip', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
+	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
 	expect(db.select().from(segments).where(eq(segments.tripId, t!.id)).all()).toHaveLength(1);
 });
 
 test('importTrips dryRun validates and previews without writing', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dry@x.c', passwordHash: 'x', displayName: 'D' }).returning().get();
-	const beforeTrips = db.select().from(trips).where(eq(trips.ownerId, u.id)).all().length;
+	const u = makeUser('dry@x.c');
+	const beforeTrips = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all().length;
 	const result = importTrips(
-		u.id,
+		Number(u.id),
 		{
-			trips: [{ name: 'Dry', startDate: '2026-07-01', segments: [{ type: 'flight', title: 'F', localStart: '2026-07-01T10:00', startTz: 'UTC' }] }]
+			trips: [
+				{
+					name: 'Dry',
+					startDate: '2026-07-01',
+					segments: [{ type: 'flight', title: 'F', localStart: '2026-07-01T10:00', startTz: 'UTC' }]
+				}
+			]
 		},
 		true
 	);
@@ -151,10 +194,9 @@ test('importTrips dryRun validates and previews without writing', () => {
 	expect(result.segmentCount).toBe(1);
 	expect(result.preview).toHaveLength(1);
 	expect(result.preview![0].name).toBe('Dry');
-	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all().length).toBe(beforeTrips);
+	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all().length).toBe(beforeTrips);
 	expect(db.select().from(segments).all().length).toBe(0);
 });
-
 
 test('parseCsv groups multi-segment rows into one trip', () => {
 	const csv = [
@@ -172,21 +214,13 @@ test('parseCsv groups multi-segment rows into one trip', () => {
 test('csv round-trip preserves multi-segment trips', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser('round@x.c');
-	db.insert(trips)
-		.values({ ownerId: u.id, name: 'RT', startDate: '2026-08-01', endDate: '2026-08-10' })
-		.returning()
-		.get();
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get()!;
-	db.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'Out', startAt: '2026-08-01T10:00:00Z', startTz: 'UTC' })
-		.run();
-	db.insert(segments)
-		.values({ tripId: t.id, type: 'hotel', title: 'Stay', startAt: '2026-08-05T16:00:00Z', startTz: 'UTC' })
-		.run();
+	const t = makeTrip(Number(u.id), 'RT');
+	makeSegment(t.id, 'flight', 'Out', '2026-08-01T10:00:00Z');
+	makeSegment(t.id, 'hotel', 'Stay', '2026-08-05T16:00:00Z');
 
-	const csv = exportTripsCsv(u.id);
-	const result = importTrips(u.id, parseCsv(csv));
+	const csv = exportTripsCsv(Number(u.id));
+	const result = importTrips(Number(u.id), parseCsv(csv));
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(2);
-	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all()).toHaveLength(2);
+	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all()).toHaveLength(2);
 });

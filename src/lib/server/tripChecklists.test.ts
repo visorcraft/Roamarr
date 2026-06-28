@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,19 +8,29 @@ vi.mock('./db', async () => {
 });
 
 import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem, setAllItemsPacked } from './tripChecklists';
-import { users, trips, tripCompanions, tripChecklists, tripChecklistItems } from './db/schema';
+import { tripChecklists, tripChecklistItems } from './db/schema';
 import { eq } from 'drizzle-orm';
 import { makeLocals } from '../../../tests/eventHelpers';
+import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 
 function formRequest(data: Record<string, string>) {
 	const body = new URLSearchParams(data);
 	return new Request('http://localhost/trips/1', { method: 'POST', body });
 }
 
+function getDb() {
+	return (ctx as { db: import('./db').DB }).db;
+}
+
+function getKit() {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
+
 test('loadChecklist creates checklist lazily and returns empty items', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const checklist = loadChecklist(t.id);
 	expect(checklist.tripId).toBe(t.id);
@@ -29,10 +39,11 @@ test('loadChecklist creates checklist lazily and returns empty items', () => {
 });
 
 test('addItem creates item and loadChecklist returns assigned companion name', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'Kid', category: 'child' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o2@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'Kid', category: 'child' });
 
 	const item = addItem(u.id, t.id, 'Passports', c.id);
 	expect(item.text).toBe('Passports');
@@ -45,28 +56,31 @@ test('addItem creates item and loadChecklist returns assigned companion name', (
 });
 
 test('addItem rejects missing or oversized text', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o3@x.c', passwordHash: 'x', displayName: 'O3' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o3@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	expect(() => addItem(u.id, t.id, '')).toThrow();
 	expect(() => addItem(u.id, t.id, 'x'.repeat(201))).toThrow();
 });
 
 test('addItem rejects companion from another trip', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o4@x.c', passwordHash: 'x', displayName: 'O4' }).returning().get();
-	const t1 = db.insert(trips).values({ ownerId: u.id, name: 'T1' }).returning().get();
-	const t2 = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
-	const c2 = db.insert(tripCompanions).values({ tripId: t2.id, name: 'Other' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o4@x.c' });
+	const t1 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T1' });
+	const t2 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T2' });
+	const c2 = makeSyncedCompanion(db, kit, { tripId: t2.id, name: 'Other' });
 
 	expect(() => addItem(u.id, t1.id, 'Thing', c2.id)).toThrow();
 });
 
 test('toggleItem flips packed status', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o5@x.c', passwordHash: 'x', displayName: 'O5' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o5@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const item = addItem(u.id, t.id, 'Socks');
 
 	expect(toggleItem(u.id, t.id, item.id).packed).toBe(true);
@@ -74,18 +88,20 @@ test('toggleItem flips packed status', () => {
 });
 
 test('toggleItem and deleteItem reject unknown items', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o6@x.c', passwordHash: 'x', displayName: 'O6' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o6@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	expect(() => toggleItem(u.id, t.id, 9999)).toThrow();
 	expect(() => deleteItem(u.id, t.id, 9999)).toThrow();
 });
 
 test('deleteItem removes item', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o7@x.c', passwordHash: 'x', displayName: 'O7' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o7@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const item = addItem(u.id, t.id, 'Hat');
 
 	deleteItem(u.id, t.id, item.id);
@@ -93,10 +109,11 @@ test('deleteItem removes item', () => {
 });
 
 test('addChecklistItem action parses form and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o8@x.c', passwordHash: 'x', displayName: 'O8' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'Adult', category: 'adult' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o8@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'Adult', category: 'adult' });
 
 	await expect(
 		addChecklistItem({
@@ -111,9 +128,10 @@ test('addChecklistItem action parses form and redirects', async () => {
 });
 
 test('toggleChecklistItem action toggles and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o9@x.c', passwordHash: 'x', displayName: 'O9' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o9@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const item = addItem(u.id, t.id, 'Shoes');
 
 	await expect(
@@ -129,9 +147,10 @@ test('toggleChecklistItem action toggles and redirects', async () => {
 });
 
 test('deleteChecklistItem action deletes and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o10@x.c', passwordHash: 'x', displayName: 'O10' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'o10@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const item = addItem(u.id, t.id, 'Bag');
 
 	await expect(
@@ -146,18 +165,20 @@ test('deleteChecklistItem action deletes and redirects', async () => {
 });
 
 test('mutation helpers require editable trip', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const a = makeSyncedUser(db, kit, { email: 'a@x.c' });
+	const b = makeSyncedUser(db, kit, { email: 'b@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: a.id, name: 'T' });
 
 	expect(() => addItem(b.id, t.id, 'Thing')).toThrow();
 });
 
 test('setAllItemsPacked packs and unpacks every item', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'all@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'all@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	addItem(u.id, t.id, 'A');
 	addItem(u.id, t.id, 'B');
 

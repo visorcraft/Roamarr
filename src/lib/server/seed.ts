@@ -11,9 +11,20 @@ import {
 	insurancePolicies,
 	loyaltyPrograms
 } from './db/schema';
-import { trips, tripShares, tripComments } from './db/mongrelSchema';
+import {
+	users as kitUsers,
+	trips as kitTrips,
+	tripComments as kitTripComments,
+	tripShares as kitTripShares,
+	segments as kitSegments,
+	cards as kitCards,
+	insurancePolicies as kitInsurancePolicies,
+	loyaltyPrograms as kitLoyaltyPrograms
+} from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as usersRepo from './repositories/usersRepo';
+import * as segmentsRepo from './repositories/segmentsRepo';
+import * as profileRepo from './repositories/profileRepo';
 
 function kitId(id: number): bigint {
 	return BigInt(id);
@@ -31,9 +42,14 @@ export function seedDemoData(adminId: number) {
 	db.delete(users).where(sql`${users.id} != ${adminId}`).run();
 
 	// Clean kit tables.
-	kit.deleteFrom(tripComments).executeSync();
-	kit.deleteFrom(tripShares).executeSync();
-	kit.deleteFrom(trips).where(kitNe(trips.owner_id, kitId(adminId))).executeSync();
+	kit.deleteFrom(kitTripComments).executeSync();
+	kit.deleteFrom(kitTripShares).executeSync();
+	kit.deleteFrom(kitSegments).executeSync();
+	kit.deleteFrom(kitTrips).where(kitNe(kitTrips.owner_id, kitId(adminId))).executeSync();
+	kit.deleteFrom(kitCards).where(kitNe(kitCards.user_id, kitId(adminId))).executeSync();
+	kit.deleteFrom(kitInsurancePolicies).where(kitNe(kitInsurancePolicies.user_id, kitId(adminId))).executeSync();
+	kit.deleteFrom(kitLoyaltyPrograms).where(kitNe(kitLoyaltyPrograms.user_id, kitId(adminId))).executeSync();
+	kit.deleteFrom(kitUsers).where(kitNe(kitUsers.id, kitId(adminId))).executeSync();
 
 	const demoUser = usersRepo.createUser({
 		email: 'demo.traveler@example.com',
@@ -55,34 +71,32 @@ export function seedDemoData(adminId: number) {
 		tags: JSON.stringify(['demo', 'asia'])
 	});
 
-	db.insert(segments).values([
-		{
-			tripId: t1.id,
-			type: 'flight',
-			title: 'JL outbound',
-			startAt: '2026-09-15T08:00:00Z',
-			startTz: 'UTC',
-			endAt: '2026-09-15T16:00:00Z',
-			location: 'NRT'
-		},
-		{
-			tripId: t1.id,
-			type: 'hotel',
-			title: 'Shinjuku Hotel',
-			startAt: '2026-09-15T17:00:00Z',
-			startTz: 'Asia/Tokyo',
-			endAt: '2026-09-22T10:00:00Z',
-			location: 'Shinjuku, Tokyo'
-		},
-		{
-			tripId: t1.id,
-			type: 'food',
-			title: 'Tsukiji lunch',
-			startAt: '2026-09-16T12:00:00Z',
-			startTz: 'Asia/Tokyo',
-			location: 'Tsukiji'
-		}
-	]).run();
+	segmentsRepo.createSegment({
+		trip_id: BigInt(t1.id),
+		type: 'flight',
+		title: 'JL outbound',
+		start_at: '2026-09-15T08:00:00Z',
+		start_tz: 'UTC',
+		end_at: '2026-09-15T16:00:00Z',
+		location: 'NRT'
+	});
+	segmentsRepo.createSegment({
+		trip_id: BigInt(t1.id),
+		type: 'hotel',
+		title: 'Shinjuku Hotel',
+		start_at: '2026-09-15T17:00:00Z',
+		start_tz: 'Asia/Tokyo',
+		end_at: '2026-09-22T10:00:00Z',
+		location: 'Shinjuku, Tokyo'
+	});
+	segmentsRepo.createSegment({
+		trip_id: BigInt(t1.id),
+		type: 'food',
+		title: 'Tsukiji lunch',
+		start_at: '2026-09-16T12:00:00Z',
+		start_tz: 'Asia/Tokyo',
+		location: 'Tsukiji'
+	});
 
 	const t2 = tripsRepo.createTrip(Number(demoUser.id), {
 		name: 'Shared demo trip',
@@ -101,16 +115,14 @@ export function seedDemoData(adminId: number) {
 		permission: 'read'
 	});
 
-	db.insert(cards).values({
-		userId: adminId,
+	profileRepo.createCard(adminId, {
 		nickname: 'Travel Card',
 		network: 'visa',
 		last4: '4242',
 		notes: 'Demo card'
-	}).run();
+	});
 
-	db.insert(insurancePolicies).values({
-		userId: adminId,
+	profileRepo.createInsurancePolicy(adminId, {
 		provider: 'Demo Insurer',
 		policyNumber: 'DEMO-123',
 		coverageSummary: 'Trip cancellation',
@@ -118,14 +130,13 @@ export function seedDemoData(adminId: number) {
 		currency: 'USD',
 		startDate: '2026-01-01',
 		endDate: '2026-12-31'
-	}).run();
+	});
 
-	db.insert(loyaltyPrograms).values({
-		userId: adminId,
+	profileRepo.createLoyaltyProgram(adminId, {
 		programName: 'Demo Air',
 		membershipNumber: 'DA12345',
 		balance: 5000
-	}).run();
+	});
 
 	return { demoUser, trips: [t1, t2] };
 }

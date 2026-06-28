@@ -1,39 +1,23 @@
-import { asc, eq } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
-import { tripCompanions, tripMedications } from './db/schema';
-import { requireCompanionOnTrip } from './ownership';
+import {
+	listMedicationsForTrip,
+	createMedication as repoCreateMedication,
+	deleteMedication as repoDeleteMedication,
+	getMedicationById
+} from './repositories/tripMiscRepo';
+import { requireCompanionOnTrip, requireEditableTrip } from './ownership';
 import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
-import { tripCrudFactory } from './crud';
+import { logAudit } from './audit';
 
-const medicationCrud = tripCrudFactory({
-	table: tripMedications,
-	auditEntity: 'trip_medication',
-	orderBy: asc(tripMedications.name),
-	list(tripId: number) {
-		return db
-			.select({
-				id: tripMedications.id,
-				tripId: tripMedications.tripId,
-				companionId: tripMedications.companionId,
-				companionName: tripCompanions.name,
-				name: tripMedications.name,
-				dosage: tripMedications.dosage,
-				schedule: tripMedications.schedule,
-				startsAt: tripMedications.startsAt,
-				endsAt: tripMedications.endsAt,
-				notes: tripMedications.notes,
-				createdAt: tripMedications.createdAt,
-				updatedAt: tripMedications.updatedAt
-			})
-			.from(tripMedications)
-			.leftJoin(tripCompanions, eq(tripMedications.companionId, tripCompanions.id))
-			.where(eq(tripMedications.tripId, tripId))
-			.orderBy(tripMedications.name)
-			.all();
-	},
-	validate(input: {
+export function listMedications(tripId: number) {
+	return listMedicationsForTrip(tripId);
+}
+
+export function addMedication(
+	userId: number,
+	tripId: number,
+	input: {
 		name: string;
 		companionId?: number | null;
 		dosage?: string | null;
@@ -41,33 +25,40 @@ const medicationCrud = tripCrudFactory({
 		startsAt?: string | null;
 		endsAt?: string | null;
 		notes?: string | null;
-	}) {
-		const v = new Validator();
-		v.requiredString(input.name, 'name', { max: 200 });
-		v.optionalString(input.dosage, 'dosage', { max: 200 });
-		v.optionalString(input.schedule, 'schedule', { max: 200 });
-		v.optionalString(input.notes, 'notes', { max: 2000 });
-		v.dateTime(input.startsAt, 'startsAt');
-		v.dateTime(input.endsAt, 'endsAt');
-		if (!v.ok()) throw error(400, v.failMessage());
-	},
-	buildInsert(input, tripId) {
-		return {
-			tripId,
-			companionId: requireCompanionOnTrip(input.companionId, tripId),
-			name: input.name.trim(),
-			dosage: input.dosage?.trim() ?? null,
-			schedule: input.schedule?.trim() ?? null,
-			startsAt: input.startsAt?.trim() || null,
-			endsAt: input.endsAt?.trim() || null,
-			notes: input.notes?.trim() ?? null
-		};
 	}
-});
+) {
+	requireEditableTrip(userId, tripId);
+	const v = new Validator();
+	v.requiredString(input.name, 'name', { max: 200 });
+	v.optionalString(input.dosage, 'dosage', { max: 200 });
+	v.optionalString(input.schedule, 'schedule', { max: 200 });
+	v.optionalString(input.notes, 'notes', { max: 2000 });
+	v.dateTime(input.startsAt, 'startsAt');
+	v.dateTime(input.endsAt, 'endsAt');
+	if (!v.ok()) throw error(400, v.failMessage());
 
-export const listMedications = medicationCrud.list;
-export const addMedication = medicationCrud.add;
-export const deleteMedication = medicationCrud.remove;
+	const companionId = requireCompanionOnTrip(input.companionId, tripId);
+	const med = repoCreateMedication({
+		tripId,
+		companionId,
+		name: input.name.trim(),
+		dosage: input.dosage?.trim() ?? null,
+		schedule: input.schedule?.trim() ?? null,
+		startsAt: input.startsAt?.trim() || null,
+		endsAt: input.endsAt?.trim() || null,
+		notes: input.notes?.trim() ?? null
+	});
+	logAudit(userId, 'create', 'trip_medication', med.id, { tripId });
+	return med;
+}
+
+export function deleteMedication(userId: number, tripId: number, medicationId: number) {
+	requireEditableTrip(userId, tripId);
+	const existing = getMedicationById(medicationId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	repoDeleteMedication(medicationId);
+	logAudit(userId, 'delete', 'trip_medication', medicationId, { tripId });
+}
 
 export async function addMedicationAction(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);

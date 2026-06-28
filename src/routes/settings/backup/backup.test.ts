@@ -3,7 +3,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -11,15 +11,18 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { actions } from './+page.server';
-import { users } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 
 function adminLocals() {
-	const u = (ctx as any).db
-		.insert(users)
-		.values({ email: `admin-${Date.now()}@x.c`, passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
-	return { user: u };
+	const u = usersRepo.createUser({
+		email: `admin-${Date.now()}@x.c`,
+		password_hash: 'x',
+		display_name: 'Admin',
+		calendar_token: null,
+		calendar_token_expires_at: null,
+		role: 'admin'
+	} as any);
+	return { user: { id: Number(u.id), role: 'admin' as const } };
 }
 
 function fileFrom(path: string, name: string): File {

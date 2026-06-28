@@ -7,21 +7,23 @@ import { loadChecklist } from './tripChecklists';
 import { listTemplates } from './packingTemplates';
 import { listTripExpenses, summarizeTripExpenses, computeSettlement } from './tripExpenses';
 import { listAttendeesForSegments } from './segmentAttendees';
-import { listJournalEntries } from './tripJournal';
-import { listDocumentLinks } from './tripDocumentLinks';
 import { listPollsWithVotes } from './tripPolls';
 import { listBudgetsWithSpent } from './tripBudgets';
 import { listEmergencyContacts, listCards } from './repositories/profileRepo';
 import { listAttachments } from './tripExpenseAttachments';
 import { listTripTemplates } from './tripTemplates';
-import { listHomeTasks } from './tripHomeTasks';
-import { listMedications } from './tripMedications';
-import { listEntryRequirements } from './tripEntryRequirements';
-import { listImportantItems } from './tripImportantItems';
 import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
 import { getMapSettings } from './settings';
 import { listFareProvidersForUser, listFareWatchesForUser } from './repositories/travelDataRepo';
+import {
+	listJournalEntriesForTrip,
+	listDocumentLinksForTrip,
+	listHomeTasksForTrip,
+	listMedicationsForTrip,
+	listEntryRequirementsForTrip,
+	listImportantItemsForTrip
+} from './repositories/tripMiscRepo';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -79,13 +81,13 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 	const expenseSummary = summarizeTripExpenses(expenses, companions, baseCurrency);
 	const expenseSettlement = computeSettlement(expenses, companions);
 	const budgets = listBudgetsWithSpent(view.trip.id, expenses, u.defaultCurrency ?? 'USD');
-	const journalEntries = listJournalEntries(view.trip.id);
-	const documentLinks = listDocumentLinks(view.trip.id);
+	const journalEntries = listJournalEntriesForTrip(view.trip.id);
+	const documentLinks = listDocumentLinksForTrip(view.trip.id);
 	const polls = listPollsWithVotes(view.trip.id);
-	const homeTasks = listHomeTasks(view.trip.id);
-	const medications = listMedications(view.trip.id);
-	const entryRequirements = listEntryRequirements(view.trip.id);
-	const importantItems = listImportantItems(view.trip.id);
+	const homeTasks = listHomeTasksForTrip(view.trip.id);
+	const medications = listMedicationsForTrip(view.trip.id);
+	const entryRequirements = listEntryRequirementsForTrip(view.trip.id);
+	const importantItems = listImportantItemsForTrip(view.trip.id);
 	const stats = computeTripStats(
 		view.editor ? view.segments : (view.trip as { segments: Array<{ startAt: string | null; paymentStatus?: string | null }> }).segments,
 		expenseSummary,

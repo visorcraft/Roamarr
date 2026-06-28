@@ -1,18 +1,13 @@
-import { count } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { Readable } from 'node:stream';
 import { requireAdmin } from '$lib/server/auth';
 import { getMapSettings, getSettings, updateSettings } from '$lib/server/settings';
 import { importMapTexture, hasMapTexture } from '$lib/server/mapsAssets';
 import { encrypt } from '$lib/server/crypto';
-import { listAuditLogs, logAudit } from '$lib/server/audit';
+import { listAuditLogs, logAudit, getAdminStats } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
-import { db } from '$lib/server/db';
-import { users, trips, groups } from '$lib/server/db/schema';
-import { countSegments } from '$lib/server/repositories/segmentsRepo';
-import { countNotifications } from '$lib/server/repositories/remindersRepo';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import type { PageServerLoad } from './$types';
@@ -73,13 +68,7 @@ export function _saveAdminSettings(
 export const load: PageServerLoad = ({ locals }) => {
 	requireAdmin(locals);
 	const s = getSettings();
-	const stats = {
-		users: db.select({ count: count() }).from(users).get()?.count ?? 0,
-		trips: db.select({ count: count() }).from(trips).get()?.count ?? 0,
-		segments: Number(countSegments()),
-		groups: db.select({ count: count() }).from(groups).get()?.count ?? 0,
-		notifications: countNotifications()
-	};
+	const stats = getAdminStats();
 	const recentLogs = listAuditLogs({ limit: 5 }).logs;
 	const mapSettings = getMapSettings();
 	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats, recentLogs, mapSettings };

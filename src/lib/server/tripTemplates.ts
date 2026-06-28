@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
-import { db } from './db';
-import { tripTemplates } from './db/schema';
+import * as templatesRepo from './repositories/templatesRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import { listSegmentsForTrip, createSegment } from './repositories/segmentsRepo';
 import { requireOwnedTrip } from './ownership';
 import { logAudit } from './audit';
 import { nowIso } from './tz';
 import { serializeTags, parseTags } from '$lib/tags';
+
+export type { TripTemplate } from './repositories/templatesRepo';
 
 interface TripTemplateSnapshot {
 	name: string;
@@ -21,7 +21,7 @@ interface TripTemplateSnapshot {
 }
 
 export function listTripTemplates(userId: number) {
-	return db.select().from(tripTemplates).where(eq(tripTemplates.userId, userId)).orderBy(tripTemplates.name).all();
+	return templatesRepo.listTripTemplates(userId);
 }
 
 export function saveTripTemplate(userId: number, sourceTripId: number, name: string) {
@@ -43,11 +43,12 @@ export function saveTripTemplate(userId: number, sourceTripId: number, name: str
 		tags: parseTags(trip.tags),
 		segmentTemplates: segs.map((s) => ({ type: s.type, title: s.title, location: s.location }))
 	};
-	const inserted = db
-		.insert(tripTemplates)
-		.values({ userId, sourceTripId, name: name.trim(), snapshotJson: JSON.stringify(snapshot) })
-		.returning()
-		.get();
+	const inserted = templatesRepo.createTripTemplate({
+		userId,
+		sourceTripId,
+		name: name.trim(),
+		snapshot: snapshot as Record<string, unknown>
+	});
 	logAudit(userId, 'create', 'trip_template', inserted.id, { sourceTripId, name: inserted.name });
 	return inserted;
 }
@@ -65,13 +66,10 @@ export function createTripFromTemplate(
 		endDate?: string | null;
 	}
 ) {
-	const template = db
-		.select()
-		.from(tripTemplates)
-		.where(and(eq(tripTemplates.id, templateId), eq(tripTemplates.userId, userId)))
-		.get();
-	if (!template) throw error(404, 'Template not found');
-	let snapshot: TripTemplateSnapshot = {
+	const template = templatesRepo.getTripTemplateById(templateId);
+	if (!template || template.userId !== userId) throw error(404, 'Template not found');
+
+	const snapshot: TripTemplateSnapshot = {
 		name: template.name,
 		destinationCountryCode: null,
 		destinationCityName: null,
@@ -81,11 +79,8 @@ export function createTripFromTemplate(
 		tags: [],
 		segmentTemplates: []
 	};
-	try {
-		snapshot = JSON.parse(template.snapshotJson) as TripTemplateSnapshot;
-	} catch {
-		// ignore
-	}
+	Object.assign(snapshot, template.snapshot);
+
 	const name = overrides.name?.trim() || snapshot.name;
 	const destinationCountryCode =
 		overrides.destinationCountryCode !== undefined

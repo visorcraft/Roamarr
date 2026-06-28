@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,19 +9,39 @@ vi.mock('./db', async () => {
 
 import { createTripFromTemplate, listTripTemplates, saveTripTemplate } from './tripTemplates';
 import { auditLogs, segments, trips, users } from './db/schema';
+import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from './db/mongrelSchema';
 import { eq } from 'drizzle-orm';
+import * as usersRepo from './repositories/usersRepo';
+import * as tripsRepo from './repositories/tripsRepo';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from trip_templates; delete from audit_logs; delete from segments; delete from trips; delete from users;'
-	);
+	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	db.delete(auditLogs).run();
+	db.delete(segments).run();
+	db.delete(trips).run();
+	db.delete(users).run();
+	kit.deleteFrom(kitTripTemplates).executeSync();
+	kit.deleteFrom(kitTrips).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 function seed() {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'tpl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'Source', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522 }).returning().get();
-	return { db, u, t };
+	const u = usersRepo.createUser({
+		email: 'tpl@x.c',
+		password_hash: 'x',
+		display_name: 'U',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	const t = tripsRepo.createTrip(Number(u.id), {
+		name: 'Source',
+		destinationCountryCode: 'FR',
+		destinationCityName: 'Paris',
+		destinationCityLat: 48.8566,
+		destinationCityLng: 2.3522
+	});
+	return { db: (ctx as { db: import('./db').DB }).db, u, t };
 }
 
 test('saveTripTemplate snapshots trip segments and tags', () => {
@@ -37,10 +57,10 @@ test('saveTripTemplate snapshots trip segments and tags', () => {
 		})
 		.run();
 
-	const tpl = saveTripTemplate(u.id, t.id, 'Paris template');
+	const tpl = saveTripTemplate(Number(u.id), t.id, 'Paris template');
 	expect(tpl.name).toBe('Paris template');
-	expect(tpl.userId).toBe(u.id);
-	expect(tpl.snapshotJson).toContain('UA1');
+	expect(tpl.userId).toBe(Number(u.id));
+	expect(JSON.stringify(tpl.snapshot)).toContain('UA1');
 
 	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, tpl.id)).all();
 	expect(logs.map((l) => l.action)).toContain('create');
@@ -58,8 +78,8 @@ test('createTripFromTemplate copies segments and metadata', () => {
 		})
 		.run();
 
-	const tpl = saveTripTemplate(u.id, t.id, 'Copy');
-	const copy = createTripFromTemplate(u.id, tpl.id, {
+	const tpl = saveTripTemplate(Number(u.id), t.id, 'Copy');
+	const copy = createTripFromTemplate(Number(u.id), tpl.id, {
 		name: 'Copied trip',
 		startDate: '2027-01-01',
 		endDate: '2027-01-07'
@@ -77,29 +97,43 @@ test('createTripFromTemplate copies segments and metadata', () => {
 });
 
 test('listTripTemplates returns only the users templates', () => {
-	const { db, u, t } = seed();
-	const other = db.insert(users).values({ email: 'oth@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const otherTrip = db.insert(trips).values({ ownerId: other.id, name: 'Other' }).returning().get();
+	const { u, t } = seed();
+	const other = usersRepo.createUser({
+		email: 'oth@x.c',
+		password_hash: 'x',
+		display_name: 'O',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	const otherTrip = tripsRepo.createTrip(Number(other.id), { name: 'Other' });
 
-	saveTripTemplate(u.id, t.id, 'Mine');
-	saveTripTemplate(other.id, otherTrip.id, 'Theirs');
+	saveTripTemplate(Number(u.id), t.id, 'Mine');
+	saveTripTemplate(Number(other.id), otherTrip.id, 'Theirs');
 
-	expect(listTripTemplates(u.id).map((tpl) => tpl.name)).toEqual(['Mine']);
+	expect(listTripTemplates(Number(u.id)).map((tpl) => tpl.name)).toEqual(['Mine']);
 });
 
 test('saveTripTemplate rejects non-owner', () => {
-	const { db, t } = seed();
-	const other = db.insert(users).values({ email: 'no@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	expect(() => saveTripTemplate(other.id, t.id, 'Nope')).toThrow();
+	const { u, t } = seed();
+	const other = usersRepo.createUser({
+		email: 'no@x.c',
+		password_hash: 'x',
+		display_name: 'O',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	expect(() => saveTripTemplate(Number(other.id), t.id, 'Nope')).toThrow();
 });
 
 test('createTripFromTemplate rejects foreign template', () => {
 	const { u, t } = seed();
-	const tpl = saveTripTemplate(u.id, t.id, 'Mine');
-	const other = (ctx as { db: import('./db').DB }).db
-		.insert(users)
-		.values({ email: 'no2@x.c', passwordHash: 'x', displayName: 'O' })
-		.returning()
-		.get();
-	expect(() => createTripFromTemplate(other.id, tpl.id, {})).toThrow();
+	const tpl = saveTripTemplate(Number(u.id), t.id, 'Mine');
+	const other = usersRepo.createUser({
+		email: 'no2@x.c',
+		password_hash: 'x',
+		display_name: 'O',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	expect(() => createTripFromTemplate(Number(other.id), tpl.id, {})).toThrow();
 });

@@ -1,6 +1,6 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,21 +9,37 @@ vi.mock('$lib/server/db', async () => {
 
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
 import { getMapSettings, updateSettings, getSettings } from '$lib/server/settings';
-import { auditLogs } from '$lib/server/db/schema';
+import { users, auditLogs } from '$lib/server/db/schema';
+import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
-import { makeUser } from '../../../tests/helpers';
 import { eq } from 'drizzle-orm';
-import { beforeEach } from 'vitest';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+
+function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'user') {
+	return usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: displayName,
+		calendar_token: null,
+		calendar_token_expires_at: null,
+		...(role === 'admin' ? { role: 'admin' } : {})
+	} as any);
+}
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from users;');
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	db.delete(auditLogs).run();
+	db.delete(users).run();
+	kit.deleteFrom(kitAuditLogs).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 test('saves settings, default leads and encrypts smtp pass', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db);
-	saveAdminSettings(u.id, {
+	const u = makeUser('u@x.c');
+	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
 		allowRegistration: true,
 		defaultTimezone: 'UTC',
@@ -45,7 +61,7 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 	expect(decrypt(s.smtpPass!)).toBe('pw');
 	expect(s.webhookUrl).toBe('https://hooks.example.com/roamarr');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('settings_update');
 	expect(logs[0].entityType).toBe('settings');
@@ -53,9 +69,9 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 });
 
 test('rejects invalid default reminder leads', () => {
-	const u = makeUser((ctx as { db: import('$lib/server/db').DB }).db, { email: 'leads@x.c' });
+	const u = makeUser('leads@x.c');
 	expect(() =>
-		saveAdminSettings(u.id, {
+		saveAdminSettings(Number(u.id), {
 			instanceName: 'R',
 			allowRegistration: true,
 			defaultTimezone: 'UTC',
@@ -65,7 +81,7 @@ test('rejects invalid default reminder leads', () => {
 		})
 	).toThrow('Default flight check-in lead must be a non-negative integer');
 	expect(() =>
-		saveAdminSettings(u.id, {
+		saveAdminSettings(Number(u.id), {
 			instanceName: 'R',
 			allowRegistration: true,
 			defaultTimezone: 'UTC',
@@ -78,9 +94,9 @@ test('rejects invalid default reminder leads', () => {
 
 test('omitting smtpPass preserves the existing encrypted value', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, { email: 'preserve@x.c' });
+	const u = makeUser('preserve@x.c');
 	const before = getSettings().smtpPass;
-	saveAdminSettings(u.id, {
+	saveAdminSettings(Number(u.id), {
 		instanceName: 'R2',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
@@ -91,15 +107,15 @@ test('omitting smtpPass preserves the existing encrypted value', () => {
 	const after = getSettings().smtpPass;
 	expect(after).toBe(before);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(JSON.parse(logs[0].metaJson).smtpPassSet).toBe(false);
 });
 
 test('saves empty webhookUrl as null', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, { email: 'webhook@x.c' });
-	saveAdminSettings(u.id, {
+	const u = makeUser('webhook@x.c');
+	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
@@ -113,9 +129,8 @@ test('saves empty webhookUrl as null', () => {
 });
 
 test('load includes recent audit log entries for admins', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, { email: 'audit-admin@x.c', role: 'admin' });
-	saveAdminSettings(u.id, {
+	const u = makeUser('audit-admin@x.c', 'Admin', 'admin');
+	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',
@@ -124,14 +139,16 @@ test('load includes recent audit log entries for admins', () => {
 		defaultDocumentExpiryLeadDays: 90
 	});
 
-	const data = load({ locals: { user: u } as App.Locals } as any) as { recentLogs: { action: string }[] };
+	const data = load({ locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals } as any) as {
+		recentLogs: { action: string }[];
+	};
 	expect(data.recentLogs).toHaveLength(1);
 	expect(data.recentLogs[0].action).toBe('settings_update');
 });
 
 test('save action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, { email: 'admin@x.c', role: 'admin' });
+	const u = makeUser('admin@x.c', 'Admin', 'admin');
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/settings', {
 		method: 'POST',
@@ -144,7 +161,7 @@ test('save action sets a flash cookie and redirects', async () => {
 			defaultDocumentExpiryLeadDays: '90'
 		})
 	});
-	const locals = { user: u } as App.Locals;
+	const locals = { user: { id: Number(u.id), role: 'admin' } } as App.Locals;
 	await expect(actions.save({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/settings'
@@ -162,8 +179,8 @@ test('getMapSettings reflects imported city count', () => {
 
 test('map tile API key is encrypted at rest and decrypts for tile config', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, { email: 'tilekey@x.c' });
-	saveAdminSettings(u.id, {
+	const u = makeUser('tilekey@x.c');
+	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
 		allowRegistration: false,
 		defaultTimezone: 'UTC',

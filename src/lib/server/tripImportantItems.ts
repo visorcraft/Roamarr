@@ -1,65 +1,58 @@
-import { asc, eq } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
-import { tripCompanions, tripImportantItems } from './db/schema';
-import { requireCompanionOnTrip } from './ownership';
+import {
+	listImportantItemsForTrip,
+	createImportantItem as repoCreateImportantItem,
+	deleteImportantItem as repoDeleteImportantItem,
+	getImportantItemById
+} from './repositories/tripMiscRepo';
+import { requireCompanionOnTrip, requireEditableTrip } from './ownership';
 import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
-import { tripCrudFactory } from './crud';
+import { logAudit } from './audit';
 
-const importantItemCrud = tripCrudFactory({
-	table: tripImportantItems,
-	auditEntity: 'trip_important_item',
-	orderBy: asc(tripImportantItems.name),
-	list(tripId: number) {
-		return db
-			.select({
-				id: tripImportantItems.id,
-				tripId: tripImportantItems.tripId,
-				companionId: tripImportantItems.companionId,
-				companionName: tripCompanions.name,
-				name: tripImportantItems.name,
-				serialNumber: tripImportantItems.serialNumber,
-				trackerId: tripImportantItems.trackerId,
-				notes: tripImportantItems.notes,
-				createdAt: tripImportantItems.createdAt,
-				updatedAt: tripImportantItems.updatedAt
-			})
-			.from(tripImportantItems)
-			.leftJoin(tripCompanions, eq(tripImportantItems.companionId, tripCompanions.id))
-			.where(eq(tripImportantItems.tripId, tripId))
-			.orderBy(tripImportantItems.name)
-			.all();
-	},
-	validate(input: {
+export function listImportantItems(tripId: number) {
+	return listImportantItemsForTrip(tripId);
+}
+
+export function addImportantItem(
+	userId: number,
+	tripId: number,
+	input: {
 		name: string;
 		companionId?: number | null;
 		serialNumber?: string | null;
 		trackerId?: string | null;
 		notes?: string | null;
-	}) {
-		const v = new Validator();
-		v.requiredString(input.name, 'name', { max: 200 });
-		v.optionalString(input.serialNumber, 'serialNumber', { max: 200 });
-		v.optionalString(input.trackerId, 'trackerId', { max: 200 });
-		v.optionalString(input.notes, 'notes', { max: 2000 });
-		if (!v.ok()) throw error(400, v.failMessage());
-	},
-	buildInsert(input, tripId) {
-		return {
-			tripId,
-			companionId: requireCompanionOnTrip(input.companionId, tripId),
-			name: input.name.trim(),
-			serialNumber: input.serialNumber?.trim() ?? null,
-			trackerId: input.trackerId?.trim() ?? null,
-			notes: input.notes?.trim() ?? null
-		};
 	}
-});
+) {
+	requireEditableTrip(userId, tripId);
+	const v = new Validator();
+	v.requiredString(input.name, 'name', { max: 200 });
+	v.optionalString(input.serialNumber, 'serialNumber', { max: 200 });
+	v.optionalString(input.trackerId, 'trackerId', { max: 200 });
+	v.optionalString(input.notes, 'notes', { max: 2000 });
+	if (!v.ok()) throw error(400, v.failMessage());
 
-export const listImportantItems = importantItemCrud.list;
-export const addImportantItem = importantItemCrud.add;
-export const deleteImportantItem = importantItemCrud.remove;
+	const companionId = requireCompanionOnTrip(input.companionId, tripId);
+	const item = repoCreateImportantItem({
+		tripId,
+		companionId,
+		name: input.name.trim(),
+		serialNumber: input.serialNumber?.trim() ?? null,
+		trackerId: input.trackerId?.trim() ?? null,
+		notes: input.notes?.trim() ?? null
+	});
+	logAudit(userId, 'create', 'trip_important_item', item.id, { tripId });
+	return item;
+}
+
+export function deleteImportantItem(userId: number, tripId: number, itemId: number) {
+	requireEditableTrip(userId, tripId);
+	const existing = getImportantItemById(itemId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	repoDeleteImportantItem(itemId);
+	logAudit(userId, 'delete', 'trip_important_item', itemId, { tripId });
+}
 
 export async function addImportantItemAction(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);

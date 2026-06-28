@@ -1,8 +1,9 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { db, sqlite } from './db';
-import { packingTemplates, packingTemplateItems, tripChecklists, tripChecklistItems } from './db/schema';
+import { tripChecklists, tripChecklistItems } from './db/schema';
+import * as templatesRepo from './repositories/templatesRepo';
 import { getOrCreateChecklist } from './tripChecklists';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
@@ -13,29 +14,11 @@ const TEMPLATE_NAME_MAX = 100;
 const ITEM_LABEL_MAX = 200;
 const ITEM_CATEGORY_MAX = 50;
 
-interface TemplateItem {
-	id: number;
-	label: string;
-	category: string;
-	createdAt: string;
-}
-
-interface PackingTemplate {
-	id: number;
-	userId: number;
-	name: string;
-	isDefault: boolean;
-	items: TemplateItem[];
-	createdAt: string;
-}
+export type { PackingTemplate, PackingTemplateItem } from './repositories/templatesRepo';
 
 function requireTemplateOwner(userId: number, templateId: number) {
-	const template = db
-		.select()
-		.from(packingTemplates)
-		.where(and(eq(packingTemplates.id, templateId), eq(packingTemplates.userId, userId)))
-		.get();
-	if (!template) throw error(404, 'Template not found');
+	const template = templatesRepo.getPackingTemplateById(templateId);
+	if (!template || template.userId !== userId) throw error(404, 'Template not found');
 	return template;
 }
 
@@ -76,21 +59,15 @@ function insertTemplate(
 	fromTripId?: number
 ) {
 	return sqlite.transaction(() => {
-		const template = db
-			.insert(packingTemplates)
-			.values({ userId, name })
-			.returning()
-			.get();
+		const template = templatesRepo.createPackingTemplate({ userId, name });
 		if (items.length) {
-			db.insert(packingTemplateItems)
-				.values(
-					items.map((item) => ({
-						templateId: template.id,
-						label: item.label,
-						category: item.category?.trim() || 'general'
-					}))
-				)
-				.run();
+			for (const item of items) {
+				templatesRepo.createPackingTemplateItem({
+					templateId: template.id,
+					label: item.label,
+					category: item.category
+				});
+			}
 		}
 		logAudit(userId, 'packing_template_save', 'packing_template', template.id, {
 			fromTripId,
@@ -115,52 +92,14 @@ export function saveTemplate(
 	return insertTemplate(userId, name.trim(), items, fromTripId);
 }
 
-export function listTemplates(userId: number): PackingTemplate[] {
-	const rows = db
-		.select()
-		.from(packingTemplates)
-		.where(eq(packingTemplates.userId, userId))
-		.orderBy(packingTemplates.name)
-		.all();
-	if (!rows.length) return [];
-	const templateIds = rows.map((t) => t.id);
-	const items = templateIds.length
-		? db
-				.select()
-				.from(packingTemplateItems)
-				.where(inArray(packingTemplateItems.templateId, templateIds))
-				.all()
-		: [];
-	const itemsByTemplate = new Map<number, typeof items>();
-	for (const item of items) {
-		const list = itemsByTemplate.get(item.templateId) ?? [];
-		list.push(item);
-		itemsByTemplate.set(item.templateId, list);
-	}
-	return rows.map((t) => ({
-		id: t.id,
-		userId: t.userId,
-		name: t.name,
-		isDefault: t.isDefault,
-		createdAt: t.createdAt,
-		items: (itemsByTemplate.get(t.id) ?? []).map((i) => ({
-			id: i.id,
-			label: i.label,
-			category: i.category,
-			createdAt: i.createdAt
-		}))
-	}));
+export function listTemplates(userId: number): templatesRepo.PackingTemplate[] {
+	return templatesRepo.listPackingTemplates(userId);
 }
 
 function applyTx(templateId: number, tripId: number, userId: number) {
 	return sqlite.transaction(() => {
 		const template = requireTemplateOwner(userId, templateId);
-		const items = db
-			.select()
-			.from(packingTemplateItems)
-			.where(eq(packingTemplateItems.templateId, templateId))
-			.orderBy(packingTemplateItems.createdAt)
-			.all();
+		const items = templatesRepo.listPackingTemplateItems(templateId);
 		const checklist = getOrCreateChecklist(tripId);
 		if (items.length) {
 			db.insert(tripChecklistItems)

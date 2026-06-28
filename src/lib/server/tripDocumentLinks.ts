@@ -1,8 +1,12 @@
-import { desc, eq } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
-import { tripDocumentLinks } from './db/schema';
-import { requireEditableTrip, requireOwnedTripRow } from './ownership';
+import {
+	listDocumentLinksForTrip,
+	createDocumentLink as repoCreateDocumentLink,
+	updateDocumentLink as repoUpdateDocumentLink,
+	deleteDocumentLink as repoDeleteDocumentLink,
+	getDocumentLinkById
+} from './repositories/tripMiscRepo';
+import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator, httpUrl, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
@@ -13,30 +17,19 @@ type DocumentLinkInput = {
 	notes?: string | null;
 };
 
-type DocumentLinkRow = typeof tripDocumentLinks.$inferSelect;
-
-export function listDocumentLinks(tripId: number): DocumentLinkRow[] {
-	return db
-		.select()
-		.from(tripDocumentLinks)
-		.where(eq(tripDocumentLinks.tripId, tripId))
-		.orderBy(desc(tripDocumentLinks.createdAt), desc(tripDocumentLinks.id))
-		.all();
+export function listDocumentLinks(tripId: number) {
+	return listDocumentLinksForTrip(tripId);
 }
 
 export function createDocumentLink(
 	userId: number,
 	tripId: number,
 	input: DocumentLinkInput
-): DocumentLinkRow {
+) {
 	requireEditableTrip(userId, tripId);
 	const { label, url, notes } = normalizeInput(input);
 
-	const row = db
-		.insert(tripDocumentLinks)
-		.values({ tripId, label, url, notes })
-		.returning()
-		.get();
+	const row = repoCreateDocumentLink({ tripId, label, url, notes });
 
 	logAudit(userId, 'document_link_create', 'trip_document_link', row.id, { tripId, label });
 	return row;
@@ -47,16 +40,12 @@ export function editDocumentLink(
 	tripId: number,
 	linkId: number,
 	input: DocumentLinkInput
-): DocumentLinkRow {
+) {
 	requireEditableTrip(userId, tripId);
-	requireOwnedTripRow(tripDocumentLinks, tripId, linkId, 'Not found');
+	requireOwnedDocumentLink(tripId, linkId);
 	const { label, url, notes } = normalizeInput(input);
-	const row = db
-		.update(tripDocumentLinks)
-		.set({ label, url, notes })
-		.where(eq(tripDocumentLinks.id, linkId))
-		.returning()
-		.get();
+	const row = repoUpdateDocumentLink(linkId, { label, url, notes });
+	if (!row) throw error(404, 'Not found');
 
 	logAudit(userId, 'document_link_update', 'trip_document_link', linkId, { tripId, label });
 	return row;
@@ -64,13 +53,19 @@ export function editDocumentLink(
 
 export function removeDocumentLink(userId: number, tripId: number, linkId: number) {
 	requireEditableTrip(userId, tripId);
-	const existing = requireOwnedTripRow(tripDocumentLinks, tripId, linkId, 'Not found');
+	const existing = requireOwnedDocumentLink(tripId, linkId);
 
-	db.delete(tripDocumentLinks).where(eq(tripDocumentLinks.id, linkId)).run();
+	repoDeleteDocumentLink(linkId);
 	logAudit(userId, 'document_link_delete', 'trip_document_link', linkId, {
 		tripId,
 		label: existing.label
 	});
+}
+
+function requireOwnedDocumentLink(tripId: number, linkId: number) {
+	const row = getDocumentLinkById(linkId);
+	if (!row || row.tripId !== tripId) throw error(404, 'Not found');
+	return row;
 }
 
 function normalizeInput(input: DocumentLinkInput) {

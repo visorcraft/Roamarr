@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -15,15 +15,24 @@ import {
 	addDocumentLink,
 	deleteDocumentLink
 } from './tripDocumentLinks';
-import { users, trips, tripDocumentLinks, auditLogs } from './db/schema';
+import { tripDocumentLinks, auditLogs } from './db/schema';
 import { eq } from 'drizzle-orm';
-import { makeUser, makeTrip } from '../../../tests/helpers';
 import { makeFormEvent } from '../../../tests/eventHelpers';
+import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+
+function getDb() {
+	return (ctx as { db: import('./db').DB }).db;
+}
+
+function getKit() {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 test('listDocumentLinks returns links ordered by newest first', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	createDocumentLink(u.id, t.id, { label: 'First', url: 'https://first.example' });
 	createDocumentLink(u.id, t.id, { label: 'Second', url: 'https://second.example' });
@@ -33,9 +42,10 @@ test('listDocumentLinks returns links ordered by newest first', () => {
 });
 
 test('createDocumentLink inserts a link and audits', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl2@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl2@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const link = createDocumentLink(u.id, t.id, {
 		label: 'Booking',
@@ -54,9 +64,10 @@ test('createDocumentLink inserts a link and audits', () => {
 });
 
 test('createDocumentLink trims whitespace and stores null for blank notes', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl3@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl3@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const link = createDocumentLink(u.id, t.id, {
 		label: '  Booking  ',
@@ -70,9 +81,10 @@ test('createDocumentLink trims whitespace and stores null for blank notes', () =
 });
 
 test('createDocumentLink rejects invalid URLs', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl4@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl4@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'not-a-url' })).toThrow(
 		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
@@ -83,9 +95,10 @@ test('createDocumentLink rejects invalid URLs', () => {
 });
 
 test('editDocumentLink updates a link and audits', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl5@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl5@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const link = createDocumentLink(u.id, t.id, { label: 'Old', url: 'https://old.example' });
 
 	const updated = editDocumentLink(u.id, t.id, link.id, {
@@ -103,10 +116,11 @@ test('editDocumentLink updates a link and audits', () => {
 });
 
 test('editDocumentLink is scoped to the trip', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dl6@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t1 = db.insert(trips).values({ ownerId: u.id, name: 'T1' }).returning().get();
-	const t2 = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl6@x.c' });
+	const t1 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T1' });
+	const t2 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T2' });
 	const link = createDocumentLink(u.id, t1.id, { label: 'L', url: 'https://a.example' });
 
 	try {
@@ -118,10 +132,11 @@ test('editDocumentLink is scoped to the trip', () => {
 });
 
 test('removeDocumentLink deletes only the owned trip link', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db.insert(users).values({ email: 'dl7-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'dl7-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const db = getDb();
+	const kit = getKit();
+	const a = makeSyncedUser(db, kit, { email: 'dl7-a@x.c' });
+	const b = makeSyncedUser(db, kit, { email: 'dl7-b@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: a.id, name: 'T' });
 	const link = createDocumentLink(a.id, t.id, { label: 'L', url: 'https://a.example' });
 
 	try {
@@ -140,9 +155,10 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 });
 
 test('addDocumentLink action creates a link and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = makeUser(db);
-	const t = makeTrip(db, { ownerId: u.id });
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl8@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const event = makeFormEvent(
 		u,
@@ -160,9 +176,10 @@ test('addDocumentLink action creates a link and redirects', async () => {
 });
 
 test('addDocumentLink action returns validation errors', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = makeUser(db);
-	const t = makeTrip(db, { ownerId: u.id });
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl9@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 
 	const event = makeFormEvent(u, { id: String(t.id) }, { label: '', url: 'not-a-url' });
 	const result = (await addDocumentLink(event)) as {
@@ -175,9 +192,10 @@ test('addDocumentLink action returns validation errors', async () => {
 });
 
 test('deleteDocumentLink action removes a link and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = makeUser(db);
-	const t = makeTrip(db, { ownerId: u.id });
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'dl10@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const link = createDocumentLink(u.id, t.id, { label: 'Remove', url: 'https://remove.example' });
 
 	const event = makeFormEvent(u, { id: String(t.id) }, { linkId: String(link.id) });

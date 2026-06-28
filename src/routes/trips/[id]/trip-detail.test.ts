@@ -28,6 +28,10 @@ import {
 	tripExpenseAttachments,
 	tripExpenses
 } from '$lib/server/db/schema';
+import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from '$lib/server/db/mongrelSchema';
+import { eq as kitEq } from '@mongreldb/kit';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { upsertCustomReminder } from '$lib/server/reminders';
 import { eq } from 'drizzle-orm';
 
@@ -415,17 +419,27 @@ test('moveSegmentDate action moves a segment to a new local date', async () => {
 
 test('saveTripTemplate action saves a template and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'stpl@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = usersRepo.createUser({
+		email: 'stpl@x.c',
+		password_hash: 'x',
+		display_name: 'U',
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+	const t = tripsRepo.createTrip(Number(u.id), { name: 'T' });
 
 	const templateForm = new FormData();
 	templateForm.set('name', 'Template');
-	await expect(actions.saveTripTemplate(formEvent(u, t.id, templateForm))).rejects.toMatchObject({
+	await expect(
+		actions.saveTripTemplate(formEvent({ id: Number(u.id), email: String(u.email) }, t.id, templateForm))
+	).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripTemplates).where(eq(tripTemplates.userId, u.id)).all()).toHaveLength(1);
+	expect(db.select().from(tripTemplates).where(eq(tripTemplates.userId, Number(u.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(kitTripTemplates).where(kitEq(kitTripTemplates.user_id, u.id)).executeSync()).toHaveLength(1);
 });
 
 test('addHomeTask action creates a task and redirects', async () => {

@@ -1,43 +1,52 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { eq, asc } from 'drizzle-orm';
-import { db } from './db';
-import { tripHomeTasks } from './db/schema';
-import { requireEditableTrip, requireOwnedTripRow } from './ownership';
+import {
+	listHomeTasksForTrip,
+	createHomeTask as repoCreateHomeTask,
+	updateHomeTask as repoUpdateHomeTask,
+	deleteHomeTask as repoDeleteHomeTask,
+	getHomeTaskById
+} from './repositories/tripMiscRepo';
+import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
-import { tripCrudFactory } from './crud';
 
-const homeTaskCrud = tripCrudFactory({
-	table: tripHomeTasks,
-	auditEntity: 'trip_home_task',
-	orderBy: [asc(tripHomeTasks.sortOrder), asc(tripHomeTasks.createdAt)],
-	validate(input: { text: string; dueDate?: string | null }) {
-		const v = new Validator();
-		v.requiredString(input.text, 'text', { max: 200 });
-		v.date(input.dueDate, 'dueDate');
-		if (!v.ok()) throw error(400, v.failMessage());
-	},
-	buildInsert(input, tripId) {
-		return { tripId, text: input.text, dueDate: input.dueDate ?? null };
-	}
-});
+export function listHomeTasks(tripId: number) {
+	return listHomeTasksForTrip(tripId);
+}
 
-export const listHomeTasks = homeTaskCrud.list;
-export const addHomeTask = homeTaskCrud.add;
-export const deleteHomeTask = homeTaskCrud.remove;
+export function addHomeTask(
+	userId: number,
+	tripId: number,
+	input: { text: string; dueDate?: string | null }
+) {
+	requireEditableTrip(userId, tripId);
+	const v = new Validator();
+	v.requiredString(input.text, 'text', { max: 200 });
+	v.date(input.dueDate, 'dueDate');
+	if (!v.ok()) throw error(400, v.failMessage());
+
+	const task = repoCreateHomeTask({ tripId, text: input.text, dueDate: input.dueDate ?? null });
+	logAudit(userId, 'create', 'trip_home_task', task.id, { tripId });
+	return task;
+}
 
 export function toggleHomeTask(userId: number, tripId: number, taskId: number) {
 	requireEditableTrip(userId, tripId);
-	const existing = requireOwnedTripRow(tripHomeTasks, tripId, taskId, 'Task not found');
-	const updated = db
-		.update(tripHomeTasks)
-		.set({ done: !existing.done })
-		.where(eq(tripHomeTasks.id, taskId))
-		.returning()
-		.get();
+	const existing = getHomeTaskById(taskId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Task not found');
+	const updated = repoUpdateHomeTask(taskId, { done: !existing.done });
+	if (!updated) throw error(404, 'Task not found');
 	logAudit(userId, 'toggle', 'trip_home_task', taskId, { tripId, done: updated.done });
 	return updated;
+}
+
+export function deleteHomeTask(userId: number, tripId: number, taskId: number) {
+	requireEditableTrip(userId, tripId);
+	const existing = getHomeTaskById(taskId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Task not found');
+	repoDeleteHomeTask(taskId);
+	logAudit(userId, 'delete', 'trip_home_task', taskId, { tripId });
 }
 
 export async function addHomeTaskAction(event: RequestEvent) {

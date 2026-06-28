@@ -1,20 +1,18 @@
-import { desc, eq } from 'drizzle-orm';
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
-import { tripJournalEntries } from './db/schema';
+import {
+	listJournalEntriesForTrip,
+	createJournalEntry as repoCreateJournalEntry,
+	updateJournalEntry as repoUpdateJournalEntry,
+	deleteJournalEntry as repoDeleteJournalEntry,
+	getJournalEntryById
+} from './repositories/tripMiscRepo';
 import { logAudit } from './audit';
 import { requireEditableTrip } from './ownership';
 import { Validator, formFail, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
-import { nowIso } from './tz';
 
 export function listJournalEntries(tripId: number) {
-	return db
-		.select()
-		.from(tripJournalEntries)
-		.where(eq(tripJournalEntries.tripId, tripId))
-		.orderBy(desc(tripJournalEntries.entryDate), desc(tripJournalEntries.createdAt))
-		.all();
+	return listJournalEntriesForTrip(tripId);
 }
 
 interface JournalEntryInput {
@@ -38,11 +36,7 @@ function validateFields(input: Partial<JournalEntryInput>) {
 export function createJournalEntry(userId: number, tripId: number, input: JournalEntryInput) {
 	const { entryDate, title, body } = validateFields(input);
 	requireEditableTrip(userId, tripId);
-	const entry = db
-		.insert(tripJournalEntries)
-		.values({ tripId, entryDate, title, body })
-		.returning()
-		.get();
+	const entry = repoCreateJournalEntry({ tripId, entryDate, title, body });
 	logAudit(userId, 'create', 'journal_entry', entry.id, { tripId, entryDate, title });
 	return entry;
 }
@@ -52,11 +46,7 @@ export function modifyJournalEntry(
 	entryId: number,
 	input: Partial<JournalEntryInput>
 ) {
-	const existing = db
-		.select()
-		.from(tripJournalEntries)
-		.where(eq(tripJournalEntries.id, entryId))
-		.get();
+	const existing = getJournalEntryById(entryId);
 	if (!existing) throw error(404, 'Not found');
 	const { entryDate, title, body } = validateFields({
 		entryDate: input.entryDate ?? existing.entryDate,
@@ -64,25 +54,17 @@ export function modifyJournalEntry(
 		body: input.body ?? existing.body
 	});
 	requireEditableTrip(userId, existing.tripId);
-	const entry = db
-		.update(tripJournalEntries)
-		.set({ entryDate, title, body, updatedAt: nowIso() })
-		.where(eq(tripJournalEntries.id, entryId))
-		.returning()
-		.get();
+	const entry = repoUpdateJournalEntry(entryId, { entryDate, title, body });
+	if (!entry) throw error(404, 'Not found');
 	logAudit(userId, 'update', 'journal_entry', entry.id, { tripId: existing.tripId, entryDate, title });
 	return entry;
 }
 
 export function removeJournalEntry(userId: number, entryId: number) {
-	const existing = db
-		.select()
-		.from(tripJournalEntries)
-		.where(eq(tripJournalEntries.id, entryId))
-		.get();
+	const existing = getJournalEntryById(entryId);
 	if (!existing) throw error(404, 'Not found');
 	requireEditableTrip(userId, existing.tripId);
-	db.delete(tripJournalEntries).where(eq(tripJournalEntries.id, entryId)).run();
+	repoDeleteJournalEntry(entryId);
 	logAudit(userId, 'delete', 'journal_entry', entryId, { tripId: existing.tripId });
 }
 

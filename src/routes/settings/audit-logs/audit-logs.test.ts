@@ -1,6 +1,6 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,25 +8,41 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users } from '$lib/server/db/schema';
+import { users, auditLogs } from '$lib/server/db/schema';
+import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { logAudit } from '$lib/server/audit';
-import { beforeEach } from 'vitest';
-import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+
+function makeUser(email: string, displayName: string, role: 'admin' | 'user' = 'user') {
+	return usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: displayName,
+		calendar_token: null,
+		calendar_token_expires_at: null,
+		...(role === 'admin' ? { role: 'admin' } : {})
+	} as any);
+}
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from audit_logs;');
-	(ctx as any).sqlite.exec('delete from users;');
+	const db = (ctx as any).db;
+	const kit = (ctx as any).kit;
+	db.delete(auditLogs).run();
+	db.delete(users).run();
+	kit.deleteFrom(kitAuditLogs).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 test('load returns recent audit logs for admin', () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).db);
-	const target = db.insert(users).values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' }).returning().get();
+	const admin = makeUser('admin@x.c', 'Admin', 'admin');
+	const target = makeUser('target@x.c', 'T');
 
-	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
-	logAudit(target.id, 'trip_delete', 'trip', 42, { name: 'Gone' });
+	logAudit(Number(admin.id), 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+	logAudit(Number(target.id), 'trip_delete', 'trip', 42, { name: 'Gone' });
 
-	const result = load({ locals: admin, url: new URL('http://localhost/settings/audit-logs') } as any) as {
+	const result = load({
+		locals: { user: { id: Number(admin.id), role: 'admin' } }
+	} as any) as {
 		logs: Array<{ action: string; user: { email: string } }>;
 	};
 	expect(result.logs).toHaveLength(2);
@@ -36,9 +52,9 @@ test('load returns recent audit logs for admin', () => {
 });
 
 test('load rejects non-admin', () => {
-	const u = makeUserLocals((ctx as any).db);
+	const u = makeUser('user@x.c', 'User');
 	try {
-		load({ locals: u, url: new URL('http://localhost/settings/audit-logs') } as any);
+		load({ locals: { user: { id: Number(u.id), role: 'user' } } } as any);
 		expect.fail('should have thrown');
 	} catch (e: any) {
 		expect(e.status).toBe(403);
@@ -46,19 +62,21 @@ test('load rejects non-admin', () => {
 });
 
 test('load returns empty logs when no events exist', () => {
-	const admin = makeAdminLocals((ctx as any).db);
-	const result = load({ locals: admin, url: new URL('http://localhost/settings/audit-logs') } as any) as {
+	const admin = makeUser('admin-empty@x.c', 'Admin', 'admin');
+	const result = load({
+		locals: { user: { id: Number(admin.id), role: 'admin' } }
+	} as any) as {
 		logs: unknown[];
 	};
 	expect(result.logs).toEqual([]);
 });
 
 test('load returns CSV export when export=csv', () => {
-	const admin = makeAdminLocals((ctx as any).db);
-	logAudit(admin.user.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+	const admin = makeUser('admin-csv@x.c', 'Admin', 'admin');
+	logAudit(Number(admin.id), 'settings_update', 'settings', 1, { changed: ['instanceName'] });
 
 	const result = load({
-		locals: admin,
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
 		url: new URL('http://localhost/settings/audit-logs?export=csv')
 	} as any) as Response;
 

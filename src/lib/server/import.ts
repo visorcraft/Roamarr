@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto';
-import { db } from '$lib/server/db';
 import { SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { Validator } from '$lib/server/validation';

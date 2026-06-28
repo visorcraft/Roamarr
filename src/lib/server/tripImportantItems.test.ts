@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,25 +9,51 @@ vi.mock('./db', async () => {
 
 import { addImportantItem, deleteImportantItem, listImportantItems } from './tripImportantItems';
 import { tripImportantItems } from './db/schema';
+import {
+	tripImportantItems as kitTripImportantItems,
+	tripCompanions as kitTripCompanions,
+	trips as kitTrips,
+	users as kitUsers
+} from './db/mongrelSchema';
 import { eq } from 'drizzle-orm';
-import { makeUser, makeTrip, makeCompanion, resetTables } from '../../../tests/helpers';
+import {
+	makeSyncedUser,
+	makeSyncedTrip,
+	makeSyncedCompanion,
+	resetTables
+} from '../../../tests/helpers';
+
+function getDb() {
+	return (ctx as { db: import('./db').DB }).db;
+}
+
+function getKit() {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 beforeEach(() => {
+	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
+	const kit = getKit();
 	resetTables(
-		(ctx as { sqlite: import('better-sqlite3').Database }).sqlite,
+		sqlite,
 		'trip_important_items',
 		'trip_companions',
 		'trips',
 		'users'
 	);
+	kit.deleteFrom(kitTripImportantItems).executeSync();
+	kit.deleteFrom(kitTripCompanions).executeSync();
+	kit.deleteFrom(kitTrips).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 function seed() {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = makeUser(db, { email: 'ii@x.c' });
-	const t = makeTrip(db, { ownerId: u.id, name: 'T' });
-	const c = makeCompanion(db, { tripId: t.id, name: 'Alex', category: 'adult' });
-	const other = makeUser(db, { email: 'oth@x.c' });
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'ii@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'Alex', category: 'adult' });
+	const other = makeSyncedUser(db, kit, { email: 'oth@x.c' });
 	return { db, u, t, c, other };
 }
 

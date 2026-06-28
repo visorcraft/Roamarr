@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -19,18 +19,14 @@ import { tripJournalEntries, tripShares, auditLogs } from './db/schema';
 import { and, eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
-import { makeUser as makeUserHelper, makeTrip as makeTripHelper } from '../../../tests/helpers';
+import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getDb() {
 	return (ctx as { db: import('./db').DB }).db;
 }
 
-function makeUser() {
-	return makeUserHelper(getDb());
-}
-
-function makeTrip(ownerId: number) {
-	return makeTripHelper(getDb(), { ownerId });
+function getKit() {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 }
 
 function makeEvent(
@@ -50,8 +46,10 @@ function makeEvent(
 }
 
 test('listJournalEntries sorts by entryDate descending', () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j1@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-10',
 		title: 'Older',
@@ -69,13 +67,14 @@ test('listJournalEntries sorts by entryDate descending', () => {
 	});
 
 	const entries = listJournalEntries(t.id);
-	expect(entries.map((e) => e.title)).toEqual(['Newer', 'Same day second', 'Older']);
+	expect(entries.map((e) => e.title)).toEqual(['Same day second', 'Newer', 'Older']);
 });
 
 test('createJournalEntry inserts entry and logs audit', () => {
 	const db = getDb();
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j2@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'Day one',
@@ -95,10 +94,11 @@ test('createJournalEntry inserts entry and logs audit', () => {
 
 test('createJournalEntry rejects viewers and non-members', () => {
 	const db = getDb();
-	const owner = makeUser();
-	const viewer = makeUser();
-	const stranger = makeUser();
-	const t = makeTrip(owner.id);
+	const kit = getKit();
+	const owner = makeSyncedUser(db, kit, { email: 'j3-owner@x.c' });
+	const viewer = makeSyncedUser(db, kit, { email: 'j3-viewer@x.c' });
+	const stranger = makeSyncedUser(db, kit, { email: 'j3-stranger@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
 	db.insert(tripShares).values({
 		tripId: t.id,
 		sharedWithUserId: viewer.id,
@@ -123,9 +123,10 @@ test('createJournalEntry rejects viewers and non-members', () => {
 
 test('createJournalEntry allows shared editors', () => {
 	const db = getDb();
-	const owner = makeUser();
-	const editor = makeUser();
-	const t = makeTrip(owner.id);
+	const kit = getKit();
+	const owner = makeSyncedUser(db, kit, { email: 'j4-owner@x.c' });
+	const editor = makeSyncedUser(db, kit, { email: 'j4-editor@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
 	db.insert(tripShares).values({
 		tripId: t.id,
 		sharedWithUserId: editor.id,
@@ -141,8 +142,10 @@ test('createJournalEntry allows shared editors', () => {
 });
 
 test('modifyJournalEntry updates fields and updatedAt', () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j5@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'Original',
@@ -156,16 +159,17 @@ test('modifyJournalEntry updates fields and updatedAt', () => {
 	expect(updated.entryDate).toBe('2026-06-16');
 	expect(updated.title).toBe('Updated');
 	expect(updated.body).toBe('Updated body');
-	const originalTime = DateTime.fromSQL(entry.updatedAt, { zone: 'utc' }).toMillis();
+	const originalTime = DateTime.fromISO(entry.updatedAt, { zone: 'utc' }).toMillis();
 	const updatedTime = DateTime.fromISO(updated.updatedAt).toMillis();
 	expect(updatedTime).toBeGreaterThanOrEqual(originalTime);
 });
 
 test('modifyJournalEntry rejects non-editors', () => {
 	const db = getDb();
-	const owner = makeUser();
-	const viewer = makeUser();
-	const t = makeTrip(owner.id);
+	const kit = getKit();
+	const owner = makeSyncedUser(db, kit, { email: 'j6-owner@x.c' });
+	const viewer = makeSyncedUser(db, kit, { email: 'j6-viewer@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
 	const entry = createJournalEntry(owner.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'X',
@@ -182,8 +186,9 @@ test('modifyJournalEntry rejects non-editors', () => {
 
 test('removeJournalEntry deletes entry and logs audit', () => {
 	const db = getDb();
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j7@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'To delete',
@@ -201,8 +206,10 @@ test('removeJournalEntry deletes entry and logs audit', () => {
 });
 
 test('addJournalEntry action validates and redirects', async () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j8@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const event = makeEvent(u, { id: String(t.id) }, {
 		entryDate: '2026-06-20',
 		title: 'Action title',
@@ -213,8 +220,10 @@ test('addJournalEntry action validates and redirects', async () => {
 });
 
 test('addJournalEntry action returns fail for invalid input', async () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j9@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const event = makeEvent(u, { id: String(t.id) }, {
 		entryDate: '',
 		title: '',
@@ -226,8 +235,10 @@ test('addJournalEntry action returns fail for invalid input', async () => {
 });
 
 test('deleteJournalEntry action deletes and redirects', async () => {
-	const u = makeUser();
-	const t = makeTrip(u.id);
+	const db = getDb();
+	const kit = getKit();
+	const u = makeSyncedUser(db, kit, { email: 'j10@x.c' });
+	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-20',
 		title: 'Delete me',

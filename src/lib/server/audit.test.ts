@@ -1,6 +1,6 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,22 +9,37 @@ vi.mock('./db', async () => {
 
 import { logAudit, listAuditLogs, exportAuditLogsCsv } from './audit';
 import { users, auditLogs } from './db/schema';
+import { users as kitUsers, auditLogs as kitAuditLogs } from './db/mongrelSchema';
 import { eq } from 'drizzle-orm';
-import { beforeEach } from 'vitest';
+import * as usersRepo from './repositories/usersRepo';
+
+function makeUser(email: string, displayName: string) {
+	return usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: displayName,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+}
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from audit_logs;');
-	(ctx as any).sqlite.exec('delete from users;');
+	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	db.delete(auditLogs).run();
+	db.delete(users).run();
+	kit.deleteFrom(kitAuditLogs).executeSync();
+	kit.deleteFrom(kitUsers).executeSync();
 });
 
 test('logAudit writes a row with serialized metadata', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'audit@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const u = makeUser('audit@x.c', 'A');
 
-	logAudit(u.id, 'test_action', 'trip', 42, { reason: 'because' });
+	logAudit(Number(u.id), 'test_action', 'trip', 42, { reason: 'because' });
 
 	const row = db.select().from(auditLogs).get()!;
-	expect(row.userId).toBe(u.id);
+	expect(row.userId).toBe(Number(u.id));
 	expect(row.action).toBe('test_action');
 	expect(row.entityType).toBe('trip');
 	expect(row.entityId).toBe(42);
@@ -34,22 +49,20 @@ test('logAudit writes a row with serialized metadata', () => {
 
 test('logAudit defaults meta to empty object', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'audit2@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const u = makeUser('audit2@x.c', 'B');
 
-	logAudit(u.id, 'plain', 'settings', 1);
+	logAudit(Number(u.id), 'plain', 'settings', 1);
 
-	const row = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).get()!;
+	const row = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).get()!;
 	expect(JSON.parse(row.metaJson)).toEqual({});
 });
 
-
 test('listAuditLogs returns recent logs with user details in descending order', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'Alice' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'Bob' }).returning().get();
+	const a = makeUser('a@x.c', 'Alice');
+	const b = makeUser('b@x.c', 'Bob');
 
-	logAudit(a.id, 'trip_delete', 'trip', 1, { name: 'Old' });
-	logAudit(b.id, 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+	logAudit(Number(a.id), 'trip_delete', 'trip', 1, { name: 'Old' });
+	logAudit(Number(b.id), 'settings_update', 'settings', 1, { changed: ['instanceName'] });
 
 	const { logs } = listAuditLogs({ limit: 10 });
 	expect(logs).toHaveLength(2);
@@ -62,11 +75,10 @@ test('listAuditLogs returns recent logs with user details in descending order', 
 });
 
 test('listAuditLogs respects the limit', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'limit@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
+	const u = makeUser('limit@x.c', 'L');
 
 	for (let i = 0; i < 5; i++) {
-		logAudit(u.id, 'action', 'trip', i);
+		logAudit(Number(u.id), 'action', 'trip', i);
 	}
 
 	expect(listAuditLogs({ limit: 2 }).logs).toHaveLength(2);
@@ -74,9 +86,8 @@ test('listAuditLogs respects the limit', () => {
 });
 
 test('listAuditLogs never exposes passwordHash', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'safe@x.c', passwordHash: 'secret-hash', displayName: 'S' }).returning().get();
-	logAudit(u.id, 'plain', 'settings', 1);
+	const u = makeUser('safe@x.c', 'S');
+	logAudit(Number(u.id), 'plain', 'settings', 1);
 
 	const { logs } = listAuditLogs({ limit: 1 });
 	expect(logs[0].user).not.toHaveProperty('passwordHash');
@@ -84,9 +95,8 @@ test('listAuditLogs never exposes passwordHash', () => {
 });
 
 test('exportAuditLogsCsv returns header and rows', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'csv@x.c', passwordHash: 'x', displayName: 'CSV' }).returning().get();
-	logAudit(u.id, 'csv_action', 'trip', 7, { note: 'hello' });
+	const u = makeUser('csv@x.c', 'CSV');
+	logAudit(Number(u.id), 'csv_action', 'trip', 7, { note: 'hello' });
 
 	const csv = exportAuditLogsCsv();
 	const lines = csv.trim().split('\n');

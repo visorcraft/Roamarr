@@ -1,8 +1,12 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { db } from './db';
-import { tripChecklists, tripChecklistItems, tripCompanions } from './db/schema';
+import {
+	getOrCreateChecklist as repoGetOrCreateChecklist,
+	listItemsForChecklist,
+	createChecklistItem,
+	updateChecklistItem,
+	deleteChecklistItem as repoDeleteChecklistItem
+} from './repositories/tripMiscRepo';
 import { requireCompanionOnTrip, requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { Validator } from './validation';
@@ -26,27 +30,12 @@ interface ChecklistWithItems {
 }
 
 export function getOrCreateChecklist(tripId: number) {
-	const existing = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, tripId)).get();
-	if (existing) return existing;
-	return db.insert(tripChecklists).values({ tripId }).returning().get();
+	return repoGetOrCreateChecklist(tripId);
 }
 
 export function loadChecklist(tripId: number): ChecklistWithItems {
 	const checklist = getOrCreateChecklist(tripId);
-	const items = db
-		.select({
-			id: tripChecklistItems.id,
-			text: tripChecklistItems.text,
-			packed: tripChecklistItems.packed,
-			assignedToCompanionId: tripChecklistItems.assignedToCompanionId,
-			assignedToName: tripCompanions.name,
-			createdAt: tripChecklistItems.createdAt
-		})
-		.from(tripChecklistItems)
-		.leftJoin(tripCompanions, eq(tripChecklistItems.assignedToCompanionId, tripCompanions.id))
-		.where(eq(tripChecklistItems.checklistId, checklist.id))
-		.orderBy(tripChecklistItems.createdAt)
-		.all();
+	const items = listItemsForChecklist(checklist.id);
 	return { id: checklist.id, tripId, items };
 }
 
@@ -62,15 +51,11 @@ export function addItem(
 	if (!validator.ok()) throw error(400, validator.failMessage());
 	const companionId = requireCompanionOnTrip(assignedToCompanionId, tripId);
 	const checklist = getOrCreateChecklist(tripId);
-	const item = db
-		.insert(tripChecklistItems)
-		.values({
-			checklistId: checklist.id,
-			text: itemText!,
-			assignedToCompanionId: companionId
-		})
-		.returning()
-		.get();
+	const item = createChecklistItem({
+		checklistId: checklist.id,
+		text: itemText!,
+		assignedToCompanionId: companionId
+	});
 	logAudit(userId, 'checklist_item_add', 'trip_checklist_item', item.id, { tripId });
 	return item;
 }
@@ -78,18 +63,10 @@ export function addItem(
 export function toggleItem(userId: number, tripId: number, itemId: number) {
 	requireEditableTrip(userId, tripId);
 	const checklist = getOrCreateChecklist(tripId);
-	const existing = db
-		.select()
-		.from(tripChecklistItems)
-		.where(and(eq(tripChecklistItems.id, itemId), eq(tripChecklistItems.checklistId, checklist.id)))
-		.get();
+	const existing = listItemsForChecklist(checklist.id).find((i) => i.id === itemId);
 	if (!existing) throw error(404, 'Item not found');
-	const updated = db
-		.update(tripChecklistItems)
-		.set({ packed: !existing.packed })
-		.where(eq(tripChecklistItems.id, itemId))
-		.returning()
-		.get();
+	const updated = updateChecklistItem(itemId, { packed: !existing.packed });
+	if (!updated) throw error(404, 'Item not found');
 	logAudit(userId, 'checklist_item_toggle', 'trip_checklist_item', itemId, {
 		tripId,
 		packed: updated.packed
@@ -100,21 +77,20 @@ export function toggleItem(userId: number, tripId: number, itemId: number) {
 export function deleteItem(userId: number, tripId: number, itemId: number) {
 	requireEditableTrip(userId, tripId);
 	const checklist = getOrCreateChecklist(tripId);
-	const result = db
-		.delete(tripChecklistItems)
-		.where(and(eq(tripChecklistItems.id, itemId), eq(tripChecklistItems.checklistId, checklist.id)))
-		.run();
-	if (result.changes === 0) throw error(404, 'Item not found');
+	const existing = listItemsForChecklist(checklist.id).find((i) => i.id === itemId);
+	if (!existing) throw error(404, 'Item not found');
+	const deleted = repoDeleteChecklistItem(itemId);
+	if (deleted === 0) throw error(404, 'Item not found');
 	logAudit(userId, 'checklist_item_delete', 'trip_checklist_item', itemId, { tripId });
 }
 
 export function setAllItemsPacked(userId: number, tripId: number, packed: boolean) {
 	requireEditableTrip(userId, tripId);
 	const checklist = getOrCreateChecklist(tripId);
-	db.update(tripChecklistItems)
-		.set({ packed })
-		.where(eq(tripChecklistItems.checklistId, checklist.id))
-		.run();
+	const items = listItemsForChecklist(checklist.id);
+	for (const item of items) {
+		updateChecklistItem(item.id, { packed });
+	}
 	logAudit(userId, 'checklist_set_all', 'trip_checklist', checklist.id, { tripId, packed });
 }
 

@@ -13,7 +13,7 @@
 		const template = data.tripTemplates.find((t) => String(t.id) === selectedTemplateId);
 		if (!template) return;
 		try {
-			const snapshot = JSON.parse(template.snapshotJson) as {
+			const snapshot = template.snapshot as {
 				name?: string;
 				destinationCountryCode?: string | null;
 				destinationCityName?: string | null;

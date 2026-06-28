@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,9 +9,12 @@ vi.mock('./db', async () => {
 
 import { logAudit, listAuditLogs, exportAuditLogsCsv } from './audit';
 import { users, auditLogs } from './db/mongrelSchema';
-import { users as kitUsers, auditLogs as kitAuditLogs } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string, displayName: string) {
 	return usersRepo.createUser({
@@ -24,37 +27,34 @@ function makeUser(email: string, displayName: string) {
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(auditLogs).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitAuditLogs).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('logAudit writes a row with serialized metadata', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('audit@x.c', 'A');
 
 	logAudit(Number(u.id), 'test_action', 'trip', 42, { reason: 'because' });
 
-	const row = db.select().from(auditLogs).get()!;
-	expect(row.userId).toBe(Number(u.id));
+	const row = kit.selectFrom(auditLogs).executeSync()[0]!;
+	expect(Number(row.user_id)).toBe(Number(u.id));
 	expect(row.action).toBe('test_action');
-	expect(row.entityType).toBe('trip');
-	expect(row.entityId).toBe(42);
-	expect(JSON.parse(row.metaJson)).toEqual({ reason: 'because' });
-	expect(row.createdAt).toBeDefined();
+	expect(row.entity_type).toBe('trip');
+	expect(Number(row.entity_id)).toBe(42);
+	expect(JSON.parse(row.meta_json as string)).toEqual({ reason: 'because' });
+	expect(row.created_at).toBeDefined();
 });
 
 test('logAudit defaults meta to empty object', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('audit2@x.c', 'B');
 
 	logAudit(Number(u.id), 'plain', 'settings', 1);
 
-	const row = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).get()!;
-	expect(JSON.parse(row.metaJson)).toEqual({});
+	const row = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync()[0]!;
+	expect(JSON.parse(row.meta_json as string)).toEqual({});
 });
 
 test('listAuditLogs returns recent logs with user details in descending order', () => {

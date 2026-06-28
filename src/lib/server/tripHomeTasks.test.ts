@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,18 +8,9 @@ vi.mock('./db', async () => {
 });
 
 import { addHomeTask, deleteHomeTask, listHomeTasks, toggleHomeTask } from './tripHomeTasks';
-import { tripHomeTasks } from './db/mongrelSchema';
-import {
-	tripHomeTasks as kitTripHomeTasks,
-	trips as kitTrips,
-	users as kitUsers
-} from './db/mongrelSchema';
+import { tripHomeTasks, trips, users } from './db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
-
-function getDb() {
-	return (ctx as { db: import('./db').DB }).db;
-}
 
 function getKit() {
 	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
@@ -27,22 +18,21 @@ function getKit() {
 
 beforeEach(() => {
 	const kit = getKit();
-	kit.deleteFrom(kitTripHomeTasks).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(tripHomeTasks).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function seed() {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'ht@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const other = makeSyncedUser(kit, { email: 'oth@x.c' });
-	return { db, u, t, other };
+	return { kit, u, t, other };
 }
 
 test('addHomeTask creates a task and lists it', () => {
-	const { db, u, t } = seed();
+	const { kit, u, t } = seed();
 	const task = addHomeTask(u.id, t.id, { text: 'Hold mail', dueDate: '2026-07-01' });
 	expect(task.text).toBe('Hold mail');
 	expect(task.dueDate).toBe('2026-07-01');
@@ -51,7 +41,7 @@ test('addHomeTask creates a task and lists it', () => {
 	const rows = listHomeTasks(t.id);
 	expect(rows).toHaveLength(1);
 	expect(rows[0].text).toBe('Hold mail');
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).get()).toBeTruthy();
+	expect(kit.selectFrom(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).executeSync()[0]).toBeTruthy();
 });
 
 test('addHomeTask validates text', () => {
@@ -68,10 +58,10 @@ test('toggleHomeTask flips done state', () => {
 });
 
 test('deleteHomeTask removes the task', () => {
-	const { db, u, t } = seed();
+	const { kit, u, t } = seed();
 	const task = addHomeTask(u.id, t.id, { text: 'Pack' });
 	deleteHomeTask(u.id, t.id, task.id);
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('non-editor cannot mutate home tasks', () => {

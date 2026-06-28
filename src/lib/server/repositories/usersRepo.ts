@@ -30,6 +30,10 @@ export function listAllUsers(): KitUser[] {
 	return kit.selectFrom(users).orderBy(asc(users.email)).executeSync();
 }
 
+export function countUsers(): number {
+	return Number(kit.selectFrom(users).selectCount().executeSync());
+}
+
 export function getUserById(id: number): KitUser | null {
 	const rows = kit.selectFrom(users).where(kitEq(users.id, toBigInt(id))).executeSync();
 	return rows[0] ?? null;

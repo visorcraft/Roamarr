@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,11 +12,10 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 
 import { listComments, addComment, deleteComment } from './tripComments';
-import { users, trips, tripComments } from './db/mongrelSchema';
+import { tripComments } from './db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 
 test('comment lifecycle', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -24,16 +23,19 @@ test('comment lifecycle', () => {
 	expect(listComments(t.id).map((c) => c.body)).toEqual(['Hello']);
 
 	deleteComment(u.id, comment.id);
-	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(comment.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(comment.id))).executeSync()[0]
+	).toBeUndefined();
 });
 
 test('deleteComment only removes the users own comment', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const comment = addComment(a.id, t.id, 'Mine');
 
 	deleteComment(b.id, comment.id);
-	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(comment.id))).get()).toBeDefined();
+	expect(
+		kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(comment.id))).executeSync()[0]
+	).toBeDefined();
 });

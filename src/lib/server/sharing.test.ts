@@ -1,18 +1,22 @@
 import { test, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { type KitDatabase } from '@mongreldb/kit';
 import { canView, canEdit, canViewDetails, viewerProjection, listViewableTrips } from './sharing';
-import { users, segments, groups, groupMembers, tripShares } from './db/mongrelSchema';
+import { segments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	const u = usersRepo.createUser({
@@ -30,7 +34,6 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 test('view matrix + projection omits sensitive fields', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const a = makeUser('a@x.c');
 	const b = makeUser('b@x.c');
 	const c = makeUser('c@x.c');
@@ -122,12 +125,16 @@ test('showDetails gate exposes confirmation numbers and details only when enable
 });
 
 test('listViewableTrips searches segment titles and confirmation numbers for owners', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('search@x.c');
 	const t = makeTrip(owner.id, 'Trip');
-	db.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'Delta 15', startAt: '2026-07-01T15:00:00Z', startTz: 'UTC', confirmationNumber: 'ABC999' })
-		.run();
+	kit.insertInto(segments).values({
+		trip_id: BigInt(t.id),
+		type: 'flight',
+		title: 'Delta 15',
+		start_at: '2026-07-01T15:00:00Z',
+		confirmation_number: 'ABC999'
+	}).executeSync();
 
 	expect(listViewableTrips(owner.id, { q: 'Delta' })).toHaveLength(1);
 	expect(listViewableTrips(owner.id, { q: 'ABC999' })).toHaveLength(1);

@@ -1,10 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
-}));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -19,18 +15,18 @@ import {
 	tripCompanions,
 	auditLogs
 } from '$lib/server/db/mongrelSchema';
-import {
-	travelDocuments as kitTravelDocuments,
-	tripCompanions as kitTripCompanions,
-	users as kitUsers
-} from '$lib/server/db/mongrelSchema';
 import { eq, and } from '@mongreldb/kit';
 import { makeFormData } from '../../../../tests/eventHelpers';
 import { makeKitUser } from '../../../../tests/kitHelpers';
+import { makeCompanion as insertCompanion } from '../../../../tests/helpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
+
 function makeTestUser(over: any = {}) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const kitUser = makeKitUser({
 		email: over.email,
 		password_hash: over.passwordHash,
@@ -38,21 +34,21 @@ function makeTestUser(over: any = {}) {
 		role: (over.role as 'admin' | 'user') ?? 'user',
 		timezone: over.timezone ?? 'UTC'
 	});
-	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
+	const row = kit.selectFrom(users).where(eq(users.id, kitUser.id)).executeSync()[0]!;
+	return { ...row, id: Number(row.id) };
 }
 
 function makeCompanion(tripId: number, name: string) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	return db.insert(tripCompanions).values({ id: 100 + Math.floor(Math.random() * 1000000), tripId, name }).returning().get();
+	return insertCompanion(kitDb(), tripId, { name });
 }
 
 beforeEach(() => {
-	ctx.sqlite.exec(
-		'delete from travel_documents; delete from audit_logs; delete from trip_companions; delete from trips; delete from users;'
-	);
-	ctx.kit.deleteFrom(kitTravelDocuments).executeSync();
-	ctx.kit.deleteFrom(kitTripCompanions).executeSync();
-	ctx.kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(travelDocuments).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(tripCompanions).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function makeEvent(form: FormData, userId = 1) {
@@ -63,7 +59,7 @@ function makeEvent(form: FormData, userId = 1) {
 }
 
 test('visa is accepted as a travel-document type', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'visa@x.c', passwordHash: 'x', displayName: 'U' });
 	const doc = _addDocument(u.id, {
 		type: 'visa',
@@ -71,12 +67,12 @@ test('visa is accepted as a travel-document type', () => {
 		expiresOn: '2027-01-01'
 	});
 	expect(doc.type).toBe('visa');
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]!;
 	expect(row.type).toBe('visa');
 });
 
 test('add action creates a document linked to a companion', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const trip = createTrip(u.id, { name: 'Paris' });
 	const companion = makeCompanion(trip.id, 'Alex');
@@ -94,22 +90,20 @@ test('add action creates a document linked to a companion', async () => {
 		location: '/profile/documents'
 	});
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).get()!;
-	expect(row.companionId).toBe(companion.id);
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).executeSync()[0]!;
+	expect(Number(row.companion_id)).toBe(companion.id);
 	expect(row.number).not.toBe('P12345');
 
-	const audit = db
-		.select()
-		.from(auditLogs)
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_create')))
-		.get();
+		.executeSync()[0];
 	expect(audit).toBeTruthy();
-	expect(audit?.entityType).toBe('document');
-	expect(audit?.entityId).toBe(row.id);
+	expect(audit?.entity_type).toBe('document');
+	expect(Number(audit?.entity_id)).toBe(Number(row.id));
 });
 
 test('load returns documents with companion context', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const trip = createTrip(u.id, { name: 'Tokyo' });
 	const companion = makeCompanion(trip.id, 'Sam');
@@ -130,7 +124,7 @@ test('load returns documents with companion context', async () => {
 });
 
 test('add action rejects a companion from another user', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
 	const other = makeTestUser({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
 	const otherTrip = createTrip(other.id, { name: 'Madrid' });
@@ -146,21 +140,21 @@ test('add action rejects a companion from another user', async () => {
 		status: 404
 	});
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).executeSync()).toHaveLength(0);
 });
 
 test('add action rejects an invalid document type', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'd@x.c', passwordHash: 'x', displayName: 'D' });
 	const form = makeFormData({ type: 'not_a_type', number: 'P000' });
 
 	const result = await actions.add(makeEvent(form, u.id));
 	expect(result).toMatchObject({ status: 400, data: { error: expect.any(String) } });
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).executeSync()).toHaveLength(0);
 });
 
 test('update action changes a document and its companion', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'e@x.c', passwordHash: 'x', displayName: 'E' });
 	const trip = createTrip(u.id, { name: 'Rome' });
 	const companion1 = makeCompanion(trip.id, 'Riley');
@@ -187,39 +181,38 @@ test('update action changes a document and its companion', async () => {
 		location: '/profile/documents'
 	});
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]!;
 	expect(row.type).toBe('visa');
 	expect(row.number).not.toBe('V54321');
-	expect(row.issuingAuthority).toBe('Italian Consulate');
-	expect(row.expiresOn).toBe('2031-12-31');
-	expect(row.companionId).toBe(companion2.id);
+	expect(row.issuing_authority).toBe('Italian Consulate');
+	expect(row.expires_on).toBe('2031-12-31');
+	expect(Number(row.companion_id)).toBe(companion2.id);
 	expect(row.notes).toBe('Updated note');
 
-	const audit = db
-		.select()
-		.from(auditLogs)
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_update')))
-		.get();
+		.executeSync()[0];
 	expect(audit).toBeTruthy();
-	expect(audit?.entityId).toBe(doc.id);
+	expect(Number(audit?.entity_id)).toBe(doc.id);
 });
 
 test('update action encrypts the document number', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'f@x.c', passwordHash: 'x', displayName: 'F' });
 	const doc = _addDocument(u.id, { type: 'passport', number: 'OLDNUM' });
 
 	const form = makeFormData({ id: String(doc.id), type: 'passport', number: 'NEWSECRET' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 303 });
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]!;
 	expect(row.number).not.toBe('NEWSECRET');
 	expect(row.number).not.toBe('OLDNUM');
 	expect(typeof row.number).toBe('string');
 });
 
 test('delete action removes the document', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'g@x.c', passwordHash: 'x', displayName: 'G' });
 	const doc = _addDocument(u.id, { type: 'passport' });
 
@@ -229,19 +222,18 @@ test('delete action removes the document', async () => {
 		location: '/profile/documents'
 	});
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()).toHaveLength(0);
 
-	const audit = db
-		.select()
-		.from(auditLogs)
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_delete')))
-		.get();
+		.executeSync()[0];
 	expect(audit).toBeTruthy();
-	expect(audit?.entityId).toBe(doc.id);
+	expect(Number(audit?.entity_id)).toBe(doc.id);
 });
 
 test('update action rejects access to another users document', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'h@x.c', passwordHash: 'x', displayName: 'H' });
 	const other = makeTestUser({ email: 'i@x.c', passwordHash: 'x', displayName: 'I' });
 	const doc = _addDocument(other.id, { type: 'passport' });
@@ -249,12 +241,12 @@ test('update action rejects access to another users document', async () => {
 	const form = makeFormData({ id: String(doc.id), type: 'visa' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]!;
 	expect(row.type).toBe('passport');
 });
 
 test('delete action rejects access to another users document', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'j@x.c', passwordHash: 'x', displayName: 'J' });
 	const other = makeTestUser({ email: 'k@x.c', passwordHash: 'x', displayName: 'K' });
 	const doc = _addDocument(other.id, { type: 'passport' });
@@ -262,25 +254,26 @@ test('delete action rejects access to another users document', async () => {
 	const form = makeFormData({ id: String(doc.id) });
 	await expect(actions.delete(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()).toHaveLength(1);
 });
 
 test('add action rejects an invalid companionId format', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'l@x.c', passwordHash: 'x', displayName: 'L' });
 	const form = makeFormData({ type: 'passport', companionId: 'not-a-number' });
 
 	await expect(actions.add(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).executeSync()).toHaveLength(0);
 });
 
 test('update action rejects an invalid companionId format', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' });
 	const doc = _addDocument(u.id, { type: 'passport' });
 	const form = makeFormData({ id: String(doc.id), type: 'passport', companionId: '-5' });
 
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
-	expect(row.companionId).toBeNull();
+	const row = kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]!;
+	// Kit returns 0n for an unset nullable int column, not null.
+	expect(row.companion_id).toBeFalsy();
 });

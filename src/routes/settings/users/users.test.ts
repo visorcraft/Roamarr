@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -17,12 +17,10 @@ import { eq } from '@mongreldb/kit';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
-import { users as kitUsers } from '$lib/server/db/mongrelSchema';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from users;');
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	(ctx as any).kit.deleteFrom(users).executeSync();
 	vi.mocked(deliver).mockClear();
 });
 
@@ -40,9 +38,9 @@ function updateForm(overrides: Record<string, string> = {}) {
 }
 
 test('load returns all users for admin', () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).kit);
-	db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).run();
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	kit.insertInto(users).values({ email: 'a@x.c', password_hash: 'x', display_name: 'A' }).executeSync();
 	const result = load({ locals: admin } as any) as { users: Array<{ passwordHash?: string }> };
 	expect(result.users.length).toBe(2);
 	expect(result.users[0]).not.toHaveProperty('passwordHash');
@@ -59,13 +57,12 @@ test('load rejects non-admin', () => {
 });
 
 test('update toggles role and disabled', async () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).kit);
-	const target = db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
-		.returning()
-		.get();
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	const target = kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' })
+		.executeSync();
 
 	const form = updateForm({
 		userId: String(target.id),
@@ -79,20 +76,19 @@ test('update toggles role and disabled', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
+	const updated = kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]!;
 	expect(updated.role).toBe('admin');
 	expect(updated.disabled).toBe(true);
-	expect(updated.mustResetPassword).toBe(true);
+	expect(updated.must_reset_password).toBe(true);
 });
 
 test('update changes display name and email', async () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).kit);
-	const target = db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
-		.returning()
-		.get();
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	const target = kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' })
+		.executeSync();
 
 	const form = updateForm({
 		userId: String(target.id),
@@ -106,8 +102,8 @@ test('update changes display name and email', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
-	expect(updated.displayName).toBe('Target User');
+	const updated = kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]!;
+	expect(updated.display_name).toBe('Target User');
 	expect(updated.email).toBe('new@x.c');
 	expect(updated.disabled).toBe(false);
 });
@@ -147,11 +143,10 @@ test('update prevents disabling the last admin', async () => {
 
 test('update rejects invalid role', async () => {
 	const admin = makeAdminLocals((ctx as any).kit);
-	const target = (ctx as any).db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
-		.returning()
-		.get();
+	const target = (ctx as any).kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T' })
+		.executeSync();
 	const form = updateForm({ userId: String(target.id), role: 'superuser' });
 	const result = (await actions.update({
 		request: { formData: async () => form },
@@ -161,10 +156,8 @@ test('update rejects invalid role', async () => {
 });
 
 test('sendReset delivers a reset link', async () => {
-	const db = (ctx as any).db;
 	const admin = makeAdminLocals((ctx as any).kit);
-	const kitUser = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' });
-	const target = db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
+	const target = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' });
 
 	const form = new FormData();
 	form.set('userId', String(target.id));
@@ -200,16 +193,16 @@ test('create adds a new user with a temporary password', async () => {
 	expect(result.email).toBe('new@x.c');
 	expect(result.generatedPassword).toBeTruthy();
 
-	const created = (ctx as any).db.select().from(users).where(eq(users.email, 'new@x.c')).get();
-	expect(created.displayName).toBe('New User');
-	expect(created.mustResetPassword).toBe(true);
+	const created = (ctx as any).kit.selectFrom(users).where(eq(users.email, 'new@x.c')).executeSync()[0];
+	expect(created.display_name).toBe('New User');
+	expect(created.must_reset_password).toBe(true);
 	expect(created.role).toBe('user');
 });
 
 test('create rejects duplicate email', async () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).kit);
-	db.insert(users).values({ email: 'exists@x.c', passwordHash: 'x', displayName: 'Existing' }).run();
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	kit.insertInto(users).values({ email: 'exists@x.c', password_hash: 'x', display_name: 'Existing' }).executeSync();
 
 	const form = new FormData();
 	form.set('displayName', 'Duplicate');
@@ -242,13 +235,12 @@ test('create rejects invalid role', async () => {
 });
 
 test('delete removes a user', async () => {
-	const db = (ctx as any).db;
-	const admin = makeAdminLocals((ctx as any).kit);
-	const target = db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
-		.returning()
-		.get();
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	const target = kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' })
+		.executeSync();
 
 	const form = new FormData();
 	form.set('userId', String(target.id));
@@ -263,7 +255,7 @@ test('delete removes a user', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	expect(db.select().from(users).where(eq(users.id, BigInt(target.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('delete prevents deleting the last admin', async () => {

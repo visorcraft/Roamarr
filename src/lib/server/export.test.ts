@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,20 +9,15 @@ vi.mock('./db', async () => {
 
 import { exportTrips, exportTripsJson, exportTripsCsv } from './export';
 import { users, trips, segments } from './db/mongrelSchema';
-import { users as kitUsers, trips as kitTrips, segments as kitSegments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(segments).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitSegments).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function makeUser(email: string) {

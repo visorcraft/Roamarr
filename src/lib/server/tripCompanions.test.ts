@@ -2,7 +2,7 @@ import { test, expect, vi } from 'vitest';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const ctx = vi.hoisted(() => ({ db: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -17,10 +17,14 @@ import {
 	addCompanion,
 	updateCompanion
 } from './tripCompanions';
-import { users, trips, tripCompanions, auditLogs } from '$lib/server/db/mongrelSchema';
+import { trips, tripCompanions, auditLogs } from '$lib/server/db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import type { KitDatabase } from '@mongreldb/kit';
+
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function event(user: { id: number }, tripId: number, body: URLSearchParams) {
 	return {
@@ -34,8 +38,7 @@ function event(user: { id: number }, tripId: number, body: URLSearchParams) {
 }
 
 test('insert and list companions', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'tc@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -49,51 +52,49 @@ test('insert and list companions', () => {
 });
 
 test('patch companion updates fields', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'patch@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Charlie', category: 'other' });
 
 	patchTripCompanion(u.id, t.id, c.id, { name: 'Charles', category: 'adult', notes: 'Updated' });
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.name).toBe('Charles');
 	expect(row.category).toBe('adult');
 	expect(row.notes).toBe('Updated');
 });
 
 test('remove companion deletes the row', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Dana' });
 
 	removeTripCompanion(u.id, t.id, c.id);
-	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]
+	).toBeUndefined();
 });
 
 test('mutations bump trip updated_at and write audit logs', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'audit@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const before = t.updatedAt;
 
 	await sleep(5);
 	const c = insertTripCompanion(u.id, t.id, { name: 'Eve' });
-	const afterInsert = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!.updatedAt;
+	const afterInsert = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!.updated_at;
 	expect(afterInsert).not.toBe(before);
 
 	removeTripCompanion(u.id, t.id, c.id);
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
 	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('delete');
 });
 
 test('non-editor cannot mutate companions', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const owner = makeUser(kit, { email: 'owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -105,8 +106,7 @@ test('non-editor cannot mutate companions', () => {
 });
 
 test('addCompanion action creates a companion and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'add@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -114,14 +114,13 @@ test('addCompanion action creates a companion and redirects', async () => {
 		addCompanion(event(u, t.id, new URLSearchParams({ name: 'Alice', category: 'adult', notes: 'A' })))
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].name).toBe('Alice');
 });
 
 test('updateCompanion action updates a companion and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'upd@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Ben', category: 'child' });
@@ -136,14 +135,13 @@ test('updateCompanion action updates a companion and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.name).toBe('Benjamin');
 	expect(row.category).toBe('adult');
 });
 
 test('action handlers reject invalid input with fail(400)', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'bad@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -157,8 +155,7 @@ test('action handlers reject invalid input with fail(400)', async () => {
 });
 
 test('insert and list companion with dietary, allergy, and medical notes', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'notes@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -180,8 +177,7 @@ test('insert and list companion with dietary, allergy, and medical notes', () =>
 });
 
 test('patch companion updates dietary, allergy, and medical notes', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'patchnotes@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
@@ -191,15 +187,14 @@ test('patch companion updates dietary, allergy, and medical notes', () => {
 		allergies: 'Dairy',
 		medicalNotes: 'Asthma inhaler'
 	});
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.dietary).toBe('Gluten-free');
 	expect(row.allergies).toBe('Dairy');
-	expect(row.medicalNotes).toBe('Asthma inhaler');
+	expect(row.medical_notes).toBe('Asthma inhaler');
 });
 
 test('insert and list companion preferences and kid gear needs', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'pref@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -220,19 +215,18 @@ test('insert and list companion preferences and kid gear needs', () => {
 	expect(c.seatPreference).toBe('window');
 	expect(c.bedPreference).toBe('twin');
 
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
-	expect(row.needsCarSeat).toBe(true);
-	expect(row.needsStroller).toBe(true);
-	expect(row.needsCrib).toBe(true);
-	expect(row.needsKidsMeal).toBe(true);
-	expect(row.childTicketDiscount).toBe('child');
-	expect(row.accessibilityNeeds).toBe('Sensory friendly seating');
-	expect(row.roomNotes).toBe('Connecting room');
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
+	expect(row.needs_car_seat).toBe(true);
+	expect(row.needs_stroller).toBe(true);
+	expect(row.needs_crib).toBe(true);
+	expect(row.needs_kids_meal).toBe(true);
+	expect(row.child_ticket_discount).toBe('child');
+	expect(row.accessibility_needs).toBe('Sensory friendly seating');
+	expect(row.room_notes).toBe('Connecting room');
 });
 
 test('patch companion updates preferences and gear needs', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'patchpref@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
@@ -244,17 +238,16 @@ test('patch companion updates preferences and gear needs', () => {
 		needsCrib: false,
 		accessibilityNeeds: 'Wheelchair accessible room'
 	});
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
-	expect(row.seatPreference).toBe('aisle');
-	expect(row.bedPreference).toBe('king');
-	expect(row.needsCarSeat).toBe(true);
-	expect(row.needsCrib).toBe(false);
-	expect(row.accessibilityNeeds).toBe('Wheelchair accessible room');
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
+	expect(row.seat_preference).toBe('aisle');
+	expect(row.bed_preference).toBe('king');
+	expect(row.needs_car_seat).toBe(true);
+	expect(row.needs_crib).toBe(false);
+	expect(row.accessibility_needs).toBe('Wheelchair accessible room');
 });
 
 test('companion notes are rejected above max length', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeUser(kit, { email: 'long@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -272,6 +265,6 @@ test('companion notes are rejected above max length', async () => {
 	expect(errors.allergies).toContain('1000');
 	expect(errors.medicalNotes).toContain('1000');
 
-	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(0);
 });

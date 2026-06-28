@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -15,25 +15,24 @@ import {
 	setTripBudget,
 	deleteTripBudget
 } from './tripBudgets';
-import { tripBudgetCategories, auditLogs } from './db/mongrelSchema';
-import { trips as kitTrips, users as kitUsers, tripBudgetCategories as kitTripBudgetCategories } from './db/mongrelSchema';
-import { eq, and } from '@mongreldb/kit';
+import { tripBudgetCategories, auditLogs, trips, users } from './db/mongrelSchema';
+import { eq, and, type KitDatabase } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
+
 beforeEach(() => {
-	const sqlite = (ctx as { sqlite: any }).sqlite;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	sqlite.exec(
-		'delete from trip_budget_categories; delete from trips; delete from users; delete from audit_logs;'
-	);
-	kit.deleteFrom(kitTripBudgetCategories).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = getKit();
+	kit.deleteFrom(tripBudgetCategories).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'b1@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -79,8 +78,7 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 });
 
 test('listBudgetsWithSpent buckets null and unknown categories into other', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'b5@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -101,8 +99,7 @@ test('listBudgetsWithSpent buckets null and unknown categories into other', () =
 });
 
 test('alert levels: ok, near, over', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'b2@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -122,43 +119,38 @@ test('alert levels: ok, near, over', () => {
 });
 
 test('deleteBudget removes a cap', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'b3@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'other', 5000);
 	deleteBudget(t.id, 'other');
 
-	const rows = db
-		.select()
-		.from(tripBudgetCategories)
+	const rows = kit
+		.selectFrom(tripBudgetCategories)
 		.where(eq(tripBudgetCategories.trip_id, BigInt(t.id)))
-		.all();
+		.executeSync();
 	expect(rows).toHaveLength(0);
 });
 
 test('setBudget updates existing cap', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'b4@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'food', 10000);
 	setBudget(t.id, 'food', 15000, 'EUR');
 
-	const row = db
-		.select()
-		.from(tripBudgetCategories)
+	const row = kit
+		.selectFrom(tripBudgetCategories)
 		.where(and(eq(tripBudgetCategories.trip_id, BigInt(t.id)), eq(tripBudgetCategories.category, 'food')))
-		.get();
-	expect(row!.amount).toBe(15000);
+		.executeSync()[0];
+	expect(Number(row!.amount)).toBe(15000);
 	expect(row!.currency).toBe('USD');
 });
 
 test('setTripBudget snapshots the editing users default currency and deleteTripBudget enforces ownership', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = getKit();
 	const owner = makeSyncedUser(kit, {
 		email: 'bo@x.c',
 		passwordHash: 'x',
@@ -173,11 +165,10 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 	);
 
 	setTripBudget(owner.id, t.id, 'food', 10000);
-	const row = db
-		.select()
-		.from(tripBudgetCategories)
+	const row = kit
+		.selectFrom(tripBudgetCategories)
 		.where(and(eq(tripBudgetCategories.trip_id, BigInt(t.id)), eq(tripBudgetCategories.category, 'food')))
-		.get();
+		.executeSync()[0];
 	expect(row!.currency).toBe('GBP');
 
 	expect(() => deleteTripBudget(other.id, t.id, 'food')).toThrowError(
@@ -185,11 +176,10 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 	);
 
 	deleteTripBudget(owner.id, t.id, 'food');
-	const audit = db
-		.select()
-		.from(auditLogs)
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.entity_type, 'trip_budget_category'), eq(auditLogs.user_id, BigInt(owner.id))))
-		.all();
+		.executeSync();
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'set')).toBe(true);
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
 });

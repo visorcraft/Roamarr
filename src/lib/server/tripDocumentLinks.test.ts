@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -16,20 +16,15 @@ import {
 	deleteDocumentLink
 } from './tripDocumentLinks';
 import { tripDocumentLinks, auditLogs } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import { makeFormEvent } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
-function getDb() {
-	return (ctx as { db: import('./db').DB }).db;
-}
-
-function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
 }
 
 test('listDocumentLinks returns links ordered by newest first', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -42,7 +37,6 @@ test('listDocumentLinks returns links ordered by newest first', () => {
 });
 
 test('createDocumentLink inserts a link and audits', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl2@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -57,14 +51,13 @@ test('createDocumentLink inserts a link and audits', () => {
 	expect(link.url).toBe('https://booking.example/123');
 	expect(link.notes).toBe('Confirmation ABC');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('document_link_create');
-	expect(logs[0].entityType).toBe('trip_document_link');
+	expect(logs[0].entity_type).toBe('trip_document_link');
 });
 
 test('createDocumentLink trims whitespace and stores null for blank notes', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl3@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -81,7 +74,6 @@ test('createDocumentLink trims whitespace and stores null for blank notes', () =
 });
 
 test('createDocumentLink rejects invalid URLs', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl4@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -95,7 +87,6 @@ test('createDocumentLink rejects invalid URLs', () => {
 });
 
 test('editDocumentLink updates a link and audits', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl5@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -111,12 +102,11 @@ test('editDocumentLink updates a link and audits', () => {
 	expect(updated.url).toBe('https://new.example');
 	expect(updated.notes).toBe('Updated note');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_update')).toBe(true);
 });
 
 test('editDocumentLink is scoped to the trip', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl6@x.c' });
 	const t1 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T1' });
@@ -132,7 +122,6 @@ test('editDocumentLink is scoped to the trip', () => {
 });
 
 test('removeDocumentLink deletes only the owned trip link', () => {
-	const db = getDb();
 	const kit = getKit();
 	const a = makeSyncedUser(kit, { email: 'dl7-a@x.c' });
 	const b = makeSyncedUser(kit, { email: 'dl7-b@x.c' });
@@ -145,17 +134,20 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 	} catch (e: any) {
 		expect(e.status).toBe(404);
 	}
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeDefined();
+	expect(
+		kit.selectFrom(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).executeSync()[0]
+	).toBeDefined();
 
 	removeDocumentLink(a.id, t.id, link.id);
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).executeSync()[0]
+	).toBeUndefined();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).executeSync();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_delete')).toBe(true);
 });
 
 test('addDocumentLink action creates a link and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl8@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -176,7 +168,6 @@ test('addDocumentLink action creates a link and redirects', async () => {
 });
 
 test('addDocumentLink action returns validation errors', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl9@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -192,7 +183,6 @@ test('addDocumentLink action returns validation errors', async () => {
 });
 
 test('deleteDocumentLink action removes a link and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'dl10@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -204,5 +194,7 @@ test('deleteDocumentLink action removes a link and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).executeSync()[0]
+	).toBeUndefined();
 });

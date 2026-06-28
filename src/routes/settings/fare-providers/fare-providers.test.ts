@@ -1,20 +1,17 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	const { db, sqlite, kit, close } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit, close });
-	return { db, sqlite, kit, getDb: () => kit };
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
 beforeEach(() => {
-	ctx.sqlite.exec('delete from fare_providers; delete from users;');
 	ctx.kit.deleteFrom(fareProviders).executeSync();
 	ctx.kit.deleteFrom(users).executeSync();
 });

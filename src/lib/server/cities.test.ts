@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,7 +12,6 @@ import * as repo from './repositories/travelDataRepo';
 import { geonamesCities } from './db/mongrelSchema';
 
 beforeEach(() => {
-	(ctx as { sqlite: any }).sqlite.exec('delete from geonames_cities;');
 	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(geonamesCities).executeSync();
 });
 

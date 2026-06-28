@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -25,7 +25,6 @@ const event = makeActionEvent;
 const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 
 test('listTripExpenses returns expenses with parsed splitAmong', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'le@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const c = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -47,7 +46,6 @@ test('listTripExpenses returns expenses with parsed splitAmong', () => {
 });
 
 test('addTripExpense defaults and validates category', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'cat@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -63,7 +61,6 @@ test('addTripExpense defaults and validates category', () => {
 });
 
 test('addExpense action stores category', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'acat@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -80,13 +77,12 @@ test('addExpense action stores category', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].category).toBe('transport');
 });
 
 test('addExpense action returns validation failures', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'iv@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -102,7 +98,6 @@ test('addExpense action returns validation failures', async () => {
 });
 
 test('addTripExpense rejects payer or split companions from another trip', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'oc@x.c', passwordHash: 'x', displayName: 'U' });
 	const t1 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T1' });
 	const t2 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T2' });
@@ -128,29 +123,26 @@ test('addTripExpense rejects payer or split companions from another trip', async
 });
 
 test('deleteTripExpense removes expense for trip editor and logs audit', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const owner = makeSyncedUser(kit, { email: 'oe@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeSyncedUser(kit, { email: 'ne@x.c', passwordHash: 'x', displayName: 'N' });
 	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 	const e = addTripExpense(owner.id, t.id, { description: 'Taxi', amount: 2500, currency: 'USD' });
 
 	deleteTripExpense(owner.id, e.id);
-	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).executeSync()[0]).toBeUndefined();
 
-	const audit = db
-		.select()
-		.from(auditLogs)
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.entity_type, 'trip_expense'), eq(auditLogs.entity_id, BigInt(e.id))))
-		.all();
+		.executeSync();
 	expect(audit).toHaveLength(2);
-	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
+	expect(audit.some((a) => a.action === 'delete')).toBe(true);
 
 	const e2 = addTripExpense(owner.id, t.id, { description: 'Bus', amount: 1500, currency: 'USD' });
 	expect(() => deleteTripExpense(other.id, e2.id)).toThrowError(expect.objectContaining({ status: 404 }));
 });
 
 test('summarizeTripExpenses computes totals and split balances', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'sm@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -188,7 +180,6 @@ test('summarizeTripExpenses computes totals and split balances', () => {
 });
 
 test('summarizeTripExpenses handles empty splitAmong as solo payer expense', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -203,7 +194,6 @@ test('summarizeTripExpenses handles empty splitAmong as solo payer expense', () 
 });
 
 test('summarizeTripExpenses handles multi-currency totals', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'mc@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -217,7 +207,6 @@ test('summarizeTripExpenses handles multi-currency totals', () => {
 });
 
 test('addExpense action creates an expense and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'ae@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -234,13 +223,12 @@ test('addExpense action creates an expense and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
-	expect(rows[0].amount).toBe(4500);
+	expect(Number(rows[0].amount)).toBe(4500);
 });
 
 test('addExpense action returns validation failures', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'av@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -252,7 +240,6 @@ test('addExpense action returns validation failures', async () => {
 });
 
 test('deleteExpense action removes an expense and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'de@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const e = addTripExpense(u.id, t.id, { description: 'X', amount: 1000, currency: 'USD' });
@@ -261,11 +248,10 @@ test('deleteExpense action removes an expense and redirects', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('computeSettlement equal split between owner and companion', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'ce@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -285,7 +271,6 @@ test('computeSettlement equal split between owner and companion', () => {
 });
 
 test('computeSettlement uneven split across three people', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'ue@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -310,7 +295,6 @@ test('computeSettlement uneven split across three people', () => {
 });
 
 test('computeSettlement single person expense has no payments', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'se@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -329,7 +313,6 @@ test('computeSettlement single person expense has no payments', () => {
 });
 
 test('computeSettlement owner-only expense leaves companions neutral', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'oo@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -349,7 +332,6 @@ test('computeSettlement owner-only expense leaves companions neutral', () => {
 });
 
 test('addTripExpense accepts owner as a split participant', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'ao@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -363,12 +345,11 @@ test('addTripExpense accepts owner as a split participant', () => {
 	});
 
 	expect(e.splitAmong).toEqual(['owner', a.id]);
-	const row = db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get();
-	expect(JSON.parse(row!.splitAmong)).toEqual(['owner', a.id]);
+	const row = kit.selectFrom(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).executeSync()[0];
+	expect(JSON.parse(row!.split_among as string)).toEqual(['owner', a.id]);
 });
 
 test('addExpense action accepts owner split participant and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'as@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -385,13 +366,12 @@ test('addExpense action accepts owner split participant and redirects', async ()
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
-	expect(JSON.parse(rows[0].splitAmong)).toEqual(['owner', a.id]);
+	expect(JSON.parse(rows[0].split_among as string)).toEqual(['owner', a.id]);
 });
 
 test('summarizeTripExpenses splits expense among owner and companion', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'so@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -412,7 +392,6 @@ test('summarizeTripExpenses splits expense among owner and companion', () => {
 });
 
 test('computeSettlement with owner split participant produces correct payment', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'cs@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
@@ -432,7 +411,6 @@ test('computeSettlement with owner split participant produces correct payment', 
 });
 
 test('addTripExpense computes base amount from exchange rate', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'fx@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -450,7 +428,6 @@ test('addTripExpense computes base amount from exchange rate', () => {
 });
 
 test('addExpense action accepts an exchange rate and stores base amount', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'fxa@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
@@ -465,14 +442,13 @@ test('addExpense action accepts an exchange rate and stores base amount', async 
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const row = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).get()!;
+	const row = kit.selectFrom(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).executeSync()[0]!;
 	expect(row.currency).toBe('GBP');
-	expect(row.exchangeRate).toBe(12700);
-	expect(row.baseAmount).toBe(6350);
+	expect(Number(row.exchange_rate)).toBe(12700);
+	expect(Number(row.base_amount)).toBe(6350);
 });
 
 test('addExpense action rejects a non-positive exchange rate', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeSyncedUser(kit, { email: 'fxb@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 

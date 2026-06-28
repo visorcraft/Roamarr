@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,7 +8,12 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, trips, segments, tripCompanions } from '$lib/server/db/mongrelSchema';
+import type { KitDatabase } from '@mongreldb/kit';
+import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../../../tests/helpers';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function event(user: { id: number }, tripId: number) {
 	return {
@@ -18,32 +23,32 @@ function event(user: { id: number }, tripId: number) {
 }
 
 test('load returns trip, day-grouped segments, and companions', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'print@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db
-		.insert(trips)
-		.values({ ownerId: u.id, name: 'Japan trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-04-01', endDate: '2026-04-03' })
-		.returning()
-		.get();
-	db.insert(segments).values({
-		tripId: t.id,
+	const kit = kitDb();
+	const u = makeUser(kit, { email: 'print@x.c', displayName: 'U' });
+	const t = makeTrip(kit, u.id, {
+		name: 'Japan trip',
+		destinationCountryCode: 'JP',
+		destinationCityName: 'Tokyo',
+		destinationCityLat: 35.6762,
+		destinationCityLng: 139.6503,
+		startDate: '2026-04-01',
+		endDate: '2026-04-03'
+	});
+	makeSegment(kit, t.id, {
 		type: 'flight',
 		title: 'Outbound flight',
 		startAt: '2026-04-01T09:00:00Z',
-		startTz: 'UTC',
 		location: 'NRT',
 		confirmationNumber: 'ABC123'
-	}).run();
-	db.insert(segments).values({
-		tripId: t.id,
+	});
+	makeSegment(kit, t.id, {
 		type: 'hotel',
 		title: 'Hotel check-in',
 		startAt: '2026-04-01T15:00:00Z',
-		startTz: 'UTC',
 		location: 'Shinjuku'
-	}).run();
-	db.insert(tripCompanions).values({ tripId: t.id, name: 'Ada', category: 'adult', notes: 'Friend' }).run();
-	db.insert(tripCompanions).values({ tripId: t.id, name: 'Leo', category: 'child' }).run();
+	});
+	makeCompanion(kit, t.id, { name: 'Ada', category: 'adult', notes: 'Friend' });
+	makeCompanion(kit, t.id, { name: 'Leo', category: 'child' });
 
 	const result = load(event(u, t.id)) as {
 		trip: { name: string };
@@ -62,10 +67,10 @@ test('load returns trip, day-grouped segments, and companions', () => {
 });
 
 test('load rejects a trip the user cannot view', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'Private' }).returning().get();
+	const kit = kitDb();
+	const owner = makeUser(kit, { email: 'owner@x.c', displayName: 'O' });
+	const other = makeUser(kit, { email: 'other@x.c', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'Private' });
 
 	expect(() => load(event(other, t.id))).toThrow();
 });

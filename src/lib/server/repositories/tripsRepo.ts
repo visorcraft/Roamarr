@@ -544,6 +544,14 @@ export interface CreateGroupInput {
 
 export type UpdateGroupInput = Partial<Pick<Group, 'name'>>;
 
+export function countTrips(): number {
+	return Number(kit.selectFrom(trips).selectCount().executeSync());
+}
+
+export function countGroups(): number {
+	return Number(kit.selectFrom(groups).selectCount().executeSync());
+}
+
 export function listGroupsForUser(userId: number): Group[] {
 	const owned = kit.selectFrom(groups).where(kitEq(groups.owner_id, kitId(userId))).executeSync();
 	const ownedIds = new Set(owned.map((g) => g.id));

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,7 +12,7 @@ import { makeUser } from '../../../../tests/helpers';
 
 
 import { actions } from './+page.server';
-import { users, trips } from '$lib/server/db/mongrelSchema';
+import { trips } from '$lib/server/db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import { makeLocals, makeFormData } from '../../../../tests/eventHelpers';
 
@@ -26,7 +26,6 @@ function makeEvent(form: FormData, params: Record<string, string> = {}, userId =
 }
 
 test('creates a trip with valid data', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const form = makeFormData({
 		name: 'Summer Escape',
@@ -39,14 +38,13 @@ test('creates a trip with valid data', async () => {
 		status: 303,
 		location: expect.stringMatching(/^\/trips\/\d+$/)
 	});
-	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Summer Escape');
-	expect(t!.publicToken).toBeTruthy();
+	expect(t!.public_token).toBeTruthy();
 });
 
 test('rejects missing name and invalid date range', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const form = makeFormData({
 		name: '  ',
@@ -61,11 +59,10 @@ test('rejects missing name and invalid date range', async () => {
 	expect(result.status).toBe(400);
 	expect(result.data.errors.name).toBe('name is required');
 	expect(result.data.errors.startDate).toBe('startDate must be on or before endDate');
-	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()).toHaveLength(0);
 });
 
 test('rejects invalid visibility enum', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
 	const form = makeFormData({ name: 'T', defaultVisibility: 'secret' });
 	const result = (await actions.default(makeEvent(form, {}, u.id))) as {

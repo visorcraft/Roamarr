@@ -1,7 +1,7 @@
 import { test, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -18,10 +18,14 @@ import {
 	_setPublicShowDetails as setPublicShowDetails
 } from './+page.server';
 import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
-import { users, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { tripShares, auditLogs } from '$lib/server/db/mongrelSchema';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	const u = usersRepo.createUser({
@@ -39,27 +43,28 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 test('owner can revoke a user share', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('a@x.c');
 	const b = makeUser('b@x.c');
 	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'b@x.c');
 	expect(canView(b.id, t)).toBe(true);
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
-	unshareUser(a.id, t.id, share.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	const shareId = Number(share.id);
+	unshareUser(a.id, t.id, shareId);
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync().length).toBe(0);
 	expect(canView(b.id, t)).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).executeSync();
 	expect(logs).toHaveLength(2);
 	expect(logs[0].action).toBe('trip_share_user');
-	expect(JSON.parse(logs[0].metaJson).sharedWithUserId).toBe(b.id);
+	expect(JSON.parse(logs[0].meta_json as string).sharedWithUserId).toBe(b.id);
 	expect(logs[1].action).toBe('trip_unshare_user');
-	expect(JSON.parse(logs[1].metaJson).shareId).toBe(share.id);
+	expect(JSON.parse(logs[1].meta_json as string).shareId).toBe(shareId);
 });
 
 test('owner can revoke a group share', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('o@x.c');
 	const member = makeUser('m@x.c');
 	const t = makeTrip(owner.id, 'T');
@@ -68,36 +73,36 @@ test('owner can revoke a group share', () => {
 	shareWithGroup(owner.id, t.id, g.id);
 	expect(canView(member.id, t)).toBe(true);
 
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
-	unshareGroup(owner.id, t.id, share.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	unshareGroup(owner.id, t.id, Number(share.id));
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync().length).toBe(0);
 	expect(canView(member.id, t)).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).executeSync();
 	expect(logs).toHaveLength(2);
 	expect(logs[0].action).toBe('trip_share_group');
-	expect(JSON.parse(logs[0].metaJson).sharedWithGroupId).toBe(g.id);
+	expect(JSON.parse(logs[0].meta_json as string).sharedWithGroupId).toBe(g.id);
 	expect(logs[1].action).toBe('trip_unshare_group');
 });
 
 test('non-owner cannot revoke a share', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('no-a@x.c');
 	const b = makeUser('no-b@x.c');
 	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'no-b@x.c');
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
-	expect(() => unshareUser(b.id, t.id, share.id)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(1);
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	expect(() => unshareUser(b.id, t.id, Number(share.id))).toThrow();
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync().length).toBe(1);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_share_user');
-	expect(db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(b.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(b.id))).executeSync()).toHaveLength(0);
 });
 
 test('user unshare does not delete group shares and vice versa', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('mix-o@x.c');
 	const friend = makeUser('mix-f@x.c');
 	const t = makeTrip(owner.id, 'T');
@@ -105,41 +110,39 @@ test('user unshare does not delete group shares and vice versa', () => {
 
 	shareWithUserEmail(owner.id, t.id, 'mix-f@x.c');
 	shareWithGroup(owner.id, t.id, g.id);
-	const allShares = db
-		.select()
-		.from(tripShares)
+	const allShares = kit
+		.selectFrom(tripShares)
 		.where(eq(tripShares.trip_id, BigInt(t.id)))
-		.all();
-	const userShare = allShares.find((s: Record<string, unknown>) => s.sharedWithUserId === friend.id)!;
-	const groupShare = allShares.find((s: Record<string, unknown>) => s.sharedWithGroupId === g.id)!;
+		.executeSync();
+	const userShare = allShares.find((s) => Number(s.shared_with_user_id) === friend.id)!;
+	const groupShare = allShares.find((s) => Number(s.shared_with_group_id) === g.id)!;
 
-	unshareUser(owner.id, t.id, userShare.id);
+	unshareUser(owner.id, t.id, Number(userShare.id));
 	expect(
-		db
-			.select()
-			.from(tripShares)
+		kit
+			.selectFrom(tripShares)
 			.where(eq(tripShares.trip_id, BigInt(t.id)))
-			.all()
-			.map((s: Record<string, unknown>) => s.id)
-	).toEqual([groupShare.id]);
-	unshareGroup(owner.id, t.id, groupShare.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
+			.executeSync()
+			.map((s) => Number(s.id))
+	).toEqual([Number(groupShare.id)]);
+	unshareGroup(owner.id, t.id, Number(groupShare.id));
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync().length).toBe(0);
 });
 
 test('minting a public token is audited', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('pub-o@x.c');
 	const t = makeTrip(owner.id, 'T');
 	mintPublicToken(owner.id, t.id);
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_public_token_mint');
-	expect(logs[0].entityType).toBe('trip');
-	expect(logs[0].entityId).toBe(t.id);
+	expect(logs[0].entity_type).toBe('trip');
+	expect(Number(logs[0].entity_id)).toBe(t.id);
 });
 
 test('share functions default to read and accept edit permission', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('perm-o@x.c');
 	const reader = makeUser('perm-r@x.c');
 	const editor = makeUser('perm-e@x.c');
@@ -148,15 +151,15 @@ test('share functions default to read and accept edit permission', () => {
 	shareWithUserEmail(owner.id, t.id, reader.email);
 	shareWithUserEmail(owner.id, t.id, editor.email, 'edit');
 
-	const shares = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all();
-	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === reader.id)?.permission).toBe('read');
-	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === editor.id)?.permission).toBe('edit');
+	const shares = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync();
+	expect(shares.find((s) => Number(s.shared_with_user_id) === reader.id)?.permission).toBe('read');
+	expect(shares.find((s) => Number(s.shared_with_user_id) === editor.id)?.permission).toBe('edit');
 	expect(canEdit(reader.id, t)).toBe(false);
 	expect(canEdit(editor.id, t)).toBe(true);
 });
 
 test('group share can be created with edit permission', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('gperm-o@x.c');
 	const member = makeUser('gperm-m@x.c');
 	const t = makeTrip(owner.id, 'T');
@@ -164,34 +167,35 @@ test('group share can be created with edit permission', () => {
 	tripsRepo.addGroupMember(g.id, member.id);
 
 	shareWithGroup(owner.id, t.id, g.id, 'edit');
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
 	expect(share.permission).toBe('edit');
 	expect(canEdit(member.id, t)).toBe(true);
 });
 
 test('owner can toggle showDetails on a share; non-owner cannot', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('details-o@x.c');
 	const friend = makeUser('details-f@x.c');
 	const t = makeTrip(owner.id, 'T');
 	shareWithUserEmail(owner.id, t.id, friend.email);
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
-	expect(share.showDetails).toBe(false);
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	const shareId = Number(share.id);
+	expect(share.show_details).toBe(false);
 
-	setShowDetails(owner.id, t.id, share.id, true);
-	const updated = db.select().from(tripShares).where(eq(tripShares.id, BigInt(share.id))).get()!;
-	expect(updated.showDetails).toBe(true);
+	setShowDetails(owner.id, t.id, shareId, true);
+	const updated = kit.selectFrom(tripShares).where(eq(tripShares.id, share.id)).executeSync()[0]!;
+	expect(updated.show_details).toBe(true);
 
-	expect(() => setShowDetails(friend.id, t.id, share.id, false)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.id, BigInt(share.id))).get()!.showDetails).toBe(true);
+	expect(() => setShowDetails(friend.id, t.id, shareId, false)).toThrow();
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.id, share.id)).executeSync()[0]!.show_details).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_share_set_show_details')).toBe(true);
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).executeSync();
+	expect(logs.some((l) => l.action === 'trip_share_set_show_details')).toBe(true);
 });
 
 
 test('member can share their own trip into a group they belong to', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('mem-o@x.c');
 	const member = makeUser('mem-m@x.c');
 	const other = makeUser('mem-other@x.c');
@@ -201,20 +205,20 @@ test('member can share their own trip into a group they belong to', () => {
 	const t = makeTrip(member.id, 'Member Trip');
 
 	shareWithGroup(member.id, t.id, g.id);
-	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
-	expect(share.sharedWithGroupId).toBe(g.id);
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	expect(Number(share.shared_with_group_id)).toBe(g.id);
 	expect(canView(other.id, t)).toBe(true);
 });
 
 test('user cannot share into a group they do not belong to', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('no-mem-a@x.c');
 	const b = makeUser('no-mem-b@x.c');
 	const g = tripsRepo.createGroup({ ownerId: a.id, name: 'private' });
 	const t = makeTrip(b.id, 'B Trip');
 
 	expect(() => shareWithGroup(b.id, t.id, g.id)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
 });
 
 test('listGroupsForUser returns owned and member groups', () => {
@@ -230,7 +234,7 @@ test('listGroupsForUser returns owned and member groups', () => {
 });
 
 test('public token can be minted with showDetails enabled', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('pub-det-o@x.c');
 	const t = makeTrip(owner.id, 'T');
 
@@ -239,8 +243,8 @@ test('public token can be minted with showDetails enabled', () => {
 	expect(updated.publicToken).toBeTruthy();
 	expect(updated.publicShowDetails).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_token_mint' && JSON.parse(String(l.metaJson)).publicShowDetails === true)).toBe(true);
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).executeSync();
+	expect(logs.some((l) => l.action === 'trip_public_token_mint' && JSON.parse(String(l.meta_json)).publicShowDetails === true)).toBe(true);
 });
 
 test('owner can toggle publicShowDetails; non-owner cannot', () => {
@@ -254,7 +258,7 @@ test('owner can toggle publicShowDetails; non-owner cannot', () => {
 	expect(() => setPublicShowDetails(other.id, t.id, false)).toThrow();
 	expect(tripsRepo.getTripById(t.id)!.publicShowDetails).toBe(true);
 
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_set_show_details')).toBe(true);
+	const kit = kitDb();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).executeSync();
+	expect(logs.some((l) => l.action === 'trip_public_set_show_details')).toBe(true);
 });

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -19,12 +19,12 @@ test('creates exactly one admin; second attempt rejected', () => {
 		instanceName: 'R',
 		timezone: 'UTC'
 	});
-	const all = (ctx as any).db.select().from(users).all();
+	const all = (ctx as any).kit.selectFrom(users).executeSync();
 	expect(all.length).toBe(1);
 	expect(all[0].role).toBe('admin');
 	expect(all[0].email).toBe('admin@x.com');
-	expect(all[0].flightCheckinLeadHours).toBe(24);
-	expect(all[0].documentExpiryLeadDays).toBe(90);
+	expect(Number(all[0].flight_checkin_lead_hours)).toBe(24);
+	expect(Number(all[0].document_expiry_lead_days)).toBe(90);
 	expect(() =>
 		createAdmin({
 			email: 'b@x.com',

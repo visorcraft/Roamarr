@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -20,7 +20,6 @@ function event(locals: App.Locals, params: { id: string }) {
 }
 
 test('owner receives a text/calendar download', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'cal-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Owner Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
 	makeSegment(kit, t.id, {
@@ -46,7 +45,6 @@ test('owner receives a text/calendar download', async () => {
 });
 
 test('shared viewer receives a calendar without private fields', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'cal-shared-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'cal-shared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, {
@@ -78,7 +76,6 @@ test('shared viewer receives a calendar without private fields', async () => {
 });
 
 test('unshared user gets 404', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'cal-unshared-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'cal-unshared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Private Trip' });

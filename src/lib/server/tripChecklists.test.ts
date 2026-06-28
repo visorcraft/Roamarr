@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem, setAllItemsPacked } from './tripChecklists';
 import { tripChecklists, tripChecklistItems } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import { makeLocals } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 
@@ -18,16 +18,11 @@ function formRequest(data: Record<string, string>) {
 	return new Request('http://localhost/trips/1', { method: 'POST', body });
 }
 
-function getDb() {
-	return (ctx as { db: import('./db').DB }).db;
-}
-
-function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
 }
 
 test('loadChecklist creates checklist lazily and returns empty items', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -35,11 +30,12 @@ test('loadChecklist creates checklist lazily and returns empty items', () => {
 	const checklist = loadChecklist(t.id);
 	expect(checklist.tripId).toBe(t.id);
 	expect(checklist.items).toEqual([]);
-	expect(db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get()).toBeDefined();
+	expect(
+		kit.selectFrom(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).executeSync()[0]
+	).toBeDefined();
 });
 
 test('addItem creates item and loadChecklist returns assigned companion name', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o2@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -56,7 +52,6 @@ test('addItem creates item and loadChecklist returns assigned companion name', (
 });
 
 test('addItem rejects missing or oversized text', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o3@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -66,7 +61,6 @@ test('addItem rejects missing or oversized text', () => {
 });
 
 test('addItem rejects companion from another trip', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o4@x.c' });
 	const t1 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T1' });
@@ -77,7 +71,6 @@ test('addItem rejects companion from another trip', () => {
 });
 
 test('toggleItem flips packed status', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o5@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -88,7 +81,6 @@ test('toggleItem flips packed status', () => {
 });
 
 test('toggleItem and deleteItem reject unknown items', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o6@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -98,18 +90,18 @@ test('toggleItem and deleteItem reject unknown items', () => {
 });
 
 test('deleteItem removes item', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o7@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const item = addItem(u.id, t.id, 'Hat');
 
 	deleteItem(u.id, t.id, item.id);
-	expect(db.select().from(tripChecklistItems).where(eq(tripChecklistItems.id, BigInt(item.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripChecklistItems).where(eq(tripChecklistItems.id, BigInt(item.id))).executeSync()[0]
+	).toBeUndefined();
 });
 
 test('addChecklistItem action parses form and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o8@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -128,7 +120,6 @@ test('addChecklistItem action parses form and redirects', async () => {
 });
 
 test('toggleChecklistItem action toggles and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o9@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -147,7 +138,6 @@ test('toggleChecklistItem action toggles and redirects', async () => {
 });
 
 test('deleteChecklistItem action deletes and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'o10@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -165,7 +155,6 @@ test('deleteChecklistItem action deletes and redirects', async () => {
 });
 
 test('mutation helpers require editable trip', () => {
-	const db = getDb();
 	const kit = getKit();
 	const a = makeSyncedUser(kit, { email: 'a@x.c' });
 	const b = makeSyncedUser(kit, { email: 'b@x.c' });
@@ -175,7 +164,6 @@ test('mutation helpers require editable trip', () => {
 });
 
 test('setAllItemsPacked packs and unpacks every item', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'all@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });

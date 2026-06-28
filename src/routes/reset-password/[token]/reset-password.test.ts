@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -10,10 +10,9 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { createPasswordResetToken } from '$lib/server/passwordReset';
-import { users } from '$lib/server/db/mongrelSchema';
+import { users, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 import { verifyPassword } from '$lib/server/auth';
 import { makeKitUser } from '../../../../tests/kitHelpers';
-import { users as kitUsers, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 
 function makeEvent(token: string, formData?: Map<string, string>) {
 	return {
@@ -23,10 +22,9 @@ function makeEvent(token: string, formData?: Map<string, string>) {
 }
 
 beforeEach(() => {
-	(ctx as { sqlite: any }).sqlite.exec(
-		'delete from password_reset_tokens; delete from users;'
-	);
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	const kit = (ctx as any).kit;
+	kit.deleteFrom(passwordResetTokens).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('load returns token for valid reset link, 404 for invalid', () => {
@@ -57,6 +55,6 @@ test('action consumes token, updates password, and redirects', async () => {
 	await expect(
 		actions.default(makeEvent(token, new Map([['password', 'newpassword'], ['confirmPassword', 'newpassword']])))
 	).rejects.toEqual(expect.objectContaining({ status: 303, location: '/login' }));
-	const updated = (ctx as any).db.select().from(users).where(eq(users.id, BigInt(u.id))).get();
-	expect(await verifyPassword(updated!.passwordHash, 'newpassword')).toBe(true);
+	const updated = (ctx as any).kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0];
+	expect(await verifyPassword(updated!.password_hash, 'newpassword')).toBe(true);
 });

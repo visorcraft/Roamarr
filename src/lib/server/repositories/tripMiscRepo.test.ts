@@ -1,49 +1,35 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as repo from './tripMiscRepo';
 import {
-	tripChecklists as drizzleTripChecklists,
-	tripChecklistItems as drizzleTripChecklistItems,
-	tripJournalEntries as drizzleTripJournalEntries
-} from '$lib/server/db/mongrelSchema';
-import {
-	tripChecklists as kitTripChecklists,
-	tripChecklistItems as kitTripChecklistItems,
-	tripJournalEntries as kitTripJournalEntries
+	tripChecklists,
+	tripChecklistItems,
+	tripJournalEntries
 } from '$lib/server/db/mongrelSchema';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../../tests/helpers';
 
-function getDb() {
-	return (ctx as { db: import('$lib/server/db').DB }).db;
-}
-
-function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
 }
 
 beforeEach(() => {
-	const db = getDb();
 	const kit = getKit();
-	db.delete(drizzleTripChecklistItems).run();
-	db.delete(drizzleTripChecklists).run();
-	db.delete(drizzleTripJournalEntries).run();
-	kit.deleteFrom(kitTripChecklistItems).executeSync();
-	kit.deleteFrom(kitTripChecklists).executeSync();
-	kit.deleteFrom(kitTripJournalEntries).executeSync();
+	kit.deleteFrom(tripChecklistItems).executeSync();
+	kit.deleteFrom(tripChecklists).executeSync();
+	kit.deleteFrom(tripJournalEntries).executeSync();
 });
 
 // Checklists
 
-test('checklist get-or-create and mirroring', () => {
-	const db = getDb();
+test('checklist get-or-create', () => {
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'chk@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -54,16 +40,14 @@ test('checklist get-or-create and mirroring', () => {
 	const second = repo.getOrCreateChecklist(t.id);
 	expect(second.id).toBe(first.id);
 
-	const legacy = db
-		.select()
-		.from(drizzleTripChecklists)
-		.where(eq(drizzleTripChecklists.trip_id, BigInt(t.id)))
-		.get();
-	expect(legacy?.id).toBe(first.id);
+	const stored = kit
+		.selectFrom(tripChecklists)
+		.where(eq(tripChecklists.trip_id, BigInt(t.id)))
+		.executeSync()[0];
+	expect(Number(stored?.id)).toBe(first.id);
 });
 
 test('checklist item CRUD with companion name', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'chki@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -88,18 +72,16 @@ test('checklist item CRUD with companion name', () => {
 	repo.deleteChecklistItem(item.id);
 	expect(repo.listItemsForChecklist(checklist.id)).toHaveLength(0);
 	expect(
-		db
-			.select()
-			.from(drizzleTripChecklistItems)
-			.where(eq(drizzleTripChecklistItems.id, BigInt(item.id)))
-			.get()
+		kit
+			.selectFrom(tripChecklistItems)
+			.where(eq(tripChecklistItems.id, BigInt(item.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 });
 
 // Journal entries
 
-test('journal entry CRUD and mirroring', () => {
-	const db = getDb();
+test('journal entry CRUD', () => {
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'jrnl@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -113,12 +95,11 @@ test('journal entry CRUD and mirroring', () => {
 	expect(entry.tripId).toBe(t.id);
 	expect(entry.title).toBe('Day one');
 
-	const legacy = db
-		.select()
-		.from(drizzleTripJournalEntries)
-		.where(eq(drizzleTripJournalEntries.id, BigInt(entry.id)))
-		.get();
-	expect(legacy?.title).toBe('Day one');
+	const stored = kit
+		.selectFrom(tripJournalEntries)
+		.where(eq(tripJournalEntries.id, BigInt(entry.id)))
+		.executeSync()[0];
+	expect(stored?.title).toBe('Day one');
 
 	const updated = repo.updateJournalEntry(entry.id, { title: 'Updated' });
 	expect(updated?.title).toBe('Updated');
@@ -127,16 +108,14 @@ test('journal entry CRUD and mirroring', () => {
 	repo.deleteJournalEntry(entry.id);
 	expect(repo.getJournalEntryById(entry.id)).toBeNull();
 	expect(
-		db
-			.select()
-			.from(drizzleTripJournalEntries)
-			.where(eq(drizzleTripJournalEntries.id, BigInt(entry.id)))
-			.get()
+		kit
+			.selectFrom(tripJournalEntries)
+			.where(eq(tripJournalEntries.id, BigInt(entry.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 });
 
 test('listJournalEntriesForTrip orders by entry date descending', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'jrn2@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });

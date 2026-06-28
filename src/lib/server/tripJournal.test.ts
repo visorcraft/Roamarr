@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -20,10 +20,6 @@ import { and, eq } from '@mongreldb/kit';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
-
-function getDb() {
-	return (ctx as { db: import('./db').DB }).db;
-}
 
 function getKit() {
 	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
@@ -46,7 +42,6 @@ function makeEvent(
 }
 
 test('listJournalEntries sorts by entryDate descending', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j1@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -71,7 +66,6 @@ test('listJournalEntries sorts by entryDate descending', () => {
 });
 
 test('createJournalEntry inserts entry and logs audit', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j2@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -84,26 +78,25 @@ test('createJournalEntry inserts entry and logs audit', () => {
 	expect(entry.entryDate).toBe('2026-06-15');
 	expect(entry.title).toBe('Day one');
 	expect(entry.body).toBe('We arrived safely.');
-	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).get()).toBeDefined();
+	expect(kit.selectFrom(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).executeSync()[0]).toBeDefined();
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(entry.id))).get();
+	const audit = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(entry.id))).executeSync()[0];
 	expect(audit).toBeDefined();
 	expect(audit?.action).toBe('create');
-	expect(audit?.entityType).toBe('journal_entry');
+	expect(audit?.entity_type).toBe('journal_entry');
 });
 
 test('createJournalEntry rejects viewers and non-members', () => {
-	const db = getDb();
 	const kit = getKit();
 	const owner = makeSyncedUser(kit, { email: 'j3-owner@x.c' });
 	const viewer = makeSyncedUser(kit, { email: 'j3-viewer@x.c' });
 	const stranger = makeSyncedUser(kit, { email: 'j3-stranger@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
-	db.insert(tripShares).values({
-		tripId: t.id,
-		sharedWithUserId: viewer.id,
+	kit.insertInto(tripShares).values({
+		trip_id: BigInt(t.id),
+		shared_with_user_id: BigInt(viewer.id),
 		permission: 'read'
-	}).run();
+	} as never).executeSync();
 
 	expect(() =>
 		createJournalEntry(viewer.id, t.id, {
@@ -122,16 +115,15 @@ test('createJournalEntry rejects viewers and non-members', () => {
 });
 
 test('createJournalEntry allows shared editors', () => {
-	const db = getDb();
 	const kit = getKit();
 	const owner = makeSyncedUser(kit, { email: 'j4-owner@x.c' });
 	const editor = makeSyncedUser(kit, { email: 'j4-editor@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
-	db.insert(tripShares).values({
-		tripId: t.id,
-		sharedWithUserId: editor.id,
+	kit.insertInto(tripShares).values({
+		trip_id: BigInt(t.id),
+		shared_with_user_id: BigInt(editor.id),
 		permission: 'edit'
-	}).run();
+	} as never).executeSync();
 
 	const entry = createJournalEntry(editor.id, t.id, {
 		entryDate: '2026-06-15',
@@ -142,7 +134,6 @@ test('createJournalEntry allows shared editors', () => {
 });
 
 test('modifyJournalEntry updates fields and updatedAt', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j5@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -165,7 +156,6 @@ test('modifyJournalEntry updates fields and updatedAt', () => {
 });
 
 test('modifyJournalEntry rejects non-editors', () => {
-	const db = getDb();
 	const kit = getKit();
 	const owner = makeSyncedUser(kit, { email: 'j6-owner@x.c' });
 	const viewer = makeSyncedUser(kit, { email: 'j6-viewer@x.c' });
@@ -175,17 +165,16 @@ test('modifyJournalEntry rejects non-editors', () => {
 		title: 'X',
 		body: 'Y'
 	});
-	db.insert(tripShares).values({
-		tripId: t.id,
-		sharedWithUserId: viewer.id,
+	kit.insertInto(tripShares).values({
+		trip_id: BigInt(t.id),
+		shared_with_user_id: BigInt(viewer.id),
 		permission: 'read'
-	}).run();
+	} as never).executeSync();
 
 	expect(() => modifyJournalEntry(viewer.id, entry.id, { title: 'Hacked' })).toThrow();
 });
 
 test('removeJournalEntry deletes entry and logs audit', () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j7@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -195,18 +184,16 @@ test('removeJournalEntry deletes entry and logs audit', () => {
 		body: 'Body'
 	});
 	removeJournalEntry(u.id, entry.id);
-	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).get()).toBeUndefined();
-	const audit = db
-		.select()
-		.from(auditLogs)
+	expect(kit.selectFrom(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).executeSync()[0]).toBeUndefined();
+	const audit = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.entity_id, BigInt(entry.id)), eq(auditLogs.action, 'delete')))
-		.get();
+		.executeSync()[0];
 	expect(audit).toBeDefined();
-	expect(audit?.entityType).toBe('journal_entry');
+	expect(audit?.entity_type).toBe('journal_entry');
 });
 
 test('addJournalEntry action validates and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j8@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -220,7 +207,6 @@ test('addJournalEntry action validates and redirects', async () => {
 });
 
 test('addJournalEntry action returns fail for invalid input', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j9@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
@@ -235,7 +221,6 @@ test('addJournalEntry action returns fail for invalid input', async () => {
 });
 
 test('deleteJournalEntry action deletes and redirects', async () => {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'j10@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });

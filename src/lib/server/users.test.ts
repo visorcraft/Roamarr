@@ -1,8 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('./db', async () => {
@@ -19,7 +17,6 @@ import { createHash } from 'node:crypto';
 import { eq } from '@mongreldb/kit';
 import { hashPassword, verifyPassword } from './auth';
 import { users, sessions } from './db/mongrelSchema';
-import { users as kitUsers } from './db/mongrelSchema';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { makeSyncedUser } from '../../../tests/helpers';
 import {
@@ -35,8 +32,8 @@ import { deliver } from './notify';
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex');
 
 beforeEach(() => {
-	ctx.sqlite.exec('delete from sessions; delete from users;');
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	ctx.kit.deleteFrom(sessions).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
 	vi.mocked(deliver).mockClear();
 });
 
@@ -46,13 +43,12 @@ test('normalizeEmail trims and lowercases', () => {
 
 test('adminUpdateUser updates profile fields', async () => {
 	const u = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
-	const target = ctx.db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
-		.returning()
-		.get();
+	const target = ctx.kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' } as never)
+		.executeSync();
 
-	await adminUpdateUser(u.id, target.id, {
+	await adminUpdateUser(u.id, Number(target.id), {
 		displayName: 'Target',
 		email: 'new@x.c',
 		role: 'user',
@@ -60,28 +56,27 @@ test('adminUpdateUser updates profile fields', async () => {
 		mustResetPassword: true
 	});
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
-	expect(updated.displayName).toBe('Target');
+	const updated = ctx.kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]!;
+	expect(updated.display_name).toBe('Target');
 	expect(updated.email).toBe('new@x.c');
-	expect(updated.mustResetPassword).toBe(true);
+	expect(updated.must_reset_password).toBe(true);
 });
 
 test('adminUpdateUser sets a new password and clears forced reset', async () => {
 	const admin = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
-	const target = ctx.db
-		.insert(users)
+	const target = ctx.kit
+		.insertInto(users)
 		.values({
 			email: 'target@x.c',
-			passwordHash: await hashPassword('oldpassword'),
-			displayName: 'T',
+			password_hash: await hashPassword('oldpassword'),
+			display_name: 'T',
 			role: 'user',
-			mustResetPassword: true
-		})
-		.returning()
-		.get();
-	ctx.db.insert(sessions).values({ tokenHash: 'abc', userId: target.id, expiresAt: '2099-01-01T00:00:00.000Z' }).run();
+			must_reset_password: true
+		} as never)
+		.executeSync();
+	ctx.kit.insertInto(sessions).values({ token_hash: 'abc', user_id: BigInt(target.id), expires_at: '2099-01-01T00:00:00.000Z' } as never).executeSync();
 
-	await adminUpdateUser(admin.id, target.id, {
+	await adminUpdateUser(admin.id, Number(target.id), {
 		displayName: 'T',
 		email: 'target@x.c',
 		role: 'user',
@@ -91,10 +86,10 @@ test('adminUpdateUser sets a new password and clears forced reset', async () => 
 		confirmPassword: 'newpassword'
 	});
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
-	expect(await verifyPassword(updated.passwordHash, 'newpassword')).toBe(true);
-	expect(updated.mustResetPassword).toBe(false);
-	expect(ctx.db.select().from(sessions).all()).toHaveLength(0);
+	const updated = ctx.kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]!;
+	expect(await verifyPassword(updated.password_hash, 'newpassword')).toBe(true);
+	expect(updated.must_reset_password).toBe(false);
+	expect(ctx.kit.selectFrom(sessions).executeSync()).toHaveLength(0);
 });
 
 test('completeRequiredPasswordChange clears mustResetPassword', async () => {
@@ -104,15 +99,15 @@ test('completeRequiredPasswordChange clears mustResetPassword', async () => {
 		displayName: 'U',
 		mustResetPassword: true
 	});
-	ctx.db.insert(sessions).values({ tokenHash: tokenHash('keep-token'), userId: u.id, expiresAt: '2099-01-01T00:00:00.000Z' }).run();
-	ctx.db.insert(sessions).values({ tokenHash: tokenHash('drop-token'), userId: u.id, expiresAt: '2099-01-01T00:00:00.000Z' }).run();
+	ctx.kit.insertInto(sessions).values({ token_hash: tokenHash('keep-token'), user_id: BigInt(u.id), expires_at: '2099-01-01T00:00:00.000Z' } as never).executeSync();
+	ctx.kit.insertInto(sessions).values({ token_hash: tokenHash('drop-token'), user_id: BigInt(u.id), expires_at: '2099-01-01T00:00:00.000Z' } as never).executeSync();
 
 	await completeRequiredPasswordChange(u.id, 'keep-token', 'newpassword', 'newpassword');
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(updated.mustResetPassword).toBe(false);
-	expect(await verifyPassword(updated.passwordHash, 'newpassword')).toBe(true);
-	expect(ctx.db.select().from(sessions).all()).toHaveLength(1);
+	const updated = ctx.kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(updated.must_reset_password).toBe(false);
+	expect(await verifyPassword(updated.password_hash, 'newpassword')).toBe(true);
+	expect(ctx.kit.selectFrom(sessions).executeSync()).toHaveLength(1);
 });
 
 test('adminCreateUser creates a user with a random password and forced reset', async () => {
@@ -132,50 +127,43 @@ test('adminCreateUser creates a user with a random password and forced reset', a
 });
 
 test('adminCreateUser rejects duplicate email', async () => {
-	const admin = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
-	ctx.db.insert(users).values({ email: 'exists@x.c', passwordHash: 'x', displayName: 'Existing' }).run();
+	const admin = ctx.kit
+		.insertInto(users)
+		.values({ email: 'admin@x.c', password_hash: 'x', display_name: 'Admin', role: 'admin' } as never)
+		.executeSync();
+	ctx.kit.insertInto(users).values({ email: 'exists@x.c', password_hash: 'x', display_name: 'Existing' } as never).executeSync();
 
 	await expect(
-		adminCreateUser(admin.id, { displayName: 'Duplicate', email: 'exists@x.c' })
+		adminCreateUser(Number(admin.id), { displayName: 'Duplicate', email: 'exists@x.c' })
 	).rejects.toThrow(/already in use/i);
 });
 
 test('adminDeleteUser removes a user', async () => {
 	const admin = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
-	const target = ctx.db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
-		.returning()
-		.get();
+	const target = ctx.kit
+		.insertInto(users)
+		.values({ email: 'target@x.c', password_hash: 'x', display_name: 'T' } as never)
+		.executeSync();
 
-	await adminDeleteUser(admin.id, target.id);
+	await adminDeleteUser(admin.id, Number(target.id));
 
-	expect(ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()).toBeUndefined();
+	expect(ctx.kit.selectFrom(users).where(eq(users.id, BigInt(target.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('adminDeleteUser refuses to delete the last admin', async () => {
-	const admin = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
+	const admin = ctx.kit
+		.insertInto(users)
+		.values({ email: 'admin@x.c', password_hash: 'x', display_name: 'Admin', role: 'admin' } as never)
+		.executeSync();
 
-	await expect(adminDeleteUser(admin.id, admin.id)).rejects.toThrow(/last admin/i);
+	await expect(adminDeleteUser(Number(admin.id), Number(admin.id))).rejects.toThrow(/last admin/i);
 });
 
 test('adminSendPasswordReset sends a reset notification', async () => {
 	const kitUser = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T' });
-	const target = ctx.db
-		.select()
-		.from(users)
-		.where(eq(users.id, BigInt(kitUser.id)))
-		.get()!;
+	const target = ctx.kit.selectFrom(users).where(eq(users.id, BigInt(kitUser.id))).executeSync()[0]!;
 
-	await adminSendPasswordReset(target.id, 'https://roamarr.test');
+	await adminSendPasswordReset(Number(target.id), 'https://roamarr.test');
 	expect(vi.mocked(deliver)).toHaveBeenCalledOnce();
 	expect(vi.mocked(deliver).mock.calls[0][1].link).toMatch(/^https:\/\/roamarr\.test\/reset-password\//);
 });

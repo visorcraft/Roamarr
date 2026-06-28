@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -20,7 +20,6 @@ import {
 } from '$lib/server/db/mongrelSchema';
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from users; delete from trips; delete from segments; delete from groups; delete from notifications;');
 	const kit = (ctx as any).kit;
 	kit.deleteFrom(kitNotifications).executeSync();
 	kit.deleteFrom(kitGroups).executeSync();
@@ -75,6 +74,6 @@ test('load includes instance stats for admins', () => {
 	};
 
 	expect(result.isAdmin).toBe(true);
-	expect(result.databasePath).toBe(':memory:');
+	expect(result.databasePath).toBe('./roamarr-test.kitdb');
 	expect(result.stats).toMatchObject({ users: 1, trips: 1, segments: 1 });
 });

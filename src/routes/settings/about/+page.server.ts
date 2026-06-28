@@ -1,16 +1,12 @@
 import { requireUser } from '$lib/server/auth';
-import { kit } from '$lib/server/db';
-import { users, trips, groups } from '$lib/server/db/mongrelSchema';
 import { countSegments } from '$lib/server/repositories/segmentsRepo';
 import { countNotifications } from '$lib/server/repositories/remindersRepo';
+import { countUsers } from '$lib/server/repositories/usersRepo';
+import { countTrips, countGroups } from '$lib/server/repositories/tripsRepo';
 import { getSettings } from '$lib/server/settings';
 import { appInfo } from '$lib/appInfo';
 import { getDatabasePath } from '$lib/server/paths';
 import type { PageServerLoad } from './$types';
-
-function countTable(table: typeof users | typeof trips | typeof groups): number {
-	return Number(kit.selectFrom(table).selectCount().executeSync());
-}
 
 export const load: PageServerLoad = ({ locals }) => {
 	const user = requireUser(locals);
@@ -25,10 +21,10 @@ export const load: PageServerLoad = ({ locals }) => {
 		databasePath: isAdmin ? getDatabasePath() : null,
 		stats: isAdmin
 			? {
-					users: countTable(users),
-					trips: countTable(trips),
+					users: countUsers(),
+					trips: countTrips(),
 					segments: Number(countSegments()),
-					groups: countTable(groups),
+					groups: countGroups(),
 					notifications: countNotifications()
 				}
 			: null

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -29,9 +29,14 @@ import { beforeEach } from 'vitest';
 import { makeLocals, makeFormData } from '../../../../../tests/eventHelpers';
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec(
-		'delete from audit_logs; delete from fare_watches; delete from fare_providers; delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users;'
-	);
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(fareWatches).executeSync();
+	kit.deleteFrom(fareProviders).executeSync();
+	kit.deleteFrom(reminders).executeSync();
+	kit.deleteFrom(tripShares).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function makeEvent(form: FormData, params: Record<string, string>, userId: number) {
@@ -44,7 +49,6 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 }
 
 test('owner can delete a trip and its segments, shares, watches, and reminders', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'del-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'del-shared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
@@ -55,44 +59,44 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 		localStart: '2026-07-01T15:00:00',
 		startTz: 'America/New_York'
 	});
-	expect(db.select().from(reminders).all()).toHaveLength(1);
+	expect(kit.selectFrom(reminders).executeSync()).toHaveLength(1);
 
 	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id });
-	const provider = db
-		.insert(fareProviders)
-		.values({ userId: a.id, providerKey: 'stub' })
-		.returning()
-		.get();
-	db.insert(fareWatches).values({ tripId: t.id, providerId: provider.id, status: 'active' }).run();
+	const provider = kit
+		.insertInto(fareProviders)
+		.values({ user_id: BigInt(a.id), provider_key: 'stub' })
+		.executeSync();
+	kit
+		.insertInto(fareWatches)
+		.values({ trip_id: BigInt(t.id), provider_id: provider.id })
+		.executeSync();
 
 	_deleteTrip(a.id, t.id);
 
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
-	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all()).toHaveLength(0);
-	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all()).toHaveLength(0);
-	expect(db.select().from(fareWatches).where(eq(fareWatches.trip_id, BigInt(t.id))).all()).toHaveLength(0);
-	expect(db.select().from(reminders).all()).toHaveLength(0);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
+	expect(kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(fareWatches).where(eq(fareWatches.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(reminders).executeSync()).toHaveLength(0);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_delete');
-	expect(logs[0].entityType).toBe('trip');
-	expect(logs[0].entityId).toBe(t.id);
+	expect(logs[0].entity_type).toBe('trip');
+	expect(Number(logs[0].entity_id)).toBe(t.id);
 });
 
 test('non-owner cannot delete a trip', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'del-owner2@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'del-intruder@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	expect(() => _deleteTrip(b.id, t.id)).toThrow();
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeDefined();
-	expect(db.select().from(auditLogs).all()).toHaveLength(0);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeDefined();
+	expect(kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });
 
 test('edit action updates a trip with valid data', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'edit-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Old' });
 	const form = makeFormData({
@@ -105,15 +109,14 @@ test('edit action updates a trip with valid data', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.name).toBe('Updated');
-	expect(updated.destination).toBeNull();
-	expect(updated.destinationCountryCode).toBeNull();
-	expect(updated.destinationCityName).toBeNull();
+	expect(updated.destination).toBe('');
+	expect(updated.destination_country_code).toBe('');
+	expect(updated.destination_city_name).toBe('');
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'edit-owner3@x.c', passwordHash: 'x', displayName: 'A' });
 	const editor = makeUser(kit, { email: 'edit-editor@x.c', passwordHash: 'x', displayName: 'E' });
 	const reader = makeUser(kit, { email: 'edit-reader@x.c', passwordHash: 'x', displayName: 'R' });
@@ -131,7 +134,7 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.name).toBe('Editor Updated');
 
 	await expect(actions.save(makeEvent(form, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
@@ -140,7 +143,6 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 });
 
 test('edit action updates trip status', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'edit-status@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
@@ -152,18 +154,17 @@ test('edit action updates trip status', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.status).toBe('active');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_update');
-	expect(logs[0].entityType).toBe('trip');
-	expect(logs[0].entityId).toBe(t.id);
+	expect(logs[0].entity_type).toBe('trip');
+	expect(Number(logs[0].entity_id)).toBe(t.id);
 });
 
 test('edit action rejects invalid status values', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'edit-status-bad@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
@@ -177,11 +178,10 @@ test('edit action rejects invalid status values', async () => {
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.errors.status).toBe('status must be one of: planning, booked, active, completed');
-	expect(db.select().from(auditLogs).all()).toHaveLength(0);
+	expect(kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });
 
 test('edit action rejects invalid data and enforces ownership', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'edit-b@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'edit-c@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip' });

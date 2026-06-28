@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -16,7 +16,6 @@ import { tripHomeTasks } from './db/mongrelSchema';
 import { Validator, formFail } from './validation';
 
 test('tripCrudFactory lists, adds and removes rows scoped to a trip', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const user = makeUser(kit, { email: 'u@x.c', passwordHash: 'x', displayName: 'U' });
 	const trip = makeTrip(kit, user.id, { name: 'T' });
 

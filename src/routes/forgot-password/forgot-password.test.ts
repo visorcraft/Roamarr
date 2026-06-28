@@ -1,7 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -13,27 +12,29 @@ vi.mock('$lib/server/notify', () => ({
 }));
 
 import { _requestReset, actions } from './+page.server';
-import { users as kitUsers, passwordResetTokens } from '$lib/server/db/mongrelSchema';
-import { users } from '$lib/server/db/mongrelSchema';
+import { users, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 import { makeKitUser } from '../../../tests/kitHelpers';
+
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 const origin = 'https://example.com';
 
 beforeEach(() => {
-	(ctx as { sqlite: any }).sqlite.exec(
-		'delete from password_reset_tokens; delete from users;'
-	);
+	const kit = kitDb();
 	// Cascading delete on kit users removes sessions and reset tokens too.
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(passwordResetTokens).executeSync();
+	kit.deleteFrom(users).executeSync();
 	delivered.length = 0;
 });
 
 test('sends reset email for existing active user', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeKitUser({ email: 'a@b.c', password_hash: 'x', display_name: 'A' });
 	await _requestReset('A@B.c', origin);
-	const row = (ctx as any).kit.selectFrom(passwordResetTokens).executeSync()[0];
+	const row = kit.selectFrom(passwordResetTokens).executeSync()[0];
 	expect(row.user_id).toBe(u.id);
 	expect(delivered).toHaveLength(1);
 	expect(delivered[0].uid).toBe(Number(u.id));
@@ -41,12 +42,12 @@ test('sends reset email for existing active user', async () => {
 });
 
 test('does not send email for unknown or disabled user', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	makeKitUser({ email: 'd@b.c', password_hash: 'x', display_name: 'D', disabled: true });
 	await _requestReset('unknown@b.c', origin);
 	await _requestReset('d@b.c', origin);
-	expect(db.select().from(users).get()).toBeDefined();
-	expect((ctx as any).kit.selectFrom(passwordResetTokens).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(users).executeSync()[0]).toBeDefined();
+	expect(kit.selectFrom(passwordResetTokens).executeSync()).toHaveLength(0);
 	expect(delivered).toHaveLength(0);
 });
 

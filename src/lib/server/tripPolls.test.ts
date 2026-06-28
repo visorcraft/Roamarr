@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -25,13 +25,16 @@ import {
 	tripPollVotes,
 	auditLogs
 } from './db/mongrelSchema';
-import { users as kitUsers, trips as kitTrips, tripCompanions as kitTripCompanions } from './db/mongrelSchema';
-import { eq, and } from '@mongreldb/kit';
+import { eq, and, type KitDatabase } from '@mongreldb/kit';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 
 const event = makeActionEvent;
+
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -48,35 +51,23 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 function makeCompanion(tripId: number, name: string) {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const row = db
-		.insert(tripCompanions)
-		.values({ tripId, name, category: 'adult' })
-		.returning()
-		.get();
-	kit.insertInto(kitTripCompanions).values({
-		id: BigInt(row.id),
-		trip_id: BigInt(tripId),
-		name: row.name,
-		category: row.category
-	} as never).executeSync();
-	return row;
+	const kit = getKit();
+	const row = kit
+		.insertInto(tripCompanions)
+		.values({ trip_id: BigInt(tripId), name, category: 'adult' } as never)
+		.executeSync();
+	return { id: Number(row.id), name: row.name, category: row.category };
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(tripPollVotes).run();
-	db.delete(tripPollOptions).run();
-	db.delete(tripPolls).run();
-	db.delete(tripCompanions).run();
-	db.delete(trips).run();
-	db.delete(auditLogs).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitTripCompanions).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = getKit();
+	kit.deleteFrom(tripPollVotes).executeSync();
+	kit.deleteFrom(tripPollOptions).executeSync();
+	kit.deleteFrom(tripPolls).executeSync();
+	kit.deleteFrom(tripCompanions).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('create and list polls with options and vote counts', () => {
@@ -125,12 +116,11 @@ test('changing vote replaces previous vote and keeps one per companion', () => {
 	expect(refreshed.votes).toHaveLength(1);
 	expect(refreshed.votes[0].optionId).toBe(optionY.id);
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const rows = db
-		.select()
-		.from(tripPollVotes)
+	const kit = getKit();
+	const rows = kit
+		.selectFrom(tripPollVotes)
 		.where(eq(tripPollVotes.poll_id, BigInt(poll.id)))
-		.all();
+		.executeSync();
 	expect(rows).toHaveLength(1);
 });
 
@@ -144,19 +134,18 @@ test('deletePoll removes poll, options, and votes and logs audit', () => {
 
 	removeTripPoll(Number(u.id), poll.id);
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
-	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
-	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
+	const kit = getKit();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeUndefined();
+	expect(kit.selectFrom(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
 
-	const logs = db
-		.select()
-		.from(auditLogs)
+	const logs = kit
+		.selectFrom(auditLogs)
 		.where(and(eq(auditLogs.entity_type, 'trip_poll'), eq(auditLogs.entity_id, BigInt(poll.id))))
-		.all();
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'create')).toBe(true);
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'vote')).toBe(true);
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'delete')).toBe(true);
+		.executeSync();
+	expect(logs.some((l) => l.action === 'create')).toBe(true);
+	expect(logs.some((l) => l.action === 'vote')).toBe(true);
+	expect(logs.some((l) => l.action === 'delete')).toBe(true);
 });
 
 test('non-editor cannot create, vote, or delete polls', () => {
@@ -190,8 +179,8 @@ test('createPoll action validates input and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const polls = db.select().from(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).all();
+	const kit = getKit();
+	const polls = kit.selectFrom(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).executeSync();
 	expect(polls).toHaveLength(1);
 });
 
@@ -202,8 +191,8 @@ test('createPoll action returns fail for invalid input', async () => {
 	const result = await createPoll(event({ id: Number(u.id) }, t.id, { question: '', options: ['Only'] }));
 	expect(result).toMatchObject({ status: 400, data: { error: expect.any(String) } });
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).all()).toHaveLength(0);
+	const kit = getKit();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
 });
 
 test('votePoll action casts a vote and redirects', async () => {
@@ -223,10 +212,10 @@ test('votePoll action casts a vote and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const votes = db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all();
+	const kit = getKit();
+	const votes = kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync();
 	expect(votes).toHaveLength(1);
-	expect(votes[0].optionId).toBe(option.id);
+	expect(Number(votes[0].option_id)).toBe(option.id);
 });
 
 test('deletePoll action removes a poll and redirects', async () => {
@@ -239,6 +228,6 @@ test('deletePoll action removes a poll and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
+	const kit = getKit();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeUndefined();
 });

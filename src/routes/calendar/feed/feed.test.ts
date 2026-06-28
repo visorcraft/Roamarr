@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -10,6 +10,10 @@ vi.mock('$lib/server/db', async () => {
 import { GET } from './+server';
 import { users, trips, segments, groups, groupMembers, tripShares } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
+
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 function event(token: string, ip: string) {
 	return {
@@ -21,28 +25,26 @@ function event(token: string, ip: string) {
 
 test('GET returns an ICS calendar for a valid user token', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'feed@x.c', passwordHash: 'x', displayName: 'U', calendarToken: 'user-cal-1' })
-		.returning()
-		.get();
-	const t = db
-		.insert(trips)
-		.values({ ownerId: u.id, name: 'Trip A', startDate: '2026-07-01', endDate: '2026-07-05' })
-		.returning()
-		.get();
-	db.insert(segments)
+	const kit = kitDb();
+	const u = kit
+		.insertInto(users)
+		.values({ email: 'feed@x.c', password_hash: 'x', display_name: 'U', calendar_token: 'user-cal-1' })
+		.executeSync();
+	const t = kit
+		.insertInto(trips)
+		.values({ owner_id: u.id, name: 'Trip A', start_date: '2026-07-01', end_date: '2026-07-05' })
+		.executeSync();
+	kit
+		.insertInto(segments)
 		.values({
-			tripId: t.id,
+			trip_id: t.id,
 			type: 'flight',
 			title: 'UA123',
-			startAt: '2026-07-01T15:00:00Z',
-			startTz: 'UTC',
-			endAt: '2026-07-01T18:00:00Z',
+			start_at: '2026-07-01T15:00:00Z',
+			end_at: '2026-07-01T18:00:00Z',
 			location: 'JFK'
 		})
-		.run();
+		.executeSync();
 
 	const res = GET(event('user-cal-1', '1.2.3.4')) as Response;
 	expect(res.status).toBe(200);
@@ -52,54 +54,50 @@ test('GET returns an ICS calendar for a valid user token', () => {
 
 test('GET aggregates owned and shared trips', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'owner@x.c', passwordHash: 'x', displayName: 'Owner' })
-		.returning()
-		.get();
-	const viewer = db
-		.insert(users)
+	const kit = kitDb();
+	const owner = kit
+		.insertInto(users)
+		.values({ email: 'owner@x.c', password_hash: 'x', display_name: 'Owner' })
+		.executeSync();
+	const viewer = kit
+		.insertInto(users)
 		.values({
 			email: 'viewer@x.c',
-			passwordHash: 'x',
-			displayName: 'Viewer',
-			calendarToken: 'user-cal-2'
+			password_hash: 'x',
+			display_name: 'Viewer',
+			calendar_token: 'user-cal-2'
 		})
-		.returning()
-		.get();
+		.executeSync();
 
-	const ownedByViewer = db
-		.insert(trips)
-		.values({ ownerId: viewer.id, name: 'My Trip', startDate: '2026-08-01' })
-		.returning()
-		.get();
-	const shared = db
-		.insert(trips)
-		.values({ ownerId: owner.id, name: 'Shared Trip', startDate: '2026-08-10' })
-		.returning()
-		.get();
-	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: viewer.id }).run();
+	const ownedByViewer = kit
+		.insertInto(trips)
+		.values({ owner_id: viewer.id, name: 'My Trip', start_date: '2026-08-01' })
+		.executeSync();
+	const shared = kit
+		.insertInto(trips)
+		.values({ owner_id: owner.id, name: 'Shared Trip', start_date: '2026-08-10' })
+		.executeSync();
+	kit.insertInto(tripShares).values({ trip_id: shared.id, shared_with_user_id: viewer.id }).executeSync();
 
-	db.insert(segments)
+	kit
+		.insertInto(segments)
 		.values({
-			tripId: ownedByViewer.id,
+			trip_id: ownedByViewer.id,
 			type: 'hotel',
 			title: 'Check-in',
-			startAt: '2026-08-01T20:00:00Z',
-			startTz: 'UTC'
+			start_at: '2026-08-01T20:00:00Z'
 		})
-		.run();
-	db.insert(segments)
+		.executeSync();
+	kit
+		.insertInto(segments)
 		.values({
-			tripId: shared.id,
+			trip_id: shared.id,
 			type: 'flight',
 			title: 'DL456',
-			startAt: '2026-08-10T14:00:00Z',
-			startTz: 'UTC',
-			endAt: '2026-08-10T17:00:00Z'
+			start_at: '2026-08-10T14:00:00Z',
+			end_at: '2026-08-10T17:00:00Z'
 		})
-		.run();
+		.executeSync();
 
 	const res = GET(event('user-cal-2', '1.2.3.4')) as Response;
 	expect(res.status).toBe(200);
@@ -107,32 +105,29 @@ test('GET aggregates owned and shared trips', () => {
 
 test('GET includes group-shared trips', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db
-		.insert(users)
-		.values({ email: 'gowner@x.c', passwordHash: 'x', displayName: 'GOwner' })
-		.returning()
-		.get();
-	const member = db
-		.insert(users)
+	const kit = kitDb();
+	const owner = kit
+		.insertInto(users)
+		.values({ email: 'gowner@x.c', password_hash: 'x', display_name: 'GOwner' })
+		.executeSync();
+	const member = kit
+		.insertInto(users)
 		.values({
 			email: 'member@x.c',
-			passwordHash: 'x',
-			displayName: 'Member',
-			calendarToken: 'user-cal-3'
+			password_hash: 'x',
+			display_name: 'Member',
+			calendar_token: 'user-cal-3'
 		})
-		.returning()
-		.get();
+		.executeSync();
 
-	const g = db.insert(groups).values({ ownerId: owner.id, name: 'fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: member.id }).run();
+	const g = kit.insertInto(groups).values({ owner_id: owner.id, name: 'fam' }).executeSync();
+	kit.insertInto(groupMembers).values({ group_id: g.id, user_id: member.id }).executeSync();
 
-	const shared = db
-		.insert(trips)
-		.values({ ownerId: owner.id, name: 'Group Trip', startDate: '2026-09-01' })
-		.returning()
-		.get();
-	db.insert(tripShares).values({ tripId: shared.id, sharedWithGroupId: g.id }).run();
+	const shared = kit
+		.insertInto(trips)
+		.values({ owner_id: owner.id, name: 'Group Trip', start_date: '2026-09-01' })
+		.executeSync();
+	kit.insertInto(tripShares).values({ trip_id: shared.id, shared_with_group_id: g.id }).executeSync();
 
 	const res = GET(event('user-cal-3', '1.2.3.4')) as Response;
 	expect(res.status).toBe(200);
@@ -150,16 +145,17 @@ test('GET returns 404 for missing token', () => {
 
 test('GET returns 404 for expired token', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	db.insert(users)
+	const kit = kitDb();
+	kit
+		.insertInto(users)
 		.values({
 			email: 'exp@x.c',
-			passwordHash: 'x',
-			displayName: 'E',
-			calendarToken: 'user-cal-exp',
-			calendarTokenExpiresAt: '2020-01-01T00:00:00Z'
+			password_hash: 'x',
+			display_name: 'E',
+			calendar_token: 'user-cal-exp',
+			calendar_token_expires_at: '2020-01-01T00:00:00Z'
 		})
-		.run();
+		.executeSync();
 
 	try {
 		GET(event('user-cal-exp', '1.2.3.4'));
@@ -171,15 +167,16 @@ test('GET returns 404 for expired token', () => {
 
 test('GET is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	db.insert(users)
+	const kit = kitDb();
+	kit
+		.insertInto(users)
 		.values({
 			email: 'rl@x.c',
-			passwordHash: 'x',
-			displayName: 'RL',
-			calendarToken: 'user-cal-rl'
+			password_hash: 'x',
+			display_name: 'RL',
+			calendar_token: 'user-cal-rl'
 		})
-		.run();
+		.executeSync();
 
 	for (let i = 0; i < 30; i++) {
 		GET(event('user-cal-rl', '1.2.3.4'));

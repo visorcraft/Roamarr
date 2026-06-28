@@ -1,12 +1,16 @@
 import { test, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 import {
 	_shareWithUserEmail as shareWithUserEmail,
@@ -64,22 +68,22 @@ test('group share requires the group to belong to the sharer', () => {
 });
 
 test('group owner can remove a member and delete the group', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('o2@x.c');
 	const member = makeUser('m2@x.c');
 	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
 	addMember(owner.id, g.id, 'm2@x.c');
-	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()).toHaveLength(1);
 
 	removeMember(owner.id, g.id, member.id);
-	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(0);
+	expect(kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()).toHaveLength(0);
 
 	deleteGroup(owner.id, g.id);
-	expect(db.select().from(groups).where(eq(groups.id, BigInt(g.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(groups).where(eq(groups.id, BigInt(g.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('non-owner cannot remove members or delete a group', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('a2@x.c');
 	const b = makeUser('b2@x.c');
 	const member = makeUser('m3@x.c');
@@ -88,6 +92,6 @@ test('non-owner cannot remove members or delete a group', () => {
 
 	expect(() => removeMember(b.id, g.id, member.id)).toThrow();
 	expect(() => deleteGroup(b.id, g.id)).toThrow();
-	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(1);
-	expect(db.select().from(groups).where(eq(groups.id, BigInt(g.id))).get()).toBeDefined();
+	expect(kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()).toHaveLength(1);
+	expect(kit.selectFrom(groups).where(eq(groups.id, BigInt(g.id))).executeSync()[0]).toBeDefined();
 });

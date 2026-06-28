@@ -1,6 +1,5 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
-import { kit } from '$lib/server/db';
 import { users } from '$lib/server/db/mongrelSchema';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
@@ -14,8 +13,7 @@ export function _createAdmin(
 ) {
 	const email = normalizeEmail(i.email);
 	const s = getSettings();
-	const existing = kit.selectFrom(users).executeSync();
-	if (s.setupComplete || existing.length > 0) throw new Error('already set up');
+	if (s.setupComplete || usersRepo.countUsers() > 0) throw new Error('already set up');
 
 	const u = usersRepo.createUser({
 		email,

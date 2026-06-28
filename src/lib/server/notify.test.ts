@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -44,10 +44,10 @@ function makeUser(over: MakeUserOver = {}) {
 }
 
 test('always writes in-app; emails only when SMTP configured', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser({ email: 'a@x.c', display_name: 'A' });
 	await deliver(Number(u.id), { title: 'Hi', body: 'There' });
-	expect(db.select().from(notifications).all().length).toBe(1);
+	expect(kit.selectFrom(notifications).executeSync().length).toBe(1);
 	expect(sent.length).toBe(0);
 	updateSettings({
 		smtpHost: 'smtp.x',
@@ -61,7 +61,6 @@ test('always writes in-app; emails only when SMTP configured', async () => {
 });
 
 test('POSTs JSON to webhookUrl when configured', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser({ email: 'b@x.c', display_name: 'B' });
 	updateSettings({ webhookUrl: 'https://hooks.example.com/roamarr' });
 	await deliver(Number(u.id), { title: 'T', body: 'B', link: 'https://r/l' });
@@ -80,7 +79,7 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 });
 
 test('respects user channel toggles', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser({
 		email: 't@x.c',
 		display_name: 'T',
@@ -97,13 +96,12 @@ test('respects user channel toggles', async () => {
 	const before = fetches.length;
 	const beforeSent = sent.length;
 	await deliver(Number(u.id), { title: 'T', body: 'B' });
-	expect(db.select().from(notifications).all().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(notifications).executeSync().length).toBeGreaterThan(0);
 	expect(fetches.length).toBe(before);
 	expect(sent.length).toBe(beforeSent);
 });
 
 test('skips webhook when webhookUrl is not set', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const before = fetches.length;
 	const u = makeUser({ email: 'c@x.c', display_name: 'C' });
 	updateSettings({ webhookUrl: null });

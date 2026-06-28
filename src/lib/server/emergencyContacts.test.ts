@@ -1,8 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
@@ -26,25 +24,22 @@ import {
 	resetEmergencyShareRateLimit
 } from './emergencyContacts';
 import { emergencyContacts, trips, users, auditLogs, tripShares } from './db/mongrelSchema';
-import {
-	emergencyContacts as kitEmergencyContacts,
-	trips as kitTrips
-} from './db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import { updateSettings } from './settings';
 import { createTrip } from './repositories/tripsRepo';
 import { makeKitUser } from '../../../tests/kitHelpers';
+import { makeShare } from '../../../tests/helpers';
 
 beforeEach(() => {
-	ctx.sqlite.exec(
-		'delete from emergency_contacts; delete from trips; delete from users; delete from audit_logs; delete from trip_shares;'
-	);
-	ctx.kit.deleteFrom(kitEmergencyContacts).executeSync();
-	ctx.kit.deleteFrom(kitTrips).executeSync();
+	ctx.kit.deleteFrom(tripShares).executeSync();
+	ctx.kit.deleteFrom(auditLogs).executeSync();
+	ctx.kit.deleteFrom(emergencyContacts).executeSync();
+	ctx.kit.deleteFrom(trips).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
 });
 
 test('addEmergencyContact creates a contact and audits', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const u = makeKitUser({ email: 'ec@x.c' });
 
 	const c = addEmergencyContact(Number(u.id), {
@@ -61,25 +56,24 @@ test('addEmergencyContact creates a contact and audits', () => {
 	expect(c.email).toBe('jordan@x.c');
 	expect(c.isPrimary).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('emergency_contact_create');
-	expect(logs[0].entityType).toBe('emergency_contact');
+	expect(logs[0].entity_type).toBe('emergency_contact');
 });
 
 test('addEmergencyContact enforces single primary contact', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const u = makeKitUser({ email: 'ec2@x.c' });
 
 	const first = addEmergencyContact(Number(u.id), { name: 'A', isPrimary: true });
 	const second = addEmergencyContact(Number(u.id), { name: 'B', isPrimary: true });
 
 	expect(
-		db
-			.select()
-			.from(emergencyContacts)
+		kit
+			.selectFrom(emergencyContacts)
 			.where(eq(emergencyContacts.id, BigInt(first.id)))
-			.get()!.isPrimary
+			.executeSync()[0]!.is_primary
 	).toBe(false);
 	expect(second.isPrimary).toBe(true);
 });
@@ -105,7 +99,7 @@ test('listEmergencyContacts orders primary first then by name', () => {
 });
 
 test('updateEmergencyContact edits a contact and shifts primary status', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const u = makeKitUser({ email: 'ec5@x.c' });
 
 	const a = addEmergencyContact(Number(u.id), { name: 'A', isPrimary: true });
@@ -113,22 +107,20 @@ test('updateEmergencyContact edits a contact and shifts primary status', () => {
 
 	updateEmergencyContact(Number(u.id), b.id, { name: 'B-updated', isPrimary: true });
 
-	const updatedA = db
-		.select()
-		.from(emergencyContacts)
+	const updatedA = kit
+		.selectFrom(emergencyContacts)
 		.where(eq(emergencyContacts.id, BigInt(a.id)))
-		.get()!;
-	const updatedB = db
-		.select()
-		.from(emergencyContacts)
+		.executeSync()[0]!;
+	const updatedB = kit
+		.selectFrom(emergencyContacts)
 		.where(eq(emergencyContacts.id, BigInt(b.id)))
-		.get()!;
-	expect(updatedA.isPrimary).toBe(false);
-	expect(updatedB.isPrimary).toBe(true);
+		.executeSync()[0]!;
+	expect(updatedA.is_primary).toBe(false);
+	expect(updatedB.is_primary).toBe(true);
 	expect(updatedB.name).toBe('B-updated');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
-	expect(logs.some((l: Record<string, unknown>) => l.action === 'emergency_contact_update')).toBe(true);
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
+	expect(logs.some((l) => l.action === 'emergency_contact_update')).toBe(true);
 });
 
 test('updateEmergencyContact is user-scoped', () => {
@@ -146,7 +138,7 @@ test('updateEmergencyContact is user-scoped', () => {
 });
 
 test('deleteEmergencyContact removes only the owned contact', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const a = makeKitUser({ email: 'ec7-a@x.c' });
 	const b = makeKitUser({ email: 'ec7-b@x.c' });
 
@@ -155,16 +147,14 @@ test('deleteEmergencyContact removes only the owned contact', () => {
 
 	deleteEmergencyContact(Number(a.id), c.id);
 
-	const remainingA = db
-		.select()
-		.from(emergencyContacts)
+	const remainingA = kit
+		.selectFrom(emergencyContacts)
 		.where(eq(emergencyContacts.user_id, BigInt(a.id)))
-		.all();
-	const remainingB = db
-		.select()
-		.from(emergencyContacts)
+		.executeSync();
+	const remainingB = kit
+		.selectFrom(emergencyContacts)
 		.where(eq(emergencyContacts.user_id, BigInt(b.id)))
-		.all();
+		.executeSync();
 	expect(remainingA).toHaveLength(0);
 	expect(remainingB).toHaveLength(1);
 	expect(remainingB[0].name).toBe('B-contact');
@@ -173,7 +163,7 @@ test('deleteEmergencyContact removes only the owned contact', () => {
 test('shareItineraryWithContact sends link and audits', async () => {
 	resetEmergencyShareRateLimit();
 	sent.length = 0;
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const u = makeKitUser({ email: 'ec-share@x.c' });
 	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' });
 	const contact = addEmergencyContact(Number(u.id), { name: 'Emergency', email: 'em@x.c' });
@@ -194,13 +184,13 @@ test('shareItineraryWithContact sends link and audits', async () => {
 	expect(String(sent[0].text)).toContain('Tokyo Trip');
 	expect(String(sent[0].text)).toContain(result.link);
 
-	const updated = db.select().from(trips).where(eq(trips.id, BigInt(trip.id))).get()!;
-	expect(updated.publicToken).toBeTruthy();
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(trip.id))).executeSync()[0]!;
+	expect(updated.public_token).toBeTruthy();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(
 		logs.some(
-			(l: Record<string, unknown>) => l.action === 'emergency_share' && l.entityType === 'trip' && l.entityId === trip.id
+			(l) => l.action === 'emergency_share' && l.entity_type === 'trip' && Number(l.entity_id) === trip.id
 		)
 	).toBe(true);
 });
@@ -208,7 +198,6 @@ test('shareItineraryWithContact sends link and audits', async () => {
 test('shareItineraryWithContact reuses existing public token', async () => {
 	resetEmergencyShareRateLimit();
 	sent.length = 0;
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeKitUser({ email: 'ec-reuse@x.c' });
 	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'roamarr@x.c' });
 	const contact = addEmergencyContact(Number(u.id), { name: 'Emergency', email: 'em@x.c' });
@@ -257,14 +246,12 @@ test('shareItineraryWithContact enforces trip ownership', async () => {
 
 test('shareItineraryWithContact rejects non-owner editors', async () => {
 	resetEmergencyShareRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = ctx.kit;
 	const owner = makeKitUser({ email: 'ec-editor-owner@x.c' });
 	const editor = makeKitUser({ email: 'ec-editor@x.c' });
 	const contact = addEmergencyContact(Number(editor.id), { name: 'Contact', email: 'c@x.c' });
 	const trip = createTrip(Number(owner.id), { name: 'Shared Trip' });
-	db.insert(tripShares)
-		.values({ tripId: trip.id, sharedWithUserId: Number(editor.id), permission: 'edit' })
-		.run();
+	makeShare(kit, { tripId: trip.id, sharedWithUserId: Number(editor.id), permission: 'edit' });
 
 	try {
 		await shareItineraryWithContact(Number(editor.id), trip.id, contact.id, 'https://roamarr.test');

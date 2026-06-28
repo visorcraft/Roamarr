@@ -1,12 +1,13 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as templatesRepo from './templatesRepo';
 import * as usersRepo from './usersRepo';
 import * as tripsRepo from './tripsRepo';
@@ -17,14 +18,10 @@ import {
 	packingTemplates,
 	packingTemplateItems
 } from '$lib/server/db/mongrelSchema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	tripTemplates as kitTripTemplates,
-	packingTemplates as kitPackingTemplates,
-	packingTemplateItems as kitPackingTemplateItems
-} from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -46,18 +43,12 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(packingTemplateItems).run();
-	db.delete(packingTemplates).run();
-	db.delete(tripTemplates).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitPackingTemplateItems).executeSync();
-	kit.deleteFrom(kitPackingTemplates).executeSync();
-	kit.deleteFrom(kitTripTemplates).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(packingTemplateItems).executeSync();
+	kit.deleteFrom(packingTemplates).executeSync();
+	kit.deleteFrom(tripTemplates).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 // Trip templates
@@ -166,35 +157,32 @@ test('deletePackingTemplateItem removes a single item', () => {
 	expect(templatesRepo.listPackingTemplateItems(tpl.id)).toHaveLength(0);
 });
 
-test('legacy tables stay in sync with kit writes', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('template writes are persisted', () => {
+	const kit = kitDb();
 	const u = makeUser('ttr4@x.c');
 
 	const tripTpl = templatesRepo.createTripTemplate({
 		userId: Number(u.id),
-		name: 'Legacy trip template',
+		name: 'Stored trip template',
 		snapshot: { key: 'value' }
 	});
-	const legacyTripTpl = db
-		.select()
-		.from(tripTemplates)
+	const storedTripTpl = kit
+		.selectFrom(tripTemplates)
 		.where(eq(tripTemplates.id, BigInt(tripTpl.id)))
-		.get();
-	expect(legacyTripTpl?.name).toBe('Legacy trip template');
-	expect(legacyTripTpl?.snapshotJson).toContain('value');
+		.executeSync()[0];
+	expect(storedTripTpl?.name).toBe('Stored trip template');
+	expect(storedTripTpl?.snapshot_json).toContain('value');
 
-	const packTpl = templatesRepo.createPackingTemplate({ userId: Number(u.id), name: 'Legacy packing' });
+	const packTpl = templatesRepo.createPackingTemplate({ userId: Number(u.id), name: 'Stored packing' });
 	templatesRepo.createPackingTemplateItem({ templateId: packTpl.id, label: 'Item' });
-	const legacyPackTpl = db
-		.select()
-		.from(packingTemplates)
+	const storedPackTpl = kit
+		.selectFrom(packingTemplates)
 		.where(eq(packingTemplates.id, BigInt(packTpl.id)))
-		.get();
-	expect(legacyPackTpl?.name).toBe('Legacy packing');
-	const legacyItems = db
-		.select()
-		.from(packingTemplateItems)
+		.executeSync()[0];
+	expect(storedPackTpl?.name).toBe('Stored packing');
+	const storedItems = kit
+		.selectFrom(packingTemplateItems)
 		.where(eq(packingTemplateItems.template_id, BigInt(packTpl.id)))
-		.all();
-	expect(legacyItems).toHaveLength(1);
+		.executeSync();
+	expect(storedItems).toHaveLength(1);
 });

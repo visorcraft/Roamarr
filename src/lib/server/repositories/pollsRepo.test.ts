@@ -1,12 +1,13 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as pollsRepo from './pollsRepo';
 import * as usersRepo from './usersRepo';
 import * as tripsRepo from './tripsRepo';
@@ -18,15 +19,10 @@ import {
 	tripPollOptions,
 	tripPollVotes
 } from '$lib/server/db/mongrelSchema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	tripCompanions as kitTripCompanions,
-	tripPolls as kitTripPolls,
-	tripPollOptions as kitTripPollOptions,
-	tripPollVotes as kitTripPollVotes
-} from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -43,37 +39,21 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 function makeCompanion(tripId: number, name: string) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const row = db
-		.insert(tripCompanions)
-		.values({ tripId, name, category: 'adult' })
-		.returning()
-		.get();
-	kit.insertInto(kitTripCompanions).values({
-		id: BigInt(row.id),
-		trip_id: BigInt(tripId),
-		name: row.name,
-		category: row.category
-	} as never).executeSync();
-	return row;
+	const row = kitDb()
+		.insertInto(tripCompanions)
+		.values({ trip_id: BigInt(tripId), name, category: 'adult' } as never)
+		.executeSync();
+	return { id: Number(row.id), name: row.name as string };
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(tripPollVotes).run();
-	db.delete(tripPollOptions).run();
-	db.delete(tripPolls).run();
-	db.delete(tripCompanions).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitTripPollVotes).executeSync();
-	kit.deleteFrom(kitTripPollOptions).executeSync();
-	kit.deleteFrom(kitTripPolls).executeSync();
-	kit.deleteFrom(kitTripCompanions).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(tripPollVotes).executeSync();
+	kit.deleteFrom(tripPollOptions).executeSync();
+	kit.deleteFrom(tripPolls).executeSync();
+	kit.deleteFrom(tripCompanions).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('createPoll stores a poll with ordered options', () => {
@@ -170,21 +150,21 @@ test('deletePoll removes poll, options, and votes', () => {
 
 	expect(pollsRepo.deletePoll(poll.id)).toBe(1);
 
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
-	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
-	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
+	const kit = kitDb();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeUndefined();
+	expect(kit.selectFrom(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
 });
 
-test('legacy tables stay in sync with kit writes', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('poll writes are persisted', () => {
+	const kit = kitDb();
 	const u = makeUser('pr8@x.c');
 	const t = makeTrip(Number(u.id), 'T');
 
-	const poll = pollsRepo.createPoll(t.id, 'Legacy?', ['Yes', 'No']);
+	const poll = pollsRepo.createPoll(t.id, 'Stored?', ['Yes', 'No']);
 
-	const legacyPoll = db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get();
-	expect(legacyPoll?.question).toBe('Legacy?');
-	const legacyOptions = db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all();
-	expect(legacyOptions).toHaveLength(2);
+	const storedPoll = kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0];
+	expect(storedPoll?.question).toBe('Stored?');
+	const storedOptions = kit.selectFrom(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).executeSync();
+	expect(storedOptions).toHaveLength(2);
 });

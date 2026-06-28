@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -16,16 +16,12 @@ import {
 	insurancePolicies,
 	loyaltyPrograms
 } from './db/mongrelSchema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	segments as kitSegments,
-	cards as kitCards,
-	insurancePolicies as kitInsurancePolicies,
-	loyaltyPrograms as kitLoyaltyPrograms
-} from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeAdmin(email: string) {
 	return usersRepo.createUser({
@@ -39,35 +35,30 @@ function makeAdmin(email: string) {
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(loyaltyPrograms).run();
-	db.delete(insurancePolicies).run();
-	db.delete(cards).run();
-	db.delete(segments).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitLoyaltyPrograms).executeSync();
-	kit.deleteFrom(kitInsurancePolicies).executeSync();
-	kit.deleteFrom(kitCards).executeSync();
-	kit.deleteFrom(kitSegments).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(loyaltyPrograms).executeSync();
+	kit.deleteFrom(insurancePolicies).executeSync();
+	kit.deleteFrom(cards).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('seedDemoData creates trips, segments and cards for the admin user', () => {
+	const kit = kitDb();
 	const admin = makeAdmin('admin@x.c');
 
 	seedDemoData(Number(admin.id));
 
-	expect((ctx as { db: import('./db').DB }).db.select().from(trips).all().length).toBeGreaterThan(0);
-	expect((ctx as { db: import('./db').DB }).db.select().from(segments).all().length).toBeGreaterThan(0);
-	expect((ctx as { db: import('./db').DB }).db.select().from(cards).all().length).toBeGreaterThan(0);
-	expect((ctx as { db: import('./db').DB }).db.select().from(insurancePolicies).all().length).toBeGreaterThan(0);
-	expect((ctx as { db: import('./db').DB }).db.select().from(loyaltyPrograms).all().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(trips).executeSync().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(segments).executeSync().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(cards).executeSync().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(insurancePolicies).executeSync().length).toBeGreaterThan(0);
+	expect(kit.selectFrom(loyaltyPrograms).executeSync().length).toBeGreaterThan(0);
 });
 
 test('seedDemoData removes existing non-admin data', () => {
+	const kit = kitDb();
 	const admin = makeAdmin('admin2@x.c');
 	const other = usersRepo.createUser({
 		email: 'other@x.c',
@@ -76,16 +67,13 @@ test('seedDemoData removes existing non-admin data', () => {
 		calendar_token: null,
 		calendar_token_expires_at: null
 	});
-	const otherTrip = (ctx as { db: import('./db').DB }).db
-		.insert(trips)
-		.values({ ownerId: Number(other.id), name: 'Other Trip' })
-		.returning()
-		.get();
+	kit.insertInto(trips).values({ owner_id: BigInt(other.id), name: 'Other Trip' }).executeSync();
 
 	seedDemoData(Number(admin.id));
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(users).where(eq(users.id, BigInt(other.id))).get()).toBeUndefined();
-	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(other.id))).get()).toBeUndefined();
-	expect(db.select().from(users).where(eq(users.id, BigInt(admin.id))).get()).toBeDefined();
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(other.id))).executeSync()[0]).toBeUndefined();
+	expect(
+		kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(other.id))).executeSync()[0]
+	).toBeUndefined();
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(admin.id))).executeSync()[0]).toBeDefined();
 });

@@ -4,7 +4,7 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -27,11 +27,10 @@ import {
 
 
 import { load } from './+page.server';
-import { users, trips, groups, groupMembers, tripShares, segments, travelDocuments, notifications, fareProviders, fareWatches } from '$lib/server/db/mongrelSchema';
+import { travelDocuments } from '$lib/server/db/mongrelSchema';
 import { makeLocals } from '../../tests/eventHelpers';
 
 test('dashboard includes upcoming trips shared with the user and labels them shared', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const c = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
@@ -72,16 +71,14 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 
 
 test('dashboard uses user document expiry lead', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'lead@x.c', passwordHash: 'x', displayName: 'U', documentExpiryLeadDays: 30 });
 	// Expires in 60 days, outside the 30-day lead window
-	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-08-24' }).run();
+	kit.insertInto(travelDocuments).values({ user_id: BigInt(u.id), type: 'passport', expires_on: '2026-08-24' }).executeSync();
 	const data = load({ locals: makeLocals(u) } as any) as any;
 	expect(data.expiring).toHaveLength(0);
 });
 
 test('dashboard stats reflect unread notifications, expiring docs and fare watches', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'stats@x.c', passwordHash: 'x', displayName: 'U' });
 	makeNotification(kit, u.id, { title: 'A', body: 'B' });
 	makeTravelDocument(kit, u.id, { type: 'passport', expiresOn: '2026-06-25' });
@@ -98,7 +95,6 @@ test('dashboard stats reflect unread notifications, expiring docs and fare watch
 });
 
 test('dashboard agenda includes trips covering today and segments starting/ending today in user timezone', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
 
@@ -148,7 +144,6 @@ test('dashboard agenda includes trips covering today and segments starting/endin
 });
 
 test('dashboard agenda is empty when nothing happens today', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
 

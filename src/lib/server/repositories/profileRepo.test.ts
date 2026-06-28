@@ -1,16 +1,14 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	const { db, sqlite, kit, close } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit, close });
-	return { db, sqlite, kit, getDb: () => kit };
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
 import * as profileRepo from './profileRepo';
@@ -24,15 +22,6 @@ import {
 	insurancePolicies,
 	emergencyContacts
 } from '../db/mongrelSchema';
-import {
-	travelDocuments as drizzleTravelDocuments,
-	loyaltyPrograms as drizzleLoyaltyPrograms,
-	cards as drizzleCards,
-	cardBenefits as drizzleCardBenefits,
-	insurancePolicies as drizzleInsurancePolicies,
-	emergencyContacts as drizzleEmergencyContacts
-} from '../db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
 import { eq } from '@mongreldb/kit';
 
 function resetKitTables() {
@@ -44,15 +33,8 @@ function resetKitTables() {
 	ctx.kit.deleteFrom(emergencyContacts).executeSync();
 }
 
-function resetLegacyTables() {
-	ctx.sqlite.exec(
-		'delete from travel_documents; delete from loyalty_programs; delete from card_benefits; delete from cards; delete from insurance_policies; delete from emergency_contacts; delete from trips; delete from users;'
-	);
-}
-
 beforeEach(() => {
 	resetKitTables();
-	resetLegacyTables();
 });
 
 afterAll(() => {
@@ -61,7 +43,7 @@ afterAll(() => {
 
 // Travel documents
 
-test('travel document CRUD encrypts number and syncs to legacy', () => {
+test('travel document CRUD encrypts number', () => {
 	const u = makeKitUser({ email: 'doc@x.c' });
 	const doc = profileRepo.createTravelDocument(Number(u.id), {
 		type: 'passport',
@@ -76,16 +58,9 @@ test('travel document CRUD encrypts number and syncs to legacy', () => {
 
 	const kitRow = ctx.kit
 		.selectFrom(travelDocuments)
-		.where(kitEq(travelDocuments.id, BigInt(doc.id)))
+		.where(eq(travelDocuments.id, BigInt(doc.id)))
 		.executeSync()[0];
 	expect(kitRow!.number).not.toBe('P1234567');
-
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleTravelDocuments)
-		.where(eq(drizzleTravelDocuments.id, BigInt(doc.id)))
-		.get()!;
-	expect(legacyRow.number).not.toBe('P1234567');
 
 	const listed = profileRepo.listTravelDocuments(Number(u.id));
 	expect(listed).toHaveLength(1);
@@ -107,13 +82,13 @@ test('travel document CRUD encrypts number and syncs to legacy', () => {
 	profileRepo.deleteTravelDocument(doc.id, Number(u.id));
 	expect(profileRepo.listTravelDocuments(Number(u.id))).toHaveLength(0);
 	expect(
-		ctx.db.select().from(drizzleTravelDocuments).where(eq(drizzleTravelDocuments.id, BigInt(doc.id))).get()
+		ctx.kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).executeSync()[0]
 	).toBeUndefined();
 });
 
 // Loyalty programs
 
-test('loyalty program CRUD validates balance and syncs to legacy', () => {
+test('loyalty program CRUD validates balance', () => {
 	const u = makeKitUser({ email: 'loyalty@x.c' });
 	const program = profileRepo.createLoyaltyProgram(Number(u.id), {
 		programName: 'United MileagePlus',
@@ -124,12 +99,11 @@ test('loyalty program CRUD validates balance and syncs to legacy', () => {
 	expect(program.programName).toBe('United MileagePlus');
 	expect(program.balance).toBe(5000);
 
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleLoyaltyPrograms)
-		.where(eq(drizzleLoyaltyPrograms.id, BigInt(program.id)))
-		.get()!;
-	expect(legacyRow.programName).toBe('United MileagePlus');
+	const stored = ctx.kit
+		.selectFrom(loyaltyPrograms)
+		.where(eq(loyaltyPrograms.id, BigInt(program.id)))
+		.executeSync()[0];
+	expect(stored!.program_name).toBe('United MileagePlus');
 
 	profileRepo.updateLoyaltyProgram(program.id, Number(u.id), {
 		programName: 'Delta SkyMiles',
@@ -152,7 +126,7 @@ test('loyalty program CRUD validates balance and syncs to legacy', () => {
 
 // Cards
 
-test('card CRUD sanitizes last4 and syncs to legacy', () => {
+test('card CRUD sanitizes last4', () => {
 	const u = makeKitUser({ email: 'card@x.c' });
 	const card = profileRepo.createCard(Number(u.id), {
 		nickname: 'Sapphire',
@@ -162,12 +136,11 @@ test('card CRUD sanitizes last4 and syncs to legacy', () => {
 	});
 	expect(card.last4).toBe('1234');
 
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleCards)
-		.where(eq(drizzleCards.id, BigInt(card.id)))
-		.get()!;
-	expect(legacyRow.last4).toBe('1234');
+	const stored = ctx.kit
+		.selectFrom(cards)
+		.where(eq(cards.id, BigInt(card.id)))
+		.executeSync()[0];
+	expect(stored!.last4).toBe('1234');
 
 	profileRepo.updateCard(card.id, Number(u.id), {
 		nickname: 'Freedom',
@@ -183,12 +156,12 @@ test('card CRUD sanitizes last4 and syncs to legacy', () => {
 
 	profileRepo.deleteCard(card.id, Number(u.id));
 	expect(profileRepo.listCards(Number(u.id))).toHaveLength(0);
-	expect(ctx.db.select().from(drizzleCards).where(eq(drizzleCards.id, BigInt(card.id))).get()).toBeUndefined();
+	expect(ctx.kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]).toBeUndefined();
 });
 
 // Card benefits
 
-test('card benefit CRUD is scoped to card and syncs to legacy', () => {
+test('card benefit CRUD is scoped to card', () => {
 	const u = makeKitUser({ email: 'benefit@x.c' });
 	const card = profileRepo.createCard(Number(u.id), { nickname: 'Sapphire', network: 'visa' });
 	const benefit = profileRepo.createCardBenefit(Number(u.id), card.id, {
@@ -200,12 +173,11 @@ test('card benefit CRUD is scoped to card and syncs to legacy', () => {
 	expect(benefit.benefitType).toBe('trip_delay');
 	expect(benefit.coverageAmount).toBe(50000);
 
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleCardBenefits)
-		.where(eq(drizzleCardBenefits.id, BigInt(benefit.id)))
-		.get()!;
-	expect(legacyRow.benefitType).toBe('trip_delay');
+	const stored = ctx.kit
+		.selectFrom(cardBenefits)
+		.where(eq(cardBenefits.id, BigInt(benefit.id)))
+		.executeSync()[0];
+	expect(stored!.benefit_type).toBe('trip_delay');
 
 	const benefits = profileRepo.listBenefitsForCard(card.id);
 	expect(benefits).toHaveLength(1);
@@ -228,7 +200,7 @@ test('card benefit CRUD is scoped to card and syncs to legacy', () => {
 
 // Insurance policies
 
-test('insurance policy CRUD supports trip link and syncs to legacy', () => {
+test('insurance policy CRUD supports trip link', () => {
 	const u = makeKitUser({ email: 'ins@x.c' });
 	createTrip(Number(u.id), { name: 'Dummy' });
 	const trip = createTrip(Number(u.id), { name: 'Tokyo' });
@@ -245,13 +217,12 @@ test('insurance policy CRUD supports trip link and syncs to legacy', () => {
 	expect(policy.provider).toBe('Acme');
 	expect(policy.tripId).toBe(trip.id);
 
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleInsurancePolicies)
-		.where(eq(drizzleInsurancePolicies.id, BigInt(policy.id)))
-		.get()!;
-	expect(legacyRow.provider).toBe('Acme');
-	expect(legacyRow.tripId).toBe(trip.id);
+	const stored = ctx.kit
+		.selectFrom(insurancePolicies)
+		.where(eq(insurancePolicies.id, BigInt(policy.id)))
+		.executeSync()[0];
+	expect(stored!.provider).toBe('Acme');
+	expect(Number(stored!.trip_id)).toBe(trip.id);
 
 	profileRepo.detachInsurancePolicyFromTrip(Number(u.id), policy.id);
 	const afterDetach = profileRepo.getInsurancePolicyById(policy.id, Number(u.id))!;
@@ -266,7 +237,7 @@ test('insurance policy CRUD supports trip link and syncs to legacy', () => {
 
 // Emergency contacts
 
-test('emergency contact CRUD clears other primary and syncs to legacy', () => {
+test('emergency contact CRUD clears other primary', () => {
 	const u = makeKitUser({ email: 'ec@x.c' });
 	const c1 = profileRepo.createEmergencyContact(Number(u.id), {
 		name: 'Sam Doe',
@@ -284,12 +255,11 @@ test('emergency contact CRUD clears other primary and syncs to legacy', () => {
 	expect(c2.isPrimary).toBe(true);
 	expect(profileRepo.getEmergencyContactById(c1.id, Number(u.id))!.isPrimary).toBe(false);
 
-	const legacyRow = ctx.db
-		.select()
-		.from(drizzleEmergencyContacts)
-		.where(eq(drizzleEmergencyContacts.id, BigInt(c2.id)))
-		.get()!;
-	expect(legacyRow.isPrimary).toBe(true);
+	const stored = ctx.kit
+		.selectFrom(emergencyContacts)
+		.where(eq(emergencyContacts.id, BigInt(c2.id)))
+		.executeSync()[0];
+	expect(stored!.is_primary).toBe(true);
 
 	const listed = profileRepo.listEmergencyContacts(Number(u.id));
 	expect(listed[0]!.id).toBe(c2.id);

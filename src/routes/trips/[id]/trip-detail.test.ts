@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -25,26 +25,19 @@ import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
 import { addComment } from '$lib/server/tripComments';
 import {
-	users,
 	trips,
 	segments,
 	insurancePolicies,
-	fareProviders,
 	reminders,
 	tripComments,
 	auditLogs,
-	tripCompanions,
-	tripShares,
 	tripTemplates,
 	tripHomeTasks,
 	tripMedications,
 	tripEntryRequirements,
 	tripImportantItems,
-	tripExpenseAttachments,
-	tripExpenses
+	tripExpenseAttachments
 } from '$lib/server/db/mongrelSchema';
-import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from '$lib/server/db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { upsertCustomReminder } from '$lib/server/reminders';
@@ -67,11 +60,10 @@ function formEvent(user: { id: number }, tripId: number, body: FormData) {
 }
 
 test('load includes fare watches with segment titles', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
-	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
-	db.insert(insurancePolicies).values({ userId: u.id, provider: 'X', tripId: t.id }).run();
+	makeFareProvider(kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
+	kit.insertInto(insurancePolicies).values({ user_id: BigInt(u.id), provider: 'X', trip_id: BigInt(t.id) }).executeSync();
 
 	const result = load(event(u, t.id)) as { watches: unknown[] };
 	expect(Array.isArray(result.watches)).toBe(true);
@@ -79,7 +71,6 @@ test('load includes fare watches with segment titles', () => {
 
 
 test('load includes attached insurance policies and user cards for the owner', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'td@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	makeFareProvider(kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
@@ -102,7 +93,6 @@ test('load includes attached insurance policies and user cards for the owner', (
 });
 
 test('load separates available unattached policies from attached policies', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'td2@x.c', passwordHash: 'x', displayName: 'U' });
 	const t1 = makeTrip(kit, u.id, { name: 'T1' });
 	const t2 = makeTrip(kit, u.id, { name: 'T2' });
@@ -118,7 +108,6 @@ test('load separates available unattached policies from attached policies', () =
 });
 
 test('attachPolicy action links an existing policy to the trip', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ap@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const pol = makeInsurancePolicy(kit, u.id, { provider: 'P', tripId: null });
@@ -132,12 +121,11 @@ test('attachPolicy action links an existing policy to the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).get();
-	expect(row?.tripId).toBe(t.id);
+	const row = kit.selectFrom(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).executeSync()[0];
+	expect(Number(row?.trip_id)).toBe(t.id);
 });
 
 test('attachPolicy action rejects a policy owned by another user', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'ap-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'ap-other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -151,7 +139,6 @@ test('attachPolicy action rejects a policy owned by another user', async () => {
 });
 
 test('detachPolicy action unlinks a policy from the trip', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'dp@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const pol = makeInsurancePolicy(kit, u.id, { provider: 'P', tripId: t.id });
@@ -165,12 +152,11 @@ test('detachPolicy action unlinks a policy from the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).get();
-	expect(row?.tripId).toBeNull();
+	const row = kit.selectFrom(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).executeSync()[0];
+	expect(row?.trip_id).toBe(0n);
 });
 
 test('addComment action creates a comment on the trip', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'cc@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -183,13 +169,12 @@ test('addComment action creates a comment on the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripComments).where(eq(tripComments.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripComments).where(eq(tripComments.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].body).toBe('Nice trip');
 });
 
 test('deleteComment action removes the users own comment', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'dc@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = addComment(u.id, t.id, 'X');
@@ -203,23 +188,21 @@ test('deleteComment action removes the users own comment', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(c.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(c.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('delete action removes trip-level reminders', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'Del', startDate: '2099-01-01' });
 	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
-	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(1);
+	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(1);
 
 	_deleteTrip(u.id, t.id);
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
-	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(0);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
+	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(0);
 });
 
 test('duplicateSegment action copies a segment and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ds@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -240,21 +223,20 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(2);
-	const copy = rows.find((r: Record<string, unknown>) => r.id !== s.id)!;
+	const copy = rows.find((r) => Number(r.id) !== s.id)!;
 	expect(copy.title).toBe('City tour');
-	expect(copy.startAt).toBe('2026-09-02T14:00:00.000Z');
-	expect(copy.endAt).toBe('2026-09-02T16:00:00.000Z');
-	expect(copy.confirmationNumber).toBeNull();
+	expect(copy.start_at).toBe('2026-09-02T14:00:00.000Z');
+	expect(copy.end_at).toBe('2026-09-02T16:00:00.000Z');
+	expect(copy.confirmation_number).toBe('');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(copy.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, copy.id)).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('duplicate');
 });
 
 test('duplicateSegment action rejects invalid segment id', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -268,7 +250,6 @@ test('duplicateSegment action rejects invalid segment id', async () => {
 });
 
 test('duplicateSegment action rejects a non-editor', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -289,7 +270,6 @@ test('duplicateSegment action rejects a non-editor', async () => {
 });
 
 test('load strips companion notes from shared viewers', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'co@x.c', passwordHash: 'x', displayName: 'O' });
 	const reader = makeUser(kit, { email: 'cr@x.c', passwordHash: 'x', displayName: 'R' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -313,7 +293,6 @@ test('load strips companion notes from shared viewers', () => {
 });
 
 test('setSegmentStatus action updates segment status for an editor', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -332,12 +311,11 @@ test('setSegmentStatus action updates segment status for an editor', async () =>
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0];
 	expect(row?.status).toBe('checked_in');
 });
 
 test('setSegmentStatus action rejects invalid status', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -355,7 +333,6 @@ test('setSegmentStatus action rejects invalid status', async () => {
 });
 
 test('setSegmentStatus action rejects a non-editor', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -374,7 +351,6 @@ test('setSegmentStatus action rejects a non-editor', async () => {
 });
 
 test('moveSegmentDate action moves a segment to a new local date', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -394,14 +370,12 @@ test('moveSegmentDate action moves a segment to a new local date', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
-	expect(row?.startAt).toBe('2026-09-15T03:30:00.000Z');
-	expect(row?.endAt).toBe('2026-09-15T04:30:00.000Z');
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0];
+	expect(row?.start_at).toBe('2026-09-15T03:30:00.000Z');
+	expect(row?.end_at).toBe('2026-09-15T04:30:00.000Z');
 });
 
 test('saveTripTemplate action saves a template and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = usersRepo.createUser({
 		email: 'stpl@x.c',
 		password_hash: 'x',
@@ -420,12 +394,10 @@ test('saveTripTemplate action saves a template and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripTemplates).where(eq(tripTemplates.user_id, BigInt(u.id))).all()).toHaveLength(1);
-	expect(kit.selectFrom(kitTripTemplates).where(kitEq(kitTripTemplates.user_id, u.id)).executeSync()).toHaveLength(1);
+	expect(kit.selectFrom(tripTemplates).where(eq(tripTemplates.user_id, u.id)).executeSync()).toHaveLength(1);
 });
 
 test('addHomeTask action creates a task and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -437,11 +409,10 @@ test('addHomeTask action creates a task and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.trip_id, BigInt(t.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(tripHomeTasks).where(eq(tripHomeTasks.trip_id, BigInt(t.id))).executeSync()).toHaveLength(1);
 });
 
 test('addMedication action creates a schedule and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -453,11 +424,10 @@ test('addMedication action creates a schedule and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripMedications).where(eq(tripMedications.trip_id, BigInt(t.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(tripMedications).where(eq(tripMedications.trip_id, BigInt(t.id))).executeSync()).toHaveLength(1);
 });
 
 test('addEntryRequirement action creates a requirement and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -470,13 +440,12 @@ test('addEntryRequirement action creates a requirement and redirects', async () 
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripEntryRequirements).where(eq(tripEntryRequirements.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].status).toBe('in_progress');
 });
 
 test('addImportantItem action creates an item and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -488,13 +457,12 @@ test('addImportantItem action creates an item and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripImportantItems).where(eq(tripImportantItems.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(tripImportantItems).where(eq(tripImportantItems.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
-	expect(rows[0].serialNumber).toBe('ABC123');
+	expect(rows[0].serial_number).toBe('ABC123');
 });
 
 test('addAttachment action uploads a receipt and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const e = makeExpense(kit, { tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' });
@@ -507,5 +475,5 @@ test('addAttachment action uploads a receipt and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expense_id, BigInt(e.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(tripExpenseAttachments).where(eq(tripExpenseAttachments.expense_id, BigInt(e.id))).executeSync()).toHaveLength(1);
 });

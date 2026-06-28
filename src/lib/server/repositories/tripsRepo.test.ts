@@ -1,32 +1,28 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as tripsRepo from './tripsRepo';
 import * as usersRepo from './usersRepo';
 import {
-	users as drizzleUsers,
-	trips as drizzleTrips,
-	tripShares as drizzleTripShares,
-	tripComments as drizzleTripComments,
-	groups as drizzleGroups,
-	groupMembers as drizzleGroupMembers
+	users,
+	trips,
+	tripShares,
+	tripComments,
+	groups,
+	groupMembers
 } from '$lib/server/db/mongrelSchema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	tripShares as kitTripShares,
-	tripComments as kitTripComments,
-	groups as kitGroups,
-	groupMembers as kitGroupMembers
-} from '$lib/server/db/mongrelSchema';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	const u = usersRepo.createUser({
@@ -44,40 +40,33 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(drizzleTripComments).run();
-	db.delete(drizzleTripShares).run();
-	db.delete(drizzleGroupMembers).run();
-	db.delete(drizzleGroups).run();
-	db.delete(drizzleTrips).run();
-	db.delete(drizzleUsers).run();
-	kit.deleteFrom(kitTripComments).executeSync();
-	kit.deleteFrom(kitTripShares).executeSync();
-	kit.deleteFrom(kitGroupMembers).executeSync();
-	kit.deleteFrom(kitGroups).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(tripComments).executeSync();
+	kit.deleteFrom(tripShares).executeSync();
+	kit.deleteFrom(groupMembers).executeSync();
+	kit.deleteFrom(groups).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
-test('CRUD trips and mirror to legacy', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('CRUD trips', () => {
+	const kit = kitDb();
 	const owner = makeUser('owner@x.c');
 	const t = makeTrip(owner.id, 'Tokyo');
 	expect(t.name).toBe('Tokyo');
 	expect(tripsRepo.getTripById(t.id)?.name).toBe('Tokyo');
 	expect(tripsRepo.listTripsForUser(owner.id)).toHaveLength(1);
 
-	const legacy = db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get();
-	expect(legacy?.name).toBe('Tokyo');
+	const stored = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0];
+	expect(stored?.name).toBe('Tokyo');
 
 	const updated = tripsRepo.updateTrip(t.id, { name: 'Kyoto' });
 	expect(updated?.name).toBe('Kyoto');
-	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get()?.name).toBe('Kyoto');
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]?.name).toBe('Kyoto');
 
 	tripsRepo.deleteTrip(t.id);
 	expect(tripsRepo.getTripById(t.id)).toBeNull();
-	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('shares and permission helpers', () => {
@@ -110,22 +99,18 @@ test('group shares resolve via group membership', () => {
 	expect(tripsRepo.listEditableTripIdsForUser(member.id)).toContain(t.id);
 });
 
-test('groups and members are mirrored to legacy', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('groups and members persist', () => {
+	const kit = kitDb();
 	const owner = makeUser('owner@x.c');
 	const member = makeUser('member@x.c');
 	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
 	expect(tripsRepo.getGroupById(g.id)?.name).toBe('team');
 	expect(tripsRepo.listGroupsForUser(owner.id)).toHaveLength(1);
-	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, BigInt(g.id))).get()?.name).toBe('team');
+	expect(kit.selectFrom(groups).where(eq(groups.id, BigInt(g.id))).executeSync()[0]?.name).toBe('team');
 
 	tripsRepo.addGroupMember(g.id, member.id);
 	expect(
-		db
-			.select()
-			.from(drizzleGroupMembers)
-			.where(eq(drizzleGroupMembers.group_id, BigInt(g.id)))
-			.all()
+		kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()
 	).toHaveLength(1);
 
 	tripsRepo.updateGroup(g.id, { name: 'crew' });
@@ -133,31 +118,23 @@ test('groups and members are mirrored to legacy', () => {
 
 	tripsRepo.removeGroupMember(g.id, member.id);
 	expect(
-		db
-			.select()
-			.from(drizzleGroupMembers)
-			.where(eq(drizzleGroupMembers.group_id, BigInt(g.id)))
-			.all()
+		kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()
 	).toHaveLength(0);
 
 	tripsRepo.deleteGroup(g.id);
 	expect(tripsRepo.getGroupById(g.id)).toBeNull();
-	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, BigInt(g.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(groups).where(eq(groups.id, BigInt(g.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('comments and public/calendar tokens', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const owner = makeUser('owner@x.c');
 	const t = makeTrip(owner.id, 'Tokens');
 
 	tripsRepo.createComment(owner.id, t.id, 'First note');
 	expect(tripsRepo.listCommentsForTrip(t.id)).toHaveLength(1);
 	expect(
-		db
-			.select()
-			.from(drizzleTripComments)
-			.where(eq(drizzleTripComments.trip_id, BigInt(t.id)))
-			.all()
+		kit.selectFrom(tripComments).where(eq(tripComments.trip_id, BigInt(t.id))).executeSync()
 	).toHaveLength(1);
 
 	tripsRepo.updateTrip(t.id, { publicToken: 'abc123', publicShowDetails: true });
@@ -167,14 +144,13 @@ test('comments and public/calendar tokens', () => {
 	expect(tripsRepo.getTripByCalendarToken('cal456')?.id).toBe(t.id);
 });
 
-test('legacy fallback read for trips', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('repo reads see directly inserted trips', () => {
+	const kit = kitDb();
 	const owner = makeUser('owner@x.c');
-	const legacy = db
-		.insert(drizzleTrips)
-		.values({ ownerId: owner.id, name: 'Legacy Trip' })
-		.returning()
-		.get();
-	const found = tripsRepo.getTripById(legacy.id);
-	expect(found?.name).toBe('Legacy Trip');
+	const inserted = kit
+		.insertInto(trips)
+		.values({ owner_id: BigInt(owner.id), name: 'Direct Trip' })
+		.executeSync();
+	const found = tripsRepo.getTripById(Number(inserted.id));
+	expect(found?.name).toBe('Direct Trip');
 });

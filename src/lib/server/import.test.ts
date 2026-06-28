@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -11,22 +11,17 @@ vi.mock('./db', async () => {
 import { parseJson, parseCsv, importTrips } from './import';
 import { exportTripsCsv } from './export';
 import { users, trips, segments, reminders, auditLogs } from './db/mongrelSchema';
-import { users as kitUsers, trips as kitTrips, segments as kitSegments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(reminders).run();
-	db.delete(segments).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	db.delete(auditLogs).run();
-	kit.deleteFrom(kitSegments).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(reminders).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function makeUser(email = 'u@x.c') {
@@ -91,7 +86,7 @@ test('parseCsv handles commas inside quoted values', () => {
 });
 
 test('importTrips creates trips and segments', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -118,28 +113,28 @@ test('importTrips creates trips and segments', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors).toHaveLength(0);
-	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Tokyo');
-	const s = db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).get();
+	const s = kit.selectFrom(segments).where(eq(segments.trip_id, t!.id)).executeSync()[0];
 	expect(s).toBeDefined();
 	expect(s!.type).toBe('flight');
-	expect(db.select().from(reminders).all()).toHaveLength(1);
-	expect(db.select().from(auditLogs).all()).toHaveLength(1);
+	expect(kit.selectFrom(reminders).executeSync()).toHaveLength(1);
+	expect(kit.selectFrom(auditLogs).executeSync()).toHaveLength(1);
 });
 
 test('importTrips mints public token for public visibility', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser();
 	importTrips(Number(u.id), {
 		trips: [{ name: 'Public Trip', defaultVisibility: 'public' }]
 	});
-	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
-	expect(t!.publicToken).toBeTruthy();
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
+	expect(t!.public_token).toBeTruthy();
 });
 
 test('importTrips collects validation errors without creating invalid trips', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -149,11 +144,11 @@ test('importTrips collects validation errors without creating invalid trips', ()
 	});
 	expect(result.imported).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()).toHaveLength(1);
 });
 
 test('importTrips skips invalid segments but keeps the trip', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -169,14 +164,14 @@ test('importTrips skips invalid segments but keeps the trip', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
-	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).all()).toHaveLength(1);
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
+	expect(kit.selectFrom(segments).where(eq(segments.trip_id, t!.id)).executeSync()).toHaveLength(1);
 });
 
 test('importTrips dryRun validates and previews without writing', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('dry@x.c');
-	const beforeTrips = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all().length;
+	const beforeTrips = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync().length;
 	const result = importTrips(
 		Number(u.id),
 		{
@@ -194,8 +189,8 @@ test('importTrips dryRun validates and previews without writing', () => {
 	expect(result.segmentCount).toBe(1);
 	expect(result.preview).toHaveLength(1);
 	expect(result.preview![0].name).toBe('Dry');
-	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all().length).toBe(beforeTrips);
-	expect(db.select().from(segments).all().length).toBe(0);
+	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync().length).toBe(beforeTrips);
+	expect(kit.selectFrom(segments).executeSync().length).toBe(0);
 });
 
 test('parseCsv groups multi-segment rows into one trip', () => {
@@ -212,7 +207,7 @@ test('parseCsv groups multi-segment rows into one trip', () => {
 });
 
 test('csv round-trip preserves multi-segment trips', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('round@x.c');
 	const t = makeTrip(Number(u.id), 'RT');
 	makeSegment(t.id, 'flight', 'Out', '2026-08-01T10:00:00Z');
@@ -222,5 +217,5 @@ test('csv round-trip preserves multi-segment trips', () => {
 	const result = importTrips(Number(u.id), parseCsv(csv));
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(2);
-	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(2);
+	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()).toHaveLength(2);
 });

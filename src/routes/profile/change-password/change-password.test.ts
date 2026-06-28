@@ -1,10 +1,7 @@
 import { test, expect, vi } from 'vitest';
 import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any
-}));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,25 +9,26 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load, actions } from './+page.server';
-import { users } from '$lib/server/db/mongrelSchema';
+import { users, sessions } from '$lib/server/db/mongrelSchema';
 import { hashPassword, createSession } from '$lib/server/auth';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../../tests/kitHelpers';
-import { users as kitUsers, sessions as kitSessions } from '$lib/server/db/mongrelSchema';
 
-function kitDb() {
-	return (ctx as any).kit as import('@mongreldb/kit').KitDatabase;
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 }
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from sessions; delete from users;');
-	kitDb().deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(sessions).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('load redirects when password change is not required', () => {
-	const u = makeKitUser({ email: 'u@x.c', password_hash: 'x', display_name: 'U' });
+	const kit = kitDb();
+	makeKitUser({ email: 'u@x.c', password_hash: 'x', display_name: 'U' });
 	try {
-		load({ locals: { user: ctx.db.select().from(users).get() } } as any);
+		load({ locals: { user: kit.selectFrom(users).executeSync()[0] } } as any);
 		expect.fail('should have thrown');
 	} catch (e: any) {
 		expect(e.status).toBe(303);
@@ -39,6 +37,7 @@ test('load redirects when password change is not required', () => {
 });
 
 test('action completes a required password change', async () => {
+	const kit = kitDb();
 	const u = makeKitUser({
 		email: 'u@x.c',
 		password_hash: await hashPassword('oldpassword'),
@@ -54,13 +53,13 @@ test('action completes a required password change', async () => {
 	try {
 		await actions.default({
 			request: { formData: async () => form },
-			locals: { user: ctx.db.select().from(users).get() },
+			locals: { user: kit.selectFrom(users).executeSync()[0] },
 			cookies: { get: () => token, set: vi.fn() }
 		} as any);
 	} catch (e: any) {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(updated.mustResetPassword).toBe(false);
+	const updated = kit.selectFrom(users).where(eq(users.id, u.id)).executeSync()[0]!;
+	expect(updated.must_reset_password).toBe(false);
 });

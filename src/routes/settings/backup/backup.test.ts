@@ -9,7 +9,7 @@ import { KitDatabase } from '@mongreldb/kit';
 import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
 import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());

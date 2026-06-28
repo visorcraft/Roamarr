@@ -1,7 +1,7 @@
 import { and, eq } from '@mongreldb/kit';
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -20,13 +20,16 @@ import { actions as tripActions } from './[id]/+page.server';
 import { makeLocals, makeFormData } from '../../../tests/eventHelpers';
 
 beforeEach(() => {
-	(ctx as { sqlite: any }).sqlite.exec(
-		'delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users; delete from cards; delete from geonames_cities;'
-	);
+	kit.deleteFrom(reminders).executeSync();
+	kit.deleteFrom(tripShares).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(cards).executeSync();
+	kit.deleteFrom(users).executeSync();
+	kit.deleteFrom(geonamesCities).executeSync();
 });
 
 test('flight start_at is stored as a UTC instant; foreign card rejected', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
@@ -37,7 +40,7 @@ test('flight start_at is stored as a UTC instant; foreign card rejected', () => 
 		localStart: '2026-07-01T15:00:00',
 		startTz: 'America/New_York'
 	});
-	expect(db.select().from(segments).get()!.startAt).toBe('2026-07-01T19:00:00.000Z');
+	expect(kit.selectFrom(segments).executeSync()[0]!.start_at).toBe('2026-07-01T19:00:00.000Z');
 	expect(() =>
 		addSegment(a.id, t.id, {
 			type: 'flight',
@@ -50,7 +53,6 @@ test('flight start_at is stored as a UTC instant; foreign card rejected', () => 
 });
 
 test('update segment edits fields and re-arms reminders when flight time changes', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'update-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
@@ -59,13 +61,12 @@ test('update segment edits fields and re-arms reminders when flight time changes
 		localStart: '2026-07-01T15:00:00',
 		startTz: 'America/New_York'
 	});
-	const initialReminder = db
-		.select()
-		.from(reminders)
+	const initialReminder = kit
+		.selectFrom(reminders)
 		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id))))
-		.get();
+		.executeSync()[0];
 	expect(initialReminder).toBeTruthy();
-	expect(initialReminder!.fireAt).toBe('2026-06-30T19:00:00.000Z');
+	expect(initialReminder!.fire_at).toBe('2026-06-30T19:00:00.000Z');
 
 	const updated = updateSegment(a.id, t.id, seg.id, {
 		title: 'UA1 Rerouted',
@@ -81,17 +82,15 @@ test('update segment edits fields and re-arms reminders when flight time changes
 	expect(updated.confirmationNumber).toBe('ABC789');
 	expect(updated.detailsJson).toBe('{"gate":"A1"}');
 
-	const rearmed = db
-		.select()
-		.from(reminders)
+	const rearmed = kit
+		.selectFrom(reminders)
 		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id))))
-		.get();
+		.executeSync()[0];
 	expect(rearmed).toBeTruthy();
-	expect(rearmed!.fireAt).toBe('2026-07-01T14:00:00.000Z');
+	expect(rearmed!.fire_at).toBe('2026-07-01T14:00:00.000Z');
 });
 
 test('update segment is ownership-checked', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'owner-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'owner-b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
@@ -120,7 +119,6 @@ test('update segment is ownership-checked', () => {
 });
 
 test('extra segment types can be added and do not arm flight reminders', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'extra-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 
@@ -172,7 +170,6 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 }
 
 test('add action validates required fields and timezone', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'act-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 
@@ -189,11 +186,10 @@ test('add action validates required fields and timezone', async () => {
 	expect(result.data.errors.title).toBe('title is required');
 	expect(result.data.errors.localStart).toBe('localStart must be a valid datetime');
 	expect(result.data.errors.startTz).toBe('startTz must be a valid IANA timezone');
-	expect(db.select().from(segments).all()).toHaveLength(0);
+	expect(kit.selectFrom(segments).executeSync()).toHaveLength(0);
 });
 
 test('add action creates a segment with valid data', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'act-b@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const form = makeFormData({
@@ -205,11 +201,10 @@ test('add action creates a segment with valid data', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).all()).toHaveLength(1);
+	expect(kit.selectFrom(segments).executeSync()).toHaveLength(1);
 });
 
 test('add action stores endTz and converts endAt to UTC', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'act-endtz@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const form = makeFormData({
@@ -224,15 +219,14 @@ test('add action stores endTz and converts endAt to UTC', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
-	expect(seg.startAt).toBe('2026-07-01T12:00:00.000Z');
-	expect(seg.startTz).toBe('America/New_York');
-	expect(seg.endAt).toBe('2026-07-01T07:00:00.000Z');
-	expect(seg.endTz).toBe('Asia/Tokyo');
+	const seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
+	expect(seg.start_at).toBe('2026-07-01T12:00:00.000Z');
+	expect(seg.start_tz).toBe('America/New_York');
+	expect(seg.end_at).toBe('2026-07-01T07:00:00.000Z');
+	expect(seg.end_tz).toBe('Asia/Tokyo');
 });
 
 test('delete action validates segmentId', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'act-c@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const form = makeFormData({ segmentId: 'abc' });
@@ -245,7 +239,6 @@ test('delete action validates segmentId', async () => {
 });
 
 test('update action validates segmentId and required fields', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'act-d@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
@@ -269,12 +262,11 @@ test('update action validates segmentId and required fields', async () => {
 });
 
 test('update action stores country, city, and venue', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'city@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
-	db.insert(geonamesCities)
-		.values({ geonameId: 1, name: 'Paris', asciiName: 'Paris', countryCode: 'FR', lat: 48.85, lng: 2.35 })
-		.run();
+	kit.insertInto(geonamesCities)
+		.values({ geoname_id: 1n, name: 'Paris', ascii_name: 'Paris', country_code: 'FR', lat: 48.85, lng: 2.35 })
+		.executeSync();
 
 	const seg = addSegment(a.id, t.id, {
 		type: 'hotel',
@@ -300,15 +292,14 @@ test('update action stores country, city, and venue', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!;
-	expect(row.countryCode).toBe('FR');
-	expect(row.cityName).toBe('Paris');
-	expect(row.cityLat).toBe(48.85);
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]!;
+	expect(row.country_code).toBe('FR');
+	expect(row.city_name).toBe('Paris');
+	expect(row.city_lat).toBe(48.85);
 	expect(row.venue).toBe('Grand Hotel');
 });
 
 test('shared editor can add, update and delete segments; read-only viewer cannot', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const owner = makeUser(kit, { email: 'seg-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const editor = makeUser(kit, { email: 'seg-editor@x.c', passwordHash: 'x', displayName: 'E' });
 	const reader = makeUser(kit, { email: 'seg-reader@x.c', passwordHash: 'x', displayName: 'R' });
@@ -325,7 +316,7 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
+	const seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
 	expect(seg.title).toBe('UA1');
 
 	await expect(addSegmentAction!(makeAddEvent(addForm, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
@@ -342,19 +333,18 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!.title).toBe('UA1 Updated');
+	expect(kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]!.title).toBe('UA1 Updated');
 
 	const deleteForm = makeFormData({ segmentId: String(seg.id) });
 	await expect(actions.delete(makeEvent(deleteForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]).toBeUndefined();
 });
 
 
 test('add and update actions store meeting point and rally time', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'meet-act@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 
@@ -370,9 +360,9 @@ test('add and update actions store meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	let seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
-	expect(seg.meetingPoint).toBe('Hotel lobby');
-	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+	let seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
+	expect(seg.meeting_point).toBe('Hotel lobby');
+	expect(seg.meeting_at).toBe('2026-07-01T13:30:00.000Z');
 
 	const updateForm = makeFormData({
 		segmentId: String(seg.id),
@@ -386,13 +376,12 @@ test('add and update actions store meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	seg = db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!;
-	expect(seg.meetingPoint).toBe('Lobby entrance');
-	expect(seg.meetingAt).toBe('2026-07-01T13:45:00.000Z');
+	seg = kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]!;
+	expect(seg.meeting_point).toBe('Lobby entrance');
+	expect(seg.meeting_at).toBe('2026-07-01T13:45:00.000Z');
 });
 
 test('flight add action stores meeting point and rally time', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'flight-meet@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 
@@ -407,14 +396,13 @@ test('flight add action stores meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
+	const seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
 	expect(seg.type).toBe('flight');
-	expect(seg.meetingPoint).toBe('Gate A12');
-	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+	expect(seg.meeting_point).toBe('Gate A12');
+	expect(seg.meeting_at).toBe('2026-07-01T13:30:00.000Z');
 });
 
 test('rental_car add action stores meeting point and rally time', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'car-meet@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 
@@ -431,14 +419,13 @@ test('rental_car add action stores meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
+	const seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
 	expect(seg.type).toBe('rental_car');
-	expect(seg.meetingPoint).toBe('Rental counter');
-	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
+	expect(seg.meeting_point).toBe('Rental counter');
+	expect(seg.meeting_at).toBe('2026-07-01T13:30:00.000Z');
 });
 
 test('update action attaches an owned card and rejects a foreign card', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'card-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'card-b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
@@ -462,7 +449,7 @@ test('update action attaches an owned card and rejects a foreign card', async ()
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!.cardId).toBe(aCard.id);
+	expect(Number(kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]!.card_id)).toBe(aCard.id);
 
 	const badForm = makeFormData({
 		segmentId: String(seg.id),
@@ -484,7 +471,6 @@ function makeTripEvent(user: { id: number }, body: FormData, tripId: number) {
 }
 
 test('segmentReminder action creates a custom reminder for a segment', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'rem-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
@@ -498,11 +484,10 @@ test('segmentReminder action creates a custom reminder for a segment', async () 
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const rem = db
-		.select()
-		.from(reminders)
+	const rem = kit
+		.selectFrom(reminders)
 		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id)), eq(reminders.kind, 'custom')))
-		.get();
+		.executeSync()[0];
 	expect(rem).toBeTruthy();
-	expect(rem!.fireAt).toBe('2026-07-01T14:00:00.000Z');
+	expect(rem!.fire_at).toBe('2026-07-01T14:00:00.000Z');
 });

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,10 +12,8 @@ import { makeUser, makeGroup, makeGroupMember } from '../../../tests/helpers';
 
 
 import { load } from './+page.server';
-import { users, groups, groupMembers } from '$lib/server/db/mongrelSchema';
 
 test('load includes groups the user owns and groups they belong to', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 

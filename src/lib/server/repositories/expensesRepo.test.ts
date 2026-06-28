@@ -1,31 +1,28 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as expensesRepo from './expensesRepo';
 import * as usersRepo from './usersRepo';
 import * as tripsRepo from './tripsRepo';
 import {
-	users as drizzleUsers,
-	trips as drizzleTrips,
-	tripExpenses as drizzleTripExpenses,
-	tripExpenseAttachments as drizzleTripExpenseAttachments,
-	tripBudgetCategories as drizzleTripBudgetCategories
+	users,
+	trips,
+	tripExpenses,
+	tripExpenseAttachments,
+	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	tripExpenses as kitTripExpenses,
-	tripExpenseAttachments as kitTripExpenseAttachments,
-	tripBudgetCategories as kitTripBudgetCategories
-} from '$lib/server/db/mongrelSchema';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -42,24 +39,16 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 beforeEach(() => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-
-	kit.deleteFrom(kitTripExpenseAttachments).executeSync();
-	kit.deleteFrom(kitTripExpenses).executeSync();
-	kit.deleteFrom(kitTripBudgetCategories).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
-
-	db.delete(drizzleTripExpenseAttachments).run();
-	db.delete(drizzleTripExpenses).run();
-	db.delete(drizzleTripBudgetCategories).run();
-	db.delete(drizzleTrips).run();
-	db.delete(drizzleUsers).run();
+	const kit = kitDb();
+	kit.deleteFrom(tripExpenseAttachments).executeSync();
+	kit.deleteFrom(tripExpenses).executeSync();
+	kit.deleteFrom(tripBudgetCategories).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('create/list/get/update/delete expense', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('expense@x.c');
 	const t = makeTrip(Number(u.id), 'Expenses Trip');
 
@@ -81,12 +70,11 @@ test('create/list/get/update/delete expense', () => {
 	expect(expensesRepo.listExpensesForTrip(t.id)).toHaveLength(1);
 	expect(expensesRepo.getExpenseById(created.id)?.description).toBe('Lunch');
 
-	const legacy = db
-		.select()
-		.from(drizzleTripExpenses)
-		.where(eq(drizzleTripExpenses.id, BigInt(created.id)))
-		.get();
-	expect(legacy?.description).toBe('Lunch');
+	const stored = kit
+		.selectFrom(tripExpenses)
+		.where(eq(tripExpenses.id, BigInt(created.id)))
+		.executeSync()[0];
+	expect(stored?.description).toBe('Lunch');
 
 	const updated = expensesRepo.updateExpense(created.id, {
 		description: 'Dinner',
@@ -101,23 +89,22 @@ test('create/list/get/update/delete expense', () => {
 	expect(updated?.amount).toBe(2500);
 	expect(updated?.splitAmong).toBe(JSON.stringify(['owner']));
 
-	const legacyUpdated = db
-		.select()
-		.from(drizzleTripExpenses)
-		.where(eq(drizzleTripExpenses.id, BigInt(created.id)))
-		.get();
-	expect(legacyUpdated?.description).toBe('Dinner');
+	const storedUpdated = kit
+		.selectFrom(tripExpenses)
+		.where(eq(tripExpenses.id, BigInt(created.id)))
+		.executeSync()[0];
+	expect(storedUpdated?.description).toBe('Dinner');
 
 	expect(expensesRepo.deleteExpense(created.id)).toBe(true);
 	expect(expensesRepo.getExpenseById(created.id)).toBeNull();
 	expect(expensesRepo.listExpensesForTrip(t.id)).toHaveLength(0);
 	expect(
-		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, BigInt(created.id))).get()
+		kit.selectFrom(tripExpenses).where(eq(tripExpenses.id, BigInt(created.id))).executeSync()[0]
 	).toBeUndefined();
 });
 
 test('attachment CRUD', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('attach@x.c');
 	const t = makeTrip(Number(u.id), 'Attachment Trip');
 	const e = expensesRepo.createExpense({
@@ -144,27 +131,25 @@ test('attachment CRUD', () => {
 	expect(expensesRepo.getAttachmentById(att.id)?.storageKey).toBe('abc-123');
 	expect(expensesRepo.getAttachmentByStorageKey('abc-123')?.id).toBe(att.id);
 
-	const legacy = db
-		.select()
-		.from(drizzleTripExpenseAttachments)
-		.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
-		.get();
-	expect(legacy?.filename).toBe('receipt.pdf');
+	const stored = kit
+		.selectFrom(tripExpenseAttachments)
+		.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+		.executeSync()[0];
+	expect(stored?.filename).toBe('receipt.pdf');
 
 	expect(expensesRepo.deleteAttachment(att.id)).toBe(true);
 	expect(expensesRepo.getAttachmentById(att.id)).toBeNull();
 	expect(expensesRepo.listAttachmentsForExpense(e.id)).toHaveLength(0);
 	expect(
-		db
-			.select()
-			.from(drizzleTripExpenseAttachments)
-			.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
-			.get()
+		kit
+			.selectFrom(tripExpenseAttachments)
+			.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 });
 
 test('budget category CRUD', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('budget@x.c');
 	const t = makeTrip(Number(u.id), 'Budget Trip');
 
@@ -181,38 +166,35 @@ test('budget category CRUD', () => {
 	expect(expensesRepo.getBudgetCategoryById(cat.id)?.category).toBe('food');
 	expect(expensesRepo.getBudgetCategoryByTripAndCategory(t.id, 'food')?.id).toBe(cat.id);
 
-	const legacy = db
-		.select()
-		.from(drizzleTripBudgetCategories)
-		.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
-		.get();
-	expect(legacy?.amount).toBe(10000);
+	const stored = kit
+		.selectFrom(tripBudgetCategories)
+		.where(eq(tripBudgetCategories.id, BigInt(cat.id)))
+		.executeSync()[0];
+	expect(Number(stored?.amount)).toBe(10000);
 
 	const updated = expensesRepo.updateBudgetCategory(cat.id, { amount: 20000, currency: 'EUR' });
 	expect(updated?.amount).toBe(20000);
 	expect(updated?.currency).toBe('EUR');
 
-	const legacyUpdated = db
-		.select()
-		.from(drizzleTripBudgetCategories)
-		.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
-		.get();
-	expect(legacyUpdated?.amount).toBe(20000);
+	const storedUpdated = kit
+		.selectFrom(tripBudgetCategories)
+		.where(eq(tripBudgetCategories.id, BigInt(cat.id)))
+		.executeSync()[0];
+	expect(Number(storedUpdated?.amount)).toBe(20000);
 
 	expect(expensesRepo.deleteBudgetCategory(cat.id)).toBe(true);
 	expect(expensesRepo.getBudgetCategoryById(cat.id)).toBeNull();
 	expect(expensesRepo.listBudgetCategoriesForTrip(t.id)).toHaveLength(0);
 	expect(
-		db
-			.select()
-			.from(drizzleTripBudgetCategories)
-			.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
-			.get()
+		kit
+			.selectFrom(tripBudgetCategories)
+			.where(eq(tripBudgetCategories.id, BigInt(cat.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 });
 
 test('cascade delete removes expenses, attachments, and budget categories with trip', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('cascade@x.c');
 	const t = makeTrip(Number(u.id), 'Cascade Trip');
 
@@ -249,20 +231,18 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 	expect(expensesRepo.getBudgetCategoryById(cat.id)).toBeNull();
 
 	expect(
-		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, BigInt(e.id))).get()
+		kit.selectFrom(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).executeSync()[0]
 	).toBeUndefined();
 	expect(
-		db
-			.select()
-			.from(drizzleTripExpenseAttachments)
-			.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
-			.get()
+		kit
+			.selectFrom(tripExpenseAttachments)
+			.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 	expect(
-		db
-			.select()
-			.from(drizzleTripBudgetCategories)
-			.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
-			.get()
+		kit
+			.selectFrom(tripBudgetCategories)
+			.where(eq(tripBudgetCategories.id, BigInt(cat.id)))
+			.executeSync()[0]
 	).toBeUndefined();
 });

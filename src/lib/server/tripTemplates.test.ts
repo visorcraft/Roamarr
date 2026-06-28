@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,22 +8,22 @@ vi.mock('./db', async () => {
 });
 
 import { createTripFromTemplate, listTripTemplates, saveTripTemplate } from './tripTemplates';
-import { auditLogs, segments, trips, users } from './db/mongrelSchema';
-import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { auditLogs, segments, trips, users, tripTemplates } from './db/mongrelSchema';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
+
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(auditLogs).run();
-	db.delete(segments).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitTripTemplates).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	const kit = getKit();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(tripTemplates).executeSync();
+	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function seed() {
@@ -41,42 +41,44 @@ function seed() {
 		destinationCityLat: 48.8566,
 		destinationCityLng: 2.3522
 	});
-	return { db: (ctx as { db: import('./db').DB }).db, u, t };
+	return { kit: getKit(), u, t };
 }
 
 test('saveTripTemplate snapshots trip segments and tags', () => {
-	const { db, u, t } = seed();
-	db.insert(segments)
+	const { kit, u, t } = seed();
+	kit
+		.insertInto(segments)
 		.values({
-			tripId: t.id,
+			trip_id: BigInt(t.id),
 			type: 'flight',
 			title: 'UA1',
-			startAt: '2026-08-01T10:00:00Z',
-			startTz: 'UTC',
+			start_at: '2026-08-01T10:00:00Z',
+			start_tz: 'UTC',
 			location: 'CDG'
-		})
-		.run();
+		} as never)
+		.executeSync();
 
 	const tpl = saveTripTemplate(Number(u.id), t.id, 'Paris template');
 	expect(tpl.name).toBe('Paris template');
 	expect(tpl.userId).toBe(Number(u.id));
 	expect(JSON.stringify(tpl.snapshot)).toContain('UA1');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(tpl.id))).all();
-	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(tpl.id))).executeSync();
+	expect(logs.map((l) => l.action)).toContain('create');
 });
 
 test('createTripFromTemplate copies segments and metadata', () => {
-	const { db, u, t } = seed();
-	db.insert(segments)
+	const { kit, u, t } = seed();
+	kit
+		.insertInto(segments)
 		.values({
-			tripId: t.id,
+			trip_id: BigInt(t.id),
 			type: 'hotel',
 			title: 'Hilton',
-			startAt: '2026-08-01T15:00:00Z',
-			startTz: 'UTC'
-		})
-		.run();
+			start_at: '2026-08-01T15:00:00Z',
+			start_tz: 'UTC'
+		} as never)
+		.executeSync();
 
 	const tpl = saveTripTemplate(Number(u.id), t.id, 'Copy');
 	const copy = createTripFromTemplate(Number(u.id), tpl.id, {
@@ -91,7 +93,7 @@ test('createTripFromTemplate copies segments and metadata', () => {
 	expect(copy.destinationCountryCode).toBe('FR');
 	expect(copy.startDate).toBe('2027-01-01');
 
-	const segs = db.select().from(segments).where(eq(segments.trip_id, BigInt(copy.id))).all();
+	const segs = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(copy.id))).executeSync();
 	expect(segs).toHaveLength(1);
 	expect(segs[0].title).toBe('Hilton');
 });

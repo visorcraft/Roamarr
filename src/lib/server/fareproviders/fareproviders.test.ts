@@ -1,15 +1,12 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('../db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('../db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	const { db, sqlite, kit } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit });
-	return { db, sqlite, kit };
+	Object.assign(ctx, freshDb());
+	return ctx;
 });
 const delivered = vi.hoisted(() => [] as Array<{ uid: number; m: any }>);
 vi.mock('../notify', () => ({
@@ -17,13 +14,10 @@ vi.mock('../notify', () => ({
 }));
 
 beforeEach(() => {
-	(ctx as { sqlite: any }).sqlite.exec(
-		'delete from fare_watches; delete from fare_providers; delete from trips; delete from users;'
-	);
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(fareWatches).executeSync();
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(fareProviders).executeSync();
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(trips).executeSync();
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(users).executeSync();
+	ctx.kit.deleteFrom(fareWatches).executeSync();
+	ctx.kit.deleteFrom(fareProviders).executeSync();
+	ctx.kit.deleteFrom(trips).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
 	delivered.length = 0;
 });
 
@@ -44,7 +38,6 @@ import { createTrip } from '../repositories/tripsRepo';
 import { getFareWatchById } from '../repositories/travelDataRepo';
 import { users, trips, fareProviders, fareWatches } from '../db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
-import { eq } from '@mongreldb/kit';
 
 test('registry has the stub; key stored encrypted; checks active, skips paused', async () => {
 	expect(registry.stub).toBeTruthy();

@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,46 +12,46 @@ import { users, reminders } from '$lib/server/db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 
 test('load returns the users reminders', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const other = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	db.insert(reminders).values({
-		userId: u.id,
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = kit.insertInto(users).values({ email: 'a@x.c', password_hash: 'x', display_name: 'A' }).executeSync();
+	const other = kit.insertInto(users).values({ email: 'b@x.c', password_hash: 'x', display_name: 'B' }).executeSync();
+	kit.insertInto(reminders).values({
+		user_id: u.id,
 		kind: 'custom',
-		refType: 'trip',
-		refId: 1,
-		fireAt: '2026-01-01T00:00:00Z'
-	}).run();
-	db.insert(reminders).values({
-		userId: other.id,
+		ref_type: 'trip',
+		ref_id: 1n,
+		fire_at: '2026-01-01T00:00:00Z'
+	}).executeSync();
+	kit.insertInto(reminders).values({
+		user_id: other.id,
 		kind: 'custom',
-		refType: 'trip',
-		refId: 2,
-		fireAt: '2026-01-02T00:00:00Z'
-	}).run();
+		ref_type: 'trip',
+		ref_id: 2n,
+		fire_at: '2026-01-02T00:00:00Z'
+	}).executeSync();
 
 	const data = (await load({ locals: { user: u } } as any)) as { reminders: { userId: number }[] };
 	expect(data.reminders).toHaveLength(1);
-	expect(data.reminders[0].userId).toBe(u.id);
+	expect(data.reminders[0].userId).toBe(Number(u.id));
 });
 
 test('cancel action deletes the users own reminder', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
-	const r = db.insert(reminders).values({
-		userId: u.id,
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const u = kit.insertInto(users).values({ email: 'c@x.c', password_hash: 'x', display_name: 'C' }).executeSync();
+	const r = kit.insertInto(reminders).values({
+		user_id: u.id,
 		kind: 'custom',
-		refType: 'trip',
-		refId: 3,
-		fireAt: '2026-01-01T00:00:00Z'
-	}).returning().get();
+		ref_type: 'trip',
+		ref_id: 3n,
+		fire_at: '2026-01-01T00:00:00Z'
+	}).executeSync();
 
 	await expect(
 		actions.cancel({
 			request: new Request('http://x', { method: 'POST', body: new URLSearchParams({ id: String(r.id) }) }),
-			locals: { user: u }
+			locals: { user: { id: Number(u.id) } }
 		} as any)
 	).rejects.toSatisfy((e: any) => e.status === 303 && e.location === '/profile/reminders');
 
-	expect(db.select().from(reminders).where(eq(reminders.id, BigInt(r.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(reminders).where(eq(reminders.id, BigInt(r.id))).executeSync()[0]).toBeUndefined();
 });

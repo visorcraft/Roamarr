@@ -1,20 +1,17 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	const { db, sqlite, kit, close } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit, close });
-	return { db, sqlite, kit, getDb: () => kit };
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
 import { eq } from '@mongreldb/kit';
-import { eq as kitEq } from '@mongreldb/kit';
 import {
 	listSegmentsForTrip,
 	getSegmentById,
@@ -32,11 +29,6 @@ import {
 import { createTrip } from './tripsRepo';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
-import {
-	segments as legacySegments,
-	segmentAttendees as legacySegmentAttendees,
-	tripCompanions as legacyTripCompanions
-} from '$lib/server/db/mongrelSchema';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(segmentAttendees).executeSync();
@@ -44,15 +36,8 @@ function resetKitTables() {
 	ctx.kit.deleteFrom(tripCompanions).executeSync();
 }
 
-function resetLegacyTables() {
-	ctx.sqlite.exec(
-		'delete from segment_attendees; delete from segments; delete from trip_companions; delete from trips; delete from users;'
-	);
-}
-
 beforeEach(() => {
 	resetKitTables();
-	resetLegacyTables();
 });
 
 afterAll(() => {
@@ -64,23 +49,13 @@ function makeKitTrip(ownerId: number, name = 'T') {
 }
 
 function makeKitCompanion(tripId: number, name = 'C') {
-	const row = ctx.kit
+	return ctx.kit
 		.insertInto(tripCompanions)
 		.values({
 			trip_id: BigInt(tripId),
 			name
-		} as any)
+		} as never)
 		.executeSync();
-	ctx.db
-		.insert(legacyTripCompanions)
-		.values({
-			id: Number(row.id),
-			tripId,
-			name,
-			category: 'adult'
-		})
-		.run();
-	return row;
 }
 
 test('creates and retrieves a segment', () => {
@@ -206,7 +181,7 @@ test('manages attendees', () => {
 	expect(getAttendeeBySegmentAndCompanion(seg.id, Number(c.id))).toBeNull();
 });
 
-test('keeps legacy segments in sync', () => {
+test('segment writes are persisted', () => {
 	const u = makeKitUser();
 	const t = makeKitTrip(Number(u.id));
 	const seg = createSegment({
@@ -216,19 +191,19 @@ test('keeps legacy segments in sync', () => {
 		start_at: '2026-08-01T10:00:00Z',
 		start_tz: 'UTC'
 	});
-	const row = ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get();
+	const row = ctx.kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0];
 	expect(row?.title).toBe('T');
 
 	updateSegment(seg.id, { title: 'T Updated' });
-	expect(ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get()?.title).toBe(
-		'T Updated'
-	);
+	expect(
+		ctx.kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]?.title
+	).toBe('T Updated');
 
 	deleteSegment(seg.id);
-	expect(ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get()).toBeUndefined();
+	expect(ctx.kit.selectFrom(segments).where(eq(segments.id, BigInt(seg.id))).executeSync()[0]).toBeUndefined();
 });
 
-test('keeps legacy attendees in sync', () => {
+test('attendee writes are persisted', () => {
 	const u = makeKitUser();
 	const t = makeKitTrip(Number(u.id));
 	const seg = createSegment({
@@ -240,16 +215,15 @@ test('keeps legacy attendees in sync', () => {
 	});
 	const c = makeKitCompanion(t.id);
 	const a = addAttendee({ segment_id: BigInt(seg.id), companion_id: BigInt(c.id), status: 'going' });
-	const row = ctx.db
-		.select()
-		.from(legacySegmentAttendees)
-		.where(eq(legacySegmentAttendees.id, BigInt(a.id)))
-		.get();
+	const row = ctx.kit
+		.selectFrom(segmentAttendees)
+		.where(eq(segmentAttendees.id, BigInt(a.id)))
+		.executeSync()[0];
 	expect(row?.status).toBe('going');
 
 	removeAttendee(a.id);
 	expect(
-		ctx.db.select().from(legacySegmentAttendees).where(eq(legacySegmentAttendees.id, BigInt(a.id))).get()
+		ctx.kit.selectFrom(segmentAttendees).where(eq(segmentAttendees.id, BigInt(a.id))).executeSync()[0]
 	).toBeUndefined();
 });
 

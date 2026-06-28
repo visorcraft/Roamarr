@@ -1,7 +1,7 @@
 import { test, expect, vi } from 'vitest';
 import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -40,10 +40,11 @@ test('parseCities1000Line rejects invalid numbers', () => {
 });
 
 test('bulkInsertCities replaces existing data and inserts rows', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	db.insert(geonamesCities)
-		.values({ geonameId: 1, name: 'Old', asciiName: 'Old', countryCode: 'XX', lat: 0, lng: 0 })
-		.run();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	kit
+		.insertInto(geonamesCities)
+		.values({ geoname_id: BigInt(1), name: 'Old', ascii_name: 'Old', country_code: 'XX', lat: 0, lng: 0 })
+		.executeSync();
 
 	const imported = bulkInsertCities([
 		{
@@ -59,8 +60,8 @@ test('bulkInsertCities replaces existing data and inserts rows', () => {
 	]);
 
 	expect(imported).toBe(1);
-	const count = (ctx as any).kit.selectFrom(geonamesCities).selectCount().executeSync();
+	const count = kit.selectFrom(geonamesCities).selectCount().executeSync();
 	expect(count).toBe(1n);
-	const row = db.select().from(geonamesCities).where(eq(geonamesCities.geoname_id, BigInt(2988507))).get();
+	const row = kit.selectFrom(geonamesCities).where(eq(geonamesCities.geoname_id, BigInt(2988507))).executeSync()[0];
 	expect(row?.name).toBe('Paris');
 });

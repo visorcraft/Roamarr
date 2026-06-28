@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -10,7 +10,6 @@ vi.mock('$lib/server/db', async () => {
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
 import { getMapSettings, updateSettings, getSettings } from '$lib/server/settings';
 import { users, auditLogs } from '$lib/server/db/mongrelSchema';
-import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
 import { eq } from '@mongreldb/kit';
@@ -28,16 +27,13 @@ function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'us
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(auditLogs).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitAuditLogs).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('saves settings, default leads and encrypts smtp pass', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('u@x.c');
 	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
@@ -61,11 +57,11 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 	expect(decrypt(s.smtpPass!)).toBe('pw');
 	expect(s.webhookUrl).toBe('https://hooks.example.com/roamarr');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('settings_update');
-	expect(logs[0].entityType).toBe('settings');
-	expect(JSON.parse(logs[0].metaJson).smtpPassSet).toBe(true);
+	expect(logs[0].entity_type).toBe('settings');
+	expect(JSON.parse(logs[0].meta_json as string).smtpPassSet).toBe(true);
 });
 
 test('rejects invalid default reminder leads', () => {
@@ -93,7 +89,7 @@ test('rejects invalid default reminder leads', () => {
 });
 
 test('omitting smtpPass preserves the existing encrypted value', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('preserve@x.c');
 	const before = getSettings().smtpPass;
 	saveAdminSettings(Number(u.id), {
@@ -107,13 +103,12 @@ test('omitting smtpPass preserves the existing encrypted value', () => {
 	const after = getSettings().smtpPass;
 	expect(after).toBe(before);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
-	expect(JSON.parse(logs[0].metaJson).smtpPassSet).toBe(false);
+	expect(JSON.parse(logs[0].meta_json as string).smtpPassSet).toBe(false);
 });
 
 test('saves empty webhookUrl as null', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser('webhook@x.c');
 	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
@@ -147,7 +142,6 @@ test('load includes recent audit log entries for admins', () => {
 });
 
 test('save action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser('admin@x.c', 'Admin', 'admin');
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/settings', {
@@ -178,7 +172,6 @@ test('getMapSettings reflects imported city count', () => {
 });
 
 test('map tile API key is encrypted at rest and decrypts for tile config', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser('tilekey@x.c');
 	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',

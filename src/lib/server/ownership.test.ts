@@ -1,8 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('./db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('./db', async () => {
@@ -12,7 +10,7 @@ vi.mock('./db', async () => {
 });
 
 import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, requireOwnedTripRow } from './ownership';
-import { users, trips, tripHomeTasks, cards as kitCards, trips as kitTrips, users as kitUsers } from './db/mongrelSchema';
+import { users, trips, tripHomeTasks, cards } from './db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
 
 import { makeKitUser } from '../../../tests/kitHelpers';
@@ -31,14 +29,13 @@ function makeTestUser(over: Partial<Record<string, unknown>> = {}) {
 }
 
 beforeEach(() => {
-	ctx.sqlite.exec('delete from trip_home_tasks; delete from trips; delete from cards; delete from users;');
-	ctx.kit.deleteFrom(kitCards).executeSync();
-	ctx.kit.deleteFrom(kitTrips).executeSync();
-	ctx.kit.deleteFrom(kitUsers).executeSync();
+	ctx.kit.deleteFrom(tripHomeTasks).executeSync();
+	ctx.kit.deleteFrom(cards).executeSync();
+	ctx.kit.deleteFrom(trips).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
 });
 
 test('blocks cross-owner trip and card access', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const a = makeTestUser({ email: 'a@x.c' });
 	const b = makeTestUser({ email: 'b@x.c' });
 	const tA = createTrip(a.id, { name: 'A trip' });

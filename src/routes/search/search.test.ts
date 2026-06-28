@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,7 +12,6 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 
 import { load } from './+page.server';
-import { users, trips } from '$lib/server/db/mongrelSchema';
 import { makeGetEvent } from '../../../tests/eventHelpers';
 
 function event(user: { id: number; email: string }, search = '') {
@@ -29,7 +28,6 @@ test('search page requires a user', () => {
 });
 
 test('search with no query returns empty results', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'search-a@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
 
@@ -39,7 +37,6 @@ test('search with no query returns empty results', () => {
 });
 
 test('search filters trips by name and destination', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'search-b@x.c', passwordHash: 'x', displayName: 'A' });
 
 	makeTrip(kit, a.id, { name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' });
@@ -51,7 +48,6 @@ test('search filters trips by name and destination', () => {
 });
 
 test('search excludes archived trips by default', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'search-c@x.c', passwordHash: 'x', displayName: 'A' });
 
 	makeTrip(kit, a.id, { name: 'Active Tokyo', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' });
@@ -62,7 +58,6 @@ test('search excludes archived trips by default', () => {
 });
 
 test('search trims whitespace-only queries', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'search-d@x.c', passwordHash: 'x', displayName: 'A' });
 
 	makeTrip(kit, a.id, { name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' });

@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -13,41 +13,31 @@ import {
 	listEntryRequirements,
 	updateEntryRequirementStatus
 } from './tripEntryRequirements';
-import { tripEntryRequirements } from './db/mongrelSchema';
-import {
-	tripEntryRequirements as kitTripEntryRequirements,
-	trips as kitTrips,
-	users as kitUsers
-} from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { tripEntryRequirements, trips, users } from './db/mongrelSchema';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
-function getDb() {
-	return (ctx as { db: import('./db').DB }).db;
-}
-
-function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function getKit(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
 }
 
 beforeEach(() => {
 	const kit = getKit();
-	kit.deleteFrom(kitTripEntryRequirements).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(tripEntryRequirements).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 function seed() {
-	const db = getDb();
 	const kit = getKit();
 	const u = makeSyncedUser(kit, { email: 'er@x.c' });
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const other = makeSyncedUser(kit, { email: 'oth@x.c' });
-	return { db, u, t, other };
+	return { kit, u, t, other };
 }
 
 test('addEntryRequirement creates a visa requirement', () => {
-	const { db, u, t } = seed();
+	const { kit, u, t } = seed();
 	const req = addEntryRequirement(u.id, t.id, {
 		country: 'France',
 		requirementType: 'visa',
@@ -60,7 +50,9 @@ test('addEntryRequirement creates a visa requirement', () => {
 
 	const rows = listEntryRequirements(t.id);
 	expect(rows).toHaveLength(1);
-	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).get()).toBeTruthy();
+	expect(
+		kit.selectFrom(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).executeSync()[0]
+	).toBeTruthy();
 });
 
 test('addEntryRequirement defaults status to needed', () => {
@@ -92,10 +84,12 @@ test('updateEntryRequirementStatus rejects invalid status', () => {
 });
 
 test('deleteEntryRequirement removes the row', () => {
-	const { db, u, t } = seed();
+	const { kit, u, t } = seed();
 	const req = addEntryRequirement(u.id, t.id, { country: 'Y', requirementType: 'other' });
 	deleteEntryRequirement(u.id, t.id, req.id);
-	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).get()).toBeUndefined();
+	expect(
+		kit.selectFrom(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).executeSync()[0]
+	).toBeUndefined();
 });
 
 test('non-editor cannot mutate entry requirements', () => {

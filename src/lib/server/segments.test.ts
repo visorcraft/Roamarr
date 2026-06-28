@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,11 +12,10 @@ import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helper
 
 
 import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
-import { users, trips, segments, cards, auditLogs } from './db/mongrelSchema';
+import { segments, auditLogs } from './db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 
 test('detects overlap with existing segment', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	makeSegment(kit, t.id, {
@@ -32,7 +31,6 @@ test('detects overlap with existing segment', () => {
 });
 
 test('excluding current segment avoids self-overlap', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -47,7 +45,6 @@ test('excluding current segment avoids self-overlap', () => {
 });
 
 test('duplicateSegment copies a segment shifted 24 hours and clears confirmation', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'dup@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = makeCard(kit, u.id, { nickname: 'Travel', network: 'visa', last4: '1234' });
@@ -77,17 +74,16 @@ test('duplicateSegment copies a segment shifted 24 hours and clears confirmation
 	expect(copy.cardId).toBe(c.id);
 	expect(copy.detailsJson).toBe(s.detailsJson);
 
-	const rows = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
+	const rows = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(2);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(copy.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(copy.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('duplicate');
-	expect(logs[0].entityType).toBe('segment');
+	expect(logs[0].entity_type).toBe('segment');
 });
 
 test('duplicateSegment rejects a segment from another trip or non-editor', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const owner = makeUser(kit, { email: 'dup-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'dup-other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t1 = makeTrip(kit, owner.id, { name: 'T1' });
@@ -104,7 +100,6 @@ test('duplicateSegment rejects a segment from another trip or non-editor', () =>
 });
 
 test('addSegment stores meeting point and rally time as UTC', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'meet@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -121,7 +116,6 @@ test('addSegment stores meeting point and rally time as UTC', () => {
 });
 
 test('updateSegment stores and clears meeting info', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'meet-update@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const seg = addSegment(u.id, t.id, {
@@ -151,7 +145,6 @@ test('updateSegment stores and clears meeting info', () => {
 });
 
 test('duplicateSegment copies meeting point and shifts rally time by 24h', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'dup-meet@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -170,7 +163,6 @@ test('duplicateSegment copies meeting point and shifts rally time by 24h', () =>
 });
 
 test('moveSegmentToDate preserves local time, duration and rally offset', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'move-date@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -188,13 +180,12 @@ test('moveSegmentToDate preserves local time, duration and rally offset', () => 
 	expect(moved.endAt).toBe('2026-09-15T04:30:00.000Z');
 	expect(moved.meetingAt).toBe('2026-09-15T03:15:00.000Z');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('move_date');
 });
 
 test('addSegment stores endTz and defaults to startTz', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'endtz@x.c', passwordHash: 'x', displayName: 'E' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -223,7 +214,6 @@ test('addSegment stores endTz and defaults to startTz', () => {
 });
 
 test('hasOverlappingSegment uses UTC endAt for comparison', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'overlap-tz@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	makeSegment(kit, t.id, {
@@ -240,7 +230,6 @@ test('hasOverlappingSegment uses UTC endAt for comparison', () => {
 });
 
 test('updateSegmentStatus updates segment status', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'status@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -252,12 +241,11 @@ test('updateSegmentStatus updates segment status', () => {
 
 	const updated = updateSegmentStatus(s.id, 'checked_in');
 	expect(updated.status).toBe('checked_in');
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0];
 	expect(row?.status).toBe('checked_in');
 });
 
 test('updateSegmentStatus rejects invalid status', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'status-bad@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -271,7 +259,6 @@ test('updateSegmentStatus rejects invalid status', () => {
 });
 
 test('setSegmentStatus updates status for an editor and logs audit', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'status-editor@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -283,13 +270,12 @@ test('setSegmentStatus updates status for an editor and logs audit', () => {
 
 	const updated = setSegmentStatus(u.id, t.id, s.id, 'boarded');
 	expect(updated.status).toBe('boarded');
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('update_status');
 });
 
 test('setSegmentStatus rejects a non-editor', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const owner = makeUser(kit, { email: 'status-owner@x.c', passwordHash: 'x', displayName: 'O' });
 	const other = makeUser(kit, { email: 'status-other@x.c', passwordHash: 'x', displayName: 'X' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -304,7 +290,6 @@ test('setSegmentStatus rejects a non-editor', () => {
 });
 
 test('addSegment defaults payment status and stores payment details', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'pay@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -329,7 +314,6 @@ test('addSegment defaults payment status and stores payment details', () => {
 });
 
 test('updateSegment changes payment status and due date', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'pay-up@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = addSegment(u.id, t.id, {
@@ -347,13 +331,12 @@ test('updateSegment changes payment status and due date', () => {
 		paymentDueDate: '2026-06-20'
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get()!;
-	expect(row.paymentStatus).toBe('fully_paid');
-	expect(row.paymentDueDate).toBe('2026-06-20');
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.payment_status).toBe('fully_paid');
+	expect(row.payment_due_date).toBe('2026-06-20');
 });
 
 test('updateSegment preserves existing payment status when omitted', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'pay-pres@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = addSegment(u.id, t.id, {
@@ -370,13 +353,12 @@ test('updateSegment preserves existing payment status when omitted', () => {
 		startTz: 'UTC'
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get()!;
-	expect(row.paymentStatus).toBe('fully_paid');
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.payment_status).toBe('fully_paid');
 	expect(row.title).toBe('UA1 renamed');
 });
 
 test('deleteSegments removes multiple segments and ignores invalid ids', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'bulk@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s1 = makeSegment(kit, t.id, { type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' });
@@ -385,12 +367,11 @@ test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 
 	deleteSegments(u.id, t.id, [s1.id, s2.id, 9999, -1]);
 
-	const remaining = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
-	expect(remaining.map((r: Record<string, unknown>) => r.id)).toEqual([s3.id]);
+	const remaining = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync();
+	expect(remaining.map((r) => Number(r.id))).toEqual([s3.id]);
 });
 
 test('addSegment stores country, city, coordinates, and venue', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'loc@x.c', passwordHash: 'x', displayName: 'L' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 
@@ -414,7 +395,6 @@ test('addSegment stores country, city, coordinates, and venue', () => {
 });
 
 test('updateSegment updates city fields and clears venue when omitted', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'loc-up@x.c', passwordHash: 'x', displayName: 'L' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const seg = addSegment(u.id, t.id, {

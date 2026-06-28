@@ -1,10 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
-}));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -20,59 +16,55 @@ import {
 } from './+page.server';
 import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
 import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/mongrelSchema';
-import {
-	cards as kitCards,
-	cardBenefits as kitCardBenefits,
-	insurancePolicies as kitInsurancePolicies,
-	trips as kitTrips,
-	users as kitUsers
-} from '$lib/server/db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
+
 function makeTestUser(over: any = {}) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const kitUser = makeKitUser({
 		email: over.email,
 		password_hash: over.passwordHash,
 		display_name: over.displayName,
 		role: (over.role as 'admin' | 'user') ?? 'user'
 	});
-	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
+	const row = kit.selectFrom(users).where(eq(users.id, kitUser.id)).executeSync()[0]!;
+	return { ...row, id: Number(row.id) };
 }
 
 beforeEach(() => {
-	ctx.sqlite.exec(
-		'delete from insurance_policies; delete from card_benefits; delete from cards; delete from trips; delete from users;'
-	);
-	ctx.kit.deleteFrom(kitInsurancePolicies).executeSync();
-	ctx.kit.deleteFrom(kitCardBenefits).executeSync();
-	ctx.kit.deleteFrom(kitCards).executeSync();
-	ctx.kit.deleteFrom(kitTrips).executeSync();
-	ctx.kit.deleteFrom(kitUsers).executeSync();
+	const kit = kitDb();
+	kit.deleteFrom(insurancePolicies).executeSync();
+	kit.deleteFrom(cardBenefits).executeSync();
+	kit.deleteFrom(cards).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('card + benefit are owner-scoped; insurance to foreign trip is rejected', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeTestUser({ email: 'a@x.c' });
 	const b = makeTestUser({ email: 'b@x.c' });
 	const bTrip = createTrip(b.id, { name: 'B trip' });
 	const card = addCard(a.id, { nickname: 'Sapphire', network: 'visa', last4: '1111' });
 	addBenefit(a.id, card.id, { benefitType: 'trip_delay', coverageAmount: 50000 });
-	expect(db.select().from(cardBenefits).all().length).toBe(1);
+	expect(kit.selectFrom(cardBenefits).executeSync().length).toBe(1);
 	expect(() => addPolicy(a.id, { provider: 'Acme', tripId: bTrip.id })).toThrow();
 });
 
 test('addCard never stores a full PAN — only the last 4 digits', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'pan@x.c', passwordHash: 'x', displayName: 'P' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa', last4: '4111 1111 1111 1234' });
-	expect(db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!.last4).toBe('1234');
+	expect(kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]!.last4).toBe('1234');
 });
 
 test('updateCard edits a card and still only stores the last 4 digits', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'update-card@x.c', passwordHash: 'x', displayName: 'U' });
 	const card = addCard(u.id, { nickname: 'Old', network: 'visa', last4: '1234' });
 	updateCard(u.id, card.id, {
@@ -81,7 +73,7 @@ test('updateCard edits a card and still only stores the last 4 digits', () => {
 		last4: '4111 1111 1111 9999',
 		notes: 'note'
 	});
-	const row = db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!;
+	const row = kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]!;
 	expect(row.nickname).toBe('Updated');
 	expect(row.network).toBe('mc');
 	expect(row.last4).toBe('9999');
@@ -89,20 +81,20 @@ test('updateCard edits a card and still only stores the last 4 digits', () => {
 });
 
 test('updateCard cannot modify another users card', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeTestUser({ email: 'a2@x.c' });
 	const b = makeTestUser({ email: 'b2@x.c' });
 	const card = addCard(a.id, { nickname: 'A card', network: 'visa', last4: '1111' });
 	expect(() => updateCard(b.id, card.id, { nickname: 'Hacked', network: 'amex' })).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
-	const row = db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!;
+	const row = kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]!;
 	expect(row.nickname).toBe('A card');
 	expect(row.network).toBe('visa');
 });
 
 test('updateBenefit edits a benefit and enforces card ownership', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'benefit-owner@x.c' });
 	const other = makeTestUser({ email: 'benefit-other@x.c' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
@@ -113,9 +105,9 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 		currency: 'EUR',
 		notes: 'bag notes'
 	});
-	const row = db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).get()!;
-	expect(row.benefitType).toBe('baggage_delay');
-	expect(row.coverageAmount).toBe(250);
+	const row = kit.selectFrom(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0]!;
+	expect(row.benefit_type).toBe('baggage_delay');
+	expect(Number(row.coverage_amount)).toBe(250);
 	expect(row.currency).toBe('EUR');
 	expect(row.notes).toBe('bag notes');
 
@@ -125,22 +117,22 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 });
 
 test('deleteBenefit removes a benefit and enforces card ownership', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'benefit-delete@x.c' });
 	const other = makeTestUser({ email: 'benefit-delete-other@x.c' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
 	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay' });
 	deleteBenefit(u.id, benefit.id, card.id);
-	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0]).toBeUndefined();
 
 	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
 	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
 	expect(() => deleteBenefit(u.id, otherBenefit.id, otherCard.id)).toThrow();
-	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(otherBenefit.id))).get()).toBeDefined();
+	expect(kit.selectFrom(cardBenefits).where(eq(cardBenefits.id, BigInt(otherBenefit.id))).executeSync()[0]).toBeDefined();
 });
 
 test('updatePolicy edits a policy and rejects a foreign trip', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser({ email: 'ins-owner@x.c' });
 	const other = makeTestUser({ email: 'ins-other@x.c' });
 	const myTrip = createTrip(u.id, { name: 'Mine' });
@@ -156,27 +148,27 @@ test('updatePolicy edits a policy and rejects a foreign trip', () => {
 		tripId: myTrip.id,
 		notes: 'policy notes'
 	});
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).get()!;
+	const row = kit.selectFrom(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).executeSync()[0]!;
 	expect(row.provider).toBe('Allianz');
-	expect(row.policyNumber).toBe('PN-123');
-	expect(row.coverageSummary).toBe('Full coverage');
-	expect(row.coverageAmount).toBe(50000);
-	expect(row.startDate).toBe('2025-01-01');
-	expect(row.endDate).toBe('2025-12-31');
+	expect(row.policy_number).toBe('PN-123');
+	expect(row.coverage_summary).toBe('Full coverage');
+	expect(Number(row.coverage_amount)).toBe(50000);
+	expect(row.start_date).toBe('2025-01-01');
+	expect(row.end_date).toBe('2025-12-31');
 	expect(row.notes).toBe('policy notes');
-	expect(row.tripId).toBe(myTrip.id);
+	expect(Number(row.trip_id)).toBe(myTrip.id);
 
 	expect(() => updatePolicy(u.id, policy.id, { provider: 'Evil', tripId: otherTrip.id })).toThrow();
 });
 
 test('updatePolicy cannot modify another users policy', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeTestUser({ email: 'ins-a@x.c' });
 	const b = makeTestUser({ email: 'ins-b@x.c' });
 	const policy = addPolicy(a.id, { provider: 'Acme' });
 	expect(() => updatePolicy(b.id, policy.id, { provider: 'Hacked' })).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).get()!;
+	const row = kit.selectFrom(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).executeSync()[0]!;
 	expect(row.provider).toBe('Acme');
 });

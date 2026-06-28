@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -17,10 +17,10 @@ import {
 	tripChecklistItems,
 	tripShares
 } from './db/mongrelSchema';
-import { trips as kitTrips, users as kitUsers, packingTemplates as kitPackingTemplates } from './db/mongrelSchema';
 import { eq } from '@mongreldb/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeFormData } from '../../../tests/eventHelpers';
+import { makeShare } from '../../../tests/helpers';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 
@@ -47,18 +47,14 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 beforeEach(() => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	db.delete(tripChecklistItems).run();
-	db.delete(tripChecklists).run();
-	db.delete(packingTemplateItems).run();
-	db.delete(packingTemplates).run();
-	db.delete(tripShares).run();
-	db.delete(trips).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitPackingTemplates).executeSync();
-	kit.deleteFrom(kitTrips).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(tripChecklistItems).executeSync();
+	kit.deleteFrom(tripChecklists).executeSync();
+	kit.deleteFrom(packingTemplateItems).executeSync();
+	kit.deleteFrom(packingTemplates).executeSync();
+	kit.deleteFrom(tripShares).executeSync();
+	kit.deleteFrom(trips).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('saveTemplate creates a template from explicit items', () => {
@@ -69,13 +65,13 @@ test('saveTemplate creates a template from explicit items', () => {
 		{ label: 'Socks', category: 'clothing' }
 	]);
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const template = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).executeSync()[0];
 	expect(template?.name).toBe('Weekend');
-	expect(template?.userId).toBe(Number(u.id));
+	expect(Number(template?.user_id)).toBe(Number(u.id));
 
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
-	expect(items.map((i: Record<string, unknown>) => ({ label: i.label, category: i.category }))).toEqual([
+	const items = kit.selectFrom(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).executeSync();
+	expect(items.map((i) => ({ label: i.label, category: i.category }))).toEqual([
 		{ label: 'Toothbrush', category: 'toiletries' },
 		{ label: 'Socks', category: 'clothing' }
 	]);
@@ -86,10 +82,10 @@ test('saveTemplate trims names and defaults blank categories', () => {
 
 	const id = saveTemplate(Number(u.id), '  Beach  ', [{ label: '  Sunscreen  ', category: '  ' }]);
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const template = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).executeSync()[0];
 	expect(template?.name).toBe('Beach');
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
+	const items = kit.selectFrom(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).executeSync();
 	expect(items[0]?.label).toBe('Sunscreen');
 	expect(items[0]?.category).toBe('general');
 });
@@ -102,21 +98,17 @@ test('saveTemplate rejects missing name or empty items', () => {
 });
 
 test('saveTemplate populates from a trip checklist', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('pt4@x.c');
 	const t = makeTrip(Number(u.id), 'T');
-	const checklist = db.insert(tripChecklists).values({ tripId: t.id }).returning().get();
-	db.insert(tripChecklistItems)
-		.values([
-			{ checklistId: checklist.id, text: 'Boarding pass' },
-			{ checklistId: checklist.id, text: 'Passport' }
-		])
-		.run();
+	const checklist = kit.insertInto(tripChecklists).values({ trip_id: BigInt(t.id) }).executeSync();
+	kit.insertInto(tripChecklistItems).values({ checklist_id: BigInt(checklist.id), text: 'Boarding pass' }).executeSync();
+	kit.insertInto(tripChecklistItems).values({ checklist_id: BigInt(checklist.id), text: 'Passport' }).executeSync();
 
 	const id = saveTemplate(Number(u.id), 'Flight', [], t.id);
 
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
-	expect(items.map((i: Record<string, unknown>) => i.label)).toEqual(['Boarding pass', 'Passport']);
+	const items = kit.selectFrom(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).executeSync();
+	expect(items.map((i) => i.label)).toEqual(['Boarding pass', 'Passport']);
 });
 
 test('saveTemplate requires editable trip when populating from trip', () => {
@@ -140,13 +132,13 @@ test('listTemplates returns templates scoped to user with items', () => {
 	expect(list[0]?.items[0]?.label).toBe('A1');
 	expect(list[0]?.items[0]?.category).toBe('general');
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const reloaded = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(idA))).get();
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const reloaded = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(idA))).executeSync()[0];
 	expect(reloaded?.name).toBe('A-list');
 });
 
 test('applyTemplate copies template items to trip checklist', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('pt7@x.c');
 	const t = makeTrip(Number(u.id), 'T');
 	const templateId = saveTemplate(Number(u.id), 'Camping', [
@@ -157,14 +149,13 @@ test('applyTemplate copies template items to trip checklist', () => {
 	const result = applyTemplate(templateId, t.id, Number(u.id));
 	expect(result.itemCount).toBe(2);
 
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
+	const checklist = kit.selectFrom(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).executeSync()[0];
 	expect(checklist).toBeDefined();
-	const items = db
-		.select()
-		.from(tripChecklistItems)
+	const items = kit
+		.selectFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
-		.all();
-	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Tent', 'Stove']);
+		.executeSync();
+	expect(items.map((i) => i.text)).toEqual(['Tent', 'Stove']);
 });
 
 test('applyTemplate guards against non-editable trips', () => {
@@ -186,32 +177,29 @@ test('applyTemplate guards templates owned by another user', () => {
 });
 
 test('applyTemplate allows editor shared with edit permission', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const a = makeUser('pt10-a@x.c');
 	const b = makeUser('pt10-b@x.c');
 	const t = makeTrip(Number(a.id), 'T');
-	db.insert(tripShares)
-		.values({ tripId: t.id, sharedWithUserId: Number(b.id), permission: 'edit' })
-		.run();
+	makeShare(kit, { tripId: t.id, sharedWithUserId: Number(b.id), permission: 'edit' });
 	const templateId = saveTemplate(Number(b.id), 'Shared', [{ label: 'X' }]);
 
 	applyTemplate(templateId, t.id, Number(b.id));
 
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
-	const items = db
-		.select()
-		.from(tripChecklistItems)
+	const checklist = kit.selectFrom(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).executeSync()[0];
+	const items = kit
+		.selectFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
-		.all();
-	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['X']);
+		.executeSync();
+	expect(items.map((i) => i.text)).toEqual(['X']);
 });
 
 test('saveChecklistTemplate action saves current checklist as template and redirects', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	const u = makeUser('pt11@x.c');
 	const t = makeTrip(Number(u.id), 'T');
-	const checklist = db.insert(tripChecklists).values({ tripId: t.id }).returning().get();
-	db.insert(tripChecklistItems).values({ checklistId: checklist.id, text: 'Charger' }).run();
+	const checklist = kit.insertInto(tripChecklists).values({ trip_id: BigInt(t.id) }).executeSync();
+	kit.insertInto(tripChecklistItems).values({ checklist_id: BigInt(checklist.id), text: 'Charger' }).executeSync();
 
 	await expect(
 		saveChecklistTemplate(
@@ -233,14 +221,13 @@ test('applyChecklistTemplate action applies a template and redirects', async () 
 		applyChecklistTemplate(makeEvent({ id: Number(u.id) }, t.id, makeFormData({ templateId: String(templateId) })))
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const db = (ctx as { db: import('./db').DB }).db;
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
-	const items = db
-		.select()
-		.from(tripChecklistItems)
+	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const checklist = kit.selectFrom(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).executeSync()[0];
+	const items = kit
+		.selectFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
-		.all();
-	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Map']);
+		.executeSync();
+	expect(items.map((i) => i.text)).toEqual(['Map']);
 });
 
 test('applyChecklistTemplate action rejects invalid template id', async () => {

@@ -2,8 +2,6 @@ import { createHash } from 'node:crypto';
 import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
@@ -35,19 +33,12 @@ import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergency
 import { decrypt } from '$lib/server/crypto';
 import { eq } from '@mongreldb/kit';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
-import {
-	travelDocuments as kitTravelDocuments,
-	loyaltyPrograms as kitLoyaltyPrograms,
-	emergencyContacts as kitEmergencyContacts,
-	users as kitUsers
-} from '$lib/server/db/mongrelSchema';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import * as profileRepo from '$lib/server/repositories/profileRepo';
 
 function makeTestUser(over: any = {}) {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const kitUser = makeKitUser({
+	return makeKitUser({
 		email: over.email,
 		password_hash: over.passwordHash,
 		display_name: over.displayName,
@@ -68,65 +59,60 @@ function makeTestUser(over: any = {}) {
 		email_notifications: over.emailNotifications ?? undefined,
 		webhook_notifications: over.webhookNotifications ?? undefined
 	});
-	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 }
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec(
-		'delete from audit_logs; delete from emergency_contacts; delete from loyalty_programs; delete from travel_documents; delete from sessions; delete from users;'
-	);
-	(ctx as any).kit.deleteFrom(kitEmergencyContacts).executeSync();
-	(ctx as any).kit.deleteFrom(kitLoyaltyPrograms).executeSync();
-	(ctx as any).kit.deleteFrom(kitTravelDocuments).executeSync();
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(sessions).executeSync();
+	kit.deleteFrom(emergencyContacts).executeSync();
+	kit.deleteFrom(loyaltyPrograms).executeSync();
+	kit.deleteFrom(travelDocuments).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('document number is encrypted at rest and arms a reminder', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
-	addDocument(u.id, {
+	addDocument(Number(u.id), {
 		type: 'passport',
 		number: 'X1234567',
 		issuingAuthority: 'US',
 		expiresOn: '2030-01-01'
 	});
-	const row = db.select().from(travelDocuments).get()!;
+	const row = kit.selectFrom(travelDocuments).executeSync()[0]!;
 	expect(row.number).not.toBe('X1234567');
 	expect(decrypt(row.number!)).toBe('X1234567');
 	expect(upsertRemindersForDocument).toHaveBeenCalled();
 });
 
 test('updateProgram edits a loyalty program and is user-scoped', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeTestUser({ email: 'loyal-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeTestUser({ email: 'loyal-b@x.c', passwordHash: 'x', displayName: 'B' });
-	const program = profileRepo.createLoyaltyProgram(a.id, {
+	const program = profileRepo.createLoyaltyProgram(Number(a.id), {
 		programName: 'Old',
 		membershipNumber: '123',
 		balance: 1000,
 		notes: 'old note'
 	});
-	updateProgram(a.id, program.id, {
+	updateProgram(Number(a.id), program.id, {
 		programName: 'United MileagePlus',
 		membershipNumber: 'UA999',
 		balance: 5000,
 		notes: 'new note'
 	});
-	const row = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).get()!;
-	expect(row.programName).toBe('United MileagePlus');
-	expect(row.membershipNumber).toBe('UA999');
-	expect(row.balance).toBe(5000);
+	const row = kit.selectFrom(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).executeSync()[0]!;
+	expect(row.program_name).toBe('United MileagePlus');
+	expect(row.membership_number).toBe('UA999');
+	expect(Number(row.balance)).toBe(5000);
 	expect(row.notes).toBe('new note');
 
-	expect(() => updateProgram(b.id, program.id, { programName: 'Hacked' })).toThrow(
+	expect(() => updateProgram(Number(b.id), program.id, { programName: 'Hacked' })).toThrow(
 		expect.objectContaining({ status: 404, body: { message: 'Not found' } })
 	);
-	const unchanged = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).get()!;
-	expect(unchanged.programName).toBe('United MileagePlus');
+	const unchanged = kit.selectFrom(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).executeSync()[0]!;
+	expect(unchanged.program_name).toBe('United MileagePlus');
 });
 
 test('update profile changes display name, timezone and reminder leads', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p1@x.c', passwordHash: 'x', displayName: 'P1', timezone: 'UTC' });
 	_updateProfile(u.id, {
 		displayName: 'Ada',
@@ -138,17 +124,16 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		themeId: 'vibes',
 		defaultCurrency: 'eur'
 	});
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(row.displayName).toBe('Ada');
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.display_name).toBe('Ada');
 	expect(row.timezone).toBe('America/New_York');
-	expect(row.flightCheckinLeadHours).toBe(48);
-	expect(row.documentExpiryLeadDays).toBe(60);
-	expect(row.themeId).toBe('vibes');
-	expect(row.defaultCurrency).toBe('EUR');
+	expect(Number(row.flight_checkin_lead_hours)).toBe(48);
+	expect(Number(row.document_expiry_lead_days)).toBe(60);
+	expect(row.theme_id).toBe('vibes');
+	expect(row.default_currency).toBe('EUR');
 });
 
 test('update profile rejects invalid timezone', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p2@x.c', passwordHash: 'x', displayName: 'P2', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
@@ -165,7 +150,6 @@ test('update profile rejects invalid timezone', () => {
 });
 
 test('update profile rejects negative or fractional reminder leads', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p-lead@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
@@ -194,7 +178,6 @@ test('update profile rejects negative or fractional reminder leads', () => {
 });
 
 test('update profile rejects invalid theme', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p-theme@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
@@ -211,7 +194,6 @@ test('update profile rejects invalid theme', () => {
 });
 
 test('update profile rejects invalid default currency', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p-currency@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
@@ -228,7 +210,6 @@ test('update profile rejects invalid default currency', () => {
 });
 
 test('update password requires old password and hashes new password', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, {
 			email: 'p3@x.c',
@@ -241,19 +222,18 @@ test('update password requires old password and hashes new password', async () =
 		newPassword: 'newsecret1',
 		confirmPassword: 'newsecret1'
 	});
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(await verifyPassword(row.passwordHash, 'newsecret1')).toBe(true);
-	expect(await verifyPassword(row.passwordHash, 'oldsecret')).toBe(false);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(await verifyPassword(row.password_hash, 'newsecret1')).toBe(true);
+	expect(await verifyPassword(row.password_hash, 'oldsecret')).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('password_change');
-	expect(logs[0].entityType).toBe('user');
-	expect(logs[0].entityId).toBe(u.id);
+	expect(logs[0].entity_type).toBe('user');
+	expect(Number(logs[0].entity_id)).toBe(u.id);
 });
 
 test('update password rejects wrong old password', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, {
 			email: 'p4@x.c',
@@ -271,7 +251,6 @@ test('update password rejects wrong old password', async () => {
 });
 
 test('update password rejects mismatched confirmation', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, {
 			email: 'p5@x.c',
@@ -289,7 +268,6 @@ test('update password rejects mismatched confirmation', async () => {
 });
 
 test('update password enforces password policy', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, {
 			email: 'p6@x.c',
@@ -303,39 +281,36 @@ test('update password enforces password policy', async () => {
 });
 
 test('update password invalidates all other sessions for the user', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const kitUser = makeKitUser({
+	const u = makeKitUser({
 		email: 'p7@x.c',
 		password_hash: initialHash,
 		display_name: 'P7',
 		timezone: 'UTC'
 	});
-	const u = db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
-	const currentToken = createSession(u.id);
-	createSession(u.id);
-	createSession(u.id);
-	expect(db.select().from(sessions).where(eq(sessions.user_id, BigInt(u.id))).all()).toHaveLength(3);
+	const currentToken = createSession(Number(u.id));
+	createSession(Number(u.id));
+	createSession(Number(u.id));
+	expect(kit.selectFrom(sessions).where(eq(sessions.user_id, BigInt(u.id))).executeSync()).toHaveLength(3);
 
-	await _updatePassword(u.id, currentToken, {
+	await _updatePassword(Number(u.id), currentToken, {
 		oldPassword: 'oldsecret',
 		newPassword: 'newsecret1',
 		confirmPassword: 'newsecret1'
 	});
 
-	const remaining = db.select().from(sessions).where(eq(sessions.user_id, BigInt(u.id))).all();
+	const remaining = kit.selectFrom(sessions).where(eq(sessions.user_id, BigInt(u.id))).executeSync();
 	expect(remaining).toHaveLength(1);
-	expect(remaining[0].tokenHash).toBe(
+	expect(remaining[0].token_hash).toBe(
 		createHash('sha256').update(currentToken).digest('hex')
 	);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('password_change');
 });
 
 test('updateProfile action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'p-action@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
@@ -354,11 +329,10 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Profile updated.', expect.any(Object));
-	expect(db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!.themeId).toBe('red-velvet');
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!.theme_id).toBe('red-velvet');
 });
 
 test('updatePassword action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'p-pw-action@x.c', passwordHash: initialHash, displayName: 'P', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: () => 'current-token' };
@@ -379,37 +353,34 @@ test('updatePassword action sets a flash cookie and redirects', async () => {
 });
 
 test('regenerate user calendar token mints a new token and audits', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'cal@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
 
 	const token = _regenerateUserCalendarToken(u.id);
 	expect(token).not.toBe('old-token');
 	expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
 
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(row.calendarToken).toBe(token);
-	expect(row.calendarTokenExpiresAt).toBeNull();
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe(token);
+	expect(row.calendar_token_expires_at).toBe('');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('calendar_token_regenerate');
-	expect(logs[0].entityType).toBe('user');
+	expect(logs[0].entity_type).toBe('user');
 });
 
 test('regenerate user calendar token can set an expiry', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'cal-exp@x.c', passwordHash: 'x', displayName: 'Cal' });
 
 	const expiresAt = '2030-01-01T00:00:00Z';
 	const token = _regenerateUserCalendarToken(u.id, expiresAt);
 
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(row.calendarToken).toBe(token);
-	expect(row.calendarTokenExpiresAt).toBe(expiresAt);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe(token);
+	expect(row.calendar_token_expires_at).toBe(expiresAt);
 });
 
 test('regenerateCalendarToken action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'cal-action@x.c', passwordHash: 'x', displayName: 'Cal' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
@@ -422,13 +393,12 @@ test('regenerateCalendarToken action sets a flash cookie and redirects', async (
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Calendar feed URL regenerated.', expect.any(Object));
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
-	expect(row.calendarToken).toBeTruthy();
-	expect(row.calendarTokenExpiresAt).toBe('2030-01-01T00:00:00Z');
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBeTruthy();
+	expect(row.calendar_token_expires_at).toBe('2030-01-01T00:00:00Z');
 });
 
 test('change email requires current password and updates the email', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'old@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
@@ -438,23 +408,21 @@ test('change email requires current password and updates the email', async () =>
 		confirmEmail: 'new@x.c'
 	});
 
-	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
 	expect(row.email).toBe('new@x.c');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('email_change');
-	expect(logs[0].entityType).toBe('user');
+	expect(logs[0].entity_type).toBe('user');
 });
 
 test('change email rejects a duplicate email', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const a = makeUser(kit, { email: 'dup-a@x.c', passwordHash: initialHash, displayName: 'A', timezone: 'UTC' });
-	db.insert(users)
-		.values({ email: 'dup-b@x.c', passwordHash: initialHash, displayName: 'B', timezone: 'UTC' })
-		.returning()
-		.get();
+	kit.insertInto(users)
+		.values({ email: 'dup-b@x.c', password_hash: initialHash, display_name: 'B' })
+		.executeSync();
 
 	await expect(
 		_changeEmail(a.id, { currentPassword: 'oldsecret', newEmail: 'dup-b@x.c', confirmEmail: 'dup-b@x.c' })
@@ -462,7 +430,6 @@ test('change email rejects a duplicate email', async () => {
 });
 
 test('change email rejects wrong current password', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'wrong@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
@@ -472,7 +439,6 @@ test('change email rejects wrong current password', async () => {
 });
 
 test('change email rejects mismatched confirmation', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'mismatch@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
@@ -482,7 +448,6 @@ test('change email rejects mismatched confirmation', async () => {
 });
 
 test('changeEmail action sets a flash cookie and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'action@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
@@ -500,12 +465,11 @@ test('changeEmail action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Email changed.', expect.any(Object));
-	expect(db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!.email).toBe('changed@x.c');
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!.email).toBe('changed@x.c');
 });
 
 
 test('addEmergencyContact action creates a contact and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'ec-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
@@ -518,21 +482,20 @@ test('addEmergencyContact action creates a contact and redirects', async () => {
 			isPrimary: 'on'
 		})
 	});
-	const locals = { user: u } as App.Locals;
+	const locals = { user: u } as unknown as App.Locals;
 	await expect(actions.addEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Emergency contact added.', expect.any(Object));
-	const row = db.select().from(emergencyContacts).get()!;
+	const row = kit.selectFrom(emergencyContacts).executeSync()[0]!;
 	expect(row.name).toBe('Sam Doe');
-	expect(row.isPrimary).toBe(true);
+	expect(row.is_primary).toBe(true);
 });
 
 test('updateEmergencyContact action edits a contact and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'ec-update-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
-	const c = profileRepo.createEmergencyContact(u.id, { name: 'Old', phone: '000', isPrimary: false });
+	const c = profileRepo.createEmergencyContact(Number(u.id), { name: 'Old', phone: '000', isPrimary: false });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -545,32 +508,31 @@ test('updateEmergencyContact action edits a contact and redirects', async () => 
 			isPrimary: 'on'
 		})
 	});
-	const locals = { user: u } as App.Locals;
+	const locals = { user: u } as unknown as App.Locals;
 	await expect(actions.updateEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/profile'
 	});
-	const row = db.select().from(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).get()!;
+	const row = kit.selectFrom(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.name).toBe('New Name');
 	expect(row.phone).toBe('111');
-	expect(row.isPrimary).toBe(true);
+	expect(row.is_primary).toBe(true);
 });
 
 test('deleteEmergencyContact action removes a contact and redirects', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'ec-delete-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
-	const c = profileRepo.createEmergencyContact(u.id, { name: 'Remove me', isPrimary: false });
+	const c = profileRepo.createEmergencyContact(Number(u.id), { name: 'Remove me', isPrimary: false });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
 		body: new URLSearchParams({ id: String(c.id) })
 	});
-	const locals = { user: u } as App.Locals;
+	const locals = { user: u } as unknown as App.Locals;
 	await expect(actions.deleteEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/profile'
 	});
-	expect(db.select().from(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('emergency contact actions reject invalid contact ids', async () => {

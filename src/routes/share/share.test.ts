@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,13 +12,10 @@ import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
 
 
 import { _loadByToken as loadByToken, load } from './[token]/+page.server';
-import { eq } from '@mongreldb/kit';
-import { users, trips, segments } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
 test('valid token returns projection without sensitive data; bad token 404s', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T', notes: 'SECRET', publicToken: 'tok123' });
 	makeSegment(kit, t.id, {
@@ -36,7 +33,6 @@ test('valid token returns projection without sensitive data; bad token 404s', ()
 
 test('load is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'rl@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'T', publicToken: 'rltok' });
 
@@ -54,7 +50,6 @@ test('load is rate limited after many requests from the same IP', () => {
 
 test('rate limit does not block a different IP', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'rl2@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'T', publicToken: 'rltok2' });
 
@@ -69,7 +64,6 @@ test('rate limit does not block a different IP', () => {
 
 test('expired public token returns 404', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'exp@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, {
 		name: 'T',
@@ -86,7 +80,6 @@ test('expired public token returns 404', () => {
 });
 
 test('public link hides details by default and shows them when publicShowDetails is enabled', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'T', publicToken: 'det-hidden' });
 	makeSegment(kit, t.id, {

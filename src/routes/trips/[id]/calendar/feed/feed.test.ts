@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -12,7 +12,6 @@ import { makeUser, makeTrip } from '../../../../../../tests/helpers';
 
 
 import { GET } from './+server';
-import { users, trips } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
 function event(tripId: number, token: string, ip: string) {
@@ -25,7 +24,6 @@ function event(tripId: number, token: string, ip: string) {
 
 test('GET returns an ICS calendar for a valid trip and token', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'feed@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-1' });
 
@@ -36,7 +34,6 @@ test('GET returns an ICS calendar for a valid trip and token', () => {
 
 test('GET is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'feed-rl@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-2' });
 
@@ -50,7 +47,6 @@ test('GET is rate limited after many requests from the same IP', () => {
 
 test('rate limit does not block a different IP', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'feed-rl2@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-3' });
 
@@ -63,7 +59,6 @@ test('rate limit does not block a different IP', () => {
 
 test('expired calendar token returns 404', () => {
 	resetRateLimit();
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeUser(kit, { email: 'feed-exp@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, {
 			name: 'F',

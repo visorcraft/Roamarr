@@ -1,7 +1,4 @@
-import { eq as kitEq, inList } from '@mongreldb/kit';
 import { requireUser } from '$lib/server/auth';
-import { kit } from '$lib/server/db';
-import { fareProviders, fareWatches } from '$lib/server/db/mongrelSchema';
 import { formatDestination } from '$lib/tripDestination';
 import { listTravelDocumentsExpiringBefore } from '$lib/server/repositories/profileRepo';
 import { countUnreadNotificationsForUser } from '$lib/server/repositories/remindersRepo';
@@ -9,6 +6,7 @@ import { listEditableTripIds, listViewableTrips } from '$lib/server/sharing';
 import * as segmentsRepo from '$lib/server/repositories/segmentsRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import * as tripMiscRepo from '$lib/server/repositories/tripMiscRepo';
+import * as travelDataRepo from '$lib/server/repositories/travelDataRepo';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
 
@@ -128,19 +126,6 @@ function buildAgenda(userId: number, timezone: string): AgendaItem[] {
 	});
 }
 
-function countWatches(userId: number): number {
-	const providerRows = kit
-		.selectFrom(fareProviders)
-		.where(kitEq(fareProviders.user_id, BigInt(userId)))
-		.executeSync();
-	const providerIds = providerRows.map((p) => p.id);
-	if (providerIds.length === 0) return 0;
-	return kit
-		.selectFrom(fareWatches)
-		.where(inList(fareWatches.provider_id, providerIds))
-		.executeSync().length;
-}
-
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const today = DateTime.utc().toISODate()!;
@@ -232,7 +217,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			upcoming: upcoming.length,
 			unread: unreadCount,
 			expiring: expiring.length,
-			watches: countWatches(u.id)
+			watches: travelDataRepo.countFareWatchesForUser(u.id)
 		},
 		agenda: buildAgenda(u.id, u.timezone)
 	};

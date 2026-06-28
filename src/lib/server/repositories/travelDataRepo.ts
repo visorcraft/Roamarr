@@ -376,6 +376,17 @@ export function listFareWatchesForUser(userId: number): FareWatch[] {
 	return rows.map(toFareWatch);
 }
 
+export function countFareWatchesForUser(userId: number): number {
+	const providerRows = kit
+		.selectFrom(fareProviders)
+		.where(eq(fareProviders.user_id, BigInt(userId)))
+		.executeSync();
+	const providerIds = providerRows.map((p) => p.id);
+	if (providerIds.length === 0) return 0;
+	return kit.selectFrom(fareWatches).where(inList(fareWatches.provider_id, providerIds)).executeSync()
+		.length;
+}
+
 export interface FareWatchWithProvider extends FareWatch {
 	provider: FareProviderAccount;
 }

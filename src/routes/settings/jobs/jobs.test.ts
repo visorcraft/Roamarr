@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -13,15 +13,10 @@ import { schedulerRuns, users } from '$lib/server/db/mongrelSchema';
 import { beforeEach } from 'vitest';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 import { makeSchedulerRun } from '../../../../tests/helpers';
-import {
-	schedulerRuns as kitSchedulerRuns,
-	users as kitUsers
-} from '$lib/server/db/mongrelSchema';
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from users; delete from scheduler_runs;');
-	(ctx as any).kit.deleteFrom(kitSchedulerRuns).executeSync();
-	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+	(ctx as any).kit.deleteFrom(schedulerRuns).executeSync();
+	(ctx as any).kit.deleteFrom(users).executeSync();
 });
 
 test('load rejects non-admin', () => {
@@ -35,7 +30,6 @@ test('load rejects non-admin', () => {
 });
 
 test('load returns recent scheduler runs newest first', () => {
-	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
 	const admin = makeAdminLocals(kit);
 	makeSchedulerRun(kit, {
@@ -60,7 +54,6 @@ test('load returns recent scheduler runs newest first', () => {
 });
 
 test('load limits to 50 runs', () => {
-	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
 	const admin = makeAdminLocals(kit);
 	const base = new Date('2026-06-01T00:00:00.000Z').getTime();
@@ -77,7 +70,6 @@ test('load limits to 50 runs', () => {
 });
 
 test('runNow action triggers a scheduler tick and redirects', async () => {
-	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
 	const admin = makeAdminLocals(kit);
 	const before = kit.selectFrom(schedulerRuns).selectCount().executeSync();

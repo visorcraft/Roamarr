@@ -1,18 +1,17 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	const { db, sqlite, kit, close } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit, close });
-	return { db, sqlite, kit, getDb: () => kit };
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
+import { eq } from '@mongreldb/kit';
 import * as repo from './travelDataRepo';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from './tripsRepo';
@@ -22,31 +21,16 @@ import {
 	fareWatches,
 	trips
 } from '$lib/server/db/mongrelSchema';
-import {
-	geonamesCities as drizzleGeonamesCities,
-	fareProviders as drizzleFareProviders,
-	fareWatches as drizzleFareWatches
-} from '$lib/server/db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
-import { eq } from '@mongreldb/kit';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(fareWatches).executeSync();
 	ctx.kit.deleteFrom(fareProviders).executeSync();
 	ctx.kit.deleteFrom(geonamesCities).executeSync();
 	ctx.kit.deleteFrom(trips).executeSync();
-	// users are reset via legacy below; keep kit users in sync by rebuilding them per test.
-}
-
-function resetLegacyTables() {
-	ctx.sqlite.exec(
-		'delete from fare_watches; delete from fare_providers; delete from geonames_cities; delete from segments; delete from trips; delete from users;'
-	);
 }
 
 beforeEach(() => {
 	resetKitTables();
-	resetLegacyTables();
 });
 
 afterAll(() => {
@@ -96,12 +80,11 @@ test('importCitiesBatch clears existing data and inserts rows', () => {
 	expect(repo.getCityByGeoNameId(LYON.geonameId)?.name).toBe('Lyon');
 	expect(repo.getCityByGeoNameId(PARIS.geonameId)).toBeNull();
 
-	const legacy = ctx.db
-		.select()
-		.from(drizzleGeonamesCities)
-		.where(eq(drizzleGeonamesCities.geoname_id, BigInt(LYON.geonameId)))
-		.get();
-	expect(legacy?.name).toBe('Lyon');
+	const stored = ctx.kit
+		.selectFrom(geonamesCities)
+		.where(eq(geonamesCities.geoname_id, BigInt(LYON.geonameId)))
+		.executeSync()[0];
+	expect(stored?.name).toBe('Lyon');
 });
 
 test('searchCities filters by country and query', () => {
@@ -143,7 +126,7 @@ test('listTopCitiesByPopulation returns global top cities', () => {
 
 // Fare providers
 
-test('createFareProvider encrypts the API key and mirrors to legacy', () => {
+test('createFareProvider encrypts the API key', () => {
 	const u = makeKitUser({ email: 'fp@x.c' });
 	const p = repo.createFareProvider({
 		userId: Number(u.id),
@@ -156,19 +139,12 @@ test('createFareProvider encrypts the API key and mirrors to legacy', () => {
 	expect(p.label).toBe('Work');
 	expect(p.apiKey).toBe('SECRET');
 
-	const kitRow = ctx.kit
+	const stored = ctx.kit
 		.selectFrom(fareProviders)
-		.where(kitEq(fareProviders.id, BigInt(p.id)))
+		.where(eq(fareProviders.id, BigInt(p.id)))
 		.executeSync()[0];
-	expect(kitRow!.api_key).not.toBe('SECRET');
-
-	const legacy = ctx.db
-		.select()
-		.from(drizzleFareProviders)
-		.where(eq(drizzleFareProviders.id, BigInt(p.id)))
-		.get()!;
-	expect(legacy.apiKey).not.toBe('SECRET');
-	expect(legacy.userId).toBe(Number(u.id));
+	expect(stored!.api_key).not.toBe('SECRET');
+	expect(Number(stored!.user_id)).toBe(Number(u.id));
 });
 
 test('updateFareProvider preserves the API key when given an empty string', () => {
@@ -187,7 +163,7 @@ test('updateFareProvider preserves the API key when given an empty string', () =
 	expect(updated?.apiKey).toBe('ORIGINAL-KEY');
 });
 
-test('deleteFareProvider removes the row from kit and legacy', () => {
+test('deleteFareProvider removes the row', () => {
 	const u = makeKitUser({ email: 'fp-del@x.c' });
 	const p = repo.createFareProvider({
 		userId: Number(u.id),
@@ -200,7 +176,7 @@ test('deleteFareProvider removes the row from kit and legacy', () => {
 	expect(repo.deleteFareProvider(p.id)).toBe(true);
 	expect(repo.getFareProviderById(p.id)).toBeNull();
 	expect(
-		ctx.db.select().from(drizzleFareProviders).where(eq(drizzleFareProviders.id, BigInt(p.id))).get()
+		ctx.kit.selectFrom(fareProviders).where(eq(fareProviders.id, BigInt(p.id))).executeSync()[0]
 	).toBeUndefined();
 });
 
@@ -229,7 +205,7 @@ test('listFareProvidersForUser returns only owned providers', () => {
 
 // Fare watches
 
-test('createFareWatch and updateFareWatch mirror to legacy', () => {
+test('createFareWatch and updateFareWatch persist status', () => {
 	const u = makeKitUser({ email: 'fw@x.c' });
 	const trip = createTrip(Number(u.id), { name: 'T' });
 	const provider = repo.createFareProvider({
@@ -244,18 +220,17 @@ test('createFareWatch and updateFareWatch mirror to legacy', () => {
 	expect(watch.status).toBe('active');
 	expect(watch.tripId).toBe(trip.id);
 
-	const legacy = ctx.db
-		.select()
-		.from(drizzleFareWatches)
-		.where(eq(drizzleFareWatches.id, BigInt(watch.id)))
-		.get()!;
-	expect(legacy.providerId).toBe(provider.id);
-	expect(legacy.status).toBe('active');
+	const stored = ctx.kit
+		.selectFrom(fareWatches)
+		.where(eq(fareWatches.id, BigInt(watch.id)))
+		.executeSync()[0];
+	expect(Number(stored!.provider_id)).toBe(provider.id);
+	expect(stored!.status).toBe('active');
 
 	const updated = repo.updateFareWatch(watch.id, { status: 'paused' });
 	expect(updated?.status).toBe('paused');
 	expect(
-		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, BigInt(watch.id))).get()!.status
+		ctx.kit.selectFrom(fareWatches).where(eq(fareWatches.id, BigInt(watch.id))).executeSync()[0]!.status
 	).toBe('paused');
 });
 
@@ -275,7 +250,7 @@ test('touchFareWatch updates lastCheckedAt', () => {
 	expect(touched?.lastCheckedAt).not.toBeNull();
 });
 
-test('deleteFareWatch removes the row from kit and legacy', () => {
+test('deleteFareWatch removes the row', () => {
 	const u = makeKitUser({ email: 'fw-del@x.c' });
 	const trip = createTrip(Number(u.id), { name: 'T' });
 	const provider = repo.createFareProvider({
@@ -290,7 +265,7 @@ test('deleteFareWatch removes the row from kit and legacy', () => {
 	expect(repo.deleteFareWatch(watch.id)).toBe(true);
 	expect(repo.getFareWatchById(watch.id)).toBeNull();
 	expect(
-		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, BigInt(watch.id))).get()
+		ctx.kit.selectFrom(fareWatches).where(eq(fareWatches.id, BigInt(watch.id))).executeSync()[0]
 	).toBeUndefined();
 });
 

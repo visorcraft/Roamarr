@@ -13,9 +13,9 @@ const ctx = vi.hoisted(
 );
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
-	const { db, sqlite, kit, close } = freshDb();
-	Object.assign(ctx, { db, sqlite, kit, close });
-	return { db, sqlite, kit, getDb: () => kit };
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
 import {

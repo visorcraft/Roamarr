@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -15,7 +15,7 @@ import { eq } from '@mongreldb/kit';
 import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';
-import { users, trips, groups, groupMembers, tripShares, reminders } from '$lib/server/db/mongrelSchema';
+import { trips, reminders } from '$lib/server/db/mongrelSchema';
 import { makeGetEvent } from '../../../tests/eventHelpers';
 
 function event(user: { id: number; email: string }, search = '') {
@@ -23,7 +23,6 @@ function event(user: { id: number; email: string }, search = '') {
 }
 
 test('owner sees full trip; non-owner without share is blocked', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
@@ -33,7 +32,6 @@ test('owner sees full trip; non-owner without share is blocked', () => {
 });
 
 test('trip list includes shared trips and labels them shared', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'list-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'list-b@x.c', passwordHash: 'x', displayName: 'B' });
 	const c = makeUser(kit, { email: 'list-c@x.c', passwordHash: 'x', displayName: 'C' });
@@ -64,7 +62,6 @@ test('trip list includes shared trips and labels them shared', () => {
 });
 
 test('trip list defaults to startDate ascending', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'sort-a@x.c', passwordHash: 'x', displayName: 'A' });
 
 	makeTrip(kit, a.id, { name: 'Zulu', startDate: '2026-09-01' });
@@ -78,7 +75,6 @@ test('trip list defaults to startDate ascending', () => {
 });
 
 test('trip list filters by query on name and destination', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'q-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'q-b@x.c', passwordHash: 'x', displayName: 'B' });
 
@@ -99,7 +95,6 @@ test('trip list filters by query on name and destination', () => {
 });
 
 test('trip list sorts by name and order', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'name-a@x.c', passwordHash: 'x', displayName: 'A' });
 
 	makeTrip(kit, a.id, { name: 'Zebra', startDate: '2026-09-01' });
@@ -114,7 +109,6 @@ test('trip list sorts by name and order', () => {
 });
 
 test('trip list filters archived and favorite trips', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'af-a@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'Active', startDate: '2026-07-01' });
 	makeTrip(kit, a.id, { name: 'Archived', startDate: '2026-08-01', archived: true });
@@ -131,7 +125,6 @@ test('trip list filters archived and favorite trips', () => {
 });
 
 test('trip list filters by status', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'status-a@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'Planning Trip', startDate: '2026-07-01', status: 'planning' });
 	makeTrip(kit, a.id, { name: 'Booked Trip', startDate: '2026-08-01', status: 'booked' });
@@ -151,7 +144,6 @@ test('trip list filters by status', () => {
 });
 
 test('trip list rejects invalid status values', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'status-bad@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'Only', startDate: '2026-07-01' });
 
@@ -161,7 +153,6 @@ test('trip list rejects invalid status values', () => {
 });
 
 test('trip list rejects invalid sort and order values', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' });
 	makeTrip(kit, a.id, { name: 'Only', startDate: '2026-07-01' });
 
@@ -183,7 +174,6 @@ function makeEvent(user: { id: number }, body: FormData) {
 }
 
 test('bulk unarchive and unfavorite actions update selected trips', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'bulk@x.c', passwordHash: 'x', displayName: 'A' });
 	const t1 = makeTrip(kit, a.id, { name: 'A', archived: true, favorite: true });
 	const t2 = makeTrip(kit, a.id, { name: 'B', archived: true, favorite: true });
@@ -195,8 +185,8 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 		status: 303,
 		location: '/trips'
 	});
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t1.id))).get()!.archived).toBe(false);
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t2.id))).get()!.archived).toBe(false);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t1.id))).executeSync()[0]!.archived).toBe(false);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t2.id))).executeSync()[0]!.archived).toBe(false);
 
 	const unfavorite = new FormData();
 	unfavorite.append('selected', String(t1.id));
@@ -204,21 +194,20 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 		status: 303,
 		location: '/trips'
 	});
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t1.id))).get()!.favorite).toBe(false);
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t2.id))).get()!.favorite).toBe(true);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t1.id))).executeSync()[0]!.favorite).toBe(false);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t2.id))).executeSync()[0]!.favorite).toBe(true);
 });
 
 
 test('bulk delete removes trip-level and segment reminders', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const a = makeUser(kit, { email: 'del-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'ToDelete', startDate: '2099-01-01' });
 	upsertCustomReminder(a.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
-	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(1);
+	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(1);
 
 	const body = new FormData();
 	body.append('selected', String(t.id));
 	await expect(actions.delete(makeEvent(a, body))).rejects.toMatchObject({ status: 303, location: '/trips' });
-	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
-	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(0);
+	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
+	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(0);
 });

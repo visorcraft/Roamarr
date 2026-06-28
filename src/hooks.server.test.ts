@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./lib/server/db', async () => {
 	const { freshDb } = await import('../tests/helpers');
 	Object.assign(ctx, freshDb());

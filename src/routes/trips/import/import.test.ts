@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,10 +8,14 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { actions } from './+page.server';
-import { users, trips, segments } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { trips, segments } from '$lib/server/db/mongrelSchema';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import { makeLocals } from '../../../../tests/eventHelpers';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeTestUser(email: string) {
 	return usersRepo.createUser({
@@ -36,7 +40,7 @@ function makeEvent(file: File, format = 'json', userId = 1) {
 }
 
 test('imports a valid JSON file', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeTestUser('a@x.c');
 	const json = JSON.stringify({
 		trips: [
@@ -60,13 +64,12 @@ test('imports a valid JSON file', async () => {
 	expect(result.success).toBe(true);
 	expect(result.result.imported).toBe(1);
 	expect(result.result.segmentCount).toBe(1);
-	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
 	expect(t!.name).toBe('Imported Trip');
-	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).all()).toHaveLength(1);
+	expect(kit.selectFrom(segments).where(eq(segments.trip_id, t!.id)).executeSync()).toHaveLength(1);
 });
 
 test('imports a valid CSV file', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser('b@x.c');
 	const csv =
 		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\n' +
@@ -95,7 +98,6 @@ test('rejects missing file', async () => {
 });
 
 test('rejects malformed JSON', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser('c@x.c');
 	const file = new File(['not json'], 'trips.json', { type: 'application/json' });
 	const result = (await actions.default(makeEvent(file, 'json', Number(u.id)))) as {
@@ -107,7 +109,6 @@ test('rejects malformed JSON', async () => {
 });
 
 test('rejects invalid format parameter', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser('d@x.c');
 	const file = new File(['{}'], 'trips.json', { type: 'application/json' });
 	const result = (await actions.default(makeEvent(file, 'xml', Number(u.id)))) as {

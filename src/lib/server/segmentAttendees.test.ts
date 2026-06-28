@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -18,7 +18,7 @@ import {
 	upsertAttendee,
 	deleteAttendee
 } from './segmentAttendees';
-import { users, trips, segments, tripCompanions, auditLogs } from './db/mongrelSchema';
+import { auditLogs } from './db/mongrelSchema';
 
 function expectHttpError(fn: () => void, status: number) {
 	try {
@@ -32,7 +32,6 @@ function expectHttpError(fn: () => void, status: number) {
 }
 
 test('sets and updates attendee status for a segment', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, { type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' });
@@ -48,13 +47,12 @@ test('sets and updates attendee status for a segment', () => {
 	expect(rows).toHaveLength(1);
 	expect(rows[0].status).toBe('maybe');
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
+	const audit = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
 	expect(audit.length).toBeGreaterThanOrEqual(2);
 	expect(audit[audit.length - 1].action).toBe('set_attendee_status');
 });
 
 test('deletes an attendee', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' });
 	const t = makeTrip(kit, u.id, { name: 'T2' });
 	const s = makeSegment(kit, t.id, { type: 'flight', title: 'B', startAt: '2026-01-02T10:00:00Z', startTz: 'UTC' });
@@ -66,12 +64,11 @@ test('deletes an attendee', () => {
 	deleteAttendee(u.id, t.id, s.id, c.id);
 	expect(listAttendeesForSegment(s.id)).toHaveLength(0);
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
+	const audit = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'remove_attendee')).toBe(true);
 });
 
 test('loads attendees grouped by segment', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o3@x.c', passwordHash: 'x', displayName: 'O3' });
 	const t = makeTrip(kit, u.id, { name: 'T3' });
 	const s1 = makeSegment(kit, t.id, { type: 'hotel', title: 'H1', startAt: '2026-01-03T10:00:00Z', startTz: 'UTC' });
@@ -90,7 +87,6 @@ test('loads attendees grouped by segment', () => {
 });
 
 test('rejects invalid status', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o4@x.c', passwordHash: 'x', displayName: 'O4' });
 	const t = makeTrip(kit, u.id, { name: 'T4' });
 	const s = makeSegment(kit, t.id, { type: 'flight', title: 'D', startAt: '2026-01-05T10:00:00Z', startTz: 'UTC' });
@@ -103,7 +99,6 @@ test('rejects invalid status', () => {
 });
 
 test('enforces trip ownership via segment and companion', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const tA = makeTrip(kit, a.id, { name: 'TA' });
@@ -122,7 +117,6 @@ test('empty segment id list returns empty map', () => {
 });
 
 test('deleting non-existing attendee is idempotent', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser(kit, { email: 'o5@x.c', passwordHash: 'x', displayName: 'O5' });
 	const t = makeTrip(kit, u.id, { name: 'T5' });
 	const s = makeSegment(kit, t.id, { type: 'flight', title: 'E', startAt: '2026-01-07T10:00:00Z', startTz: 'UTC' });

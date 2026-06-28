@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,7 +9,6 @@ vi.mock('$lib/server/db', async () => {
 
 import { load } from './+page.server';
 import { users, auditLogs } from '$lib/server/db/mongrelSchema';
-import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { logAudit } from '$lib/server/audit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 
@@ -25,12 +24,9 @@ function makeUser(email: string, displayName: string, role: 'admin' | 'user' = '
 }
 
 beforeEach(() => {
-	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
-	db.delete(auditLogs).run();
-	db.delete(users).run();
-	kit.deleteFrom(kitAuditLogs).executeSync();
-	kit.deleteFrom(kitUsers).executeSync();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('load returns recent audit logs for admin', () => {

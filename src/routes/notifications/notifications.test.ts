@@ -1,12 +1,16 @@
 import { test, expect, vi } from 'vitest';
 import { eq } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+
+function kitDb(): import('@mongreldb/kit').KitDatabase {
+	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+}
 
 import { actions } from './+page.server';
 import {
@@ -35,20 +39,21 @@ function insertNotification(userId: number, title: string) {
 }
 
 test('markRead only affects the caller’s own notification', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('a1@x.c', 'A');
 	const b = makeUser('b1@x.c', 'B');
 	const nB = insertNotification(b.id, 't');
 	expect(() => markRead(a.id, nB.id)).toThrow(
 		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
 	);
-	expect(db.select().from(notifications).get()!.readAt).toBeNull();
+	// Kit returns '' for an unset nullable timestamp, not null.
+	expect(kit.selectFrom(notifications).executeSync()[0]!.read_at).toBeFalsy();
 	markRead(b.id, nB.id);
-	expect(db.select().from(notifications).get()!.readAt).not.toBeNull();
+	expect(kit.selectFrom(notifications).executeSync()[0]!.read_at).toBeTruthy();
 });
 
 test('markUnread clears readAt for the caller’s own notification', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('a2@x.c', 'A');
 	const b = makeUser('b2@x.c', 'B');
 	const nB = insertNotification(b.id, 't');
@@ -57,11 +62,13 @@ test('markUnread clears readAt for the caller’s own notification', () => {
 		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
 	);
 	markUnread(b.id, nB.id);
-	expect(db.select().from(notifications).where(eq(notifications.id, BigInt(nB.id))).get()!.readAt).toBeNull();
+	expect(
+		kit.selectFrom(notifications).where(eq(notifications.id, BigInt(nB.id))).executeSync()[0]!.read_at
+	).toBeFalsy();
 });
 
 test('markAllRead only affects the caller’s unread notifications', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const a = makeUser('a3@x.c', 'A');
 	const b = makeUser('b3@x.c', 'B');
 	const nA1 = insertNotification(a.id, 'a1');
@@ -69,10 +76,10 @@ test('markAllRead only affects the caller’s unread notifications', () => {
 	const nB = insertNotification(b.id, 'b1');
 	markRead(a.id, nA1.id);
 	markAllRead(a.id);
-	const rows = db.select().from(notifications).all();
-	expect(rows.find((r: Record<string, unknown>) => r.id === nA1.id)!.readAt).not.toBeNull();
-	expect(rows.find((r: Record<string, unknown>) => r.id === nA2.id)!.readAt).not.toBeNull();
-	expect(rows.find((r: Record<string, unknown>) => r.id === nB.id)!.readAt).toBeNull();
+	const rows = kit.selectFrom(notifications).executeSync();
+	expect(rows.find((r) => Number(r.id) === nA1.id)!.read_at).toBeTruthy();
+	expect(rows.find((r) => Number(r.id) === nA2.id)!.read_at).toBeTruthy();
+	expect(rows.find((r) => Number(r.id) === nB.id)!.read_at).toBeFalsy();
 });
 
 test('markAllRead action sets a flash cookie and redirects', async () => {

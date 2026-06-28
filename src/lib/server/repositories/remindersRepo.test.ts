@@ -1,25 +1,24 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@mongreldb/kit';
 import * as repo from './remindersRepo';
 import * as usersRepo from './usersRepo';
 import {
-	reminders as drizzleReminders,
-	notifications as drizzleNotifications,
-	schedulerRuns as drizzleSchedulerRuns
+	reminders,
+	notifications,
+	schedulerRuns
 } from '$lib/server/db/mongrelSchema';
-import {
-	reminders as kitReminders,
-	notifications as kitNotifications,
-	schedulerRuns as kitSchedulerRuns
-} from '$lib/server/db/mongrelSchema';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -32,21 +31,16 @@ function makeUser(email: string) {
 }
 
 beforeEach(() => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-
-	kit.deleteFrom(kitSchedulerRuns).executeSync();
-	kit.deleteFrom(kitNotifications).executeSync();
-	kit.deleteFrom(kitReminders).executeSync();
-	db.delete(drizzleSchedulerRuns).run();
-	db.delete(drizzleNotifications).run();
-	db.delete(drizzleReminders).run();
+	const kit = kitDb();
+	kit.deleteFrom(schedulerRuns).executeSync();
+	kit.deleteFrom(notifications).executeSync();
+	kit.deleteFrom(reminders).executeSync();
 });
 
 // Reminders
 
 test('create/get/list/update/delete reminder', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('reminder@x.c');
 
 	const created = repo.createReminder({
@@ -63,23 +57,22 @@ test('create/get/list/update/delete reminder', () => {
 	expect(repo.getReminderBySource('custom', 'trip', 1)?.id).toBe(created.id);
 	expect(repo.listRemindersForUser(Number(u.id))).toHaveLength(1);
 
-	const legacy = db
-		.select()
-		.from(drizzleReminders)
-		.where(eq(drizzleReminders.id, BigInt(created.id)))
-		.get();
-	expect(legacy?.fireAt).toBe('2026-01-01T00:00:00Z');
+	const stored = kit
+		.selectFrom(reminders)
+		.where(eq(reminders.id, BigInt(created.id)))
+		.executeSync()[0];
+	expect(stored?.fire_at).toBe('2026-01-01T00:00:00Z');
 
 	const updated = repo.updateReminder(created.id, { fireAt: '2026-01-02T00:00:00Z' });
 	expect(updated?.fireAt).toBe('2026-01-02T00:00:00Z');
 	expect(
-		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(created.id))).get()?.fireAt
+		kit.selectFrom(reminders).where(eq(reminders.id, BigInt(created.id))).executeSync()[0]?.fire_at
 	).toBe('2026-01-02T00:00:00Z');
 
 	expect(repo.deleteReminder(created.id)).toBe(true);
 	expect(repo.getReminderById(created.id)).toBeNull();
 	expect(repo.listRemindersForUser(Number(u.id))).toHaveLength(0);
-	expect(db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(created.id))).get()).toBeUndefined();
+	expect(kit.selectFrom(reminders).where(eq(reminders.id, BigInt(created.id))).executeSync()[0]).toBeUndefined();
 });
 
 test('upsertReminderBySource updates existing row', () => {
@@ -133,8 +126,8 @@ test('listPendingRemindersBefore filters by status and fireAt', () => {
 	expect(pending[0].refId).toBe(1);
 });
 
-test('markReminderSent updates status and mirrors to legacy', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+test('markReminderSent updates status', () => {
+	const kit = kitDb();
 	const u = makeUser('sent@x.c');
 	const r = repo.createReminder({
 		userId: Number(u.id),
@@ -147,7 +140,7 @@ test('markReminderSent updates status and mirrors to legacy', () => {
 	expect(updated?.status).toBe('sent');
 	expect(updated?.sentAt).toBe('2026-01-01T01:00:00Z');
 	expect(
-		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(r.id))).get()?.status
+		kit.selectFrom(reminders).where(eq(reminders.id, BigInt(r.id))).executeSync()[0]?.status
 	).toBe('sent');
 });
 
@@ -167,7 +160,7 @@ test('deleteRemindersForRef removes rows by ref', () => {
 // Notifications
 
 test('create/list/count/get/mark-read/delete notification', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const u = makeUser('notif@x.c');
 
 	const created = repo.createNotification({
@@ -182,19 +175,18 @@ test('create/list/count/get/mark-read/delete notification', () => {
 	expect(repo.countUnreadNotificationsForUser(Number(u.id))).toBe(1);
 	expect(repo.getNotificationById(created.id)?.body).toBe('World');
 
-	const legacy = db
-		.select()
-		.from(drizzleNotifications)
-		.where(eq(drizzleNotifications.id, BigInt(created.id)))
-		.get();
-	expect(legacy?.title).toBe('Hello');
+	const stored = kit
+		.selectFrom(notifications)
+		.where(eq(notifications.id, BigInt(created.id)))
+		.executeSync()[0];
+	expect(stored?.title).toBe('Hello');
 
 	const read = repo.markNotificationRead(created.id, '2026-01-01T00:00:00Z');
 	expect(read?.readAt).toBe('2026-01-01T00:00:00Z');
 	expect(repo.countUnreadNotificationsForUser(Number(u.id))).toBe(0);
 	expect(
-		db.select().from(drizzleNotifications).where(eq(drizzleNotifications.id, BigInt(created.id))).get()
-			?.readAt
+		kit.selectFrom(notifications).where(eq(notifications.id, BigInt(created.id))).executeSync()[0]
+			?.read_at
 	).not.toBeNull();
 
 	repo.markNotificationUnread(created.id);
@@ -207,7 +199,7 @@ test('create/list/count/get/mark-read/delete notification', () => {
 test('listNotificationsForUser respects includeRead and limit', () => {
 	const u = makeUser('notif-opts@x.c');
 	const a = repo.createNotification({ userId: Number(u.id), title: 'A', body: 'a' });
-	const b = repo.createNotification({ userId: Number(u.id), title: 'B', body: 'b' });
+	repo.createNotification({ userId: Number(u.id), title: 'B', body: 'b' });
 	repo.markNotificationRead(a.id);
 
 	expect(repo.listNotificationsForUser(Number(u.id), { includeRead: false })).toHaveLength(1);
@@ -218,10 +210,7 @@ test('deleteOldNotifications removes old rows', () => {
 	const u = makeUser('notif-old@x.c');
 	repo.createNotification({ userId: Number(u.id), title: 'Old', body: 'x' });
 
-	const before = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
-		.selectFrom(kitNotifications)
-		.selectCount()
-		.executeSync();
+	const before = kitDb().selectFrom(notifications).selectCount().executeSync();
 	expect(before).toBeGreaterThan(0n);
 
 	repo.deleteOldNotifications('2099-01-01T00:00:00Z');
@@ -231,7 +220,7 @@ test('deleteOldNotifications removes old rows', () => {
 // Scheduler runs
 
 test('start/finish/list/prune scheduler runs', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kit = kitDb();
 	const run = repo.startSchedulerRun('tick');
 	expect(run.finishedAt).toBeNull();
 
@@ -239,12 +228,11 @@ test('start/finish/list/prune scheduler runs', () => {
 	expect(finished?.success).toBe(true);
 	expect(finished?.finishedAt).not.toBeNull();
 
-	const legacy = db
-		.select()
-		.from(drizzleSchedulerRuns)
-		.where(eq(drizzleSchedulerRuns.id, BigInt(run.id)))
-		.get();
-	expect(legacy?.success).toBe(true);
+	const stored = kit
+		.selectFrom(schedulerRuns)
+		.where(eq(schedulerRuns.id, BigInt(run.id)))
+		.executeSync()[0];
+	expect(stored?.success).toBe(true);
 
 	expect(repo.listRecentSchedulerRuns(10)).toHaveLength(1);
 

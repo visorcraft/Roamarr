@@ -29,12 +29,6 @@ import { migrations } from '../src/lib/server/db/mongrelMigrations/0001_initial'
 let userCounter = 0;
 let tripCounter = 0;
 
-function allocId(): number {
-	// Random high id avoids collisions when the helpers module is reloaded
-	// between tests while the in-memory database persists.
-	return 1_000_000 + Math.floor(Math.random() * 1_000_000_000);
-}
-
 
 export function freshDb() {
 	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
@@ -101,11 +95,9 @@ function serializeJson(value: unknown): string | null {
 
 export function makeUser(kit: KitDatabase, over: Partial<Record<string, unknown>> = {}) {
 	const n = userCounter++;
-	const id = allocId();
 	const row = kit
 		.insertInto(users)
 		.values({
-			id: BigInt(id),
 			email: (over.email as string) ?? `u${n}@x.c`,
 			password_hash: (over.passwordHash as string) ?? 'x',
 			display_name: (over.displayName as string) ?? `U${n}`,
@@ -121,12 +113,12 @@ export function makeUser(kit: KitDatabase, over: Partial<Record<string, unknown>
 			webhook_notifications: over.webhookNotifications as boolean | undefined,
 			theme_id: over.themeId as string | undefined,
 			default_currency: over.defaultCurrency as string | undefined,
-			calendar_token: (over.calendarToken as string) ?? `cal-user-${id}`,
+			calendar_token: (over.calendarToken as string) ?? `cal-user-${n}`,
 			calendar_token_expires_at: (over.calendarTokenExpiresAt as string | null) ?? null
 		} as any)
 		.executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		email: row.email,
 		passwordHash: row.password_hash,
 		displayName: row.display_name,
@@ -158,11 +150,9 @@ export function makeTrip(
 	over: Partial<Record<string, unknown>> = {}
 ) {
 	const n = tripCounter++;
-	const id = allocId();
 	const row = kit
 		.insertInto(trips)
 		.values({
-			id: BigInt(id),
 			owner_id: BigInt(ownerId),
 			name: (over.name as string) ?? `Test Trip ${n}`,
 			destination: (over.destination as string | null) ?? null,
@@ -177,17 +167,17 @@ export function makeTrip(
 			archived: (over.archived as boolean) ?? false,
 			favorite: (over.favorite as boolean) ?? false,
 			default_visibility: (over.defaultVisibility as any) ?? 'private',
-			public_token: (over.publicToken as string) ?? `pub-trip-${id}`,
+			public_token: (over.publicToken as string) ?? `pub-trip-${n}`,
 			public_token_expires_at: (over.publicTokenExpiresAt as string | null) ?? null,
 			public_show_details: (over.publicShowDetails as boolean) ?? false,
-			calendar_token: (over.calendarToken as string) ?? `cal-trip-${id}`,
+			calendar_token: (over.calendarToken as string) ?? `cal-trip-${n}`,
 			calendar_token_expires_at: (over.calendarTokenExpiresAt as string | null) ?? null,
 			base_currency: (over.baseCurrency as string) ?? 'USD',
 			status: (over.status as any) ?? 'booked'
 		} as any)
 		.executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		ownerId,
 		name: row.name,
 		destination: row.destination,
@@ -221,11 +211,9 @@ export function makeSegment(
 	tripId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit
 		.insertInto(segments)
 		.values({
-			id: BigInt(id),
 			trip_id: BigInt(tripId),
 			type: (over.type as any) ?? 'flight',
 			title: (over.title as string) ?? 'Segment',
@@ -250,7 +238,7 @@ export function makeSegment(
 		} as any)
 		.executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		tripId,
 		type: row.type,
 		title: row.title,
@@ -284,11 +272,9 @@ export function makeCompanion(
 	tripId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit
 		.insertInto(tripCompanions)
 		.values({
-			id: BigInt(id),
 			trip_id: BigInt(tripId),
 			name: (over.name as string) ?? 'Companion',
 			category: (over.category as any) ?? 'adult',
@@ -308,7 +294,7 @@ export function makeCompanion(
 		} as any)
 		.executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		tripId,
 		name: row.name,
 		category: row.category,
@@ -332,13 +318,12 @@ export function makeCompanion(
 // Groups and members
 
 export function makeGroup(kit: KitDatabase, ownerId: number, name: string) {
-	const id = allocId();
 	const row = kit
 		.insertInto(groups)
-		.values({ id: BigInt(id), owner_id: BigInt(ownerId), name: name.trim() } as any)
+		.values({ owner_id: BigInt(ownerId), name: name.trim() } as any)
 		.executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		ownerId,
 		name: row.name,
 		createdAt: row.created_at
@@ -365,11 +350,9 @@ export function makeShare(
 		showDetails?: boolean;
 	}
 ) {
-	const id = allocId();
 	const sharedWithUserId = input.sharedWithUserId ?? null;
 	const sharedWithGroupId = input.sharedWithGroupId ?? null;
 	const row = kit.insertInto(tripShares).values({
-		id: BigInt(id),
 		trip_id: BigInt(input.tripId),
 		shared_with_user_id: sharedWithUserId != null ? BigInt(sharedWithUserId) : null,
 		shared_with_group_id: sharedWithGroupId != null ? BigInt(sharedWithGroupId) : null,
@@ -377,7 +360,7 @@ export function makeShare(
 		show_details: input.showDetails ?? false
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		tripId: input.tripId,
 		sharedWithUserId,
 		sharedWithGroupId,
@@ -394,9 +377,7 @@ export function makeCard(
 	userId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(cards).values({
-		id: BigInt(id),
 		user_id: BigInt(userId),
 		nickname: (over.nickname as string) ?? 'Card',
 		network: (over.network as any) ?? 'visa',
@@ -404,7 +385,7 @@ export function makeCard(
 		notes: (over.notes as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId,
 		nickname: row.nickname,
 		network: row.network,
@@ -420,9 +401,7 @@ export function makeInsurancePolicy(
 	userId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(insurancePolicies).values({
-		id: BigInt(id),
 		user_id: BigInt(userId),
 		provider: (over.provider as string) ?? 'Provider',
 		policy_number: (over.policyNumber as string | null) ?? null,
@@ -435,7 +414,7 @@ export function makeInsurancePolicy(
 		notes: (over.notes as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId,
 		provider: row.provider,
 		policyNumber: row.policy_number,
@@ -456,9 +435,7 @@ export function makeTravelDocument(
 	userId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(travelDocuments).values({
-		id: BigInt(id),
 		user_id: BigInt(userId),
 		companion_id: over.companionId ? BigInt(over.companionId as number) : null,
 		type: (over.type as any) ?? 'passport',
@@ -468,7 +445,7 @@ export function makeTravelDocument(
 		notes: (over.notes as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId,
 		companionId: nullableFk(row.companion_id),
 		type: row.type,
@@ -486,9 +463,7 @@ export function makeFareProvider(
 	userId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(fareProviders).values({
-		id: BigInt(id),
 		user_id: BigInt(userId),
 		provider_key: (over.providerKey as string) ?? 'stub',
 		label: (over.label as string) ?? '',
@@ -496,7 +471,7 @@ export function makeFareProvider(
 		enabled: (over.enabled as boolean) ?? true
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId,
 		providerKey: row.provider_key,
 		label: row.label,
@@ -514,16 +489,14 @@ export function makeFareWatch(
 		status?: 'active' | 'paused';
 	}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(fareWatches).values({
-		id: BigInt(id),
 		trip_id: BigInt(input.tripId),
 		provider_id: BigInt(input.providerId),
 		segment_id: input.segmentId != null ? BigInt(input.segmentId) : null,
 		status: input.status ?? 'active'
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		tripId: input.tripId,
 		providerId: input.providerId,
 		segmentId: input.segmentId ?? null,
@@ -541,16 +514,14 @@ export function makeNotification(
 	userId: number,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(notifications).values({
-		id: BigInt(id),
 		user_id: BigInt(userId),
 		title: (over.title as string) ?? 'Notification',
 		body: (over.body as string) ?? 'Body',
 		link: (over.link as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId,
 		title: row.title,
 		body: row.body,
@@ -564,9 +535,7 @@ export function makeReminder(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(reminders).values({
-		id: BigInt(id),
 		user_id: BigInt((over.userId as number) ?? 0),
 		kind: (over.kind as any) ?? 'custom',
 		ref_type: (over.refType as any) ?? 'trip',
@@ -577,7 +546,7 @@ export function makeReminder(
 		sent_at: (over.sentAt as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		userId: Number(row.user_id),
 		kind: row.kind,
 		refType: row.ref_type,
@@ -596,9 +565,7 @@ export function makeExpense(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(tripExpenses).values({
-		id: BigInt(id),
 		trip_id: BigInt((over.tripId as number) ?? 0),
 		description: (over.description as string) ?? 'Expense',
 		amount: BigInt((over.amount as number) ?? 0),
@@ -610,7 +577,7 @@ export function makeExpense(
 		split_among: serializeJson(over.splitAmong) ?? '[]'
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		tripId: Number(row.trip_id),
 		description: row.description,
 		amount: Number(row.amount),
@@ -628,9 +595,7 @@ export function makeAttachment(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const row = kit.insertInto(tripExpenseAttachments).values({
-		id: BigInt(id),
 		expense_id: BigInt((over.expenseId as number) ?? 0),
 		filename: (over.filename as string) ?? 'file.png',
 		storage_key: (over.storageKey as string) ?? 'key',
@@ -638,7 +603,7 @@ export function makeAttachment(
 		size_bytes: BigInt((over.sizeBytes as number) ?? 0)
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		expenseId: Number(row.expense_id),
 		filename: row.filename,
 		storageKey: row.storage_key,
@@ -654,17 +619,15 @@ export function makeSchedulerRun(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const id = allocId();
 	const now = new Date().toISOString();
 	const row = kit.insertInto(schedulerRuns).values({
-		id: BigInt(id),
 		started_at: (over.startedAt as string) ?? now,
 		finished_at: (over.finishedAt as string | null) ?? null,
 		success: (over.success as boolean) ?? false,
 		error_message: (over.errorMessage as string | null) ?? null
 	} as any).executeSync();
 	return {
-		id,
+		id: Number(row.id),
 		startedAt: row.started_at,
 		finishedAt: row.finished_at,
 		success: row.success,

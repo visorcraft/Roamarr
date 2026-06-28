@@ -1,5 +1,7 @@
 import { test, expect, vi } from 'vitest';
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const ctx = vi.hoisted(() => ({ db: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
@@ -71,13 +73,14 @@ test('remove companion deletes the row', () => {
 	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()).toBeUndefined();
 });
 
-test('mutations bump trip updated_at and write audit logs', () => {
+test('mutations bump trip updated_at and write audit logs', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
 	const u = makeUser(kit, { email: 'audit@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const before = t.updatedAt;
 
+	await sleep(5);
 	const c = insertTripCompanion(u.id, t.id, { name: 'Eve' });
 	const afterInsert = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!.updatedAt;
 	expect(afterInsert).not.toBe(before);

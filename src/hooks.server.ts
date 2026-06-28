@@ -3,6 +3,7 @@ import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp } from '$lib/server/boot';
+import { tileCspOrigins } from '$lib/server/mapTiles';
 import type { ToastVariant } from '$lib/toast';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
@@ -14,21 +15,24 @@ bootApp();
 
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/health$/];
 
-const CSP_DIRECTIVES: Record<string, string[]> = {
-	'default-src': ["'self'"],
-	'script-src': ["'self'", "'unsafe-inline'"],
-	'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-	'font-src': ["'self'", 'https://fonts.gstatic.com'],
-	'img-src': ["'self'", 'data:'],
-	'connect-src': dev ? ["'self'", 'ws:', 'wss:'] : ["'self'"],
-	'form-action': ["'self'"],
-	'base-uri': ["'self'"],
-	'frame-ancestors': ["'none'"],
-	'object-src': ["'none'"]
-};
-
 function contentSecurityPolicy() {
-	return Object.entries(CSP_DIRECTIVES)
+	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,
+	// and blob: workers since MapLibre runs its renderer in a blob-sourced Web Worker.
+	const tiles = tileCspOrigins();
+	const directives: Record<string, string[]> = {
+		'default-src': ["'self'"],
+		'script-src': ["'self'", "'unsafe-inline'"],
+		'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+		'font-src': ["'self'", 'https://fonts.gstatic.com'],
+		'img-src': ["'self'", 'data:', 'blob:', ...tiles],
+		'connect-src': [...(dev ? ["'self'", 'ws:', 'wss:'] : ["'self'"]), ...tiles],
+		'worker-src': ["'self'", 'blob:'],
+		'form-action': ["'self'"],
+		'base-uri': ["'self'"],
+		'frame-ancestors': ["'none'"],
+		'object-src': ["'none'"]
+	};
+	return Object.entries(directives)
 		.map(([directive, values]) => `${directive} ${values.join(' ')}`)
 		.join('; ');
 }

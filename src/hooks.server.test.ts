@@ -68,6 +68,10 @@ test('sets baseline security and CSP headers on a public response', async () => 
 	expect(parsed.get('font-src')).toContain('https://fonts.gstatic.com');
 	expect(parsed.get('frame-ancestors')).toEqual(["'none'"]);
 	expect(parsed.get('object-src')).toEqual(["'none'"]);
+	// MapLibre needs a blob worker and the configured tile origin (default: OpenStreetMap).
+	expect(parsed.get('worker-src')).toContain('blob:');
+	expect(parsed.get('img-src')).toContain('blob:');
+	expect(parsed.get('connect-src')).toContain('https://tile.openstreetmap.org');
 });
 
 test('sets CSP headers on a public share link', async () => {

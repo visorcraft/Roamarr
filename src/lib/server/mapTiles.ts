@@ -62,6 +62,32 @@ function expandTileUrl(url: string): string[] {
 	return ['a', 'b', 'c', 'd'].map((s) => url.replace('{s}', s));
 }
 
+// Origins (scheme://host) the browser must reach for the configured map tiles, for the
+// CSP allow-list. Origin only — never the full URL — so a {key} API key in the path/query
+// is never copied into a response header.
+export function tileCspOrigins(): string[] {
+	try {
+		const s = getSettings();
+		const provider = s.mapsTileProvider as MapTileProvider;
+		const rawUrl = s.mapsTileUrl || defaultTileUrl(provider);
+		if (!rawUrl) return [];
+		const candidates = rawUrl.includes('{s}')
+			? ['a', 'b', 'c', 'd'].map((sub) => rawUrl.replace('{s}', sub))
+			: [rawUrl];
+		const origins = new Set<string>();
+		for (const u of candidates) {
+			try {
+				origins.add(new URL(u).origin);
+			} catch {
+				// Unparseable template (e.g. an unexpanded {s} left in the host) — skip it.
+			}
+		}
+		return [...origins];
+	} catch {
+		return [];
+	}
+}
+
 export function resolveTileConfig(): ResolvedTileConfig | null {
 	const s = getSettings();
 	const provider = s.mapsTileProvider as MapTileProvider;

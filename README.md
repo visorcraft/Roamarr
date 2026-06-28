@@ -36,9 +36,21 @@
       <sub><b>Dashboard</b> — trips, reminders, documents, and recent activity.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/trip-itinerary.png" alt="Roamarr trip itinerary tab with hero details, timeline cards, and trip stats" />
+      <img src="docs/screenshots/trip-itinerary-people.png" alt="Roamarr trip people tab with companions, attendees, and sharing controls" />
       <br />
-      <sub><b>Trip itinerary</b> — hero details, tabs, timeline cards, and stats.</sub>
+      <sub><b>Trip people</b> — companions, attendees, and itinerary sharing.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/trip-itinerary.png" alt="Roamarr trip itinerary tab with map hero, timeline cards, and trip stats" />
+      <br />
+      <sub><b>Trip itinerary</b> — map hero, timeline cards, tabs, and stats.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/trip-itinerary-globe.png" alt="Roamarr trip 3D globe modal with city dots, country borders, and the destination centered" />
+      <br />
+      <sub><b>Trip globe</b> — interactive 3D Earth with cities, borders, and click-to-coordinates.</sub>
     </td>
   </tr>
   <tr>

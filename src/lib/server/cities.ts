@@ -1,6 +1,4 @@
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
-import { db } from './db';
-import { geonamesCities } from './db/schema';
+import * as repo from './repositories/travelDataRepo';
 
 export interface CityResult {
 	geonameId: number;
@@ -20,61 +18,37 @@ export interface GlobeCity {
 }
 
 export function findCity(countryCode: string, name: string): CityResult | null {
-	const row = db
-		.select({
-			geonameId: geonamesCities.geonameId,
-			name: geonamesCities.name,
-			countryCode: geonamesCities.countryCode,
-			lat: geonamesCities.lat,
-			lng: geonamesCities.lng
-		})
-		.from(geonamesCities)
-		.where(and(eq(geonamesCities.countryCode, countryCode.toUpperCase()), eq(geonamesCities.name, name)))
-		.get();
-	return row ?? null;
+	const city = repo.findCityByCountryAndName(countryCode, name);
+	if (!city) return null;
+	return {
+		geonameId: city.geonameId,
+		name: city.name,
+		countryCode: city.countryCode,
+		lat: city.lat,
+		lng: city.lng
+	};
 }
 
 export function searchCities(countryCode: string, query: string, limit = 20): CityResult[] {
-	const q = query.trim();
-	if (!q || q.length < 2) return [];
-	const likePattern = `%${q}%`;
-	return db
-		.select({
-			geonameId: geonamesCities.geonameId,
-			name: geonamesCities.name,
-			countryCode: geonamesCities.countryCode,
-			lat: geonamesCities.lat,
-			lng: geonamesCities.lng
-		})
-		.from(geonamesCities)
-		.where(
-			and(
-				eq(geonamesCities.countryCode, countryCode.toUpperCase()),
-				sql`${geonamesCities.name} LIKE ${likePattern}`
-			)
-		)
-		.orderBy(sql`CASE WHEN ${geonamesCities.name} = ${q} THEN 0 ELSE 1 END, ${geonamesCities.population} DESC`)
-		.limit(limit)
-		.all();
+	return repo.searchCities(query, countryCode, limit).map((c) => ({
+		geonameId: c.geonameId,
+		name: c.name,
+		countryCode: c.countryCode,
+		lat: c.lat,
+		lng: c.lng
+	}));
 }
-
-const GLOBE_SELECT = {
-	id: geonamesCities.geonameId,
-	name: geonamesCities.name,
-	lat: geonamesCities.lat,
-	lon: geonamesCities.lng,
-	population: geonamesCities.population,
-	countryCode: geonamesCities.countryCode
-};
 
 // SQLite sorts NULLs last under DESC, so nameless/popless rows fall to the bottom.
 export function citiesForGlobe(center?: { lat: number; lng: number } | null): GlobeCity[] {
-	const global = db
-		.select(GLOBE_SELECT)
-		.from(geonamesCities)
-		.orderBy(desc(geonamesCities.population))
-		.limit(1000)
-		.all();
+	const global = repo.listTopCitiesByPopulation(1000).map((c) => ({
+		id: c.geonameId,
+		name: c.name,
+		lat: c.lat,
+		lon: c.lng,
+		population: c.population,
+		countryCode: c.countryCode
+	}));
 
 	const byId = new Map<number, GlobeCity>();
 	for (const c of global) byId.set(c.id, c);
@@ -84,21 +58,23 @@ export function citiesForGlobe(center?: { lat: number; lng: number } | null): Gl
 	if (center && Number.isFinite(center.lat) && Number.isFinite(center.lng)) {
 		const dLat = 12;
 		const dLng = 14;
-		const regional = db
-			.select(GLOBE_SELECT)
-			.from(geonamesCities)
-			.where(
-				and(
-					gte(geonamesCities.lat, center.lat - dLat),
-					lte(geonamesCities.lat, center.lat + dLat),
-					gte(geonamesCities.lng, center.lng - dLng),
-					lte(geonamesCities.lng, center.lng + dLng)
-				)
-			)
-			.orderBy(desc(geonamesCities.population))
-			.limit(600)
-			.all();
-		for (const c of regional) byId.set(c.id, c);
+		const candidates = repo.listTopCitiesByPopulation(1000).filter(
+			(c) =>
+				c.lat >= center.lat - dLat &&
+				c.lat <= center.lat + dLat &&
+				c.lng >= center.lng - dLng &&
+				c.lng <= center.lng + dLng
+		);
+		for (const c of candidates) {
+			byId.set(c.geonameId, {
+				id: c.geonameId,
+				name: c.name,
+				lat: c.lat,
+				lon: c.lng,
+				population: c.population,
+				countryCode: c.countryCode
+			});
+		}
 	}
 
 	return [...byId.values()];

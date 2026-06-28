@@ -1,6 +1,3 @@
-import { and, eq } from 'drizzle-orm';
-import { db } from './db';
-import { fareProviders, fareWatches } from './db/schema';
 import type { Trip } from './repositories/tripsRepo';
 import { listInsurancePolicies } from './repositories/profileRepo';
 import { listComments } from './tripComments';
@@ -24,6 +21,7 @@ import { listImportantItems } from './tripImportantItems';
 import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
 import { getMapSettings } from './settings';
+import { listFareProvidersForUser, listFareWatchesForUser } from './repositories/travelDataRepo';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -71,7 +69,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 					bedPreference: null,
 					accessibilityNeeds: null,
 					roomNotes: null
-				}
+			  }
 	);
 	const checklist = loadChecklist(view.trip.id);
 	const expenses = listTripExpenses(view.trip.id).map((e) => ({
@@ -103,31 +101,26 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		attendeesBySegment = listAttendeesForSegments(segmentIds);
 	}
 	if (view.owner) {
-		const providers = db
-			.select({
-				id: fareProviders.id,
-				providerKey: fareProviders.providerKey,
-				label: fareProviders.label
-			})
-			.from(fareProviders)
-			.where(and(eq(fareProviders.userId, u.id), eq(fareProviders.enabled, true)))
-			.all();
+		const providers = listFareProvidersForUser(u.id)
+			.filter((p) => p.enabled)
+			.map((p) => ({
+				id: p.id,
+				providerKey: p.providerKey,
+				label: p.label
+			}));
 		const segmentTitleMap = new Map(view.segments.map((s) => [s.id, s.title]));
-		const watches = db
-			.select({
-				id: fareWatches.id,
-				status: fareWatches.status,
-				segmentId: fareWatches.segmentId,
-				providerKey: fareProviders.providerKey,
-				label: fareProviders.label,
-				lastCheckedAt: fareWatches.lastCheckedAt,
-				lastResultJson: fareWatches.lastResultJson
-			})
-			.from(fareWatches)
-			.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
-			.where(eq(fareWatches.tripId, view.trip.id))
-			.all()
-			.map((w) => ({ ...w, segmentTitle: w.segmentId != null ? segmentTitleMap.get(w.segmentId) ?? null : null }));
+		const watches = listFareWatchesForUser(u.id)
+			.filter((w) => w.tripId === view.trip.id)
+			.map((w) => ({
+				id: w.id,
+				status: w.status,
+				segmentId: w.segmentId,
+				providerKey: providers.find((p) => p.id === w.providerId)?.providerKey ?? null,
+				label: providers.find((p) => p.id === w.providerId)?.label ?? null,
+				lastCheckedAt: w.lastCheckedAt,
+				lastResultJson: w.lastResultJson,
+				segmentTitle: w.segmentId != null ? segmentTitleMap.get(w.segmentId) ?? null : null
+			}));
 		const feedUrl = view.trip.calendarToken
 			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
 			: null;

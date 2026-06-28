@@ -6,23 +6,12 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { createInterface } from 'node:readline';
 import unzipper from 'unzipper';
-import { db, sqlite } from './db';
-import { geonamesCities } from './db/schema';
+import { importCitiesBatch, type GeonamesCityRow } from './repositories/travelDataRepo';
 import { updateSettings } from './settings';
 import { nowIso } from './tz';
 
+export type { GeonamesCityRow };
 export const GEONAMES_DOWNLOAD_URL = 'https://download.geonames.org/export/dump/cities1000.zip';
-
-export interface GeonamesCityRow {
-	geonameId: number;
-	name: string;
-	asciiName: string;
-	countryCode: string;
-	lat: number;
-	lng: number;
-	population: number | null;
-	timezone: string | null;
-}
 
 export function parseCities1000Line(line: string): GeonamesCityRow | null {
 	const trimmed = line.trim();
@@ -52,18 +41,8 @@ export function parseCities1000Line(line: string): GeonamesCityRow | null {
 	return { geonameId, name, asciiName, countryCode, lat, lng, population, timezone };
 }
 
-const INSERT_BATCH_SIZE = 2000;
-
 export function bulkInsertCities(cities: GeonamesCityRow[]): number {
-	if (cities.length === 0) return 0;
-	db.delete(geonamesCities).run();
-	sqlite.transaction(() => {
-		for (let i = 0; i < cities.length; i += INSERT_BATCH_SIZE) {
-			const batch = cities.slice(i, i + INSERT_BATCH_SIZE);
-			if (batch.length > 0) db.insert(geonamesCities).values(batch).run();
-		}
-	})();
-	return cities.length;
+	return importCitiesBatch(cities);
 }
 
 async function importCitiesFromTextFile(txtPath: string): Promise<{ imported: number }> {

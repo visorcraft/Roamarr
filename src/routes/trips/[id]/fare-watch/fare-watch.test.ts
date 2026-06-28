@@ -1,15 +1,36 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+	close: null as unknown as () => void
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { db, sqlite, kit, close } = freshDb();
+	Object.assign(ctx, { db, sqlite, kit, close });
+	return { db, sqlite, kit, getDb: () => kit };
+});
+
+beforeEach(() => {
+	ctx.sqlite.exec('delete from fare_watches; delete from fare_providers; delete from trips; delete from users;');
+	ctx.kit.deleteFrom(fareWatches).executeSync();
+	ctx.kit.deleteFrom(fareProviders).executeSync();
+	ctx.kit.deleteFrom(trips).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+});
+
+afterAll(() => {
+	ctx.close();
 });
 
 import { actions } from './+page.server';
-import { users, trips, fareProviders, fareWatches } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { makeKitUser } from '../../../../../tests/kitHelpers';
+import { createTrip } from '$lib/server/repositories/tripsRepo';
+import { createFareProvider, createFareWatch, getFareWatchById } from '$lib/server/repositories/travelDataRepo';
+import { fareProviders, fareWatches, trips, users } from '$lib/server/db/mongrelSchema';
+import { eq as kitEq } from '@mongreldb/kit';
 
 function event(user: { id: number }, body: FormData, tripId: number) {
 	return {
@@ -20,56 +41,64 @@ function event(user: { id: number }, body: FormData, tripId: number) {
 }
 
 test('enable action creates a watch with the chosen provider account', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'fw@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: a.id, providerKey: 'stub', label: 'Work', enabled: true }).returning().get();
+	const a = makeKitUser({ email: 'fw@x.c' });
+	const t = createTrip(Number(a.id), { name: 'T' });
+	const p = createFareProvider({ userId: Number(a.id), providerKey: 'stub', label: 'Work', apiKey: null, enabled: true });
 
 	const body = new FormData();
 	body.set('providerId', String(p.id));
-	await expect(actions.enable(event(a, body, t.id))).rejects.toEqual(expect.objectContaining({ status: 303 }));
+	await expect(actions.enable(event({ id: Number(a.id) }, body, t.id))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
 
-	const w = db.select().from(fareWatches).where(eq(fareWatches.tripId, t.id)).get()!;
-	expect(w.providerId).toBe(p.id);
-	expect(w.status).toBe('active');
+	const w = ctx.kit
+		.selectFrom(fareWatches)
+		.where(kitEq(fareWatches.trip_id, BigInt(t.id)))
+		.executeSync()[0];
+	expect(Number(w!.provider_id)).toBe(p.id);
+	expect(w!.status).toBe('active');
 });
 
 test('enable action is ownership-checked', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'fw-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'fw-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: a.id, providerKey: 'stub', label: 'Work', enabled: true }).returning().get();
+	const a = makeKitUser({ email: 'fw-a@x.c' });
+	const b = makeKitUser({ email: 'fw-b@x.c' });
+	const t = createTrip(Number(a.id), { name: 'T' });
+	const p = createFareProvider({ userId: Number(a.id), providerKey: 'stub', label: 'Work', apiKey: null, enabled: true });
 
 	const body = new FormData();
 	body.set('providerId', String(p.id));
-	await expect(actions.enable(event(b, body, t.id))).rejects.toThrow();
+	await expect(actions.enable(event({ id: Number(b.id) }, body, t.id))).rejects.toThrow();
 });
 
 test('pause, resume and delete actions are ownership-checked', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'fw-owner@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'fw-intruder@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: a.id, providerKey: 'stub', label: 'Work', enabled: true }).returning().get();
-	const w = db.insert(fareWatches).values({ tripId: t.id, providerId: p.id, status: 'active' }).returning().get();
+	const a = makeKitUser({ email: 'fw-owner@x.c' });
+	const b = makeKitUser({ email: 'fw-intruder@x.c' });
+	const t = createTrip(Number(a.id), { name: 'T' });
+	const p = createFareProvider({ userId: Number(a.id), providerKey: 'stub', label: 'Work', apiKey: null, enabled: true });
+	const w = createFareWatch({ tripId: t.id, providerId: p.id });
 
 	const pauseBody = new FormData();
 	pauseBody.set('watchId', String(w.id));
-	await expect(actions.pause(event(a, pauseBody, t.id))).rejects.toEqual(expect.objectContaining({ status: 303 }));
-	expect(db.select().from(fareWatches).where(eq(fareWatches.id, w.id)).get()!.status).toBe('paused');
+	await expect(actions.pause(event({ id: Number(a.id) }, pauseBody, t.id))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+	expect(getFareWatchById(w.id)!.status).toBe('paused');
 
 	const resumeBody = new FormData();
 	resumeBody.set('watchId', String(w.id));
-	await expect(actions.resume(event(a, resumeBody, t.id))).rejects.toEqual(expect.objectContaining({ status: 303 }));
-	expect(db.select().from(fareWatches).where(eq(fareWatches.id, w.id)).get()!.status).toBe('active');
+	await expect(actions.resume(event({ id: Number(a.id) }, resumeBody, t.id))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+	expect(getFareWatchById(w.id)!.status).toBe('active');
 
-	await expect(actions.pause(event(b, pauseBody, t.id))).rejects.toThrow();
-	await expect(actions.resume(event(b, resumeBody, t.id))).rejects.toThrow();
-	await expect(actions.delete(event(b, pauseBody, t.id))).rejects.toThrow();
+	await expect(actions.pause(event({ id: Number(b.id) }, pauseBody, t.id))).rejects.toThrow();
+	await expect(actions.resume(event({ id: Number(b.id) }, resumeBody, t.id))).rejects.toThrow();
+	await expect(actions.delete(event({ id: Number(b.id) }, pauseBody, t.id))).rejects.toThrow();
 
 	const deleteBody = new FormData();
 	deleteBody.set('watchId', String(w.id));
-	await expect(actions.delete(event(a, deleteBody, t.id))).rejects.toEqual(expect.objectContaining({ status: 303 }));
-	expect(db.select().from(fareWatches).where(eq(fareWatches.id, w.id)).get()).toBeUndefined();
+	await expect(actions.delete(event({ id: Number(a.id) }, deleteBody, t.id))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+	expect(getFareWatchById(w.id)).toBeNull();
 });

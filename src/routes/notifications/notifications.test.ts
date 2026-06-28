@@ -79,7 +79,7 @@ test('markAllRead action sets a flash cookie and redirects', async () => {
 	const a = makeUser('a-action@x.c', 'A');
 	insertNotification(a.id, 'n1');
 	const cookies = { set: vi.fn(), get: vi.fn() };
-	const locals = { user: a } as App.Locals;
+	const locals = { user: a } as unknown as App.Locals;
 	await expect(actions.markAllRead({ locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/notifications'

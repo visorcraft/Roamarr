@@ -1,7 +1,8 @@
-import { count } from 'drizzle-orm';
-import { db } from './db';
-import { geonamesCities } from './db/schema';
-import { getSettings as getKitSettings, updateSettings as updateKitSettings } from './repositories/settingsRepo';
+import { countCities } from './repositories/travelDataRepo';
+import {
+	getSettings as getKitSettings,
+	updateSettings as updateKitSettings
+} from './repositories/settingsRepo';
 import { hasMapTexture, mapTextureImportedAt } from './mapsAssets';
 import type { SettingsPatch } from './repositories/settingsRepo';
 
@@ -21,7 +22,7 @@ export function isSetupComplete() {
 
 export function getMapSettings() {
 	const s = getSettings();
-	const cityCount = db.select({ count: count() }).from(geonamesCities).get()?.count ?? 0;
+	const cityCount = countCities();
 	return {
 		mapsEnabled: s.mapsEnabled,
 		mapsGeonamesImportedAt: s.mapsGeonamesImportedAt,

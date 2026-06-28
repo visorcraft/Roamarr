@@ -1,40 +1,27 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import { fareProviders } from '$lib/server/db/schema';
 import {
-	createProvider,
-	updateProvider,
-	deleteProvider,
-	testProvider,
-	registry
-} from '$lib/server/fareproviders';
+	listFareProvidersForUser,
+	createFareProvider,
+	updateFareProvider,
+	deleteFareProvider
+} from '$lib/server/repositories/travelDataRepo';
+import { testProvider, registry } from '$lib/server/fareproviders';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	const saved = db
-		.select({
-			id: fareProviders.id,
-			providerKey: fareProviders.providerKey,
-			label: fareProviders.label,
-			enabled: fareProviders.enabled,
-			apiKey: fareProviders.apiKey
-		})
-		.from(fareProviders)
-		.where(eq(fareProviders.userId, u.id))
-		.all();
+	const saved = listFareProvidersForUser(u.id).map((p) => ({
+		id: p.id,
+		providerKey: p.providerKey,
+		label: p.label,
+		enabled: p.enabled,
+		// Expose only whether a key is set — never ship the ciphertext to the client.
+		hasKey: !!p.apiKey
+	}));
 	return {
 		providers: Object.values(registry).map((p) => ({ key: p.key, label: p.label })),
-		// Expose only whether a key is set — never ship the ciphertext to the client.
-		saved: saved.map((s) => ({
-			id: s.id,
-			providerKey: s.providerKey,
-			label: s.label,
-			enabled: s.enabled,
-			hasKey: !!s.apiKey
-		}))
+		saved
 	};
 };
 
@@ -42,31 +29,29 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		createProvider(
-			u.id,
-			String(f.get('providerKey')),
-			String(f.get('label') || ''),
-			String(f.get('apiKey') || ''),
-			f.get('enabled') === 'on'
-		);
+		createFareProvider({
+			userId: u.id,
+			providerKey: String(f.get('providerKey')),
+			label: String(f.get('label') || ''),
+			apiKey: String(f.get('apiKey') || ''),
+			enabled: f.get('enabled') === 'on'
+		});
 		throw redirect(303, '/settings/fare-providers');
 	},
 	update: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		updateProvider(
-			u.id,
-			Number(f.get('id')),
-			String(f.get('label') || ''),
-			String(f.get('apiKey') || ''),
-			f.get('enabled') === 'on'
-		);
+		updateFareProvider(Number(f.get('id')), {
+			label: String(f.get('label') || ''),
+			apiKey: String(f.get('apiKey') || ''),
+			enabled: f.get('enabled') === 'on'
+		});
 		throw redirect(303, '/settings/fare-providers');
 	},
 	delete: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		deleteProvider(u.id, Number(f.get('id')));
+		deleteFareProvider(Number(f.get('id')));
 		throw redirect(303, '/settings/fare-providers');
 	},
 	test: async ({ request, locals }) => {

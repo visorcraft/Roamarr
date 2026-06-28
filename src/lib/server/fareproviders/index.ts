@@ -1,8 +1,20 @@
-import { and, eq, isNull } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
-import { db } from '../db';
-import { fareProviders, fareWatches } from '../db/schema';
-import { encrypt, decrypt } from '../crypto';
+import {
+	createFareProvider,
+	updateFareProvider,
+	deleteFareProvider,
+	getFareProviderById,
+	getFareProviderByIdAndUser,
+	getFareWatchById,
+	getFareWatchByTripAndProvider,
+	createFareWatch,
+	updateFareWatch,
+	deleteFareWatch,
+	listActiveFareWatches,
+	touchFareWatch,
+	type FareWatch,
+	type FareProviderAccount
+} from '../repositories/travelDataRepo';
 import { deliver } from '../notify';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
 import { stub } from './stub';
@@ -12,7 +24,7 @@ type FareResult = { ok: boolean; summary: string; raw?: unknown };
 export interface FareProvider {
 	key: string;
 	label: string;
-	check(watch: typeof fareWatches.$inferSelect, apiKey: string): Promise<FareResult>;
+	check(watch: FareWatch, apiKey: string): Promise<FareResult>;
 }
 
 export const registry: Record<string, FareProvider> = { [stub.key]: stub };
@@ -25,25 +37,17 @@ export function createProvider(
 	enabled: boolean
 ) {
 	if (!registry[providerKey]) throw error(400, 'Unknown provider');
-	return db
-		.insert(fareProviders)
-		.values({
-			userId,
-			providerKey,
-			label: label.trim(),
-			apiKey: apiKey ? encrypt(apiKey) : null,
-			enabled
-		})
-		.returning()
-		.get();
+	return createFareProvider({
+		userId,
+		providerKey,
+		label: label.trim(),
+		apiKey: apiKey || null,
+		enabled
+	});
 }
 
-function requireOwnedProvider(userId: number, providerId: number) {
-	const p = db
-		.select()
-		.from(fareProviders)
-		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
-		.get();
+function requireOwnedProvider(userId: number, providerId: number): FareProviderAccount {
+	const p = getFareProviderByIdAndUser(providerId, userId);
 	if (!p) throw error(404, 'Not found');
 	return p;
 }
@@ -56,31 +60,25 @@ export function updateProvider(
 	enabled: boolean
 ) {
 	requireOwnedProvider(userId, providerId);
-	const set: Partial<typeof fareProviders.$inferInsert> = {
+	const updated = updateFareProvider(providerId, {
 		label: label.trim(),
+		apiKey,
 		enabled
-	};
-	if (apiKey) set.apiKey = encrypt(apiKey);
-	return db
-		.update(fareProviders)
-		.set(set)
-		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
-		.returning()
-		.get();
+	});
+	if (!updated) throw error(404, 'Not found');
+	return updated;
 }
 
 export function deleteProvider(userId: number, providerId: number) {
 	requireOwnedProvider(userId, providerId);
-	db.delete(fareProviders)
-		.where(and(eq(fareProviders.id, providerId), eq(fareProviders.userId, userId)))
-		.run();
+	deleteFareProvider(providerId);
 }
 
 export async function testProvider(userId: number, providerId: number): Promise<FareResult> {
 	const p = requireOwnedProvider(userId, providerId);
 	const provider = registry[p.providerKey];
 	if (!provider) throw error(400, 'Unknown provider');
-	const dummyWatch = {
+	const dummyWatch: FareWatch = {
 		id: 0,
 		tripId: 0,
 		segmentId: null,
@@ -89,8 +87,8 @@ export async function testProvider(userId: number, providerId: number): Promise<
 		lastCheckedAt: null,
 		lastResultJson: null,
 		createdAt: new Date().toISOString()
-	} as typeof fareWatches.$inferSelect;
-	return provider.check(dummyWatch, p.apiKey ? decrypt(p.apiKey) : '');
+	};
+	return provider.check(dummyWatch, p.apiKey ?? '');
 }
 
 export function toggleWatch(
@@ -104,27 +102,13 @@ export function toggleWatch(
 	const sid = segmentId ?? null;
 	// Idempotent: re-enabling an already-watched (trip, provider, segment) returns the
 	// existing row instead of stacking duplicate watches (and duplicate provider calls).
-	const existing = db
-		.select()
-		.from(fareWatches)
-		.where(
-			and(
-				eq(fareWatches.tripId, tripId),
-				eq(fareWatches.providerId, providerId),
-				sid == null ? isNull(fareWatches.segmentId) : eq(fareWatches.segmentId, sid)
-			)
-		)
-		.get();
+	const existing = getFareWatchByTripAndProvider(tripId, providerId, sid);
 	if (existing) return existing;
-	return db
-		.insert(fareWatches)
-		.values({ tripId, providerId, segmentId: sid, status: 'active' })
-		.returning()
-		.get();
+	return createFareWatch({ tripId, providerId, segmentId: sid, status: 'active' });
 }
 
-function requireOwnedWatch(userId: number, watchId: number) {
-	const w = db.select().from(fareWatches).where(eq(fareWatches.id, watchId)).get();
+function requireOwnedWatch(userId: number, watchId: number): FareWatch {
+	const w = getFareWatchById(watchId);
 	if (!w) throw error(404, 'Not found');
 	requireOwnedTrip(userId, w.tripId);
 	assertOwnedRefs(userId, { providerId: w.providerId });
@@ -133,30 +117,24 @@ function requireOwnedWatch(userId: number, watchId: number) {
 
 export function pauseWatch(userId: number, watchId: number) {
 	requireOwnedWatch(userId, watchId);
-	return db
-		.update(fareWatches)
-		.set({ status: 'paused' })
-		.where(eq(fareWatches.id, watchId))
-		.returning()
-		.get();
+	const updated = updateFareWatch(watchId, { status: 'paused' });
+	if (!updated) throw error(404, 'Not found');
+	return updated;
 }
 
 export function resumeWatch(userId: number, watchId: number) {
 	requireOwnedWatch(userId, watchId);
-	return db
-		.update(fareWatches)
-		.set({ status: 'active' })
-		.where(eq(fareWatches.id, watchId))
-		.returning()
-		.get();
+	const updated = updateFareWatch(watchId, { status: 'active' });
+	if (!updated) throw error(404, 'Not found');
+	return updated;
 }
 
 export function deleteWatch(userId: number, watchId: number) {
 	requireOwnedWatch(userId, watchId);
-	db.delete(fareWatches).where(eq(fareWatches.id, watchId)).run();
+	deleteFareWatch(watchId);
 }
 
-function previousSummary(watch: typeof fareWatches.$inferSelect): string | null {
+function previousSummary(watch: FareWatch): string | null {
 	if (!watch.lastResultJson) return null;
 	try {
 		return (JSON.parse(watch.lastResultJson) as FareResult).summary ?? null;
@@ -166,16 +144,16 @@ function previousSummary(watch: typeof fareWatches.$inferSelect): string | null 
 }
 
 async function applyResult(
-	watch: typeof fareWatches.$inferSelect,
-	providerRow: typeof fareProviders.$inferSelect,
+	watch: FareWatch,
+	providerRow: FareProviderAccount,
 	result: FareResult,
 	now: Date
 ) {
 	const prior = previousSummary(watch);
-	db.update(fareWatches)
-		.set({ lastResultJson: JSON.stringify(result), lastCheckedAt: now.toISOString() })
-		.where(eq(fareWatches.id, watch.id))
-		.run();
+	updateFareWatch(watch.id, {
+		lastResultJson: JSON.stringify(result),
+		lastCheckedAt: now.toISOString()
+	});
 	if (prior !== null && result.summary !== prior) {
 		await deliver(providerRow.userId, {
 			title: 'Fare watch update',
@@ -187,14 +165,14 @@ async function applyResult(
 
 export async function checkWatch(userId: number, watchId: number): Promise<FareResult> {
 	const w = requireOwnedWatch(userId, watchId);
-	const p = db.select().from(fareProviders).where(eq(fareProviders.id, w.providerId)).get();
+	const p = getFareProviderById(w.providerId);
 	if (!p || !p.enabled) throw error(400, 'Provider not found or disabled');
 	const provider = registry[p.providerKey];
 	if (!provider) throw error(400, 'Unknown provider');
 	const now = new Date();
 	let res: FareResult;
 	try {
-		res = await provider.check(w, p.apiKey ? decrypt(p.apiKey) : '');
+		res = await provider.check(w, p.apiKey ?? '');
 	} catch (e) {
 		res = { ok: false, summary: String(e) };
 	}
@@ -203,19 +181,14 @@ export async function checkWatch(userId: number, watchId: number): Promise<FareR
 }
 
 export async function runFareChecks(now: Date) {
-	const rows = db
-		.select()
-		.from(fareWatches)
-		.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
-		.where(and(eq(fareWatches.status, 'active'), eq(fareProviders.enabled, true)))
-		.all();
+	const rows = listActiveFareWatches();
 	for (const row of rows) {
-		const w = row.fare_watches;
-		const p = row.fare_providers;
+		const w = row;
+		const p = row.provider;
 		const provider = registry[p.providerKey];
 		if (!provider) continue;
 		try {
-			const res = await provider.check(w, p.apiKey ? decrypt(p.apiKey) : '');
+			const res = await provider.check(w, p.apiKey ?? '');
 			await applyResult(w, p, res, now);
 		} catch (e) {
 			const res = { ok: false, summary: String(e) };

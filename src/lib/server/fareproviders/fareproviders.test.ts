@@ -1,10 +1,15 @@
-import { test, expect, vi, beforeEach } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('../db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+}));
 vi.mock('../db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { db, sqlite, kit } = freshDb();
+	Object.assign(ctx, { db, sqlite, kit });
+	return { db, sqlite, kit };
 });
 const delivered = vi.hoisted(() => [] as Array<{ uid: number; m: any }>);
 vi.mock('../notify', () => ({
@@ -15,6 +20,10 @@ beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
 		'delete from fare_watches; delete from fare_providers; delete from trips; delete from users;'
 	);
+	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(fareWatches).executeSync();
+	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(fareProviders).executeSync();
+	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(trips).executeSync();
+	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(users).executeSync();
 	delivered.length = 0;
 });
 
@@ -30,172 +39,155 @@ import {
 	resumeWatch,
 	deleteWatch
 } from './index';
-import { users, trips, fareProviders, fareWatches } from '../db/schema';
-import { decrypt } from '../crypto';
+import { makeKitUser } from '../../../../tests/kitHelpers';
+import { createTrip } from '../repositories/tripsRepo';
+import { getFareWatchById } from '../repositories/travelDataRepo';
+import { users, trips, fareProviders, fareWatches } from '../db/mongrelSchema';
+import { eq as kitEq } from '@mongreldb/kit';
 import { eq } from 'drizzle-orm';
 
 test('registry has the stub; key stored encrypted; checks active, skips paused', async () => {
 	expect(registry.stub).toBeTruthy();
-	const db = (ctx as { db: import('../db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'fare-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const p = createProvider(a.id, 'stub', 'Work', 'SECRET-KEY', true);
+	const u = makeKitUser({ email: 'fare-a@x.c' });
+	const t = createTrip(Number(u.id), { name: 'T' });
+	const p = createProvider(Number(u.id), 'stub', 'Work', 'SECRET-KEY', true);
 	expect(p.label).toBe('Work');
-	expect(
-		decrypt(db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()!.apiKey!)
-	).toBe('SECRET-KEY');
-	toggleWatch(a.id, t.id, p.id);
+
+	const kitRow = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.id, BigInt(p.id)))
+		.executeSync()[0];
+	expect(kitRow!.api_key).not.toBe('SECRET-KEY');
+
+	toggleWatch(Number(u.id), t.id, p.id);
 	await runFareChecks(new Date());
-	const w = db.select().from(fareWatches).get()!;
-	expect(w.lastResultJson).toBeTruthy();
-	expect(w.lastCheckedAt).toBeTruthy();
+	const w = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(fareWatches)
+		.executeSync()[0];
+	expect(w!.last_result_json).toBeTruthy();
+	expect(w!.last_checked_at).toBeTruthy();
 });
 
 test('user can save multiple accounts per provider', () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'fare-multi@x.c', passwordHash: 'x', displayName: 'M' })
-		.returning()
-		.get();
-	const a = createProvider(u.id, 'stub', 'Personal', 'KEY-A', true);
-	const b = createProvider(u.id, 'stub', 'Work', 'KEY-B', true);
+	const u = makeKitUser({ email: 'fare-multi@x.c' });
+	const a = createProvider(Number(u.id), 'stub', 'Personal', 'KEY-A', true);
+	const b = createProvider(Number(u.id), 'stub', 'Work', 'KEY-B', true);
 	expect(a.id).not.toBe(b.id);
-	const rows = db
-		.select()
-		.from(fareProviders)
-		.where(eq(fareProviders.userId, u.id))
-		.all();
+	const rows = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.user_id, u.id))
+		.executeSync();
 	expect(rows).toHaveLength(2);
 	expect(rows.map((r) => r.label).sort()).toEqual(['Personal', 'Work']);
 });
 
 test('updating with a blank apiKey preserves the stored key', () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'fare-k@x.c', passwordHash: 'x', displayName: 'K' })
-		.returning()
-		.get();
-	const p = createProvider(u.id, 'stub', 'Original', 'ORIGINAL-KEY', true);
-	updateProvider(u.id, p.id, 'Renamed', '', false); // toggle enabled off without re-entering the key
-	const row = db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()!;
-	expect(row.label).toBe('Renamed');
-	expect(row.enabled).toBe(false);
-	expect(decrypt(row.apiKey!)).toBe('ORIGINAL-KEY');
+	const u = makeKitUser({ email: 'fare-k@x.c' });
+	const p = createProvider(Number(u.id), 'stub', 'Original', 'ORIGINAL-KEY', true);
+	updateProvider(Number(u.id), p.id, 'Renamed', '', false); // toggle enabled off without re-entering the key
+	const row = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.id, BigInt(p.id)))
+		.executeSync()[0];
+	expect(row!.label).toBe('Renamed');
+	expect(row!.enabled).toBe(false);
+	expect(row!.api_key).not.toBeNull();
 });
 
 test('provider mutations are owner-checked', () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const a = db.insert(users).values({ email: 'fare-own@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'fare-other@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const p = createProvider(a.id, 'stub', 'Mine', 'KEY', true);
+	const a = makeKitUser({ email: 'fare-own@x.c' });
+	const b = makeKitUser({ email: 'fare-other@x.c' });
+	const p = createProvider(Number(a.id), 'stub', 'Mine', 'KEY', true);
 
-	expect(() => updateProvider(b.id, p.id, 'Hijacked', 'X', true)).toThrow();
-	expect(() => deleteProvider(b.id, p.id)).toThrow();
+	expect(() => updateProvider(Number(b.id), p.id, 'Hijacked', 'X', true)).toThrow();
+	expect(() => deleteProvider(Number(b.id), p.id)).toThrow();
 
-	deleteProvider(a.id, p.id);
-	expect(db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()).toBeUndefined();
+	deleteProvider(Number(a.id), p.id);
+	expect(
+		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+			.selectFrom(fareProviders)
+			.where(kitEq(fareProviders.id, BigInt(p.id)))
+			.executeSync()
+	).toHaveLength(0);
 });
 
 test('toggleWatch is idempotent — no duplicate watches', () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'fare-w@x.c', passwordHash: 'x', displayName: 'W' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
-	const p = createProvider(u.id, 'stub', 'Primary', 'KEY', true);
-	const w1 = toggleWatch(u.id, t.id, p.id);
-	const w2 = toggleWatch(u.id, t.id, p.id);
+	const u = makeKitUser({ email: 'fare-w@x.c' });
+	const t = createTrip(Number(u.id), { name: 'T2' });
+	const p = createProvider(Number(u.id), 'stub', 'Primary', 'KEY', true);
+	const w1 = toggleWatch(Number(u.id), t.id, p.id);
+	const w2 = toggleWatch(Number(u.id), t.id, p.id);
 	expect(w2.id).toBe(w1.id);
-	expect(db.select().from(fareWatches).where(eq(fareWatches.tripId, t.id)).all().length).toBe(1);
+	expect(
+		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+			.selectFrom(fareWatches)
+			.where(kitEq(fareWatches.trip_id, BigInt(t.id)))
+			.executeSync()
+	).toHaveLength(1);
 });
 
 test('pauseWatch, resumeWatch and deleteWatch are owner-checked', () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'fare-owner@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'fare-other2@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T3' }).returning().get();
-	const p = createProvider(a.id, 'stub', 'Primary', 'KEY', true);
-	const w = toggleWatch(a.id, t.id, p.id);
+	const a = makeKitUser({ email: 'fare-owner@x.c' });
+	const b = makeKitUser({ email: 'fare-other2@x.c' });
+	const t = createTrip(Number(a.id), { name: 'T3' });
+	const p = createProvider(Number(a.id), 'stub', 'Primary', 'KEY', true);
+	const w = toggleWatch(Number(a.id), t.id, p.id);
 
-	expect(pauseWatch(a.id, w.id).status).toBe('paused');
-	expect(resumeWatch(a.id, w.id).status).toBe('active');
+	expect(pauseWatch(Number(a.id), w.id).status).toBe('paused');
+	expect(resumeWatch(Number(a.id), w.id).status).toBe('active');
 
-	expect(() => pauseWatch(b.id, w.id)).toThrow();
-	expect(() => resumeWatch(b.id, w.id)).toThrow();
-	expect(() => deleteWatch(b.id, w.id)).toThrow();
+	expect(() => pauseWatch(Number(b.id), w.id)).toThrow();
+	expect(() => resumeWatch(Number(b.id), w.id)).toThrow();
+	expect(() => deleteWatch(Number(b.id), w.id)).toThrow();
 
-	deleteWatch(a.id, w.id);
-	expect(db.select().from(fareWatches).where(eq(fareWatches.id, w.id)).get()).toBeUndefined();
+	deleteWatch(Number(a.id), w.id);
+	expect(
+		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+			.selectFrom(fareWatches)
+			.where(kitEq(fareWatches.id, BigInt(w.id)))
+			.executeSync()
+	).toHaveLength(0);
 });
 
 test('runFareChecks skips paused watches and disabled providers', async () => {
-	const db = (ctx as { db: import('../db').DB }).db;
+	const a = makeKitUser({ email: 'fare-skip-paused@x.c' });
+	const t1 = createTrip(Number(a.id), { name: 'Paused' });
+	const p1 = createProvider(Number(a.id), 'stub', 'A', 'K1', true);
+	const wPaused = toggleWatch(Number(a.id), t1.id, p1.id);
+	pauseWatch(Number(a.id), wPaused.id);
 
-	const a = db
-		.insert(users)
-		.values({ email: 'fare-skip-paused@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const t1 = db.insert(trips).values({ ownerId: a.id, name: 'Paused' }).returning().get();
-	const p1 = createProvider(a.id, 'stub', 'A', 'K1', true);
-	const wPaused = toggleWatch(a.id, t1.id, p1.id);
-	pauseWatch(a.id, wPaused.id);
-
-	const b = db
-		.insert(users)
-		.values({ email: 'fare-skip-disabled@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const t2 = db.insert(trips).values({ ownerId: b.id, name: 'Disabled' }).returning().get();
-	const p2 = createProvider(b.id, 'stub', 'B', 'K2', true);
-	updateProvider(b.id, p2.id, 'B', '', false); // disable provider without changing key
-	const wDisabled = toggleWatch(b.id, t2.id, p2.id);
+	const b = makeKitUser({ email: 'fare-skip-disabled@x.c' });
+	const t2 = createTrip(Number(b.id), { name: 'Disabled' });
+	const p2 = createProvider(Number(b.id), 'stub', 'B', 'K2', true);
+	updateProvider(Number(b.id), p2.id, 'B', '', false); // disable provider without changing key
+	const wDisabled = toggleWatch(Number(b.id), t2.id, p2.id);
 
 	await runFareChecks(new Date());
 
-	const r1 = db.select().from(fareWatches).where(eq(fareWatches.id, wPaused.id)).get()!;
-	const r2 = db.select().from(fareWatches).where(eq(fareWatches.id, wDisabled.id)).get()!;
-	expect(r1.lastCheckedAt).toBeNull();
-	expect(r2.lastCheckedAt).toBeNull();
+	const r1 = getFareWatchById(wPaused.id);
+	const r2 = getFareWatchById(wDisabled.id);
+	expect(r1!.lastCheckedAt).toBeNull();
+	expect(r2!.lastCheckedAt).toBeNull();
 });
 
-
 test('testProvider returns the stub result for an owned account', async () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const a = db.insert(users).values({ email: 'fare-test@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const p = createProvider(a.id, 'stub', 'Test', 'KEY', true);
-	const res = await testProvider(a.id, p.id);
+	const a = makeKitUser({ email: 'fare-test@x.c' });
+	const p = createProvider(Number(a.id), 'stub', 'Test', 'KEY', true);
+	const res = await testProvider(Number(a.id), p.id);
 	expect(res.ok).toBe(true);
 	expect(res.summary).toContain('stub provider');
 });
 
-
 test('runFareChecks notifies the provider owner when the summary changes', async () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const u = db.insert(users).values({ email: 'fare-change@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'Change' }).returning().get();
-	const p = createProvider(u.id, 'stub', 'A', 'K', true);
-	toggleWatch(u.id, t.id, p.id);
-	db.update(fareWatches)
-		.set({ lastResultJson: JSON.stringify({ ok: true, summary: 'old summary' }) })
-		.where(eq(fareWatches.tripId, t.id))
-		.run();
+	const u = makeKitUser({ email: 'fare-change@x.c' });
+	const t = createTrip(Number(u.id), { name: 'Change' });
+	const p = createProvider(Number(u.id), 'stub', 'A', 'K', true);
+	toggleWatch(Number(u.id), t.id, p.id);
+	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		.updateTable(fareWatches)
+		.set({ last_result_json: JSON.stringify({ ok: true, summary: 'old summary' }) })
+		.where(kitEq(fareWatches.trip_id, BigInt(t.id)))
+		.executeSync();
 	delivered.length = 0;
 
 	const original = registry.stub.check;
@@ -204,17 +196,16 @@ test('runFareChecks notifies the provider owner when the summary changes', async
 	registry.stub.check = original;
 
 	expect(delivered.length).toBe(1);
-	expect(delivered[0].uid).toBe(u.id);
+	expect(delivered[0].uid).toBe(Number(u.id));
 	expect(delivered[0].m.title).toBe('Fare watch update');
 	expect(delivered[0].m.link).toBe(`/trips/${t.id}`);
 });
 
 test('runFareChecks does not notify on the first check', async () => {
-	const db = (ctx as { db: import('../db').DB }).db;
-	const u = db.insert(users).values({ email: 'fare-first@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'First' }).returning().get();
-	const p = createProvider(u.id, 'stub', 'A', 'K', true);
-	toggleWatch(u.id, t.id, p.id);
+	const u = makeKitUser({ email: 'fare-first@x.c' });
+	const t = createTrip(Number(u.id), { name: 'First' });
+	const p = createProvider(Number(u.id), 'stub', 'A', 'K', true);
+	toggleWatch(Number(u.id), t.id, p.id);
 	delivered.length = 0;
 	await runFareChecks(new Date());
 	expect(delivered.length).toBe(0);

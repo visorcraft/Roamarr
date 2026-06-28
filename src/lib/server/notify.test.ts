@@ -24,7 +24,12 @@ import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
 import { updateSettings } from './settings';
 
-function makeUser(over: Partial<import('./repositories/usersRepo').CreateUserInput> = {}) {
+type MakeUserOver = Partial<import('./repositories/usersRepo').CreateUserInput> & {
+	email_notifications?: boolean;
+	webhook_notifications?: boolean;
+};
+
+function makeUser(over: MakeUserOver = {}) {
 	const n = Math.random().toString(36).slice(2);
 	return usersRepo.createUser({
 		email: over.email ?? `u-${n}@x.c`,

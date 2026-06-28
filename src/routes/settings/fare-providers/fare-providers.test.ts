@@ -1,16 +1,38 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+	close: null as unknown as () => void
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { db, sqlite, kit, close } = freshDb();
+	Object.assign(ctx, { db, sqlite, kit, close });
+	return { db, sqlite, kit, getDb: () => kit };
+});
+
+beforeEach(() => {
+	ctx.sqlite.exec('delete from fare_providers; delete from users;');
+	ctx.kit.deleteFrom(fareProviders).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+});
+
+afterAll(() => {
+	ctx.close();
 });
 
 import { load, actions } from './+page.server';
-import { users, fareProviders } from '$lib/server/db/schema';
+import { makeKitUser } from '../../../../tests/kitHelpers';
+import {
+	createFareProvider,
+	listFareProvidersForUser,
+	type FareProviderAccount
+} from '$lib/server/repositories/travelDataRepo';
+import { fareProviders, users } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
-import { eq } from 'drizzle-orm';
+import { eq as kitEq } from '@mongreldb/kit';
 
 function event(user: { id: number }, body?: FormData) {
 	return {
@@ -20,19 +42,16 @@ function event(user: { id: number }, body?: FormData) {
 }
 
 test('load lists saved accounts without leaking ciphertext', () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'fp@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	db.insert(fareProviders)
-		.values({
-			userId: u.id,
-			providerKey: 'stub',
-			label: 'Work',
-			apiKey: 'encrypted-blob',
-			enabled: true
-		})
-		.run();
+	const u = makeKitUser({ email: 'fp@x.c' });
+	createFareProvider({
+		userId: Number(u.id),
+		providerKey: 'stub',
+		label: 'Work',
+		apiKey: 'encrypted-blob',
+		enabled: true
+	});
 
-	const result = load(event(u)) as any;
+	const result = load(event({ id: Number(u.id) })) as any;
 	expect(result.saved.length).toBe(1);
 	expect(result.saved[0].label).toBe('Work');
 	expect(result.saved[0].hasKey).toBe(true);
@@ -40,71 +59,95 @@ test('load lists saved accounts without leaking ciphertext', () => {
 });
 
 test('add action creates a new provider account', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'fp-add@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
+	const u = makeKitUser({ email: 'fp-add@x.c' });
 
 	const body = new FormData();
 	body.set('providerKey', 'stub');
 	body.set('label', 'Personal');
 	body.set('apiKey', 'SECRET');
 	body.set('enabled', 'on');
-	await expect(actions.add(event(u, body))).rejects.toEqual(expect.objectContaining({ status: 303 }));
+	await expect(actions.add(event({ id: Number(u.id) }, body))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
 
-	const row = db.select().from(fareProviders).where(eq(fareProviders.userId, u.id)).get()!;
-	expect(row.label).toBe('Personal');
-	expect(decrypt(row.apiKey!)).toBe('SECRET');
-	expect(row.enabled).toBe(true);
+	const rows = listFareProvidersForUser(Number(u.id));
+	expect(rows).toHaveLength(1);
+	expect(rows[0].label).toBe('Personal');
+	expect(rows[0].apiKey).toBe('SECRET');
 });
 
 test('update action edits an owned account', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'fp-up@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const other = db.insert(users).values({ email: 'fp-other@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Old', apiKey: 'enc', enabled: true }).returning().get();
+	const u = makeKitUser({ email: 'fp-up@x.c' });
+	const other = makeKitUser({ email: 'fp-other@x.c' });
+	const p = createFareProvider({
+		userId: Number(u.id),
+		providerKey: 'stub',
+		label: 'Old',
+		apiKey: 'enc',
+		enabled: true
+	});
 
 	const body = new FormData();
 	body.set('id', String(p.id));
 	body.set('label', 'New');
 	body.set('apiKey', 'NEW-SECRET');
 	body.set('enabled', 'on');
-	await expect(actions.update(event(u, body))).rejects.toEqual(expect.objectContaining({ status: 303 }));
+	await expect(actions.update(event({ id: Number(u.id) }, body))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
 
-	const row = db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()!;
-	expect(row.label).toBe('New');
-	expect(decrypt(row.apiKey!)).toBe('NEW-SECRET');
+	const row = ctx.kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.id, BigInt(p.id)))
+		.executeSync()[0];
+	expect(row!.label).toBe('New');
+	expect(decrypt(row!.api_key!)).toBe('NEW-SECRET');
 
 	const hijack = new FormData();
 	hijack.set('id', String(p.id));
 	hijack.set('label', 'Hijacked');
 	hijack.set('apiKey', 'X');
-	await expect(actions.update(event(other, hijack))).rejects.toThrow();
+	await expect(actions.update(event({ id: Number(other.id) }, hijack))).rejects.toThrow();
 });
 
 test('delete action removes an owned account', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'fp-del@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const other = db.insert(users).values({ email: 'fp-del-other@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'X', enabled: true }).returning().get();
+	const u = makeKitUser({ email: 'fp-del@x.c' });
+	const other = makeKitUser({ email: 'fp-del-other@x.c' });
+	const p = createFareProvider({
+		userId: Number(u.id),
+		providerKey: 'stub',
+		label: 'X',
+		apiKey: null,
+		enabled: true
+	});
 
 	const hijack = new FormData();
 	hijack.set('id', String(p.id));
-	await expect(actions.delete(event(other, hijack))).rejects.toThrow();
+	await expect(actions.delete(event({ id: Number(other.id) }, hijack))).rejects.toThrow();
 
 	const body = new FormData();
 	body.set('id', String(p.id));
-	await expect(actions.delete(event(u, body))).rejects.toEqual(expect.objectContaining({ status: 303 }));
-	expect(db.select().from(fareProviders).where(eq(fareProviders.id, p.id)).get()).toBeUndefined();
+	await expect(actions.delete(event({ id: Number(u.id) }, body))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+	expect(listFareProvidersForUser(Number(u.id))).toHaveLength(0);
 });
 
-
 test('test action returns the stub result without redirecting', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'fp-test@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const p = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Test', apiKey: null, enabled: true }).returning().get();
+	const u = makeKitUser({ email: 'fp-test@x.c' });
+	const p = createFareProvider({
+		userId: Number(u.id),
+		providerKey: 'stub',
+		label: 'Test',
+		apiKey: null,
+		enabled: true
+	});
 
 	const body = new FormData();
 	body.set('id', String(p.id));
-	const result = (await actions.test(event(u, body))) as { testResult: string };
+	const result = (await actions.test(event({ id: Number(u.id) }, body))) as {
+		testResult: string;
+	};
 	expect(result.testResult).toContain('OK');
 	expect(result.testResult).toContain('stub provider');
 });

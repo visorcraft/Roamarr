@@ -23,6 +23,11 @@ export function listTripCompanions(tripId: number) {
 		.all();
 }
 
+export function getCompanionTripId(companionId: number): number | null {
+	const c = db.select({ tripId: tripCompanions.tripId }).from(tripCompanions).where(eq(tripCompanions.id, companionId)).get();
+	return c?.tripId ?? null;
+}
+
 function requireCompanion(tripId: number, companionId: number) {
 	const c = db
 		.select()

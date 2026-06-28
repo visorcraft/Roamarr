@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { db } from '$lib/server/db';
-import { trips, segments, SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
+import { SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { Validator } from '$lib/server/validation';
 import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
+import { createSegment } from '$lib/server/repositories/segmentsRepo';
 
 interface ImportSegment {
 	type: SegmentType;
@@ -230,43 +232,33 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 			tripInput.defaultVisibility === 'public'
 				? randomBytes(24).toString('base64url')
 				: null;
-		const trip = db
-			.insert(trips)
-			.values({
-				ownerId: userId,
-				name: tripInput.name.trim(),
-				destination: null,
-				destinationCountryCode: tripInput.destinationCountryCode ?? null,
-				destinationCityName: tripInput.destinationCityName ?? null,
-				destinationCityLat: tripInput.destinationCityLat ?? null,
-				destinationCityLng: tripInput.destinationCityLng ?? null,
-				startDate: tripInput.startDate,
-				endDate: tripInput.endDate,
-				notes: tripInput.notes,
-				defaultVisibility: tripInput.defaultVisibility || 'private',
-				publicToken
-			})
-			.returning()
-			.get();
+		const trip = tripsRepo.createTrip(userId, {
+			name: tripInput.name.trim(),
+			destinationCountryCode: tripInput.destinationCountryCode ?? null,
+			destinationCityName: tripInput.destinationCityName ?? null,
+			destinationCityLat: tripInput.destinationCityLat ?? null,
+			destinationCityLng: tripInput.destinationCityLng ?? null,
+			startDate: tripInput.startDate,
+			endDate: tripInput.endDate,
+			notes: tripInput.notes,
+			defaultVisibility: (tripInput.defaultVisibility || 'private') as 'private' | 'groups' | 'public',
+			publicToken
+		});
 		result.imported++;
 
 		for (const segInput of validSegments) {
-			const seg = db
-				.insert(segments)
-				.values({
-					tripId: trip.id,
-					type: segInput.type,
-					title: segInput.title.trim(),
-					startAt: localToUtc(segInput.localStart, segInput.startTz || 'UTC'),
-					startTz: segInput.startTz || 'UTC',
-					endAt: segInput.endAt ?? null,
-					location: segInput.location ?? null,
-					confirmationNumber: segInput.confirmationNumber ?? null,
-					detailsJson: segInput.details ? JSON.stringify(segInput.details) : null,
-					cardId: null
-				})
-				.returning()
-				.get();
+			const seg = createSegment({
+				trip_id: BigInt(trip.id),
+				type: segInput.type,
+				title: segInput.title.trim(),
+				start_at: localToUtc(segInput.localStart, segInput.startTz || 'UTC'),
+				start_tz: segInput.startTz || 'UTC',
+				end_at: segInput.endAt ?? null,
+				location: segInput.location ?? null,
+				confirmation_number: segInput.confirmationNumber ?? null,
+				details_json: segInput.details ? JSON.stringify(segInput.details) : null,
+				card_id: null
+			});
 			upsertRemindersForSegment(seg);
 			result.segmentCount++;
 		}

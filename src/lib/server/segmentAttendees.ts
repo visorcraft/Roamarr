@@ -1,17 +1,16 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
-import { db } from './db';
 import {
-	segmentAttendees,
-	segments,
-	tripCompanions,
-	SEGMENT_ATTENDEE_STATUSES,
-	type SegmentAttendeeStatus,
-	type CompanionCategory
-} from './db/schema';
+	listAttendeesForSegment as listAttendeesForSegmentRepo,
+	listAttendeesForSegments as listAttendeesForSegmentsRepo,
+	upsertAttendee as upsertAttendeeRepo,
+	removeAttendeeBySegmentAndCompanion,
+	getSegmentById
+} from './repositories/segmentsRepo';
+import { getCompanionTripId } from './tripCompanions';
 import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
+import { SEGMENT_ATTENDEE_STATUSES, type SegmentAttendeeStatus } from './db/schema';
 
 type AttendeeRow = {
 	id: number;
@@ -23,71 +22,19 @@ type AttendeeRow = {
 };
 
 function validateSegmentAndCompanion(tripId: number, segmentId: number, companionId: number) {
-	const seg = db
-		.select({ tripId: segments.tripId })
-		.from(segments)
-		.where(eq(segments.id, segmentId))
-		.get();
+	const seg = getSegmentById(segmentId);
 	if (!seg || seg.tripId !== tripId) throw error(404, 'Segment not found');
 
-	const companion = db
-		.select({ tripId: tripCompanions.tripId })
-		.from(tripCompanions)
-		.where(eq(tripCompanions.id, companionId))
-		.get();
-	if (!companion || companion.tripId !== tripId) throw error(404, 'Companion not found');
+	const companionTripId = getCompanionTripId(companionId);
+	if (companionTripId == null || companionTripId !== tripId) throw error(404, 'Companion not found');
 }
 
 export function listAttendeesForSegment(segmentId: number): AttendeeRow[] {
-	return db
-		.select({
-			id: segmentAttendees.id,
-			segmentId: segmentAttendees.segmentId,
-			companionId: segmentAttendees.companionId,
-			name: tripCompanions.name,
-			category: tripCompanions.category,
-			status: segmentAttendees.status
-		})
-		.from(segmentAttendees)
-		.innerJoin(tripCompanions, eq(segmentAttendees.companionId, tripCompanions.id))
-		.where(eq(segmentAttendees.segmentId, segmentId))
-		.orderBy(tripCompanions.name)
-		.all()
-		.map((row) => ({
-			...row,
-			category: row.category as CompanionCategory,
-			status: row.status as SegmentAttendeeStatus
-		}));
+	return listAttendeesForSegmentRepo(segmentId);
 }
 
 export function listAttendeesForSegments(segmentIds: number[]): Map<number, AttendeeRow[]> {
-	const map = new Map<number, AttendeeRow[]>();
-	for (const id of segmentIds) map.set(id, []);
-	if (segmentIds.length === 0) return map;
-
-	const rows = db
-		.select({
-			id: segmentAttendees.id,
-			segmentId: segmentAttendees.segmentId,
-			companionId: segmentAttendees.companionId,
-			name: tripCompanions.name,
-			category: tripCompanions.category,
-			status: segmentAttendees.status
-		})
-		.from(segmentAttendees)
-		.innerJoin(tripCompanions, eq(segmentAttendees.companionId, tripCompanions.id))
-		.where(inArray(segmentAttendees.segmentId, segmentIds))
-		.orderBy(tripCompanions.name)
-		.all();
-
-	for (const row of rows) {
-		map.get(row.segmentId)!.push({
-			...row,
-			category: row.category as CompanionCategory,
-			status: row.status as SegmentAttendeeStatus
-		});
-	}
-	return map;
+	return listAttendeesForSegmentsRepo(segmentIds);
 }
 
 export function upsertAttendee(
@@ -102,13 +49,7 @@ export function upsertAttendee(
 
 	if (!SEGMENT_ATTENDEE_STATUSES.includes(status)) throw error(400, 'Invalid status');
 
-	db.insert(segmentAttendees)
-		.values({ segmentId, companionId, status })
-		.onConflictDoUpdate({
-			target: [segmentAttendees.segmentId, segmentAttendees.companionId],
-			set: { status }
-		})
-		.run();
+	upsertAttendeeRepo(segmentId, companionId, status);
 
 	logAudit(userId, 'set_attendee_status', 'segment', segmentId, { companionId, status });
 }
@@ -122,9 +63,7 @@ export function deleteAttendee(
 	requireEditableTrip(userId, tripId);
 	validateSegmentAndCompanion(tripId, segmentId, companionId);
 
-	db.delete(segmentAttendees)
-		.where(and(eq(segmentAttendees.segmentId, segmentId), eq(segmentAttendees.companionId, companionId)))
-		.run();
+	removeAttendeeBySegmentAndCompanion(segmentId, companionId);
 
 	logAudit(userId, 'remove_attendee', 'segment', segmentId, { companionId });
 }

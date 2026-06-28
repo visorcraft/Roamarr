@@ -1,15 +1,15 @@
-import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import { db } from '$lib/server/db';
-import { trips, segments } from '$lib/server/db/schema';
-import type { trips as tripsTable, segments as segmentsTable } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import type { Trip } from '$lib/server/repositories/tripsRepo';
+import { listSegmentsForTrip, createSegment } from '$lib/server/repositories/segmentsRepo';
+import type { SegmentRow } from '$lib/server/repositories/segmentsRepo';
 import { canView, canEdit, canViewDetails, viewerProjection } from '$lib/server/sharing';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { serializeTags } from '$lib/tags';
 
-type Trip = typeof tripsTable.$inferSelect;
-type Segment = typeof segmentsTable.$inferSelect;
+type Segment = SegmentRow;
 type Projection = ReturnType<typeof viewerProjection>;
 
 type TripView =
@@ -34,90 +34,71 @@ export function createTrip(
 ) {
 	const publicToken =
 		i.defaultVisibility === 'public' ? randomBytes(24).toString('base64url') : null;
-	return db
-		.insert(trips)
-		.values({
-			ownerId: userId,
-			name: i.name,
-			destination: null,
-			destinationCountryCode: i.destinationCountryCode,
-			destinationCityName: i.destinationCityName,
-			destinationCityLat: i.destinationCityLat,
-			destinationCityLng: i.destinationCityLng,
-			startDate: i.startDate,
-			endDate: i.endDate,
-			notes: i.notes,
-			tags: serializeTags(i.tags),
-			defaultVisibility: i.defaultVisibility ?? 'private',
-			publicToken
-		})
-		.returning()
-		.get();
+	return tripsRepo.createTrip(userId, {
+		name: i.name,
+		destinationCountryCode: i.destinationCountryCode,
+		destinationCityName: i.destinationCityName,
+		destinationCityLat: i.destinationCityLat,
+		destinationCityLng: i.destinationCityLng,
+		startDate: i.startDate,
+		endDate: i.endDate,
+		notes: i.notes,
+		tags: serializeTags(i.tags),
+		defaultVisibility: (i.defaultVisibility as 'private' | 'groups' | 'public') ?? 'private',
+		publicToken
+	});
 }
 
 export function regenerateCalendarToken(ownerId: number, tripId: number, expiresAt?: string | null) {
 	requireOwnedTrip(ownerId, tripId);
 	const token = randomBytes(24).toString('base64url');
-	db.update(trips)
-		.set({ calendarToken: token, calendarTokenExpiresAt: expiresAt ?? null })
-		.where(eq(trips.id, tripId))
-		.run();
+	tripsRepo.updateTrip(tripId, { calendarToken: token, calendarTokenExpiresAt: expiresAt ?? null });
 	return token;
 }
 
 export function revokeCalendarToken(ownerId: number, tripId: number) {
 	requireOwnedTrip(ownerId, tripId);
-	db.update(trips).set({ calendarToken: null, calendarTokenExpiresAt: null }).where(eq(trips.id, tripId)).run();
+	tripsRepo.updateTrip(tripId, { calendarToken: null, calendarTokenExpiresAt: null });
 }
 
 export function duplicateTrip(ownerId: number, tripId: number) {
-	const t = db.select().from(trips).where(eq(trips.id, tripId)).get();
+	const t = tripsRepo.getTripById(tripId);
 	if (!t || t.ownerId !== ownerId) throw error(403, 'Not allowed');
-	const segs = db.select().from(segments).where(eq(segments.tripId, tripId)).all();
-	const copy = db
-		.insert(trips)
-		.values({
-			ownerId,
-			name: `Copy of ${t.name}`,
-			destination: null,
-			destinationCountryCode: t.destinationCountryCode,
-			destinationCityName: t.destinationCityName,
-			destinationCityLat: t.destinationCityLat,
-			destinationCityLng: t.destinationCityLng,
-			startDate: t.startDate,
-			endDate: t.endDate,
-			notes: t.notes,
-			tags: t.tags,
-			defaultVisibility: t.defaultVisibility
-		})
-		.returning()
-		.get();
+	const segs = listSegmentsForTrip(tripId);
+	const copy = tripsRepo.createTrip(ownerId, {
+		name: `Copy of ${t.name}`,
+		destinationCountryCode: t.destinationCountryCode,
+		destinationCityName: t.destinationCityName,
+		destinationCityLat: t.destinationCityLat,
+		destinationCityLng: t.destinationCityLng,
+		startDate: t.startDate,
+		endDate: t.endDate,
+		notes: t.notes,
+		tags: t.tags,
+		defaultVisibility: t.defaultVisibility
+	});
 	for (const s of segs) {
-		db.insert(segments)
-			.values({
-				tripId: copy.id,
-				type: s.type,
-				title: s.title,
-				startAt: s.startAt,
-				startTz: s.startTz,
-				endAt: s.endAt,
-				location: s.location,
-				confirmationNumber: s.confirmationNumber,
-				detailsJson: s.detailsJson,
-				cardId: s.cardId
-			})
-			.run();
+		createSegment({
+			trip_id: BigInt(copy.id),
+			type: s.type,
+			title: s.title,
+			start_at: s.startAt,
+			start_tz: s.startTz,
+			end_at: s.endAt,
+			location: s.location,
+			confirmation_number: s.confirmationNumber,
+			details_json: s.detailsJson,
+			card_id: s.cardId != null ? BigInt(s.cardId) : null
+		});
 	}
 	return copy;
 }
 
 export function loadTripFor(userId: number, tripId: number): TripView {
-	const t = db.select().from(trips).where(eq(trips.id, tripId)).get();
+	const t = tripsRepo.getTripById(tripId);
 	if (!t || !canView(userId, t)) throw error(404, 'Not found');
-	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const segs = listSegmentsForTrip(t.id);
 	const editable = canEdit(userId, t);
 	if (editable) return { owner: t.ownerId === userId, editor: true, trip: t, segments: segs };
 	return { owner: false, editor: false, trip: viewerProjection(t, segs, canViewDetails(userId, t)) };
 }
-
-

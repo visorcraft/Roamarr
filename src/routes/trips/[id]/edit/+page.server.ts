@@ -1,11 +1,10 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip, requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { cancelRemindersFor } from '$lib/server/reminders';
-import { db } from '$lib/server/db';
-import { trips, segments } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import { nowIso } from '$lib/server/tz';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
@@ -24,9 +23,9 @@ export const load: PageServerLoad = ({ locals, params }) => {
 export function _deleteTrip(userId: number, tripId: number) {
 	requireOwnedTrip(userId, tripId);
 	cancelRemindersFor('trip', tripId);
-	const segs = db.select({ id: segments.id }).from(segments).where(eq(segments.tripId, tripId)).all();
+	const segs = listSegmentsForTrip(tripId);
 	for (const s of segs) cancelRemindersFor('segment', s.id);
-	db.delete(trips).where(eq(trips.id, tripId)).run();
+	tripsRepo.deleteTrip(tripId);
 	logAudit(userId, 'trip_delete', 'trip', tripId);
 }
 
@@ -90,24 +89,21 @@ export const actions: Actions = {
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 
-		db.update(trips)
-			.set({
-				name: name!,
-				destination: null,
-				destinationCountryCode,
-				destinationCityName,
-				destinationCityLat,
-				destinationCityLng,
-				startDate,
-				endDate,
-				notes,
-				tags: serializeTags(tags),
-				baseCurrency: baseCurrencyRaw,
-				...(status && { status }),
-				updatedAt: nowIso()
-			})
-			.where(eq(trips.id, tripId))
-			.run();
+		tripsRepo.updateTrip(tripId, {
+			name: name!,
+			destination: null,
+			destinationCountryCode,
+			destinationCityName,
+			destinationCityLat,
+			destinationCityLng,
+			startDate,
+			endDate,
+			notes,
+			tags: serializeTags(tags),
+			baseCurrency: baseCurrencyRaw,
+			...(status && { status }),
+			updatedAt: nowIso()
+		});
 		logAudit(u.id, 'trip_update', 'trip', tripId, { status });
 		throw redirect(303, `/trips/${params.id}`);
 	},

@@ -1,7 +1,9 @@
 import { error } from '@sveltejs/kit';
-import { eq, and } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from './db';
-import { segments, trips, tripTemplates } from './db/schema';
+import { tripTemplates } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
+import { listSegmentsForTrip, createSegment } from './repositories/segmentsRepo';
 import { requireOwnedTrip } from './ownership';
 import { logAudit } from './audit';
 import { nowIso } from './tz';
@@ -24,14 +26,13 @@ export function listTripTemplates(userId: number) {
 
 export function saveTripTemplate(userId: number, sourceTripId: number, name: string) {
 	requireOwnedTrip(userId, sourceTripId);
-	const trip = db.select().from(trips).where(eq(trips.id, sourceTripId)).get();
+	const trip = tripsRepo.getTripById(sourceTripId);
 	if (!trip) throw error(404, 'Trip not found');
-	const segs = db
-		.select({ type: segments.type, title: segments.title, location: segments.location })
-		.from(segments)
-		.where(eq(segments.tripId, sourceTripId))
-		.orderBy(segments.startAt)
-		.all();
+	const segs = listSegmentsForTrip(sourceTripId).map((s) => ({
+		type: s.type,
+		title: s.title,
+		location: s.location
+	}));
 	const snapshot: TripTemplateSnapshot = {
 		name: trip.name,
 		destinationCountryCode: trip.destinationCountryCode ?? null,
@@ -105,37 +106,27 @@ export function createTripFromTemplate(
 	const startDate = overrides.startDate ?? null;
 	const endDate = overrides.endDate ?? null;
 
-	const trip = db
-		.insert(trips)
-		.values({
-			ownerId: userId,
-			name,
-			destination: null,
-			destinationCountryCode,
-			destinationCityName,
-			destinationCityLat,
-			destinationCityLng,
-			startDate,
-			endDate,
-			notes: snapshot.notes,
-			tags: serializeTags(snapshot.tags.join(', ')),
-			updatedAt: nowIso()
-		})
-		.returning()
-		.get();
+	const trip = tripsRepo.createTrip(userId, {
+		name,
+		destinationCountryCode,
+		destinationCityName,
+		destinationCityLat,
+		destinationCityLng,
+		startDate,
+		endDate,
+		notes: snapshot.notes,
+		tags: serializeTags(snapshot.tags.join(', '))
+	});
 
 	for (const s of snapshot.segmentTemplates) {
-		db.insert(segments)
-			.values({
-				tripId: trip.id,
-				type: s.type,
-				title: s.title,
-				startAt: nowIso(),
-				startTz: 'UTC',
-				location: s.location,
-				updatedAt: nowIso()
-			})
-			.run();
+		createSegment({
+			trip_id: BigInt(trip.id),
+			type: s.type,
+			title: s.title,
+			start_at: nowIso(),
+			start_tz: 'UTC',
+			location: s.location
+		});
 	}
 
 	logAudit(userId, 'create_from_template', 'trip', trip.id, { templateId });

@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
-import { cards, fareProviders, fareWatches, segments, trips } from './db/schema';
-import { listPoliciesForUser } from './insurance';
+import { fareProviders, fareWatches } from './db/schema';
+import type { Trip } from './repositories/tripsRepo';
+import { listInsurancePolicies } from './repositories/profileRepo';
 import { listComments } from './tripComments';
 import { loadTripFor } from '../../routes/trips/shared';
 import { listTripCompanions } from './tripCompanions';
@@ -13,7 +14,7 @@ import { listJournalEntries } from './tripJournal';
 import { listDocumentLinks } from './tripDocumentLinks';
 import { listPollsWithVotes } from './tripPolls';
 import { listBudgetsWithSpent } from './tripBudgets';
-import { listEmergencyContacts } from './emergencyContacts';
+import { listEmergencyContacts, listCards } from './repositories/profileRepo';
 import { listAttachments } from './tripExpenseAttachments';
 import { listTripTemplates } from './tripTemplates';
 import { listHomeTasks } from './tripHomeTasks';
@@ -51,7 +52,7 @@ function computeTripStats(
 
 export function buildTripDetail(u: { id: number; defaultCurrency?: string | null }, tripId: number, url: URL) {
 	const view = loadTripFor(u.id, tripId);
-	const baseCurrency = ((view.trip as typeof trips.$inferSelect).baseCurrency as string | undefined) ?? 'USD';
+	const baseCurrency = ((view.trip as Trip).baseCurrency as string | undefined) ?? 'USD';
 	const companions = listTripCompanions(view.trip.id).map((c) =>
 		view.editor
 			? c
@@ -111,12 +112,12 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 			.from(fareProviders)
 			.where(and(eq(fareProviders.userId, u.id), eq(fareProviders.enabled, true)))
 			.all();
+		const segmentTitleMap = new Map(view.segments.map((s) => [s.id, s.title]));
 		const watches = db
 			.select({
 				id: fareWatches.id,
 				status: fareWatches.status,
 				segmentId: fareWatches.segmentId,
-				segmentTitle: segments.title,
 				providerKey: fareProviders.providerKey,
 				label: fareProviders.label,
 				lastCheckedAt: fareWatches.lastCheckedAt,
@@ -124,21 +125,17 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 			})
 			.from(fareWatches)
 			.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
-			.leftJoin(segments, eq(fareWatches.segmentId, segments.id))
 			.where(eq(fareWatches.tripId, view.trip.id))
-			.all();
+			.all()
+			.map((w) => ({ ...w, segmentTitle: w.segmentId != null ? segmentTitleMap.get(w.segmentId) ?? null : null }));
 		const feedUrl = view.trip.calendarToken
 			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
 			: null;
 		const publicShareUrl = view.trip.publicToken
 			? `${url.origin}/share/${encodeURIComponent(view.trip.publicToken)}`
 			: null;
-		const userCards = db
-			.select({ id: cards.id, nickname: cards.nickname, network: cards.network, last4: cards.last4 })
-			.from(cards)
-			.where(eq(cards.userId, u.id))
-			.all();
-		const allPolicies = listPoliciesForUser(u.id);
+		const userCards = listCards(u.id);
+		const allPolicies = listInsurancePolicies(u.id);
 		const policies = allPolicies.filter((p) => p.tripId === view.trip.id);
 		const availablePolicies = allPolicies.filter((p) => p.tripId !== view.trip.id);
 		const comments = listComments(view.trip.id);

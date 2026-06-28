@@ -1,9 +1,8 @@
-import { and, eq, inArray } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { listViewableTrips, TRIP_STATUSES } from '$lib/server/sharing';
-import { db } from '$lib/server/db';
-import { trips, segments } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import { cancelRemindersFor } from '$lib/server/reminders';
 import type { PageServerLoad } from './$types';
 
@@ -35,13 +34,10 @@ function selectedIds(formData: FormData): number[] {
 }
 
 function requireOwnedIds(userId: number, ids: number[]) {
-	if (ids.length === 0) return [];
-	return db
-		.select({ id: trips.id })
-		.from(trips)
-		.where(and(inArray(trips.id, ids), eq(trips.ownerId, userId)))
-		.all()
-		.map((t) => t.id);
+	return ids.filter((id) => {
+		const t = tripsRepo.getTripById(id);
+		return t && t.ownerId === userId;
+	});
 }
 
 export const actions: Actions = {
@@ -51,9 +47,9 @@ export const actions: Actions = {
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
 			cancelRemindersFor('trip', id);
-			const segs = db.select({ id: segments.id }).from(segments).where(eq(segments.tripId, id)).all();
+			const segs = listSegmentsForTrip(id);
 			for (const s of segs) cancelRemindersFor('segment', s.id);
-			db.delete(trips).where(eq(trips.id, id)).run();
+			tripsRepo.deleteTrip(id);
 		}
 		throw redirect(303, '/trips');
 	},
@@ -62,7 +58,7 @@ export const actions: Actions = {
 		const ids = selectedIds(await request.formData());
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
-			db.update(trips).set({ archived: true }).where(eq(trips.id, id)).run();
+			tripsRepo.updateTrip(id, { archived: true });
 		}
 		throw redirect(303, '/trips');
 	},
@@ -71,7 +67,7 @@ export const actions: Actions = {
 		const ids = selectedIds(await request.formData());
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
-			db.update(trips).set({ favorite: true }).where(eq(trips.id, id)).run();
+			tripsRepo.updateTrip(id, { favorite: true });
 		}
 		throw redirect(303, '/trips');
 	},
@@ -80,7 +76,7 @@ export const actions: Actions = {
 		const ids = selectedIds(await request.formData());
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
-			db.update(trips).set({ archived: false }).where(eq(trips.id, id)).run();
+			tripsRepo.updateTrip(id, { archived: false });
 		}
 		throw redirect(303, '/trips');
 	},
@@ -89,7 +85,7 @@ export const actions: Actions = {
 		const ids = selectedIds(await request.formData());
 		if (ids.length === 0) return fail(400, { error: 'No trips selected' });
 		for (const id of requireOwnedIds(u.id, ids)) {
-			db.update(trips).set({ favorite: false }).where(eq(trips.id, id)).run();
+			tripsRepo.updateTrip(id, { favorite: false });
 		}
 		throw redirect(303, '/trips');
 	}

@@ -1,12 +1,14 @@
-import { and, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, gte, inArray, sql } from 'drizzle-orm';
 import { db } from './db';
-import { trips, tripShares, groups, groupMembers, segments } from './db/schema';
-import type { trips as tripsTable } from './db/schema';
+import { segments } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
+import type { Trip } from './repositories/tripsRepo';
 
 export { TRIP_STATUSES } from '../tripStatus';
 import type { TripStatus } from '../tripStatus';
 
-type Trip = typeof tripsTable.$inferSelect;
+export { listGroupsForUser } from './repositories/tripsRepo';
+
 type Segment = typeof segments.$inferSelect;
 
 export function tripTags(trip: { tags: string }): string[] {
@@ -26,111 +28,30 @@ function tripHasTag(trip: ListedTrip, tag: string): boolean {
 
 export function canEdit(userId: number, trip: Trip) {
 	if (trip.ownerId === userId) return true;
-	const direct = db
-		.select()
-		.from(tripShares)
-		.where(
-			and(
-				eq(tripShares.tripId, trip.id),
-				eq(tripShares.sharedWithUserId, userId),
-				eq(tripShares.permission, 'edit')
-			)
-		)
-		.get();
-	if (direct) return true;
-	const viaGroup = db
-		.select({ id: tripShares.id })
-		.from(tripShares)
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(
-			and(
-				eq(tripShares.tripId, trip.id),
-				eq(groupMembers.userId, userId),
-				eq(tripShares.permission, 'edit')
-			)
-		)
-		.get();
-	return !!viaGroup;
+	const direct = tripsRepo.getDirectShareForTrip(trip.id, userId);
+	if (direct?.permission === 'edit') return true;
+	const viaGroup = tripsRepo.getGroupShareForTrip(trip.id, userId);
+	return viaGroup?.permission === 'edit';
 }
 
 export function listEditableTripIds(userId: number): number[] {
-	const owned = db
-		.select({ id: trips.id })
-		.from(trips)
-		.where(eq(trips.ownerId, userId))
-		.all();
-	const directShares = db
-		.select({ tripId: tripShares.tripId })
-		.from(tripShares)
-		.where(and(eq(tripShares.sharedWithUserId, userId), eq(tripShares.permission, 'edit')))
-		.all();
-	const groupShares = db
-		.select({ tripId: tripShares.tripId })
-		.from(tripShares)
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(and(eq(groupMembers.userId, userId), eq(tripShares.permission, 'edit')))
-		.all();
-	return Array.from(
-		new Set([...owned.map((o) => o.id), ...directShares.map((s) => s.tripId), ...groupShares.map((s) => s.tripId)])
-	);
+	return tripsRepo.listEditableTripIdsForUser(userId);
 }
 
 export function canView(userId: number, trip: Trip) {
 	if (trip.ownerId === userId) return true;
-	const direct = db
-		.select()
-		.from(tripShares)
-		.where(and(eq(tripShares.tripId, trip.id), eq(tripShares.sharedWithUserId, userId)))
-		.get();
+	const direct = tripsRepo.getDirectShareForTrip(trip.id, userId);
 	if (direct) return true;
-	const viaGroup = db
-		.select({ id: tripShares.id })
-		.from(tripShares)
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(and(eq(tripShares.tripId, trip.id), eq(groupMembers.userId, userId)))
-		.get();
+	const viaGroup = tripsRepo.getGroupShareForTrip(trip.id, userId);
 	return !!viaGroup;
 }
 
 export function canViewDetails(userId: number, trip: Trip) {
 	if (trip.ownerId === userId) return true;
-	const direct = db
-		.select({ id: tripShares.id })
-		.from(tripShares)
-		.where(
-			and(
-				eq(tripShares.tripId, trip.id),
-				eq(tripShares.sharedWithUserId, userId),
-				eq(tripShares.showDetails, true)
-			)
-		)
-		.get();
-	if (direct) return true;
-	const viaGroup = db
-		.select({ id: tripShares.id })
-		.from(tripShares)
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(
-			and(
-				eq(tripShares.tripId, trip.id),
-				eq(groupMembers.userId, userId),
-				eq(tripShares.showDetails, true)
-			)
-		)
-		.get();
-	return !!viaGroup;
-}
-
-export function listGroupsForUser(userId: number) {
-	const owned = db.select({ id: groups.id }).from(groups).where(eq(groups.ownerId, userId)).all();
-	const member = db
-		.select({ groupId: groupMembers.groupId })
-		.from(groupMembers)
-		.where(eq(groupMembers.userId, userId))
-		.all();
-	const ids = Array.from(new Set([...owned.map((g) => g.id), ...member.map((m) => m.groupId)]));
-	if (ids.length === 0) return [];
-	return db.select().from(groups).where(inArray(groups.id, ids)).all();
+	const direct = tripsRepo.getDirectShareForTrip(trip.id, userId);
+	if (direct?.showDetails) return true;
+	const viaGroup = tripsRepo.getGroupShareForTrip(trip.id, userId);
+	return viaGroup?.showDetails ?? false;
 }
 
 export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = false) {
@@ -177,32 +98,19 @@ export function listViewableTrips(
 	userId: number,
 	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder; filter?: TripFilter; status?: TripStatus }
 ): ListedTrip[] {
-	const ownedWhere = options?.startDateGte
-		? and(eq(trips.ownerId, userId), gte(trips.startDate, options.startDateGte))
-		: eq(trips.ownerId, userId);
-	const owned = db.select().from(trips).where(ownedWhere).all();
+	const owned = tripsRepo
+		.listTripsForUser(userId)
+		.filter((t) => !options?.startDateGte || !t.startDate || t.startDate >= options.startDateGte);
 
-	const sharedByUser = db
-		.select({ trip: trips })
-		.from(trips)
-		.innerJoin(tripShares, eq(trips.id, tripShares.tripId))
-		.where(eq(tripShares.sharedWithUserId, userId))
-		.all();
-
-	const sharedByGroup = db
-		.select({ trip: trips })
-		.from(trips)
-		.innerJoin(tripShares, eq(trips.id, tripShares.tripId))
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(eq(groupMembers.userId, userId))
-		.all();
+	const shared = tripsRepo
+		.listTripsSharedWithUser(userId)
+		.filter((t) => !options?.startDateGte || !t.startDate || t.startDate >= options.startDateGte);
 
 	const map = new Map<number, ListedTrip>();
 	for (const t of owned) map.set(t.id, { ...t, isShared: false });
-	for (const { trip: t } of [...sharedByUser, ...sharedByGroup]) {
+	for (const t of shared) {
 		if (map.has(t.id)) continue;
 		if (!canView(userId, t)) continue;
-		if (options?.startDateGte && t.startDate && t.startDate < options.startDateGte) continue;
 		map.set(t.id, { ...viewerProjection(t, []), isShared: true });
 	}
 

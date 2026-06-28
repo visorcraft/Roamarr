@@ -1,6 +1,5 @@
-import { eq } from 'drizzle-orm';
-import { db } from './db';
-import { trips, segments } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
+import { listSegmentsForTrip } from './repositories/segmentsRepo';
 import { utcToLocal } from './tz';
 import { tripTags } from './sharing';
 import type { SegmentType } from './db/schema';
@@ -31,9 +30,9 @@ interface ExportedTrip {
 }
 
 export function exportTrips(userId: number): ExportedTrip[] {
-	const owned = db.select().from(trips).where(eq(trips.ownerId, userId)).all();
+	const owned = tripsRepo.listTripsForUser(userId);
 	return owned.map((t) => {
-		const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+		const segs = listSegmentsForTrip(t.id);
 		return {
 			name: t.name,
 			destinationCountryCode: t.destinationCountryCode ?? undefined,

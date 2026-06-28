@@ -1,12 +1,11 @@
 import { error } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { buildCalendar, type CalendarSegment } from '$lib/server/ical';
 import { parseTripId } from '$lib/server/params';
-import { db } from '$lib/server/db';
-import { segments, trips } from '$lib/server/db/schema';
 import { viewerProjection } from '$lib/server/sharing';
+import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { isExpired } from '$lib/server/dates';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
@@ -24,14 +23,10 @@ export const GET: RequestHandler = ({ params, url, getClientAddress }) => {
 	const token = url.searchParams.get('token');
 	if (!token) throw error(404, 'Not found');
 
-	const t = db
-		.select()
-		.from(trips)
-		.where(and(eq(trips.id, tripId), eq(trips.calendarToken, token)))
-		.get();
-	if (!t || isExpired(t.calendarTokenExpiresAt)) throw error(404, 'Not found');
+	const t = tripsRepo.getTripByCalendarToken(token);
+	if (!t || t.id !== tripId || isExpired(t.calendarTokenExpiresAt)) throw error(404, 'Not found');
 
-	const segs = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const segs = listSegmentsForTrip(t.id);
 	const projection = viewerProjection(t, segs);
 
 	const calendar = buildCalendar(

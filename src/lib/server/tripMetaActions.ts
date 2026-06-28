@@ -1,12 +1,15 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { db } from './db';
-import { trips, segments } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
+import { getSegmentById } from './repositories/segmentsRepo';
 import { regenerateCalendarToken, revokeCalendarToken, duplicateTrip } from '../../routes/trips/shared';
 import { upsertCustomReminder } from './reminders';
 import { duplicateSegment, moveSegmentToDate, setSegmentStatus } from './segments';
-import { attachPolicyToTrip, detachPolicyFromTrip } from './insurance';
+import {
+	attachInsurancePolicyToTrip,
+	detachInsurancePolicyFromTrip
+} from './repositories/profileRepo';
 import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
@@ -39,14 +42,14 @@ export async function duplicate(event: RequestEvent) {
 export async function toggleArchive(event: RequestEvent) {
 	const { user, tripId } = await withTripAction(event);
 	const t = requireOwnedTrip(user.id, tripId);
-	db.update(trips).set({ archived: !t.archived }).where(eq(trips.id, tripId)).run();
+	tripsRepo.updateTrip(tripId, { archived: !t.archived });
 	throw redirect(303, `/trips/${tripId}`);
 }
 
 export async function toggleFavorite(event: RequestEvent) {
 	const { user, tripId } = await withTripAction(event);
 	const t = requireOwnedTrip(user.id, tripId);
-	db.update(trips).set({ favorite: !t.favorite }).where(eq(trips.id, tripId)).run();
+	tripsRepo.updateTrip(tripId, { favorite: !t.favorite });
 	throw redirect(303, `/trips/${tripId}`);
 }
 
@@ -68,12 +71,8 @@ export async function segmentReminder(event: RequestEvent) {
 	if (!segmentIdResult.ok) throw error(400, segmentIdResult.error);
 	const offset = Number(formData.get('offsetMinutes') ?? 60);
 	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
-	const seg = db
-		.select()
-		.from(segments)
-		.where(and(eq(segments.id, segmentIdResult.value), eq(segments.tripId, tripId)))
-		.get();
-	if (!seg) throw error(404, 'Segment not found');
+	const seg = getSegmentById(segmentIdResult.value);
+	if (!seg || seg.tripId !== tripId) throw error(404, 'Segment not found');
 	upsertCustomReminder(user.id, 'segment', segmentIdResult.value, seg.startAt, offset);
 	throw redirect(303, `/trips/${tripId}`);
 }
@@ -111,7 +110,7 @@ export async function attachPolicy(event: RequestEvent) {
 	requireOwnedTrip(user.id, tripId);
 	const policyIdResult = positiveIdFromForm(formData.get('policyId'), 'policyId');
 	if (!policyIdResult.ok) throw error(400, policyIdResult.error);
-	attachPolicyToTrip(user.id, policyIdResult.value, tripId);
+	attachInsurancePolicyToTrip(user.id, policyIdResult.value, tripId);
 	throw redirect(303, `/trips/${tripId}`);
 }
 
@@ -120,7 +119,7 @@ export async function detachPolicy(event: RequestEvent) {
 	requireOwnedTrip(user.id, tripId);
 	const policyIdResult = positiveIdFromForm(formData.get('policyId'), 'policyId');
 	if (!policyIdResult.ok) throw error(400, policyIdResult.error);
-	detachPolicyFromTrip(user.id, policyIdResult.value);
+	detachInsurancePolicyFromTrip(user.id, policyIdResult.value);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

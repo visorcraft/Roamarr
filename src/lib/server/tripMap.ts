@@ -1,8 +1,7 @@
-import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
-import { db } from './db';
-import { segments, trips } from './db/schema';
 import { nowIso } from './tz';
+import * as tripsRepo from './repositories/tripsRepo';
+import { listSegmentsForTrip } from './repositories/segmentsRepo';
 
 export interface NextCity {
 	segmentId: number | null;
@@ -15,20 +14,7 @@ export interface NextCity {
 }
 
 export function selectNextSegmentCity(tripId: number): NextCity | null {
-	const rows = db
-		.select({
-			id: segments.id,
-			cityName: segments.cityName,
-			countryCode: segments.countryCode,
-			cityLat: segments.cityLat,
-			cityLng: segments.cityLng,
-			startAt: segments.startAt,
-			startTz: segments.startTz
-		})
-		.from(segments)
-		.where(eq(segments.tripId, tripId))
-		.orderBy(segments.startAt)
-		.all();
+	const rows = listSegmentsForTrip(tripId);
 
 	const now = DateTime.fromISO(nowIso(), { zone: 'utc' });
 	for (const row of rows) {
@@ -57,24 +43,15 @@ export function tripMapCity(tripId: number): NextCity | null {
 	const segmentCity = selectNextSegmentCity(tripId);
 	if (segmentCity) return segmentCity;
 
-	const trip = db
-		.select({
-			cityName: trips.destinationCityName,
-			countryCode: trips.destinationCountryCode,
-			lat: trips.destinationCityLat,
-			lng: trips.destinationCityLng
-		})
-		.from(trips)
-		.where(eq(trips.id, tripId))
-		.get();
+	const trip = tripsRepo.getTripById(tripId);
 
-	if (trip?.cityName && trip.lat != null && trip.lng != null) {
+	if (trip?.destinationCityName && trip.destinationCityLat != null && trip.destinationCityLng != null) {
 		return {
 			segmentId: null,
-			cityName: trip.cityName,
-			countryCode: trip.countryCode ?? '',
-			lat: trip.lat,
-			lng: trip.lng,
+			cityName: trip.destinationCityName,
+			countryCode: trip.destinationCountryCode ?? '',
+			lat: trip.destinationCityLat,
+			lng: trip.destinationCityLng,
 			startAt: null,
 			startTz: null
 		};

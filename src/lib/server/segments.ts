@@ -1,18 +1,18 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, ne, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
 import { localToUtc, nowIso } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
-import { db } from '$lib/server/db';
 import {
-	segments,
-	type SegmentType,
-	type SegmentStatus,
-	SEGMENT_STATUSES,
-	SEGMENT_PAYMENT_STATUSES
-} from '$lib/server/db/schema';
+	createSegment,
+	updateSegment as updateSegmentRepo,
+	deleteSegment as deleteSegmentRepo,
+	deleteSegmentsForTrip,
+	getSegmentById,
+	countOverlappingSegments
+} from '$lib/server/repositories/segmentsRepo';
+import { SEGMENT_STATUSES, SEGMENT_PAYMENT_STATUSES, type SegmentType, type SegmentStatus } from '$lib/server/db/schema';
 
 function normalizeMeetingAt(i: {
 	meetingAt?: string;
@@ -56,32 +56,28 @@ export function addSegment(
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const paymentStatus = normalizePaymentStatus(i.paymentStatus);
-	const seg = db
-		.insert(segments)
-		.values({
-			tripId,
-			type: i.type,
-			title: i.title,
-			startAt: localToUtc(i.localStart, i.startTz),
-			startTz: i.startTz,
-			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
-			endTz,
-			location: i.location ?? null,
-			countryCode: i.countryCode ?? null,
-			cityName: i.cityName ?? null,
-			cityLat: i.cityLat ?? null,
-			cityLng: i.cityLng ?? null,
-			venue: i.venue ?? null,
-			confirmationNumber: i.confirmationNumber ?? null,
-			cardId: i.cardId ?? null,
-			detailsJson: i.details ? JSON.stringify(i.details) : null,
-			meetingPoint,
-			meetingAt,
-			paymentStatus,
-			paymentDueDate: i.paymentDueDate ?? null
-		})
-		.returning()
-		.get();
+	const seg = createSegment({
+		trip_id: BigInt(tripId),
+		type: i.type,
+		title: i.title,
+		start_at: localToUtc(i.localStart, i.startTz),
+		start_tz: i.startTz,
+		end_at: i.endAt ? localToUtc(i.endAt, endTz) : null,
+		end_tz: endTz,
+		location: i.location ?? null,
+		country_code: i.countryCode ?? null,
+		city_name: i.cityName ?? null,
+		city_lat: i.cityLat ?? null,
+		city_lng: i.cityLng ?? null,
+		venue: i.venue ?? null,
+		confirmation_number: i.confirmationNumber ?? null,
+		card_id: i.cardId != null ? BigInt(i.cardId) : null,
+		details_json: i.details ? JSON.stringify(i.details) : null,
+		meeting_point: meetingPoint,
+		meeting_at: meetingAt,
+		payment_status: paymentStatus,
+		payment_due_date: i.paymentDueDate ?? null
+	});
 	upsertRemindersForSegment(seg);
 	return seg;
 }
@@ -102,23 +98,15 @@ export function hasOverlappingSegment(
 	endAt: string | null | undefined
 ) {
 	if (!endAt) return false;
-	const conditions = [
-		eq(segments.tripId, tripId),
-		sql`${segments.startAt} < ${endAt}`,
-		sql`${segments.endAt} > ${startAt}`
-	];
-	if (excludeSegmentId != null) conditions.push(ne(segments.id, excludeSegmentId));
-	const row = db
-		.select({ count: sql<number>`count(*)` })
-		.from(segments)
-		.where(and(...conditions))
-		.get();
-	return (row?.count ?? 0) > 0;
+	const count = countOverlappingSegments(tripId, startAt, endAt, excludeSegmentId);
+	return count > 0n;
 }
 
 export function deleteSegment(userId: number, tripId: number, segId: number) {
 	requireEditableTrip(userId, tripId);
-	db.delete(segments).where(and(eq(segments.id, segId), eq(segments.tripId, tripId))).run();
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	deleteSegmentRepo(segId);
 	cancelRemindersFor('segment', segId);
 }
 
@@ -126,15 +114,12 @@ export function deleteSegments(userId: number, tripId: number, segIds: number[])
 	requireEditableTrip(userId, tripId);
 	const unique = Array.from(new Set(segIds.filter((id) => Number.isInteger(id) && id > 0)));
 	if (unique.length === 0) return 0;
-	const deleted = db
-		.delete(segments)
-		.where(and(eq(segments.tripId, tripId), sql`${segments.id} IN (${sql.join(unique, sql`, `)})`))
-		.run();
+	deleteSegmentsForTrip(tripId, unique);
 	for (const id of unique) {
 		cancelRemindersFor('segment', id);
 	}
 	logAudit(userId, 'delete_many', 'segment', tripId, { count: unique.length });
-	return deleted.changes ?? unique.length;
+	return unique.length;
 }
 
 export function updateSegment(
@@ -163,53 +148,44 @@ export function updateSegment(
 	}
 ) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(segments)
-		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const paymentStatus = i.paymentStatus ? normalizePaymentStatus(i.paymentStatus) : undefined;
-	const seg = db
-		.update(segments)
-		.set({
-			title: i.title,
-			startAt: localToUtc(i.localStart, i.startTz),
-			startTz: i.startTz,
-			endAt: i.endAt ? localToUtc(i.endAt, endTz) : null,
-			endTz,
-			location: i.location ?? null,
-			countryCode: i.countryCode ?? null,
-			cityName: i.cityName ?? null,
-			cityLat: i.cityLat ?? null,
-			cityLng: i.cityLng ?? null,
-			venue: i.venue ?? null,
-			confirmationNumber: i.confirmationNumber ?? null,
-			cardId: i.cardId ?? null,
-			detailsJson: i.details ? JSON.stringify(i.details) : null,
-			meetingPoint,
-			meetingAt,
-			...(paymentStatus && { paymentStatus }),
-			paymentDueDate: i.paymentDueDate
-		})
-		.where(eq(segments.id, segId))
-		.returning()
-		.get();
+	const patch: Parameters<typeof updateSegmentRepo>[1] = {
+		title: i.title,
+		start_at: localToUtc(i.localStart, i.startTz),
+		start_tz: i.startTz,
+		end_at: i.endAt ? localToUtc(i.endAt, endTz) : null,
+		end_tz: endTz,
+		location: i.location ?? null,
+		country_code: i.countryCode ?? null,
+		city_name: i.cityName ?? null,
+		city_lat: i.cityLat ?? null,
+		city_lng: i.cityLng ?? null,
+		venue: i.venue ?? null,
+		confirmation_number: i.confirmationNumber ?? null,
+		card_id: i.cardId != null ? BigInt(i.cardId) : null,
+		details_json: i.details ? JSON.stringify(i.details) : null,
+		meeting_point: meetingPoint,
+		meeting_at: meetingAt,
+		payment_due_date: i.paymentDueDate
+	};
+	if (paymentStatus) {
+		patch.payment_status = paymentStatus;
+	}
+	const seg = updateSegmentRepo(segId, patch);
+	if (!seg) throw error(404, 'Not found');
 	upsertRemindersForSegment(seg);
 	return seg;
 }
 
 export function moveSegmentToDate(userId: number, tripId: number, segId: number, targetDate: string) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(segments)
-		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 
 	const start = DateTime.fromISO(existing.startAt, { zone: 'utc' });
 	const startLocal = start.setZone(existing.startTz || 'UTC');
@@ -234,17 +210,13 @@ export function moveSegmentToDate(userId: number, tripId: number, segId: number,
 		? DateTime.fromISO(existing.meetingAt, { zone: 'utc' }).plus(delta).toUTC().toISO()
 		: null;
 
-	const seg = db
-		.update(segments)
-		.set({
-			startAt: movedStart.toISO()!,
-			endAt: movedEndAt,
-			meetingAt: movedMeetingAt,
-			updatedAt: nowIso()
-		})
-		.where(eq(segments.id, segId))
-		.returning()
-		.get();
+	const seg = updateSegmentRepo(segId, {
+		start_at: movedStart.toISO()!,
+		end_at: movedEndAt,
+		meeting_at: movedMeetingAt,
+		updated_at: nowIso()
+	});
+	if (!seg) throw error(404, 'Not found');
 	upsertRemindersForSegment(seg);
 	logAudit(userId, 'move_date', 'segment', segId, { targetDate });
 	return seg;
@@ -257,40 +229,32 @@ function shiftUtcBy24h(iso: string | null) {
 
 export function duplicateSegment(userId: number, tripId: number, segId: number) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select()
-		.from(segments)
-		.where(and(eq(segments.id, segId), eq(segments.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
 
-	const copy = db
-		.insert(segments)
-		.values({
-			tripId,
-			type: existing.type,
-			title: existing.title,
-			startAt: shiftUtcBy24h(existing.startAt)!,
-			startTz: existing.startTz,
-			endAt: shiftUtcBy24h(existing.endAt),
-			endTz: existing.endTz ?? existing.startTz,
-			location: existing.location,
-			countryCode: existing.countryCode,
-			cityName: existing.cityName,
-			cityLat: existing.cityLat,
-			cityLng: existing.cityLng,
-			venue: existing.venue,
-			confirmationNumber: null,
-			cardId: existing.cardId,
-			detailsJson: existing.detailsJson,
-			meetingPoint: existing.meetingPoint,
-			meetingAt: shiftUtcBy24h(existing.meetingAt),
-			paymentStatus: existing.paymentStatus,
-			paymentDueDate: existing.paymentDueDate
-		})
-		.returning()
-		.get();
+	const copy = createSegment({
+		trip_id: BigInt(tripId),
+		type: existing.type,
+		title: existing.title,
+		start_at: shiftUtcBy24h(existing.startAt)!,
+		start_tz: existing.startTz,
+		end_at: shiftUtcBy24h(existing.endAt),
+		end_tz: existing.endTz ?? existing.startTz,
+		location: existing.location,
+		country_code: existing.countryCode,
+		city_name: existing.cityName,
+		city_lat: existing.cityLat,
+		city_lng: existing.cityLng,
+		venue: existing.venue,
+		confirmation_number: null,
+		card_id: existing.cardId != null ? BigInt(existing.cardId) : null,
+		details_json: existing.detailsJson,
+		meeting_point: existing.meetingPoint,
+		meeting_at: shiftUtcBy24h(existing.meetingAt),
+		payment_status: existing.paymentStatus,
+		payment_due_date: existing.paymentDueDate
+	});
 	upsertRemindersForSegment(copy);
 	logAudit(userId, 'duplicate', 'segment', copy.id, { sourceSegmentId: segId, sourceTripId: tripId });
 	return copy;
@@ -300,12 +264,9 @@ export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
 	if (!SEGMENT_STATUSES.includes(status)) {
 		throw error(400, 'Invalid segment status');
 	}
-	return db
-		.update(segments)
-		.set({ status, updatedAt: nowIso() })
-		.where(eq(segments.id, segmentId))
-		.returning()
-		.get();
+	const seg = updateSegmentRepo(segmentId, { status, updated_at: nowIso() });
+	if (!seg) throw error(404, 'Not found');
+	return seg;
 }
 
 export function setSegmentStatus(
@@ -315,12 +276,8 @@ export function setSegmentStatus(
 	status: SegmentStatus
 ) {
 	requireEditableTrip(userId, tripId);
-	const existing = db
-		.select({ id: segments.id })
-		.from(segments)
-		.where(and(eq(segments.id, segmentId), eq(segments.tripId, tripId)))
-		.get();
-	if (!existing) throw error(404, 'Not found');
+	const existing = getSegmentById(segmentId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	const seg = updateSegmentStatus(segmentId, status);
 	logAudit(userId, 'update_status', 'segment', segmentId, { status });
 	return seg;

@@ -44,8 +44,8 @@ afterEach(() => {
 function seed() {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'att@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'att@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const e = expensesRepo.createExpense({
 		tripId: t.id,
 		description: 'Dinner',
@@ -107,7 +107,7 @@ test('deleteAttachment removes the row and file', async () => {
 
 test('non-editor cannot add or delete attachments', async () => {
 	const { db, kit, u, e } = seed();
-	const other = makeSyncedUser(db, kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeSyncedUser(kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'O' });
 
 	await expect(
 		addAttachment(other.id, e.id, new File(['x'], 'x.png', { type: 'image/png' }))

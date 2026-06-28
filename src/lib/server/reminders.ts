@@ -1,8 +1,8 @@
 import { DateTime } from 'luxon';
-import { eq } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
-import { db } from './db';
-import { segments, travelDocuments, trips, users } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
+import * as usersRepo from './repositories/usersRepo';
+import * as segmentsRepo from './repositories/segmentsRepo';
+import * as profileRepo from './repositories/profileRepo';
 import {
 	createReminder,
 	upsertReminderBySource,
@@ -16,10 +16,11 @@ import {
 	type ReminderRow
 } from './repositories/remindersRepo';
 import { deliver } from './notify';
+import { error } from '@sveltejs/kit';
 import { nowIso } from './tz';
 
-type Seg = typeof segments.$inferSelect;
-type Doc = typeof travelDocuments.$inferSelect;
+type Segment = ReturnType<typeof segmentsRepo.toSegmentRow>;
+type Doc = profileRepo.TravelDocument;
 type Reminder = ReminderRow;
 
 export function computeFireAt(
@@ -58,27 +59,23 @@ function arm(
 	upsertReminderBySource({ userId, kind, refType, refId, fireAt, status, attempts: 0, sentAt: null });
 }
 
-export function upsertRemindersForSegment(seg: Seg) {
+export function upsertRemindersForSegment(seg: Segment) {
 	if (seg.type !== 'flight') {
 		cancelRemindersFor('segment', seg.id);
 		return;
 	}
-	const owner = db
-		.select({ ownerId: trips.ownerId })
-		.from(trips)
-		.where(eq(trips.id, seg.tripId))
-		.get()!;
-	const user = db
-		.select({ flightCheckinLeadHours: users.flightCheckinLeadHours })
-		.from(users)
-		.where(eq(users.id, owner.ownerId))
-		.get()!;
+	const trip = tripsRepo.getTripById(seg.tripId);
+	if (!trip) return;
+	const user = usersRepo.getUserById(trip.ownerId);
+	if (!user) return;
 	arm(
-		owner.ownerId,
+		trip.ownerId,
 		'flight_checkin',
 		'segment',
 		seg.id,
-		computeFireAt('flight_checkin', seg.startAt, { flightCheckinLeadHours: user.flightCheckinLeadHours })
+		computeFireAt('flight_checkin', seg.startAt, {
+			flightCheckinLeadHours: Number(user.flight_checkin_lead_hours)
+		})
 	);
 }
 
@@ -98,13 +95,9 @@ export function upsertRemindersForDocument(doc: Doc) {
 		cancelRemindersFor('document', doc.id);
 		return;
 	}
-	const user = db
-		.select({ timezone: users.timezone, documentExpiryLeadDays: users.documentExpiryLeadDays })
-		.from(users)
-		.where(eq(users.id, doc.userId))
-		.get();
+	const user = usersRepo.getUserById(doc.userId);
 	const tz = user?.timezone ?? 'UTC';
-	const leadDays = user?.documentExpiryLeadDays ?? 90;
+	const leadDays = Number(user?.document_expiry_lead_days ?? 90);
 	arm(
 		doc.userId,
 		'document_expiry',

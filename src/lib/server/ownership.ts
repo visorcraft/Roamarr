@@ -1,13 +1,20 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq as kitEq, and, inList } from '@mongreldb/kit';
+import type { TableSpec, Row } from '@mongreldb/kit';
 import { error } from '@sveltejs/kit';
-import { db } from './db';
-import { cards, fareProviders, segments, groups, travelDocuments, users, tripCompanions } from './db/schema';
+import { kit } from './db';
+import {
+	cards,
+	fareProviders,
+	segments,
+	travelDocuments,
+	tripCompanions,
+	users
+} from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import { canEdit } from './sharing';
-import type { SQLiteTable, AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 export function requireOwnedUser(userId: number) {
-	const u = db.select().from(users).where(eq(users.id, userId)).get();
+	const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
 	if (!u) throw error(404, 'Not found');
 	return u;
 }
@@ -31,56 +38,64 @@ export function requireOwnedGroup(userId: number, groupId: number) {
 }
 
 export function requireOwnedDocument(userId: number, documentId: number) {
-	const d = db
-		.select()
-		.from(travelDocuments)
-		.where(and(eq(travelDocuments.id, documentId), eq(travelDocuments.userId, userId)))
-		.get();
+	const d = kit
+		.selectFrom(travelDocuments)
+		.where(and(kitEq(travelDocuments.id, BigInt(documentId)), kitEq(travelDocuments.user_id, BigInt(userId))))
+		.executeSync()[0];
 	if (!d) throw error(404, 'Not found');
 	return d;
 }
 
-export function requireOwnedTripRow<TTable extends SQLiteTable>(
-	table: TTable & { id: AnySQLiteColumn; tripId: AnySQLiteColumn },
+export function requireOwnedTripRow<TTable extends TableSpec & { id: unknown; trip_id: unknown }>(
+	table: TTable,
 	tripId: number,
 	id: number,
 	notFoundMessage = 'Not found'
-): TTable['$inferSelect'] {
-	const row = db.select().from(table).where(and(eq(table.id, id), eq(table.tripId, tripId))).get();
+): Row<TTable> {
+	const row = kit
+		.selectFrom(table)
+		.where(and(kitEq(table.id as any, BigInt(id)), kitEq(table.trip_id as any, BigInt(tripId))))
+		.executeSync()[0];
 	if (!row) throw error(404, notFoundMessage);
-	return row;
+	return row as Row<TTable>;
 }
 
-export function requireOwnedUserRow<TTable extends SQLiteTable>(
-	table: TTable & { id: AnySQLiteColumn; userId: AnySQLiteColumn },
+export function requireOwnedUserRow<TTable extends TableSpec & { id: unknown; user_id: unknown }>(
+	table: TTable,
 	userId: number,
 	id: number,
 	notFoundMessage = 'Not found'
-): TTable['$inferSelect'] {
-	const row = db.select().from(table).where(and(eq(table.id, id), eq(table.userId, userId))).get();
+): Row<TTable> {
+	const row = kit
+		.selectFrom(table)
+		.where(and(kitEq(table.id as any, BigInt(id)), kitEq(table.user_id as any, BigInt(userId))))
+		.executeSync()[0];
 	if (!row) throw error(404, notFoundMessage);
-	return row;
+	return row as Row<TTable>;
 }
 
 export function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {
 	if (companionId == null) return null;
-	const c = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.get();
+	const c = kit
+		.selectFrom(tripCompanions)
+		.where(and(kitEq(tripCompanions.id, BigInt(companionId)), kitEq(tripCompanions.trip_id, BigInt(tripId))))
+		.executeSync()[0];
 	if (!c) throw error(400, 'Companion is not on this trip');
 	return companionId;
 }
 
 export function requireCompanionsOnTrip(companionIds: number[], tripId: number) {
 	if (companionIds.length === 0) return;
-	const found = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.tripId, tripId), inArray(tripCompanions.id, companionIds)))
-		.all();
-	const foundIds = new Set(found.map((c) => c.id));
+	const found = kit
+		.selectFrom(tripCompanions)
+		.where(
+			and(
+				kitEq(tripCompanions.trip_id, BigInt(tripId)),
+				inList(tripCompanions.id, companionIds.map((id) => BigInt(id)))
+			)
+		)
+		.executeSync();
+	const foundIds = new Set(found.map((c) => Number(c.id)));
 	if (foundIds.size !== companionIds.length) throw error(400, 'Companion is not on this trip');
 }
 
@@ -95,28 +110,22 @@ export function assertOwnedRefs(
 ) {
 	if (refs.tripId != null) requireOwnedTrip(userId, refs.tripId);
 	if (refs.cardId != null) {
-		const c = db
-			.select()
-			.from(cards)
-			.where(and(eq(cards.id, refs.cardId), eq(cards.userId, userId)))
-			.get();
+		const c = kit
+			.selectFrom(cards)
+			.where(and(kitEq(cards.id, BigInt(refs.cardId)), kitEq(cards.user_id, BigInt(userId))))
+			.executeSync()[0];
 		if (!c) throw error(404, 'Not found');
 	}
 	if (refs.providerId != null) {
-		const p = db
-			.select()
-			.from(fareProviders)
-			.where(and(eq(fareProviders.id, refs.providerId), eq(fareProviders.userId, userId)))
-			.get();
+		const p = kit
+			.selectFrom(fareProviders)
+			.where(and(kitEq(fareProviders.id, BigInt(refs.providerId)), kitEq(fareProviders.user_id, BigInt(userId))))
+			.executeSync()[0];
 		if (!p) throw error(404, 'Not found');
 	}
 	if (refs.segmentId != null) {
-		const s = db
-			.select({ tripId: segments.tripId })
-			.from(segments)
-			.where(eq(segments.id, refs.segmentId))
-			.get();
+		const s = kit.selectFrom(segments).where(kitEq(segments.id, BigInt(refs.segmentId))).executeSync()[0];
 		if (!s) throw error(404, 'Not found');
-		requireOwnedTrip(userId, s.tripId);
+		requireOwnedTrip(userId, Number(s.trip_id));
 	}
 }

@@ -45,8 +45,8 @@ beforeEach(() => {
 test('checklist get-or-create and mirroring', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'chk@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'chk@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const first = repo.getOrCreateChecklist(t.id);
 	expect(first.tripId).toBe(t.id);
@@ -65,9 +65,9 @@ test('checklist get-or-create and mirroring', () => {
 test('checklist item CRUD with companion name', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'chki@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
-	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'Kid', category: 'child' });
+	const u = makeSyncedUser(kit, { email: 'chki@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(kit, { tripId: t.id, name: 'Kid', category: 'child' });
 	const checklist = repo.getOrCreateChecklist(t.id);
 
 	const item = repo.createChecklistItem({
@@ -101,8 +101,8 @@ test('checklist item CRUD with companion name', () => {
 test('journal entry CRUD and mirroring', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'jrnl@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'jrnl@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const entry = repo.createJournalEntry({
 		tripId: t.id,
@@ -138,8 +138,8 @@ test('journal entry CRUD and mirroring', () => {
 test('listJournalEntriesForTrip orders by entry date descending', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'jrn2@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'jrn2@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	repo.createJournalEntry({ tripId: t.id, entryDate: '2026-06-10', title: 'Older', body: 'A' });
 	repo.createJournalEntry({ tripId: t.id, entryDate: '2026-06-12', title: 'Newer', body: 'B' });

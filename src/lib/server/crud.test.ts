@@ -17,8 +17,8 @@ import { Validator, formFail } from './validation';
 
 test('tripCrudFactory lists, adds and removes rows scoped to a trip', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const user = makeUser(db, kit, { email: 'u@x.c', passwordHash: 'x', displayName: 'U' });
-	const trip = makeTrip(db, kit, user.id, { name: 'T' });
+	const user = makeUser(kit, { email: 'u@x.c', passwordHash: 'x', displayName: 'U' });
+	const trip = makeTrip(kit, user.id, { name: 'T' });
 
 	const crud = tripCrudFactory({
 		table: tripHomeTasks,

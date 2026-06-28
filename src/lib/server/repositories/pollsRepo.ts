@@ -1,12 +1,6 @@
 import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@mongreldb/kit';
-import { eq as drizzleEq, and as drizzleAnd, inArray as drizzleInArray } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import { tripPolls, tripPollOptions, tripPollVotes } from '$lib/server/db/mongrelSchema';
-import {
-	tripPolls as drizzleTripPolls,
-	tripPollOptions as drizzleTripPollOptions,
-	tripPollVotes as drizzleTripPollVotes
-} from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 
 export type KitPoll = Row<typeof tripPolls>;
@@ -71,89 +65,14 @@ function toVote(row: KitPollVote): PollVote {
 	};
 }
 
-function kitPollToDrizzle(row: KitPoll): typeof drizzleTripPolls.$inferInsert {
-	return {
-		id: idFromBigInt(row.id),
-		tripId: idFromBigInt(row.trip_id),
-		question: row.question,
-		createdAt: row.created_at
-	};
-}
 
-function kitOptionToDrizzle(row: KitPollOption): typeof drizzleTripPollOptions.$inferInsert {
-	return {
-		id: idFromBigInt(row.id),
-		pollId: idFromBigInt(row.poll_id),
-		label: row.label,
-		sortOrder: Number(row.sort_order),
-		createdAt: row.created_at
-	};
-}
 
-function kitVoteToDrizzle(row: KitPollVote): typeof drizzleTripPollVotes.$inferInsert {
-	return {
-		id: idFromBigInt(row.id),
-		pollId: idFromBigInt(row.poll_id),
-		optionId: idFromBigInt(row.option_id),
-		companionId: idFromBigInt(row.companion_id),
-		createdAt: row.created_at
-	};
-}
 
-function syncPollToLegacy(row: KitPoll) {
-	const values = kitPollToDrizzle(row);
-	const existing = db.select().from(drizzleTripPolls).where(drizzleEq(drizzleTripPolls.id, values.id!)).get();
-	if (existing) {
-		db.update(drizzleTripPolls).set(values).where(drizzleEq(drizzleTripPolls.id, values.id!)).run();
-	} else {
-		db.insert(drizzleTripPolls).values(values).run();
-	}
-}
 
-function syncOptionToLegacy(row: KitPollOption) {
-	const values = kitOptionToDrizzle(row);
-	const existing = db
-		.select()
-		.from(drizzleTripPollOptions)
-		.where(drizzleEq(drizzleTripPollOptions.id, values.id!))
-		.get();
-	if (existing) {
-		db.update(drizzleTripPollOptions)
-			.set(values)
-			.where(drizzleEq(drizzleTripPollOptions.id, values.id!))
-			.run();
-	} else {
-		db.insert(drizzleTripPollOptions).values(values).run();
-	}
-}
 
-function syncVoteToLegacy(row: KitPollVote) {
-	const values = kitVoteToDrizzle(row);
-	const existing = db.select().from(drizzleTripPollVotes).where(drizzleEq(drizzleTripPollVotes.id, values.id!)).get();
-	if (existing) {
-		db.update(drizzleTripPollVotes)
-			.set(values)
-			.where(drizzleEq(drizzleTripPollVotes.id, values.id!))
-			.run();
-	} else {
-		db.insert(drizzleTripPollVotes).values(values).run();
-	}
-}
 
-function deletePollFromLegacy(pollId: number) {
-	db.delete(drizzleTripPollVotes).where(drizzleEq(drizzleTripPollVotes.pollId, pollId)).run();
-	db.delete(drizzleTripPollOptions).where(drizzleEq(drizzleTripPollOptions.pollId, pollId)).run();
-	db.delete(drizzleTripPolls).where(drizzleEq(drizzleTripPolls.id, pollId)).run();
-}
 
-function deleteOptionFromLegacy(optionId: number) {
-	db.delete(drizzleTripPollVotes).where(drizzleEq(drizzleTripPollVotes.optionId, optionId)).run();
-	db.delete(drizzleTripPollOptions).where(drizzleEq(drizzleTripPollOptions.id, optionId)).run();
-}
 
-function deleteVoteFromLegacy(voteId: number) {
-	db.delete(drizzleTripPollVotes).where(drizzleEq(drizzleTripPollVotes.id, voteId)).run();
-}
 
 export function listPollsForTrip(tripId: number): Poll[] {
 	const rows = kit
@@ -230,7 +149,7 @@ export function createPoll(tripId: number, question: string, options: string[]):
 			question
 		} as Insert<typeof tripPolls>)
 		.executeSync();
-	syncPollToLegacy(row);
+(row);
 	const pollId = idFromBigInt(row.id);
 
 	for (let i = 0; i < options.length; i++) {
@@ -242,7 +161,7 @@ export function createPoll(tripId: number, question: string, options: string[]):
 				sort_order: BigInt(i)
 			} as Insert<typeof tripPollOptions>)
 			.executeSync();
-		syncOptionToLegacy(optionRow);
+		(optionRow);
 	}
 
 	return getPollById(pollId)!;
@@ -250,7 +169,7 @@ export function createPoll(tripId: number, question: string, options: string[]):
 
 export function deletePoll(pollId: number): number {
 	const deleted = kit.deleteFrom(tripPolls).where(kitEq(tripPolls.id, toBigInt(pollId))).executeSync();
-	deletePollFromLegacy(pollId);
+	(pollId);
 	return Number(deleted);
 }
 
@@ -290,8 +209,7 @@ export function castVote(pollId: number, optionId: number, companionId: number):
 			.deleteFrom(tripPollVotes)
 			.where(kitEq(tripPollVotes.id, existing.id))
 			.executeSync();
-		deleteVoteFromLegacy(idFromBigInt(existing.id));
-	}
+			}
 
 	const row = kit
 		.insertInto(tripPollVotes)
@@ -301,7 +219,7 @@ export function castVote(pollId: number, optionId: number, companionId: number):
 			companion_id: toBigInt(companionId)
 		} as Insert<typeof tripPollVotes>)
 		.executeSync();
-	syncVoteToLegacy(row);
+	(row);
 	return toVote(row);
 }
 
@@ -321,6 +239,5 @@ export function removeVote(pollId: number, companionId: number): number {
 		.deleteFrom(tripPollVotes)
 		.where(kitEq(tripPollVotes.id, existing.id))
 		.executeSync();
-	deleteVoteFromLegacy(idFromBigInt(existing.id));
-	return Number(deleted);
+		return Number(deleted);
 }

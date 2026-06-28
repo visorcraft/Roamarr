@@ -45,7 +45,7 @@ test('normalizeEmail trims and lowercases', () => {
 });
 
 test('adminUpdateUser updates profile fields', async () => {
-	const u = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
+	const u = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -67,7 +67,7 @@ test('adminUpdateUser updates profile fields', async () => {
 });
 
 test('adminUpdateUser sets a new password and clears forced reset', async () => {
-	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
+	const admin = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({
@@ -98,7 +98,7 @@ test('adminUpdateUser sets a new password and clears forced reset', async () => 
 });
 
 test('completeRequiredPasswordChange clears mustResetPassword', async () => {
-	const u = makeSyncedUser(ctx.db, ctx.kit, {
+	const u = makeSyncedUser(ctx.kit, {
 		email: 'u@x.c',
 		passwordHash: await hashPassword('oldpassword'),
 		displayName: 'U',
@@ -116,7 +116,7 @@ test('completeRequiredPasswordChange clears mustResetPassword', async () => {
 });
 
 test('adminCreateUser creates a user with a random password and forced reset', async () => {
-	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
+	const admin = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 
 	const { user: created, temporaryPassword } = await adminCreateUser(admin.id, {
 		displayName: 'New User',
@@ -145,7 +145,7 @@ test('adminCreateUser rejects duplicate email', async () => {
 });
 
 test('adminDeleteUser removes a user', async () => {
-	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
+	const admin = makeSyncedUser(ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })

@@ -1,18 +1,16 @@
 import { fail, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { createPasswordResetToken } from '$lib/server/passwordReset';
 import { deliver } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 
 export async function _requestReset(email: string, origin: string) {
-	const u = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
+	const u = usersRepo.getUserByEmail(normalizeEmail(email));
 	if (!u || u.disabled) return;
-	const token = createPasswordResetToken(u.id);
+	const token = createPasswordResetToken(Number(u.id));
 	const link = `${origin}/reset-password/${token}`;
-	await deliver(u.id, {
+	await deliver(Number(u.id), {
 		title: 'Reset your Roamarr password',
 		body: 'Click the link below to reset your password. This link expires in 1 hour.',
 		link

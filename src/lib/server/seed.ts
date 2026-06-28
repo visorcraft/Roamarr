@@ -1,16 +1,5 @@
-import { sql } from 'drizzle-orm';
 import { ne as kitNe } from '@mongreldb/kit';
-import { db, kit } from './db';
-import {
-	users,
-	trips as drizzleTrips,
-	tripComments as drizzleTripComments,
-	tripShares as drizzleTripShares,
-	segments,
-	cards,
-	insurancePolicies,
-	loyaltyPrograms
-} from './db/schema';
+import { kit } from './db';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -31,16 +20,6 @@ function kitId(id: number): bigint {
 }
 
 export function seedDemoData(adminId: number) {
-	// Clean legacy tables.
-	db.delete(drizzleTripComments).run();
-	db.delete(drizzleTripShares).run();
-	db.delete(segments).run();
-	db.delete(drizzleTrips).where(sql`${drizzleTrips.ownerId} != ${adminId}`).run();
-	db.delete(cards).where(sql`${cards.userId} != ${adminId}`).run();
-	db.delete(insurancePolicies).where(sql`${insurancePolicies.userId} != ${adminId}`).run();
-	db.delete(loyaltyPrograms).where(sql`${loyaltyPrograms.userId} != ${adminId}`).run();
-	db.delete(users).where(sql`${users.id} != ${adminId}`).run();
-
 	// Clean kit tables.
 	kit.deleteFrom(kitTripComments).executeSync();
 	kit.deleteFrom(kitTripShares).executeSync();

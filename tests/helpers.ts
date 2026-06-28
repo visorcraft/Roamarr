@@ -1,11 +1,9 @@
+import type { Insert } from '@mongreldb/kit';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
-import { createDb } from '../src/lib/server/db/createDb';
-import { applyMigrations } from '../src/lib/server/db/migrate';
+import { KitDatabase } from '@mongreldb/kit';
 import {
-	settings,
 	users,
 	trips,
 	segments,
@@ -22,35 +20,48 @@ import {
 	notifications,
 	tripExpenses,
 	tripExpenseAttachments,
-	schedulerRuns
-} from '../src/lib/server/db/schema';
-import {
-	users as kitUsers,
-	trips as kitTrips,
-	segments as kitSegments,
-	tripCompanions as kitTripCompanions,
-	groups as kitGroups,
-	groupMembers as kitGroupMembers,
-	tripShares as kitTripShares,
-	cards as kitCards,
-	insurancePolicies as kitInsurancePolicies,
-	travelDocuments as kitTravelDocuments,
-	fareProviders as kitFareProviders,
-	fareWatches as kitFareWatches,
-	reminders as kitReminders,
-	notifications as kitNotifications,
-	tripExpenses as kitTripExpenses,
-	tripExpenseAttachments as kitTripExpenseAttachments,
-	schedulerRuns as kitSchedulerRuns
+	schedulerRuns,
+	settings,
+	schema
 } from '../src/lib/server/db/mongrelSchema';
-import { KitDatabase } from '@mongreldb/kit';
-import { schema as kitSchema } from '../src/lib/server/db/mongrelSchema';
-import { migrations as kitMigrations } from '../src/lib/server/db/mongrelMigrations/0001_initial';
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import type { Database } from 'better-sqlite3';
+import { migrations } from '../src/lib/server/db/mongrelMigrations/0001_initial';
 
 let userCounter = 0;
 let tripCounter = 0;
+
+// Test-only shim that preserves the old `db.select(...).from(...)` typing
+// while the suite is migrated to kit queries. At runtime `db` is null, so
+// any test that still uses it will fail; the shim exists only to keep the
+// TypeScript checker useful during the transition.
+interface LegacySelectFrom {
+	where(...conds: unknown[]): LegacySelectFrom;
+	orderBy(...cols: unknown[]): LegacySelectFrom;
+	limit(n: number): LegacySelectFrom;
+	innerJoin(table: unknown, cond: unknown): LegacySelectFrom;
+	all(): Record<string, unknown>[];
+	get(): Record<string, unknown> | undefined;
+}
+interface LegacySelect {
+	from(table: unknown): LegacySelectFrom;
+}
+interface LegacyInsert {
+	values(vals: unknown): { returning(): { get(): Record<string, unknown> } };
+}
+interface LegacyUpdate {
+	set(vals: unknown): {
+		where(...conds: unknown[]): { returning(): { get(): Record<string, unknown> }; run(): void };
+	};
+}
+interface LegacyDelete {
+	where(...conds: unknown[]): { run(): void };
+}
+interface LegacyDb {
+	select(fields?: unknown): LegacySelect;
+	insert(table: unknown): LegacyInsert;
+	update(table: unknown): LegacyUpdate;
+	delete(table: unknown): LegacyDelete;
+}
+
 function allocId(): number {
 	// Random high id avoids collisions when the helpers module is reloaded
 	// between tests while the in-memory database persists.
@@ -58,15 +69,15 @@ function allocId(): number {
 }
 
 export function freshDb() {
-	const { db, sqlite } = createDb(':memory:');
-	applyMigrations(db);
-	db.insert(settings).values({ id: 1 }).run();
-
-	// Also provide a fresh MongrelDB Kit instance for code that has migrated to
-	// the kit singleton. The temp directory is removed on process exit.
 	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
-	const kitInstance = KitDatabase.openSync(dir, kitSchema);
-	kitInstance.migrateSync(kitSchema, kitMigrations);
+	const kitInstance = KitDatabase.openSync(dir, schema);
+	kitInstance.migrateSync(schema, migrations);
+
+	// Ensure the singleton settings row exists.
+	kitInstance
+		.insertInto(settings)
+		.values({ id: 1n } as Insert<typeof settings>)
+		.executeSync();
 
 	const close = () => {
 		kitInstance.close();
@@ -81,24 +92,32 @@ export function freshDb() {
 	};
 	process.once('exit', cleanup);
 
-	return { db, sqlite, kit: kitInstance, getDb: () => kitInstance, dir, close };
-}
-
-export function freshKitDb() {
-	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
-	const kitInstance = KitDatabase.openSync(dir, kitSchema);
-	kitInstance.migrateSync(kitSchema, kitMigrations);
 	return {
+		db: null as unknown as LegacyDb,
+		sqlite: null as any,
 		kit: kitInstance,
-		close: () => {
-			kitInstance.close();
-			rmSync(dir, { recursive: true, force: true });
-		}
+		getDb: () => kitInstance,
+		dir,
+		close
 	};
 }
 
-export function resetTables(sqlite: Database, ...tables: string[]) {
-	sqlite.exec(tables.map((t) => `delete from ${t};`).join(' '));
+export function freshKitDb() {
+	return freshDb();
+}
+
+export function resetTables(kit: KitDatabase, ...tables: { tableName: string }[]) {
+	for (const t of tables) {
+		try {
+			kit.deleteFrom(t as any).executeSync();
+		} catch {
+			// best-effort; some tables may not be directly deletable due to FKs
+		}
+	}
+}
+
+function toBigInt(id: number): bigint {
+	return BigInt(id);
 }
 
 function nullableFk(id: bigint | null | undefined): number | null {
@@ -114,289 +133,263 @@ function serializeJson(value: unknown): string | null {
 
 // Users
 
-export function makeUser(
-	db: BetterSQLite3Database<Record<string, unknown>>,
-	kit: KitDatabase,
-	over: Partial<typeof users.$inferInsert> = {}
-) {
+export function makeUser(kit: KitDatabase, over: Partial<Record<string, unknown>> = {}) {
 	const n = userCounter++;
 	const id = allocId();
-	const row = kit.insertInto(kitUsers).values({
-		id: BigInt(id),
-		email: over.email ?? `u${n}@x.c`,
-		password_hash: over.passwordHash ?? 'x',
-		display_name: over.displayName ?? `U${n}`,
-		role: (over.role as any) ?? 'user',
-		disabled: over.disabled ?? false,
-		must_reset_password: over.mustResetPassword ?? false,
-		timezone: over.timezone ?? 'UTC',
-		flight_checkin_lead_hours:
-			over.flightCheckinLeadHours != null ? BigInt(over.flightCheckinLeadHours) : undefined,
-		document_expiry_lead_days:
-			over.documentExpiryLeadDays != null ? BigInt(over.documentExpiryLeadDays) : undefined,
-		email_notifications: over.emailNotifications,
-		webhook_notifications: over.webhookNotifications,
-		theme_id: over.themeId,
-		default_currency: over.defaultCurrency,
-		calendar_token: over.calendarToken ?? `cal-user-${id}`,
-		calendar_token_expires_at: over.calendarTokenExpiresAt ?? null
-	} as never).executeSync();
-	db.insert(users)
+	const row = kit
+		.insertInto(users)
 		.values({
-			id,
-			email: row.email,
-			passwordHash: row.password_hash,
-			displayName: row.display_name,
-			role: row.role,
-			disabled: row.disabled,
-			mustResetPassword: row.must_reset_password,
-			timezone: row.timezone,
-			flightCheckinLeadHours: Number(row.flight_checkin_lead_hours),
-			documentExpiryLeadDays: Number(row.document_expiry_lead_days),
-			emailNotifications: row.email_notifications,
-			webhookNotifications: row.webhook_notifications,
-			themeId: row.theme_id,
-			defaultCurrency: row.default_currency,
-			calendarToken: row.calendar_token,
-			calendarTokenExpiresAt: row.calendar_token_expires_at,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(users).where(eq(users.id, id)).get()!;
+			id: BigInt(id),
+			email: (over.email as string) ?? `u${n}@x.c`,
+			password_hash: (over.passwordHash as string) ?? 'x',
+			display_name: (over.displayName as string) ?? `U${n}`,
+			role: (over.role as any) ?? 'user',
+			disabled: (over.disabled as boolean) ?? false,
+			must_reset_password: (over.mustResetPassword as boolean) ?? false,
+			timezone: (over.timezone as string) ?? 'UTC',
+			flight_checkin_lead_hours:
+				over.flightCheckinLeadHours != null ? BigInt(over.flightCheckinLeadHours as number) : undefined,
+			document_expiry_lead_days:
+				over.documentExpiryLeadDays != null ? BigInt(over.documentExpiryLeadDays as number) : undefined,
+			email_notifications: over.emailNotifications as boolean | undefined,
+			webhook_notifications: over.webhookNotifications as boolean | undefined,
+			theme_id: over.themeId as string | undefined,
+			default_currency: over.defaultCurrency as string | undefined,
+			calendar_token: (over.calendarToken as string) ?? `cal-user-${id}`,
+			calendar_token_expires_at: (over.calendarTokenExpiresAt as string | null) ?? null
+		} as any)
+		.executeSync();
+	return {
+		id,
+		email: row.email,
+		passwordHash: row.password_hash,
+		displayName: row.display_name,
+		role: row.role,
+		disabled: row.disabled,
+		mustResetPassword: row.must_reset_password,
+		timezone: row.timezone,
+		flightCheckinLeadHours: Number(row.flight_checkin_lead_hours),
+		documentExpiryLeadDays: Number(row.document_expiry_lead_days),
+		emailNotifications: row.email_notifications,
+		webhookNotifications: row.webhook_notifications,
+		themeId: row.theme_id,
+		defaultCurrency: row.default_currency,
+		calendarToken: row.calendar_token,
+		calendarTokenExpiresAt: row.calendar_token_expires_at,
+		createdAt: row.created_at
+	};
 }
 
-export function makeAdmin(
-	db: BetterSQLite3Database<Record<string, unknown>>,
-	kit: KitDatabase,
-	over: Partial<typeof users.$inferInsert> = {}
-) {
-	return makeUser(db, kit, { ...over, role: 'admin' });
+export function makeAdmin(kit: KitDatabase, over: Partial<Record<string, unknown>> = {}) {
+	return makeUser(kit, { ...over, role: 'admin' });
 }
 
 // Trips
 
 export function makeTrip(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	ownerId: number,
-	over: Partial<typeof trips.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const n = tripCounter++;
 	const id = allocId();
-	const row = kit.insertInto(kitTrips).values({
-		id: BigInt(id),
-		owner_id: BigInt(ownerId),
-		name: over.name ?? `Test Trip ${n}`,
-		destination: over.destination ?? null,
-		destination_country_code: over.destinationCountryCode ?? null,
-		destination_city_name: over.destinationCityName ?? null,
-		destination_city_lat: over.destinationCityLat ?? null,
-		destination_city_lng: over.destinationCityLng ?? null,
-		start_date: over.startDate ?? null,
-		end_date: over.endDate ?? null,
-		notes: over.notes ?? null,
-		tags: over.tags ?? '[]',
-		archived: over.archived ?? false,
-		favorite: over.favorite ?? false,
-		default_visibility: (over.defaultVisibility as any) ?? 'private',
-		public_token: over.publicToken ?? `pub-trip-${id}`,
-		public_token_expires_at: over.publicTokenExpiresAt ?? null,
-		public_show_details: over.publicShowDetails ?? false,
-		calendar_token: over.calendarToken ?? `cal-trip-${id}`,
-		calendar_token_expires_at: over.calendarTokenExpiresAt ?? null,
-		base_currency: over.baseCurrency ?? 'USD',
-		status: (over.status as any) ?? 'booked'
-	} as never).executeSync();
-	db.insert(trips)
+	const row = kit
+		.insertInto(trips)
 		.values({
-			id,
-			ownerId,
-			name: row.name,
-			destination: row.destination,
-			destinationCountryCode: row.destination_country_code,
-			destinationCityName: row.destination_city_name,
-			destinationCityLat: row.destination_city_lat,
-			destinationCityLng: row.destination_city_lng,
-			startDate: row.start_date,
-			endDate: row.end_date,
-			notes: row.notes,
-			tags: row.tags,
-			archived: row.archived,
-			favorite: row.favorite,
-			defaultVisibility: row.default_visibility,
-			publicToken: row.public_token,
-			publicTokenExpiresAt: row.public_token_expires_at,
-			publicShowDetails: row.public_show_details,
-			calendarToken: row.calendar_token,
-			calendarTokenExpiresAt: row.calendar_token_expires_at,
-			baseCurrency: row.base_currency,
-			status: row.status,
-			createdAt: row.created_at,
-			updatedAt: row.updated_at
-		} as never)
-		.run();
-	return db.select().from(trips).where(eq(trips.id, id)).get()!;
+			id: BigInt(id),
+			owner_id: BigInt(ownerId),
+			name: (over.name as string) ?? `Test Trip ${n}`,
+			destination: (over.destination as string | null) ?? null,
+			destination_country_code: (over.destinationCountryCode as string | null) ?? null,
+			destination_city_name: (over.destinationCityName as string | null) ?? null,
+			destination_city_lat: (over.destinationCityLat as number | null) ?? null,
+			destination_city_lng: (over.destinationCityLng as number | null) ?? null,
+			start_date: (over.startDate as string | null) ?? null,
+			end_date: (over.endDate as string | null) ?? null,
+			notes: (over.notes as string | null) ?? null,
+			tags: (over.tags as string) ?? '[]',
+			archived: (over.archived as boolean) ?? false,
+			favorite: (over.favorite as boolean) ?? false,
+			default_visibility: (over.defaultVisibility as any) ?? 'private',
+			public_token: (over.publicToken as string) ?? `pub-trip-${id}`,
+			public_token_expires_at: (over.publicTokenExpiresAt as string | null) ?? null,
+			public_show_details: (over.publicShowDetails as boolean) ?? false,
+			calendar_token: (over.calendarToken as string) ?? `cal-trip-${id}`,
+			calendar_token_expires_at: (over.calendarTokenExpiresAt as string | null) ?? null,
+			base_currency: (over.baseCurrency as string) ?? 'USD',
+			status: (over.status as any) ?? 'booked'
+		} as any)
+		.executeSync();
+	return {
+		id,
+		ownerId,
+		name: row.name,
+		destination: row.destination,
+		destinationCountryCode: row.destination_country_code,
+		destinationCityName: row.destination_city_name,
+		destinationCityLat: row.destination_city_lat,
+		destinationCityLng: row.destination_city_lng,
+		startDate: row.start_date,
+		endDate: row.end_date,
+		notes: row.notes,
+		tags: row.tags,
+		archived: row.archived,
+		favorite: row.favorite,
+		defaultVisibility: row.default_visibility,
+		publicToken: row.public_token,
+		publicTokenExpiresAt: row.public_token_expires_at,
+		publicShowDetails: row.public_show_details,
+		calendarToken: row.calendar_token,
+		calendarTokenExpiresAt: row.calendar_token_expires_at,
+		baseCurrency: row.base_currency,
+		status: row.status,
+		createdAt: row.created_at,
+		updatedAt: row.updated_at
+	};
 }
 
 // Segments
 
 export function makeSegment(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	tripId: number,
-	over: Partial<typeof segments.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitSegments).values({
-		id: BigInt(id),
-		trip_id: BigInt(tripId),
-		type: (over.type as any) ?? 'flight',
-		title: over.title ?? 'Segment',
-		start_at: over.startAt ?? new Date().toISOString(),
-		start_tz: (over.startTz as any) ?? 'UTC',
-		end_at: over.endAt ?? null,
-		end_tz: over.endTz ?? null,
-		status: (over.status as any) ?? 'planned',
-		location: over.location ?? null,
-		country_code: over.countryCode ?? null,
-		city_name: over.cityName ?? null,
-		city_lat: over.cityLat ?? null,
-		city_lng: over.cityLng ?? null,
-		venue: over.venue ?? null,
-		confirmation_number: over.confirmationNumber ?? null,
-		details_json: serializeJson(over.detailsJson) as any,
-		meeting_point: over.meetingPoint ?? null,
-		meeting_at: over.meetingAt ?? null,
-		payment_status: (over.paymentStatus as any) ?? 'quoted',
-		payment_due_date: over.paymentDueDate ?? null,
-		card_id: over.cardId ? BigInt(over.cardId) : null
-	} as never).executeSync();
-	db.insert(segments)
+	const row = kit
+		.insertInto(segments)
 		.values({
-			id,
-			tripId,
-			type: row.type,
-			title: row.title,
-			startAt: row.start_at,
-			startTz: row.start_tz,
-			endAt: row.end_at,
-			endTz: row.end_tz,
-			status: row.status,
-			location: row.location,
-			countryCode: row.country_code,
-			cityName: row.city_name,
-			cityLat: row.city_lat,
-			cityLng: row.city_lng,
-			venue: row.venue,
-			confirmationNumber: row.confirmation_number,
-			detailsJson: serializeJson(row.details_json),
-			meetingPoint: row.meeting_point,
-			meetingAt: row.meeting_at,
-			paymentStatus: row.payment_status,
-			paymentDueDate: row.payment_due_date,
-			cardId: nullableFk(row.card_id),
-			createdAt: row.created_at,
-			updatedAt: row.updated_at
-		} as never)
-		.run();
-	return db.select().from(segments).where(eq(segments.id, id)).get()!;
+			id: BigInt(id),
+			trip_id: BigInt(tripId),
+			type: (over.type as any) ?? 'flight',
+			title: (over.title as string) ?? 'Segment',
+			start_at: (over.startAt as string) ?? new Date().toISOString(),
+			start_tz: (over.startTz as any) ?? 'UTC',
+			end_at: (over.endAt as string | null) ?? null,
+			end_tz: (over.endTz as string | null) ?? null,
+			status: (over.status as any) ?? 'planned',
+			location: (over.location as string | null) ?? null,
+			country_code: (over.countryCode as string | null) ?? null,
+			city_name: (over.cityName as string | null) ?? null,
+			city_lat: (over.cityLat as number | null) ?? null,
+			city_lng: (over.cityLng as number | null) ?? null,
+			venue: (over.venue as string | null) ?? null,
+			confirmation_number: (over.confirmationNumber as string | null) ?? null,
+			details_json: serializeJson(over.detailsJson) as any,
+			meeting_point: (over.meetingPoint as string | null) ?? null,
+			meeting_at: (over.meetingAt as string | null) ?? null,
+			payment_status: (over.paymentStatus as any) ?? 'quoted',
+			payment_due_date: (over.paymentDueDate as string | null) ?? null,
+			card_id: over.cardId ? BigInt(over.cardId as number) : null
+		} as any)
+		.executeSync();
+	return {
+		id,
+		tripId,
+		type: row.type,
+		title: row.title,
+		startAt: row.start_at,
+		startTz: row.start_tz,
+		endAt: row.end_at,
+		endTz: row.end_tz,
+		status: row.status,
+		location: row.location,
+		countryCode: row.country_code,
+		cityName: row.city_name,
+		cityLat: row.city_lat,
+		cityLng: row.city_lng,
+		venue: row.venue,
+		confirmationNumber: row.confirmation_number,
+		detailsJson: serializeJson(row.details_json),
+		meetingPoint: row.meeting_point,
+		meetingAt: row.meeting_at,
+		paymentStatus: row.payment_status,
+		paymentDueDate: row.payment_due_date,
+		cardId: nullableFk(row.card_id),
+		createdAt: row.created_at,
+		updatedAt: row.updated_at
+	};
 }
 
 // Companions
 
 export function makeCompanion(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	tripId: number,
-	over: Partial<typeof tripCompanions.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitTripCompanions).values({
-		id: BigInt(id),
-		trip_id: BigInt(tripId),
-		name: over.name ?? 'Companion',
-		category: (over.category as any) ?? 'adult',
-		dietary: over.dietary ?? null,
-		allergies: over.allergies ?? null,
-		medical_notes: over.medicalNotes ?? null,
-		needs_car_seat: over.needsCarSeat ?? false,
-		needs_stroller: over.needsStroller ?? false,
-		needs_crib: over.needsCrib ?? false,
-		needs_kids_meal: over.needsKidsMeal ?? false,
-		child_ticket_discount: over.childTicketDiscount ?? null,
-		seat_preference: (over.seatPreference as any) ?? null,
-		bed_preference: (over.bedPreference as any) ?? null,
-		accessibility_needs: over.accessibilityNeeds ?? null,
-		room_notes: over.roomNotes ?? null,
-		notes: over.notes ?? null
-	} as never).executeSync();
-	db.insert(tripCompanions)
+	const row = kit
+		.insertInto(tripCompanions)
 		.values({
-			id,
-			tripId,
-			name: row.name,
-			category: row.category,
-			notes: row.notes,
-			dietary: row.dietary,
-			allergies: row.allergies,
-			medicalNotes: row.medical_notes,
-			needsCarSeat: row.needs_car_seat,
-			needsStroller: row.needs_stroller,
-			needsCrib: row.needs_crib,
-			needsKidsMeal: row.needs_kids_meal,
-			childTicketDiscount: row.child_ticket_discount,
-			seatPreference: row.seat_preference,
-			bedPreference: row.bed_preference,
-			accessibilityNeeds: row.accessibility_needs,
-			roomNotes: row.room_notes,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(tripCompanions).where(eq(tripCompanions.id, id)).get()!;
+			id: BigInt(id),
+			trip_id: BigInt(tripId),
+			name: (over.name as string) ?? 'Companion',
+			category: (over.category as any) ?? 'adult',
+			dietary: (over.dietary as string | null) ?? null,
+			allergies: (over.allergies as string | null) ?? null,
+			medical_notes: (over.medicalNotes as string | null) ?? null,
+			needs_car_seat: (over.needsCarSeat as boolean) ?? false,
+			needs_stroller: (over.needsStroller as boolean) ?? false,
+			needs_crib: (over.needsCrib as boolean) ?? false,
+			needs_kids_meal: (over.needsKidsMeal as boolean) ?? false,
+			child_ticket_discount: (over.childTicketDiscount as string | null) ?? null,
+			seat_preference: (over.seatPreference as any) ?? null,
+			bed_preference: (over.bedPreference as any) ?? null,
+			accessibility_needs: (over.accessibilityNeeds as string | null) ?? null,
+			room_notes: (over.roomNotes as string | null) ?? null,
+			notes: (over.notes as string | null) ?? null
+		} as any)
+		.executeSync();
+	return {
+		id,
+		tripId,
+		name: row.name,
+		category: row.category,
+		notes: row.notes,
+		dietary: row.dietary,
+		allergies: row.allergies,
+		medicalNotes: row.medical_notes,
+		needsCarSeat: row.needs_car_seat,
+		needsStroller: row.needs_stroller,
+		needsCrib: row.needs_crib,
+		needsKidsMeal: row.needs_kids_meal,
+		childTicketDiscount: row.child_ticket_discount,
+		seatPreference: row.seat_preference,
+		bedPreference: row.bed_preference,
+		accessibilityNeeds: row.accessibility_needs,
+		roomNotes: row.room_notes,
+		createdAt: row.created_at
+	};
 }
 
 // Groups and members
 
-export function makeGroup(
-	db: BetterSQLite3Database<Record<string, unknown>>,
-	kit: KitDatabase,
-	ownerId: number,
-	name: string
-) {
+export function makeGroup(kit: KitDatabase, ownerId: number, name: string) {
 	const id = allocId();
 	const row = kit
-		.insertInto(kitGroups)
-		.values({ id: BigInt(id), owner_id: BigInt(ownerId), name: name.trim() } as never)
+		.insertInto(groups)
+		.values({ id: BigInt(id), owner_id: BigInt(ownerId), name: name.trim() } as any)
 		.executeSync();
-	db.insert(groups)
-		.values({
-			id,
-			ownerId,
-			name: row.name,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(groups).where(eq(groups.id, id)).get()!;
+	return {
+		id,
+		ownerId,
+		name: row.name,
+		createdAt: row.created_at
+	};
 }
 
-export function makeGroupMember(
-	db: BetterSQLite3Database<Record<string, unknown>>,
-	kit: KitDatabase,
-	groupId: number,
-	userId: number
-) {
-	kit.insertInto(kitGroupMembers).values({
+export function makeGroupMember(kit: KitDatabase, groupId: number, userId: number) {
+	kit.insertInto(groupMembers).values({
 		group_id: BigInt(groupId),
 		user_id: BigInt(userId)
-	} as never).executeSync();
-	db.insert(groupMembers).values({ groupId, userId } as never).run();
+	} as any).executeSync();
 	return { groupId, userId };
 }
 
 // Shares
 
 export function makeShare(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	input: {
 		tripId: number;
@@ -409,164 +402,144 @@ export function makeShare(
 	const id = allocId();
 	const sharedWithUserId = input.sharedWithUserId ?? null;
 	const sharedWithGroupId = input.sharedWithGroupId ?? null;
-	const row = kit.insertInto(kitTripShares).values({
+	const row = kit.insertInto(tripShares).values({
 		id: BigInt(id),
 		trip_id: BigInt(input.tripId),
 		shared_with_user_id: sharedWithUserId != null ? BigInt(sharedWithUserId) : null,
 		shared_with_group_id: sharedWithGroupId != null ? BigInt(sharedWithGroupId) : null,
 		permission: input.permission ?? 'read',
 		show_details: input.showDetails ?? false
-	} as never).executeSync();
-	db.insert(tripShares)
-		.values({
-			id,
-			tripId: input.tripId,
-			sharedWithUserId,
-			sharedWithGroupId,
-			permission: row.permission,
-			showDetails: row.show_details,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(tripShares).where(eq(tripShares.id, id)).get()!;
+	} as any).executeSync();
+	return {
+		id,
+		tripId: input.tripId,
+		sharedWithUserId,
+		sharedWithGroupId,
+		permission: row.permission,
+		showDetails: row.show_details,
+		createdAt: row.created_at
+	};
 }
 
 // Cards
 
 export function makeCard(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	userId: number,
-	over: Partial<typeof cards.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitCards).values({
+	const row = kit.insertInto(cards).values({
 		id: BigInt(id),
 		user_id: BigInt(userId),
-		nickname: over.nickname ?? 'Card',
+		nickname: (over.nickname as string) ?? 'Card',
 		network: (over.network as any) ?? 'visa',
-		last4: over.last4 ?? null,
-		notes: over.notes ?? null
-	} as never).executeSync();
-	db.insert(cards)
-		.values({
-			id,
-			userId,
-			nickname: row.nickname,
-			network: row.network,
-			last4: row.last4,
-			notes: row.notes
-		} as never)
-		.run();
-	return db.select().from(cards).where(eq(cards.id, id)).get()!;
+		last4: (over.last4 as string | null) ?? null,
+		notes: (over.notes as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		userId,
+		nickname: row.nickname,
+		network: row.network,
+		last4: row.last4,
+		notes: row.notes
+	};
 }
 
 // Insurance policies
 
 export function makeInsurancePolicy(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	userId: number,
-	over: Partial<typeof insurancePolicies.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitInsurancePolicies).values({
+	const row = kit.insertInto(insurancePolicies).values({
 		id: BigInt(id),
 		user_id: BigInt(userId),
-		provider: over.provider ?? 'Provider',
-		policy_number: over.policyNumber ?? null,
-		coverage_summary: over.coverageSummary ?? null,
-		coverage_amount: over.coverageAmount != null ? BigInt(over.coverageAmount) : null,
-		currency: over.currency ?? 'USD',
-		start_date: over.startDate ?? null,
-		end_date: over.endDate ?? null,
-		trip_id: over.tripId ? BigInt(over.tripId) : null,
-		notes: over.notes ?? null
-	} as never).executeSync();
-	db.insert(insurancePolicies)
-		.values({
-			id,
-			userId,
-			provider: row.provider,
-			policyNumber: row.policy_number,
-			coverageSummary: row.coverage_summary,
-			coverageAmount: nullableFk(row.coverage_amount),
-			currency: row.currency,
-			startDate: row.start_date,
-			endDate: row.end_date,
-			tripId: nullableFk(row.trip_id),
-			notes: row.notes
-		} as never)
-		.run();
-	return db.select().from(insurancePolicies).where(eq(insurancePolicies.id, id)).get()!;
+		provider: (over.provider as string) ?? 'Provider',
+		policy_number: (over.policyNumber as string | null) ?? null,
+		coverage_summary: (over.coverageSummary as string | null) ?? null,
+		coverage_amount: over.coverageAmount != null ? BigInt(over.coverageAmount as number) : null,
+		currency: (over.currency as string) ?? 'USD',
+		start_date: (over.startDate as string | null) ?? null,
+		end_date: (over.endDate as string | null) ?? null,
+		trip_id: over.tripId ? BigInt(over.tripId as number) : null,
+		notes: (over.notes as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		userId,
+		provider: row.provider,
+		policyNumber: row.policy_number,
+		coverageSummary: row.coverage_summary,
+		coverageAmount: nullableFk(row.coverage_amount),
+		currency: row.currency,
+		startDate: row.start_date,
+		endDate: row.end_date,
+		tripId: nullableFk(row.trip_id),
+		notes: row.notes
+	};
 }
 
 // Travel documents
 
 export function makeTravelDocument(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	userId: number,
-	over: Partial<typeof travelDocuments.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitTravelDocuments).values({
+	const row = kit.insertInto(travelDocuments).values({
 		id: BigInt(id),
 		user_id: BigInt(userId),
-		companion_id: over.companionId ? BigInt(over.companionId) : null,
+		companion_id: over.companionId ? BigInt(over.companionId as number) : null,
 		type: (over.type as any) ?? 'passport',
-		number: over.number ?? null,
-		issuing_authority: over.issuingAuthority ?? null,
-		expires_on: over.expiresOn ?? null,
-		notes: over.notes ?? null
-	} as never).executeSync();
-	db.insert(travelDocuments)
-		.values({
-			id,
-			userId,
-			companionId: nullableFk(row.companion_id),
-			type: row.type,
-			number: row.number,
-			issuingAuthority: row.issuing_authority,
-			expiresOn: row.expires_on,
-			notes: row.notes
-		} as never)
-		.run();
-	return db.select().from(travelDocuments).where(eq(travelDocuments.id, id)).get()!;
+		number: (over.number as string | null) ?? null,
+		issuing_authority: (over.issuingAuthority as string | null) ?? null,
+		expires_on: (over.expiresOn as string | null) ?? null,
+		notes: (over.notes as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		userId,
+		companionId: nullableFk(row.companion_id),
+		type: row.type,
+		number: row.number,
+		issuingAuthority: row.issuing_authority,
+		expiresOn: row.expires_on,
+		notes: row.notes
+	};
 }
 
 // Fare providers and watches
 
 export function makeFareProvider(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	userId: number,
-	over: Partial<typeof fareProviders.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitFareProviders).values({
+	const row = kit.insertInto(fareProviders).values({
 		id: BigInt(id),
 		user_id: BigInt(userId),
-		provider_key: over.providerKey ?? 'stub',
-		label: over.label ?? '',
-		api_key: over.apiKey ?? null,
-		enabled: over.enabled ?? true
-	} as never).executeSync();
-	db.insert(fareProviders)
-		.values({
-			id,
-			userId,
-			providerKey: over.providerKey ?? 'stub',
-			label: over.label ?? '',
-			apiKey: over.apiKey ?? null,
-			enabled: over.enabled ?? true
-		} as never)
-		.run();
-	return db.select().from(fareProviders).where(eq(fareProviders.id, id)).get()!;
+		provider_key: (over.providerKey as string) ?? 'stub',
+		label: (over.label as string) ?? '',
+		api_key: (over.apiKey as string | null) ?? null,
+		enabled: (over.enabled as boolean) ?? true
+	} as any).executeSync();
+	return {
+		id,
+		userId,
+		providerKey: row.provider_key,
+		label: row.label,
+		apiKey: row.api_key,
+		enabled: row.enabled
+	};
 }
 
 export function makeFareWatch(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	input: {
 		tripId: number;
@@ -576,210 +549,180 @@ export function makeFareWatch(
 	}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitFareWatches).values({
+	const row = kit.insertInto(fareWatches).values({
 		id: BigInt(id),
 		trip_id: BigInt(input.tripId),
 		provider_id: BigInt(input.providerId),
 		segment_id: input.segmentId != null ? BigInt(input.segmentId) : null,
 		status: input.status ?? 'active'
-	} as never).executeSync();
-	db.insert(fareWatches)
-		.values({
-			id,
-			tripId: input.tripId,
-			providerId: input.providerId,
-			segmentId: input.segmentId ?? null,
-			status: row.status,
-			lastCheckedAt: null,
-			lastResultJson: null,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(fareWatches).where(eq(fareWatches.id, id)).get()!;
+	} as any).executeSync();
+	return {
+		id,
+		tripId: input.tripId,
+		providerId: input.providerId,
+		segmentId: input.segmentId ?? null,
+		status: row.status,
+		lastCheckedAt: null,
+		lastResultJson: null,
+		createdAt: row.created_at
+	};
 }
 
 // Notifications and reminders
 
 export function makeNotification(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
 	userId: number,
-	over: Partial<typeof notifications.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitNotifications).values({
+	const row = kit.insertInto(notifications).values({
 		id: BigInt(id),
 		user_id: BigInt(userId),
-		title: over.title ?? 'Notification',
-		body: over.body ?? 'Body',
-		link: over.link ?? null
-	} as never).executeSync();
-	db.insert(notifications)
-		.values({
-			id,
-			userId,
-			title: row.title,
-			body: row.body,
-			link: row.link,
-			createdAt: row.created_at,
-			readAt: row.read_at
-		} as never)
-		.run();
-	return db.select().from(notifications).where(eq(notifications.id, id)).get()!;
+		title: (over.title as string) ?? 'Notification',
+		body: (over.body as string) ?? 'Body',
+		link: (over.link as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		userId,
+		title: row.title,
+		body: row.body,
+		link: row.link,
+		createdAt: row.created_at,
+		readAt: row.read_at
+	};
 }
 
 export function makeReminder(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof reminders.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitReminders).values({
+	const row = kit.insertInto(reminders).values({
 		id: BigInt(id),
-		user_id: BigInt(over.userId ?? 0),
+		user_id: BigInt((over.userId as number) ?? 0),
 		kind: (over.kind as any) ?? 'custom',
 		ref_type: (over.refType as any) ?? 'trip',
-		ref_id: BigInt(over.refId ?? 0),
-		fire_at: over.fireAt ?? new Date().toISOString(),
+		ref_id: BigInt((over.refId as number) ?? 0),
+		fire_at: (over.fireAt as string) ?? new Date().toISOString(),
 		status: (over.status as any) ?? 'pending',
-		attempts: BigInt(over.attempts ?? 0),
-		sent_at: over.sentAt ?? null
-	} as never).executeSync();
-	db.insert(reminders)
-		.values({
-			id,
-			userId: Number(row.user_id),
-			kind: row.kind,
-			refType: row.ref_type,
-			refId: Number(row.ref_id),
-			fireAt: row.fire_at,
-			status: row.status,
-			attempts: Number(row.attempts),
-			sentAt: row.sent_at,
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(reminders).where(eq(reminders.id, id)).get()!;
+		attempts: BigInt((over.attempts as number) ?? 0),
+		sent_at: (over.sentAt as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		userId: Number(row.user_id),
+		kind: row.kind,
+		refType: row.ref_type,
+		refId: Number(row.ref_id),
+		fireAt: row.fire_at,
+		status: row.status,
+		attempts: Number(row.attempts),
+		sentAt: row.sent_at,
+		createdAt: row.created_at
+	};
 }
 
 // Expenses and attachments
 
 export function makeExpense(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof tripExpenses.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitTripExpenses).values({
+	const row = kit.insertInto(tripExpenses).values({
 		id: BigInt(id),
-		trip_id: BigInt(over.tripId ?? 0),
-		description: over.description ?? 'Expense',
-		amount: BigInt(over.amount ?? 0),
-		currency: over.currency ?? 'USD',
+		trip_id: BigInt((over.tripId as number) ?? 0),
+		description: (over.description as string) ?? 'Expense',
+		amount: BigInt((over.amount as number) ?? 0),
+		currency: (over.currency as string) ?? 'USD',
 		category: (over.category as any) ?? null,
-		exchange_rate: BigInt(over.exchangeRate ?? 10000),
-		base_amount: BigInt(over.baseAmount ?? 0),
-		paid_by_companion_id: over.paidByCompanionId ? BigInt(over.paidByCompanionId) : null,
+		exchange_rate: BigInt((over.exchangeRate as number) ?? 10000),
+		base_amount: BigInt((over.baseAmount as number) ?? 0),
+		paid_by_companion_id: over.paidByCompanionId ? BigInt(over.paidByCompanionId as number) : null,
 		split_among: serializeJson(over.splitAmong) ?? '[]'
-	} as never).executeSync();
-	db.insert(tripExpenses)
-		.values({
-			id,
-			tripId: Number(row.trip_id),
-			description: row.description,
-			amount: Number(row.amount),
-			currency: row.currency,
-			category: row.category,
-			exchangeRate: Number(row.exchange_rate),
-			baseAmount: Number(row.base_amount),
-			paidByCompanionId: nullableFk(row.paid_by_companion_id),
-			splitAmong: serializeJson(row.split_among),
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(tripExpenses).where(eq(tripExpenses.id, id)).get()!;
+	} as any).executeSync();
+	return {
+		id,
+		tripId: Number(row.trip_id),
+		description: row.description,
+		amount: Number(row.amount),
+		currency: row.currency,
+		category: row.category,
+		exchangeRate: Number(row.exchange_rate),
+		baseAmount: Number(row.base_amount),
+		paidByCompanionId: nullableFk(row.paid_by_companion_id),
+		splitAmong: serializeJson(row.split_among),
+		createdAt: row.created_at
+	};
 }
 
 export function makeAttachment(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof tripExpenseAttachments.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
-	const row = kit.insertInto(kitTripExpenseAttachments).values({
+	const row = kit.insertInto(tripExpenseAttachments).values({
 		id: BigInt(id),
-		expense_id: BigInt(over.expenseId ?? 0),
-		filename: over.filename ?? 'file.png',
-		storage_key: over.storageKey ?? 'key',
-		content_type: over.contentType ?? 'image/png',
-		size_bytes: BigInt(over.sizeBytes ?? 0)
-	} as never).executeSync();
-	db.insert(tripExpenseAttachments)
-		.values({
-			id,
-			expenseId: Number(row.expense_id),
-			filename: row.filename,
-			storageKey: row.storage_key,
-			contentType: row.content_type,
-			sizeBytes: Number(row.size_bytes),
-			createdAt: row.created_at
-		} as never)
-		.run();
-	return db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.id, id)).get()!;
+		expense_id: BigInt((over.expenseId as number) ?? 0),
+		filename: (over.filename as string) ?? 'file.png',
+		storage_key: (over.storageKey as string) ?? 'key',
+		content_type: (over.contentType as string) ?? 'image/png',
+		size_bytes: BigInt((over.sizeBytes as number) ?? 0)
+	} as any).executeSync();
+	return {
+		id,
+		expenseId: Number(row.expense_id),
+		filename: row.filename,
+		storageKey: row.storage_key,
+		contentType: row.content_type,
+		sizeBytes: Number(row.size_bytes),
+		createdAt: row.created_at
+	};
 }
 
 // Scheduler runs
 
 export function makeSchedulerRun(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof schedulerRuns.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
 	const id = allocId();
 	const now = new Date().toISOString();
-	const row = kit.insertInto(kitSchedulerRuns).values({
+	const row = kit.insertInto(schedulerRuns).values({
 		id: BigInt(id),
-		started_at: over.startedAt ?? now,
-		finished_at: over.finishedAt ?? null,
-		success: over.success ?? false,
-		error_message: over.errorMessage ?? null
-	} as never).executeSync();
-	db.insert(schedulerRuns)
-		.values({
-			id,
-			startedAt: row.started_at,
-			finishedAt: row.finished_at,
-			success: row.success,
-			errorMessage: row.error_message
-		} as never)
-		.run();
-	return db.select().from(schedulerRuns).where(eq(schedulerRuns.id, id)).get()!;
+		started_at: (over.startedAt as string) ?? now,
+		finished_at: (over.finishedAt as string | null) ?? null,
+		success: (over.success as boolean) ?? false,
+		error_message: (over.errorMessage as string | null) ?? null
+	} as any).executeSync();
+	return {
+		id,
+		startedAt: row.started_at,
+		finishedAt: row.finished_at,
+		success: row.success,
+		errorMessage: row.error_message
+	};
 }
 
-// Backwards-compatible wrappers used by tests that were migrated earlier. They
-// keep the old (db, kit, over) signature while delegating to the canonical
-// helpers above.
+// Backwards-compatible wrappers used by older tests. They keep the old name
+// while delegating to the canonical kit-only helpers above.
 
-export function makeSyncedUser(
-	db: BetterSQLite3Database<Record<string, unknown>>,
-	kit: KitDatabase,
-	over: Partial<typeof users.$inferInsert> = {}
-) {
-	return makeUser(db, kit, over);
+export function makeSyncedUser(kit: KitDatabase, over: Partial<Record<string, unknown>> = {}) {
+	return makeUser(kit, over);
 }
 
 export function makeSyncedTrip(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof trips.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
-	return makeTrip(db, kit, over.ownerId ?? 0, over);
+	return makeTrip(kit, (over.ownerId as number) ?? 0, over);
 }
 
 export function makeSyncedCompanion(
-	db: BetterSQLite3Database<Record<string, unknown>>,
 	kit: KitDatabase,
-	over: Partial<typeof tripCompanions.$inferInsert> = {}
+	over: Partial<Record<string, unknown>> = {}
 ) {
-	return makeCompanion(db, kit, over.tripId ?? 0, over);
+	return makeCompanion(kit, (over.tripId as number) ?? 0, over);
 }

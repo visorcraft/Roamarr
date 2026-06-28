@@ -46,13 +46,13 @@ beforeEach(() => {
 	kit.deleteFrom(kitUsers).executeSync();
 	delivered.length = 0;
 	const db = (ctx as { db: import('./db').DB }).db;
-	owner = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
-	trip = makeTrip(db, kit, owner.id, { name: 'T' });
+	owner = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	trip = makeTrip(kit, owner.id, { name: 'T' });
 });
 
 test('arms a pending reminder 24h before a future flight', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2099-01-02T00:00:00.000Z',
@@ -66,7 +66,7 @@ test('arms a pending reminder 24h before a future flight', () => {
 
 test('atomic run delivers due, marks sent, no double-deliver on re-run', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2000-01-02T00:00:00.000Z',
@@ -82,7 +82,7 @@ test('atomic run delivers due, marks sent, no double-deliver on re-run', async (
 
 test('reclaims a reminder orphaned in "sending" by a prior crash', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2000-01-02T00:00:00.000Z',
@@ -98,7 +98,7 @@ test('reclaims a reminder orphaned in "sending" by a prior crash', async () => {
 
 test('cancel removes the reminder', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2099-01-02T00:00:00.000Z',
@@ -112,7 +112,7 @@ test('cancel removes the reminder', () => {
 test('non-flight segments do not arm reminders', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	for (const type of ['hotel', 'rental_car', 'train', 'poi', 'boat'] as const) {
-		const seg = makeSegment(db, kit, trip.id, {
+		const seg = makeSegment(kit, trip.id, {
 				type,
 				title: type,
 				startAt: '2099-01-02T00:00:00.000Z',
@@ -125,7 +125,7 @@ test('non-flight segments do not arm reminders', () => {
 
 test('changing a flight to a non-flight cancels its reminder', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2099-01-02T00:00:00.000Z',
@@ -142,7 +142,7 @@ test('changing a flight to a non-flight cancels its reminder', () => {
 test('arms a reminder using the owners configured flight check-in lead', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	db.update(users).set({ flightCheckinLeadHours: 48 }).where(eq(users.id, owner.id)).run();
-	const seg = makeSegment(db, kit, trip.id, {
+	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2099-01-02T00:00:00.000Z',
@@ -175,7 +175,7 @@ test('arms a reminder using the owners configured document expiry lead', () => {
 
 test('custom reminder arms before a trip start', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const t = makeTrip(db, kit, owner.id, { name: 'Custom', startDate: '2099-06-01' });
+	const t = makeTrip(kit, owner.id, { name: 'Custom', startDate: '2099-06-01' });
 	upsertCustomReminder(owner.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 1440);
 	const rows = db.select().from(reminders).where(eq(reminders.refType, 'trip')).all();
 	expect(rows).toHaveLength(1);
@@ -186,14 +186,14 @@ test('custom reminder arms before a trip start', () => {
 
 test('listRemindersForUser returns user reminders sorted by fireAt desc', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	makeReminder(db, kit, {
+	makeReminder(kit, {
 			userId: owner.id,
 			kind: 'custom',
 			refType: 'trip',
 			refId: 1,
 			fireAt: '2026-01-02T00:00:00Z'
 		});
-	makeReminder(db, kit, {
+	makeReminder(kit, {
 			userId: owner.id,
 			kind: 'custom',
 			refType: 'trip',
@@ -207,15 +207,15 @@ test('listRemindersForUser returns user reminders sorted by fireAt desc', () => 
 
 test('cancelReminder deletes only the users own reminder', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const other = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
-	const r1 = makeReminder(db, kit, {
+	const other = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const r1 = makeReminder(kit, {
 			userId: owner.id,
 			kind: 'custom',
 			refType: 'trip',
 			refId: 1,
 			fireAt: '2026-01-01T00:00:00Z'
 		});
-	const r2 = makeReminder(db, kit, {
+	const r2 = makeReminder(kit, {
 			userId: other.id,
 			kind: 'custom',
 			refType: 'trip',

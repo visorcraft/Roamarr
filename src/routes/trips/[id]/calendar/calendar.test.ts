@@ -21,9 +21,9 @@ function event(locals: App.Locals, params: { id: string }) {
 
 test('owner receives a text/calendar download', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'cal-owner@x.c', passwordHash: 'x', displayName: 'A' });
+	const a = makeUser(kit, { email: 'cal-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Owner Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
-	makeSegment(db, kit, t.id, {
+	makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'AF1',
 			startAt: '2026-07-01T10:00:00Z',
@@ -47,8 +47,8 @@ test('owner receives a text/calendar download', async () => {
 
 test('shared viewer receives a calendar without private fields', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'cal-shared-owner@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'cal-shared@x.c', passwordHash: 'x', displayName: 'B' });
+	const a = makeUser(kit, { email: 'cal-shared-owner@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'cal-shared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, {
 		name: 'Shared Trip',
 		destinationCountryCode: 'DE',
@@ -58,7 +58,7 @@ test('shared viewer receives a calendar without private fields', async () => {
 		startDate: '2026-08-01',
 		notes: 'SECRET NOTES'
 	});
-	makeSegment(db, kit, t.id, {
+	makeSegment(kit, t.id, {
 			type: 'hotel',
 			title: 'Hotel',
 			startAt: '2026-08-01T16:00:00Z',
@@ -66,7 +66,7 @@ test('shared viewer receives a calendar without private fields', async () => {
 			location: 'Mitte',
 			confirmationNumber: 'CONF123'
 		});
-	makeShare(db, kit, { tripId: t.id, sharedWithUserId: b.id });
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id });
 
 	const res = await GET(event({ user: b }, { id: String(t.id) }));
 	expect(res.status).toBe(200);
@@ -79,8 +79,8 @@ test('shared viewer receives a calendar without private fields', async () => {
 
 test('unshared user gets 404', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'cal-unshared-owner@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'cal-unshared@x.c', passwordHash: 'x', displayName: 'B' });
+	const a = makeUser(kit, { email: 'cal-unshared-owner@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'cal-unshared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Private Trip' });
 
 	try {

@@ -1,8 +1,8 @@
 import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
-import { eq } from 'drizzle-orm';
-import { db } from './db';
-import { users } from './db/schema';
+import { eq as kitEq } from '@mongreldb/kit';
+import { kit } from './db';
+import { users } from './db/mongrelSchema';
 import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
 import { decrypt } from './crypto';
@@ -20,10 +20,10 @@ const inAppChannel: Channel = {
 };
 
 function getUserPreferences(userId: number) {
-	const u = db.select().from(users).where(eq(users.id, userId)).get();
+	const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
 	return {
-		email: u?.emailNotifications ?? true,
-		webhook: u?.webhookNotifications ?? true
+		email: u?.email_notifications ?? true,
+		webhook: u?.webhook_notifications ?? true
 	};
 }
 
@@ -33,7 +33,7 @@ const smtpChannel: Channel = {
 		if (!prefs.email) return;
 		const s = getSettings();
 		if (!s.smtpHost || !s.smtpFrom) return;
-		const u = db.select().from(users).where(eq(users.id, userId)).get();
+		const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
 		if (!u) return;
 		const transport = nodemailer.createTransport({
 			host: s.smtpHost,
@@ -105,4 +105,3 @@ export async function sendMail(to: string, msg: NotificationMessage) {
 	});
 	return true;
 }
-

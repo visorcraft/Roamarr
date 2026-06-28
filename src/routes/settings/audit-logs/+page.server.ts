@@ -1,7 +1,6 @@
 import { requireAdmin } from '$lib/server/auth';
 import { exportAuditLogsCsv, listAuditLogs } from '$lib/server/audit';
-import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import type { PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
@@ -36,6 +35,10 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		limit: PAGE_SIZE,
 		offset: (page - 1) * PAGE_SIZE
 	});
-	const allUsers = db.select({ id: users.id, email: users.email, displayName: users.displayName }).from(users).all();
+	const allUsers = usersRepo.listAllUsers().map((u) => ({
+		id: Number(u.id),
+		email: u.email,
+		displayName: u.display_name ?? ''
+	}));
 	return { logs, total, page, pageSize: PAGE_SIZE, filters: { userId, action, entityType, from, to }, users: allUsers };
 };

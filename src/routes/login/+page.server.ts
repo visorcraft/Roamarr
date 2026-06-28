@@ -1,15 +1,23 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { verifyPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 
 export async function _authenticate(email: string, password: string) {
-	const u = db.select().from(users).where(eq(users.email, normalizeEmail(email))).get();
-	if (!u || u.disabled || !(await verifyPassword(u.passwordHash, password))) return null;
-	return u;
+	const u = usersRepo.getUserByEmail(normalizeEmail(email));
+	if (!u || u.disabled || !(await verifyPassword(u.password_hash, password))) return null;
+	return {
+		id: Number(u.id),
+		email: u.email,
+		displayName: u.display_name ?? '',
+		role: u.role,
+		disabled: u.disabled,
+		mustResetPassword: u.must_reset_password,
+		timezone: u.timezone,
+		emailNotifications: u.email_notifications,
+		webhookNotifications: u.webhook_notifications
+	};
 }
 
 export const actions: Actions = {

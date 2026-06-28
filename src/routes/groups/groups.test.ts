@@ -16,12 +16,12 @@ import { users, groups, groupMembers } from '$lib/server/db/schema';
 
 test('load includes groups the user owns and groups they belong to', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 
-	const owned = makeGroup(db, kit, a.id, 'Owned');
-	const memberGroup = makeGroup(db, kit, b.id, 'Member');
-	makeGroupMember(db, kit, memberGroup.id, a.id);
+	const owned = makeGroup(kit, a.id, 'Owned');
+	const memberGroup = makeGroup(kit, b.id, 'Member');
+	makeGroupMember(kit, memberGroup.id, a.id);
 
 	const data = load({ locals: { user: a } } as any) as any;
 	expect(data.groups.map((g: any) => g.name).sort()).toEqual(['Member', 'Owned']);

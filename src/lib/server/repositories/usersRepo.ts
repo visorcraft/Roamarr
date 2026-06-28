@@ -1,8 +1,6 @@
-import { eq as kitEq, and, ne, lt } from '@mongreldb/kit';
-import { eq as drizzleEq } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { eq as kitEq, and, ne, lt, asc } from '@mongreldb/kit';
+import { kit } from '$lib/server/db';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
-import { users as drizzleUsers } from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 
 export type KitUser = Row<typeof users>;
@@ -18,31 +16,18 @@ function toBigInt(id: number): bigint {
 	return BigInt(id);
 }
 
-function kitUserToDrizzleRow(row: KitUser): typeof drizzleUsers.$inferInsert {
-	return {
-		id: Number(row.id),
-		email: row.email,
-		passwordHash: row.password_hash,
-		displayName: row.display_name,
-		role: row.role as 'admin' | 'user',
-		disabled: row.disabled,
-		mustResetPassword: row.must_reset_password,
-		timezone: row.timezone,
-		flightCheckinLeadHours: Number(row.flight_checkin_lead_hours),
-		documentExpiryLeadDays: Number(row.document_expiry_lead_days),
-		emailNotifications: row.email_notifications,
-		webhookNotifications: row.webhook_notifications,
-		themeId: row.theme_id,
-		defaultCurrency: row.default_currency,
-		calendarToken: row.calendar_token,
-		calendarTokenExpiresAt: row.calendar_token_expires_at,
-		createdAt: row.created_at
-	};
-}
-
 export function getUserByEmail(email: string): KitUser | null {
 	const rows = kit.selectFrom(users).where(kitEq(users.email, email)).executeSync();
 	return rows[0] ?? null;
+}
+
+export function getUserByCalendarToken(token: string): KitUser | null {
+	const rows = kit.selectFrom(users).where(kitEq(users.calendar_token, token)).executeSync();
+	return rows[0] ?? null;
+}
+
+export function listAllUsers(): KitUser[] {
+	return kit.selectFrom(users).orderBy(asc(users.email)).executeSync();
 }
 
 export function getUserById(id: number): KitUser | null {
@@ -51,15 +36,7 @@ export function getUserById(id: number): KitUser | null {
 }
 
 export function createUser(input: CreateUserInput): KitUser {
-	const created = kit.insertInto(users).values(input as Insert<typeof users>).executeSync();
-	// Keep the legacy Drizzle users table in sync during transition so that
-	// not-yet-migrated code can still read user rows. When callers already
-	// inserted the Drizzle row (e.g. setup/register routes), skip the duplicate.
-	db.insert(drizzleUsers)
-		.values(kitUserToDrizzleRow(created))
-		.onConflictDoNothing({ target: drizzleUsers.id })
-		.run();
-	return created;
+	return kit.insertInto(users).values(input as Insert<typeof users>).executeSync();
 }
 
 export function updateUser(id: number, patch: UpdateUserInput): KitUser | null {
@@ -68,20 +45,11 @@ export function updateUser(id: number, patch: UpdateUserInput): KitUser | null {
 		.set(patch)
 		.where(kitEq(users.id, toBigInt(id)))
 		.executeSync();
-	const row = updated[0];
-	if (row) {
-		db.update(drizzleUsers)
-			.set(kitUserToDrizzleRow(row))
-			.where(drizzleEq(drizzleUsers.id, Number(row.id)))
-			.run();
-	}
-	return row ?? null;
+	return updated[0] ?? null;
 }
 
 export function deleteUser(id: number): bigint {
-	const deleted = kit.deleteFrom(users).where(kitEq(users.id, toBigInt(id))).executeSync();
-	db.delete(drizzleUsers).where(drizzleEq(drizzleUsers.id, id)).run();
-	return deleted;
+	return kit.deleteFrom(users).where(kitEq(users.id, toBigInt(id))).executeSync();
 }
 
 export function getSessionByTokenHash(tokenHash: string): KitSession | null {
@@ -107,6 +75,21 @@ export function updateSessionByTokenHash(
 
 export function deleteSession(id: number): bigint {
 	return kit.deleteFrom(sessions).where(kitEq(sessions.id, toBigInt(id))).executeSync();
+}
+
+export function listSessionsForUser(userId: number): KitSession[] {
+	return kit
+		.selectFrom(sessions)
+		.where(kitEq(sessions.user_id, toBigInt(userId)))
+		.orderBy(asc(sessions.created_at))
+		.executeSync();
+}
+
+export function deleteSessionByIdAndUserId(id: number, userId: number): bigint {
+	return kit
+		.deleteFrom(sessions)
+		.where(and(kitEq(sessions.id, toBigInt(id)), kitEq(sessions.user_id, toBigInt(userId))))
+		.executeSync();
 }
 
 export function deleteSessionByTokenHash(tokenHash: string): bigint {

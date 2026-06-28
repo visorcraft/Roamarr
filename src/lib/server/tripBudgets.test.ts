@@ -34,8 +34,8 @@ beforeEach(() => {
 test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'b1@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'b1@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'food', 10000, 'EUR');
 	setBudget(t.id, 'lodging', 50000);
@@ -81,8 +81,8 @@ test('setBudget upserts and listBudgetsWithSpent returns spent and remaining', (
 test('listBudgetsWithSpent buckets null and unknown categories into other', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'b5@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'b5@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'other', 5000);
 
@@ -103,8 +103,8 @@ test('listBudgetsWithSpent buckets null and unknown categories into other', () =
 test('alert levels: ok, near, over', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'b2@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'b2@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'activities', 10000);
 	setBudget(t.id, 'transport', 10000);
@@ -124,8 +124,8 @@ test('alert levels: ok, near, over', () => {
 test('deleteBudget removes a cap', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'b3@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'b3@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'other', 5000);
 	deleteBudget(t.id, 'other');
@@ -141,8 +141,8 @@ test('deleteBudget removes a cap', () => {
 test('setBudget updates existing cap', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const u = makeSyncedUser(db, kit, { email: 'b4@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'b4@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	setBudget(t.id, 'food', 10000);
 	setBudget(t.id, 'food', 15000, 'EUR');
@@ -159,14 +159,14 @@ test('setBudget updates existing cap', () => {
 test('setTripBudget snapshots the editing users default currency and deleteTripBudget enforces ownership', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
-	const owner = makeSyncedUser(db, kit, {
+	const owner = makeSyncedUser(kit, {
 		email: 'bo@x.c',
 		passwordHash: 'x',
 		displayName: 'O',
 		defaultCurrency: 'GBP'
 	});
-	const other = makeSyncedUser(db, kit, { email: 'bn@x.c', passwordHash: 'x', displayName: 'N' });
-	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
+	const other = makeSyncedUser(kit, { email: 'bn@x.c', passwordHash: 'x', displayName: 'N' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 
 	expect(() => setTripBudget(other.id, t.id, 'food', 10000)).toThrowError(
 		expect.objectContaining({ status: 404 })

@@ -1,13 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
 import { hashPassword, invalidateOtherSessions, requireUser, verifyPassword } from '$lib/server/auth';
 import { requireOwnedUser } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
-import { db } from '$lib/server/db';
-import { users, sessions } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import {
 	listEmergencyContacts,
@@ -49,19 +47,16 @@ export function _updateProfile(
 	if (!isThemeId(i.themeId)) throw new Error('Invalid theme');
 	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
-	db.update(users)
-		.set({
-			displayName: i.displayName,
-			timezone: i.timezone,
-			flightCheckinLeadHours: i.flightCheckinLeadHours,
-			documentExpiryLeadDays: i.documentExpiryLeadDays,
-			emailNotifications: i.emailNotifications,
-			webhookNotifications: i.webhookNotifications,
-			themeId: i.themeId,
-			defaultCurrency: defaultCurrency.value
-		})
-		.where(eq(users.id, userId))
-		.run();
+	usersRepo.updateUser(userId, {
+		display_name: i.displayName,
+		timezone: i.timezone,
+		flight_checkin_lead_hours: BigInt(i.flightCheckinLeadHours),
+		document_expiry_lead_days: BigInt(i.documentExpiryLeadDays),
+		email_notifications: i.emailNotifications,
+		webhook_notifications: i.webhookNotifications,
+		theme_id: i.themeId,
+		default_currency: defaultCurrency.value
+	});
 }
 
 export async function _updatePassword(
@@ -70,13 +65,10 @@ export async function _updatePassword(
 	i: { oldPassword: string; newPassword: string; confirmPassword: string }
 ) {
 	const u = requireOwnedUser(userId);
-	if (!(await verifyPassword(u.passwordHash, i.oldPassword)))
+	if (!(await verifyPassword(u.password_hash, i.oldPassword)))
 		throw new Error('Current password is incorrect');
 	if (i.newPassword !== i.confirmPassword) throw new Error('New passwords do not match');
-	db.update(users)
-		.set({ passwordHash: await hashPassword(i.newPassword) })
-		.where(eq(users.id, userId))
-		.run();
+	usersRepo.updateUser(userId, { password_hash: await hashPassword(i.newPassword) });
 	invalidateOtherSessions(userId, currentToken);
 	logAudit(userId, 'password_change', 'user', userId);
 }
@@ -86,7 +78,7 @@ export async function _changeEmail(
 	i: { currentPassword: string; newEmail: string; confirmEmail?: string }
 ) {
 	const u = requireOwnedUser(userId);
-	if (!(await verifyPassword(u.passwordHash, i.currentPassword)))
+	if (!(await verifyPassword(u.password_hash, i.currentPassword)))
 		throw new Error('Current password is incorrect');
 
 	const email = normalizeEmail(i.newEmail);
@@ -96,21 +88,18 @@ export async function _changeEmail(
 		throw new Error('Email addresses do not match.');
 	}
 
-	const duplicate = db.select().from(users).where(eq(users.email, email)).get();
-	if (duplicate && duplicate.id !== userId) throw new Error('That email is already in use.');
+	const duplicate = usersRepo.getUserByEmail(email);
+	if (duplicate && Number(duplicate.id) !== userId) throw new Error('That email is already in use.');
 
 	const oldEmail = u.email;
-	db.update(users).set({ email }).where(eq(users.id, userId)).run();
+	usersRepo.updateUser(userId, { email });
 	logAudit(userId, 'email_change', 'user', userId, { oldEmail });
 }
 
 export function _regenerateUserCalendarToken(userId: number, expiresAt?: string | null) {
 	requireOwnedUser(userId);
 	const token = randomBytes(24).toString('base64url');
-	db.update(users)
-		.set({ calendarToken: token, calendarTokenExpiresAt: expiresAt ?? null })
-		.where(eq(users.id, userId))
-		.run();
+	usersRepo.updateUser(userId, { calendar_token: token, calendar_token_expires_at: expiresAt ?? null });
 	logAudit(userId, 'calendar_token_regenerate', 'user', userId, {
 		expiresAt: expiresAt ?? null
 	});
@@ -121,14 +110,18 @@ export const load: PageServerLoad = ({ locals, cookies, url }) => {
 	const u = requireUser(locals);
 	const currentToken = cookies.get('session');
 	const currentHash = currentToken ? tokenHash(currentToken) : null;
-	const sessionRows = db
-		.select({ id: sessions.id, tokenHash: sessions.tokenHash, createdAt: sessions.createdAt, expiresAt: sessions.expiresAt, lastIp: sessions.lastIp, userAgent: sessions.userAgent })
-		.from(sessions)
-		.where(eq(sessions.userId, u.id))
-		.all();
+	const sessionRows = usersRepo.listSessionsForUser(u.id);
 	const userSessions = sessionRows
-		.filter((s) => s.expiresAt >= nowIso())
-		.map((s) => ({ ...s, current: s.tokenHash === currentHash }));
+		.filter((s) => s.expires_at >= nowIso())
+		.map((s) => ({
+			id: Number(s.id),
+			tokenHash: s.token_hash,
+			createdAt: s.created_at,
+			expiresAt: s.expires_at,
+			lastIp: s.last_ip,
+			userAgent: s.user_agent,
+			current: s.token_hash === currentHash
+		}));
 	const feedUrl = u.calendarToken
 		? `${url.origin}/calendar/feed?token=${encodeURIComponent(u.calendarToken)}`
 		: null;
@@ -191,9 +184,9 @@ export const actions: Actions = {
 		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid session' });
 		const currentToken = cookies.get('session');
 		const currentHash = currentToken ? tokenHash(currentToken) : null;
-		db.delete(sessions).where(and(eq(sessions.id, id), eq(sessions.userId, u.id))).run();
+		usersRepo.deleteSessionByIdAndUserId(id, u.id);
 		if (currentHash) {
-			const removed = db.select().from(sessions).where(eq(sessions.tokenHash, currentHash)).get();
+			const removed = usersRepo.getSessionByTokenHash(currentHash);
 			if (!removed) {
 				cookies.delete('session', { path: '/' });
 				throw redirect(303, '/login');

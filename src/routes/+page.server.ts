@@ -1,19 +1,14 @@
-import { and, count, desc, eq, gt, inArray, isNotNull, isNull, lte, ne } from 'drizzle-orm';
+import { eq as kitEq, inList } from '@mongreldb/kit';
 import { requireUser } from '$lib/server/auth';
-import { db } from '$lib/server/db';
+import { kit } from '$lib/server/db';
+import { fareProviders, fareWatches } from '$lib/server/db/mongrelSchema';
 import { formatDestination } from '$lib/tripDestination';
-import {
-	fareProviders,
-	fareWatches,
-	segments,
-	tripComments,
-	tripJournalEntries,
-	trips,
-	users
-} from '$lib/server/db/schema';
 import { listTravelDocumentsExpiringBefore } from '$lib/server/repositories/profileRepo';
 import { countUnreadNotificationsForUser } from '$lib/server/repositories/remindersRepo';
 import { listEditableTripIds, listViewableTrips } from '$lib/server/sharing';
+import * as segmentsRepo from '$lib/server/repositories/segmentsRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import * as tripMiscRepo from '$lib/server/repositories/tripMiscRepo';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
 
@@ -83,7 +78,7 @@ function buildAgenda(userId: number, timezone: string): AgendaItem[] {
 	}
 
 	if (viewableIds.length > 0) {
-		const segs = db.select().from(segments).where(inArray(segments.tripId, viewableIds)).all();
+		const segs = segmentsRepo.listSegmentsForTrips(viewableIds);
 		for (const s of segs) {
 			const startDate = DateTime.fromISO(s.startAt, { zone: 'utc' }).setZone(timezone).toISODate();
 			if (startDate === today) {
@@ -133,6 +128,19 @@ function buildAgenda(userId: number, timezone: string): AgendaItem[] {
 	});
 }
 
+function countWatches(userId: number): number {
+	const providerRows = kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.user_id, BigInt(userId)))
+		.executeSync();
+	const providerIds = providerRows.map((p) => p.id);
+	if (providerIds.length === 0) return 0;
+	return kit
+		.selectFrom(fareWatches)
+		.where(inList(fareWatches.provider_id, providerIds))
+		.executeSync().length;
+}
+
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const today = DateTime.utc().toISODate()!;
@@ -142,79 +150,37 @@ export const load: PageServerLoad = ({ locals }) => {
 	const upcoming = listViewableTrips(u.id, { startDateGte: today });
 	const unreadCount = countUnreadNotificationsForUser(u.id);
 	const expiring = listTravelDocumentsExpiringBefore(u.id, soon);
-	const watchesRow = db
-		.select({ count: count() })
-		.from(fareWatches)
-		.innerJoin(fareProviders, eq(fareWatches.providerId, fareProviders.id))
-		.where(eq(fareProviders.userId, u.id))
-		.get();
 
 	const viewableIds = viewable.map((t) => t.id);
 	const editableIds = listEditableTripIds(u.id);
-	const paymentsDue =
-		editableIds.length > 0
-			? db
-					.select({
-						segmentId: segments.id,
-						tripId: segments.tripId,
-						tripName: trips.name,
-						title: segments.title,
-						paymentDueDate: segments.paymentDueDate,
-						paymentStatus: segments.paymentStatus
-					})
-					.from(segments)
-					.innerJoin(trips, eq(segments.tripId, trips.id))
-					.where(
-						and(
-							inArray(segments.tripId, editableIds),
-							ne(segments.paymentStatus, 'fully_paid'),
-							isNotNull(segments.paymentDueDate),
-							lte(segments.paymentDueDate, soon),
-							gt(segments.paymentDueDate, today)
-						)
-					)
-					.orderBy(segments.paymentDueDate)
-					.all()
-			: [];
 
-	const recentComments =
-		viewableIds.length > 0
-			? db
-					.select({
-						id: tripComments.id,
-						tripId: tripComments.tripId,
-						tripName: trips.name,
-						body: tripComments.body,
-						createdAt: tripComments.createdAt,
-						displayName: users.displayName
-					})
-					.from(tripComments)
-					.innerJoin(trips, eq(tripComments.tripId, trips.id))
-					.innerJoin(users, eq(tripComments.userId, users.id))
-					.where(inArray(tripComments.tripId, viewableIds))
-					.orderBy(desc(tripComments.createdAt))
-					.limit(10)
-					.all()
-			: [];
-
-	const recentJournal =
-		viewableIds.length > 0
-			? db
-					.select({
-						id: tripJournalEntries.id,
-						tripId: tripJournalEntries.tripId,
-						tripName: trips.name,
-						title: tripJournalEntries.title,
-						body: tripJournalEntries.body,
-						createdAt: tripJournalEntries.createdAt
-					})
-					.from(tripJournalEntries)
-					.innerJoin(trips, eq(tripJournalEntries.tripId, trips.id))
-					.where(inArray(tripJournalEntries.tripId, viewableIds))
-					.orderBy(desc(tripJournalEntries.createdAt))
-					.limit(10)
-					.all()
-			: [];
+	let paymentsDue: {
+		segmentId: number;
+		tripId: number;
+		tripName: string;
+		title: string;
+		paymentDueDate: string;
+		paymentStatus: string;
+	}[] = [];
+	if (editableIds.length > 0) {
+		const tripMap = new Map(viewable.map((t) => [t.id, t.name]));
+		const segs = segmentsRepo.listSegmentsForTrips(editableIds).filter(
+			(s) =>
+				s.paymentStatus !== 'fully_paid' &&
+				s.paymentDueDate != null &&
+				s.paymentDueDate <= soon &&
+				s.paymentDueDate > today
+		);
+		segs.sort((a, b) => (a.paymentDueDate ?? '').localeCompare(b.paymentDueDate ?? ''));
+		paymentsDue = segs.map((s) => ({
+			segmentId: s.id,
+			tripId: s.tripId,
+			tripName: tripMap.get(s.tripId) ?? '',
+			title: s.title,
+			paymentDueDate: s.paymentDueDate ?? '',
+			paymentStatus: s.paymentStatus
+		}));
+	}
 
 	type ActivityItem = {
 		kind: 'comment' | 'journal';
@@ -226,12 +192,33 @@ export const load: PageServerLoad = ({ locals }) => {
 		displayName?: string;
 		title?: string;
 	};
-	const activity: ActivityItem[] = [
-		...recentComments.map((c) => ({ kind: 'comment' as const, ...c })),
-		...recentJournal.map((j) => ({ kind: 'journal' as const, ...j }))
-	]
-		.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-		.slice(0, 10);
+	const activity: ActivityItem[] = [];
+	if (viewableIds.length > 0) {
+		const tripNameMap = new Map(viewable.map((t) => [t.id, t.name]));
+		for (const tripId of viewableIds) {
+			const comments = tripsRepo.listCommentsForTrip(tripId).map((c) => ({
+				kind: 'comment' as const,
+				id: c.id,
+				tripId,
+				tripName: tripNameMap.get(tripId) ?? '',
+				createdAt: c.createdAt,
+				body: c.body,
+				displayName: c.displayName
+			}));
+			const journal = tripMiscRepo.listJournalEntriesForTrip(tripId).map((j) => ({
+				kind: 'journal' as const,
+				id: j.id,
+				tripId,
+				tripName: tripNameMap.get(tripId) ?? '',
+				createdAt: j.createdAt,
+				title: j.title,
+				body: j.body
+			}));
+			activity.push(...comments, ...journal);
+		}
+		activity.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+		activity.splice(10);
+	}
 
 	return {
 		upcoming: upcoming.map((t) => ({
@@ -245,7 +232,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			upcoming: upcoming.length,
 			unread: unreadCount,
 			expiring: expiring.length,
-			watches: watchesRow?.count ?? 0
+			watches: countWatches(u.id)
 		},
 		agenda: buildAgenda(u.id, u.timezone)
 	};

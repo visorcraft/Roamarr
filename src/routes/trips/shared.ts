@@ -1,15 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
-import { db } from '$lib/server/db';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import type { Trip } from '$lib/server/repositories/tripsRepo';
 import { listSegmentsForTrip, createSegment } from '$lib/server/repositories/segmentsRepo';
-import type { SegmentRow } from '$lib/server/repositories/segmentsRepo';
 import { canView, canEdit, canViewDetails, viewerProjection } from '$lib/server/sharing';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { serializeTags } from '$lib/tags';
 
-type Segment = SegmentRow;
+type Segment = ReturnType<typeof listSegmentsForTrip>[number];
 type Projection = ReturnType<typeof viewerProjection>;
 
 type TripView =

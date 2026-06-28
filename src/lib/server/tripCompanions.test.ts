@@ -34,8 +34,8 @@ function event(user: { id: number }, tripId: number, body: URLSearchParams) {
 test('insert and list companions', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'tc@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'tc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const a = insertTripCompanion(u.id, t.id, { name: 'Alice', category: 'adult', notes: 'Likes windows' });
 	const b = insertTripCompanion(u.id, t.id, { name: 'Bob', category: 'child' });
@@ -49,8 +49,8 @@ test('insert and list companions', () => {
 test('patch companion updates fields', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'patch@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'patch@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Charlie', category: 'other' });
 
 	patchTripCompanion(u.id, t.id, c.id, { name: 'Charles', category: 'adult', notes: 'Updated' });
@@ -63,8 +63,8 @@ test('patch companion updates fields', () => {
 test('remove companion deletes the row', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Dana' });
 
 	removeTripCompanion(u.id, t.id, c.id);
@@ -74,8 +74,8 @@ test('remove companion deletes the row', () => {
 test('mutations bump trip updated_at and write audit logs', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'audit@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'audit@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const before = t.updatedAt;
 
 	const c = insertTripCompanion(u.id, t.id, { name: 'Eve' });
@@ -91,9 +91,9 @@ test('mutations bump trip updated_at and write audit logs', () => {
 test('non-editor cannot mutate companions', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const owner = makeUser(db, kit, { email: 'owner@x.c', passwordHash: 'x', displayName: 'O' });
-	const other = makeUser(db, kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'X' });
-	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	const owner = makeUser(kit, { email: 'owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
 	const c = insertTripCompanion(owner.id, t.id, { name: 'Mallory' });
 
 	expect(() => insertTripCompanion(other.id, t.id, { name: 'Eve' })).toThrow();
@@ -104,8 +104,8 @@ test('non-editor cannot mutate companions', () => {
 test('addCompanion action creates a companion and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'add@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'add@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	await expect(
 		addCompanion(event(u, t.id, new URLSearchParams({ name: 'Alice', category: 'adult', notes: 'A' })))
@@ -119,8 +119,8 @@ test('addCompanion action creates a companion and redirects', async () => {
 test('updateCompanion action updates a companion and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'upd@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'upd@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Ben', category: 'child' });
 
 	await expect(
@@ -141,8 +141,8 @@ test('updateCompanion action updates a companion and redirects', async () => {
 test('action handlers reject invalid input with fail(400)', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'bad@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'bad@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const addResult = await addCompanion(event(u, t.id, new URLSearchParams({ name: '' })));
 	expect(addResult).toMatchObject({ status: 400, data: { error: expect.any(String) } });
@@ -156,8 +156,8 @@ test('action handlers reject invalid input with fail(400)', async () => {
 test('insert and list companion with dietary, allergy, and medical notes', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'notes@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'notes@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const c = insertTripCompanion(u.id, t.id, {
 		name: 'Sam',
@@ -179,8 +179,8 @@ test('insert and list companion with dietary, allergy, and medical notes', () =>
 test('patch companion updates dietary, allergy, and medical notes', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'patchnotes@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'patchnotes@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
 
 	patchTripCompanion(u.id, t.id, c.id, {
@@ -197,8 +197,8 @@ test('patch companion updates dietary, allergy, and medical notes', () => {
 test('insert and list companion preferences and kid gear needs', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'pref@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'pref@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const c = insertTripCompanion(u.id, t.id, {
 		name: 'Jordan',
@@ -230,8 +230,8 @@ test('insert and list companion preferences and kid gear needs', () => {
 test('patch companion updates preferences and gear needs', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'patchpref@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'patchpref@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = insertTripCompanion(u.id, t.id, { name: 'Taylor', category: 'child' });
 
 	patchTripCompanion(u.id, t.id, c.id, {
@@ -252,8 +252,8 @@ test('patch companion updates preferences and gear needs', () => {
 test('companion notes are rejected above max length', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kit = (ctx as { kit: KitDatabase }).kit;
-	const u = makeUser(db, kit, { email: 'long@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'long@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const long = 'x'.repeat(1001);
 	const result = await addCompanion(

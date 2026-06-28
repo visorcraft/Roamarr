@@ -9,34 +9,45 @@ import {
 	isNull as kitIsNull,
 	isNotNull as kitIsNotNull
 } from '@mongreldb/kit';
-import {
-	eq as drizzleEq,
-	and as drizzleAnd,
-	inArray as drizzleInArray,
-	lte as drizzleLte,
-	lt as drizzleLt,
-	isNull as drizzleIsNull,
-	not as drizzleNot,
-	sql,
-	count as drizzleCount
-} from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	reminders as kitReminders,
 	notifications as kitNotifications,
 	schedulerRuns as kitSchedulerRuns
 } from '$lib/server/db/mongrelSchema';
-import {
-	reminders as drizzleReminders,
-	notifications as drizzleNotifications,
-	schedulerRuns as drizzleSchedulerRuns
-} from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 import { nowIso } from '$lib/server/tz';
 
-export type ReminderRow = typeof drizzleReminders.$inferSelect;
-export type NotificationRow = typeof drizzleNotifications.$inferSelect;
-export type SchedulerRunRow = typeof drizzleSchedulerRuns.$inferSelect;
+export interface ReminderRow {
+	id: number;
+	userId: number;
+	kind: 'flight_checkin' | 'document_expiry' | 'custom';
+	refType: 'segment' | 'document' | 'trip';
+	refId: number;
+	fireAt: string;
+	status: 'pending' | 'sending' | 'sent';
+	attempts: number;
+	sentAt: string | null;
+	createdAt: string;
+}
+
+export interface NotificationRow {
+	id: number;
+	userId: number;
+	title: string;
+	body: string;
+	link: string | null;
+	createdAt: string;
+	readAt: string | null;
+}
+
+export interface SchedulerRunRow {
+	id: number;
+	startedAt: string;
+	finishedAt: string | null;
+	success: boolean;
+	errorMessage: string | null;
+}
 
 type KitReminder = Row<typeof kitReminders>;
 type KitNotification = Row<typeof kitNotifications>;
@@ -87,148 +98,6 @@ function toSchedulerRunRow(row: KitSchedulerRun): SchedulerRunRow {
 	};
 }
 
-function kitReminderToDrizzleInsert(row: KitReminder): typeof drizzleReminders.$inferInsert {
-	return {
-		id: num(row.id),
-		userId: num(row.user_id),
-		kind: row.kind,
-		refType: row.ref_type,
-		refId: num(row.ref_id),
-		fireAt: row.fire_at,
-		status: row.status,
-		attempts: Number(row.attempts),
-		sentAt: row.sent_at,
-		createdAt: row.created_at
-	};
-}
-
-function kitNotificationToDrizzleInsert(row: KitNotification): typeof drizzleNotifications.$inferInsert {
-	return {
-		id: num(row.id),
-		userId: num(row.user_id),
-		title: row.title,
-		body: row.body,
-		link: row.link,
-		createdAt: row.created_at,
-		readAt: row.read_at
-	};
-}
-
-function kitSchedulerRunToDrizzleInsert(row: KitSchedulerRun): typeof drizzleSchedulerRuns.$inferInsert {
-	return {
-		id: num(row.id),
-		startedAt: row.started_at,
-		finishedAt: row.finished_at,
-		success: row.success,
-		errorMessage: row.error_message
-	};
-}
-
-function syncReminderToLegacy(row: KitReminder) {
-	const values = kitReminderToDrizzleInsert(row);
-	const id = values.id!;
-	const existing = db.select().from(drizzleReminders).where(drizzleEq(drizzleReminders.id, id)).get();
-	if (existing) {
-		db.update(drizzleReminders).set(values).where(drizzleEq(drizzleReminders.id, id)).run();
-	} else {
-		db.insert(drizzleReminders).values(values).run();
-	}
-}
-
-function syncNotificationToLegacy(row: KitNotification) {
-	const values = kitNotificationToDrizzleInsert(row);
-	const id = values.id!;
-	const existing = db
-		.select()
-		.from(drizzleNotifications)
-		.where(drizzleEq(drizzleNotifications.id, id))
-		.get();
-	if (existing) {
-		db.update(drizzleNotifications)
-			.set(values)
-			.where(drizzleEq(drizzleNotifications.id, id))
-			.run();
-	} else {
-		db.insert(drizzleNotifications).values(values).run();
-	}
-}
-
-function syncSchedulerRunToLegacy(row: KitSchedulerRun) {
-	const values = kitSchedulerRunToDrizzleInsert(row);
-	const id = values.id!;
-	const existing = db
-		.select()
-		.from(drizzleSchedulerRuns)
-		.where(drizzleEq(drizzleSchedulerRuns.id, id))
-		.get();
-	if (existing) {
-		db.update(drizzleSchedulerRuns)
-			.set(values)
-			.where(drizzleEq(drizzleSchedulerRuns.id, id))
-			.run();
-	} else {
-		db.insert(drizzleSchedulerRuns).values(values).run();
-	}
-}
-
-function deleteReminderFromLegacy(id: number) {
-	db.delete(drizzleReminders).where(drizzleEq(drizzleReminders.id, id)).run();
-}
-
-function deleteNotificationFromLegacy(id: number) {
-	db.delete(drizzleNotifications).where(drizzleEq(drizzleNotifications.id, id)).run();
-}
-
-function deleteSchedulerRunFromLegacy(id: number) {
-	db.delete(drizzleSchedulerRuns).where(drizzleEq(drizzleSchedulerRuns.id, id)).run();
-}
-
-function reminderFromLegacy(id: number): ReminderRow | null {
-	const row = db.select().from(drizzleReminders).where(drizzleEq(drizzleReminders.id, id)).get();
-	return row ?? null;
-}
-
-function reminderFromLegacyBySource(
-	kind: string,
-	refType: string,
-	refId: number
-): ReminderRow | null {
-	const row = db
-		.select()
-		.from(drizzleReminders)
-		.where(
-			drizzleAnd(
-				drizzleEq(drizzleReminders.kind, kind),
-				drizzleEq(drizzleReminders.refType, refType),
-				drizzleEq(drizzleReminders.refId, refId)
-			)
-		)
-		.get();
-	return row ?? null;
-}
-
-function notificationFromLegacy(id: number): NotificationRow | null {
-	const row = db.select().from(drizzleNotifications).where(drizzleEq(drizzleNotifications.id, id)).get();
-	return row ?? null;
-}
-
-function schedulerRunFromLegacy(id: number): SchedulerRunRow | null {
-	const row = db.select().from(drizzleSchedulerRuns).where(drizzleEq(drizzleSchedulerRuns.id, id)).get();
-	return row ?? null;
-}
-
-function mergeUniqueById<T extends { id: number }>(kitRows: T[], legacyRows: T[]): T[] {
-	const seen = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows];
-	for (const row of legacyRows) {
-		if (!seen.has(row.id)) {
-			merged.push(row);
-			seen.add(row.id);
-		}
-	}
-	return merged;
-}
-
 // Reminders
 
 export type CreateReminderInput = Pick<ReminderRow, 'userId' | 'kind' | 'refType' | 'refId' | 'fireAt'> &
@@ -236,38 +105,18 @@ export type CreateReminderInput = Pick<ReminderRow, 'userId' | 'kind' | 'refType
 
 export type UpdateReminderInput = Partial<Omit<ReminderRow, 'id' | 'createdAt'>>;
 
-function listRemindersForUserQuery(userId: number): ReminderRow[] {
-	const kitRows = kit
+export function listRemindersForUser(userId: number): ReminderRow[] {
+	const rows = kit
 		.selectFrom(kitReminders)
 		.where(kitEq(kitReminders.user_id, toBigInt(userId)))
 		.orderBy(kitDesc(kitReminders.fire_at), kitDesc(kitReminders.id))
-		.executeSync()
-		.map(toReminderRow);
-
-	const legacyRows = db
-		.select()
-		.from(drizzleReminders)
-		.where(drizzleEq(drizzleReminders.userId, userId))
-		.orderBy(drizzleReminders.fireAt)
-		.all();
-
-	const kitIds = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows, ...legacyRows.filter((r) => !kitIds.has(r.id))];
-	merged.sort((a, b) => {
-		if (a.fireAt > b.fireAt) return -1;
-		if (a.fireAt < b.fireAt) return 1;
-		return b.id - a.id;
-	});
-	return merged;
-}
-
-export function listRemindersForUser(userId: number): ReminderRow[] {
-	return listRemindersForUserQuery(userId);
+		.executeSync();
+	return rows.map(toReminderRow);
 }
 
 export function listPendingRemindersBefore(fireAt: string): ReminderRow[] {
 	const statuses: ReminderRow['status'][] = ['pending', 'sending'];
-	const kitRows = kit
+	return kit
 		.selectFrom(kitReminders)
 		.where(
 			kitAnd(
@@ -278,29 +127,11 @@ export function listPendingRemindersBefore(fireAt: string): ReminderRow[] {
 		.orderBy(kitAsc(kitReminders.fire_at))
 		.executeSync()
 		.map(toReminderRow);
-
-	const legacyRows = db
-		.select()
-		.from(drizzleReminders)
-		.where(
-			drizzleAnd(
-				drizzleInArray(drizzleReminders.status, statuses),
-				drizzleLte(drizzleReminders.fireAt, fireAt)
-			)
-		)
-		.orderBy(drizzleReminders.fireAt)
-		.all();
-
-	const kitIds = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows, ...legacyRows.filter((r) => !kitIds.has(r.id))];
-	merged.sort((a, b) => a.fireAt.localeCompare(b.fireAt));
-	return merged;
 }
 
 export function getReminderById(id: number): ReminderRow | null {
 	const rows = kit.selectFrom(kitReminders).where(kitEq(kitReminders.id, toBigInt(id))).executeSync();
-	if (rows[0]) return toReminderRow(rows[0]);
-	return reminderFromLegacy(id);
+	return rows[0] ? toReminderRow(rows[0]) : null;
 }
 
 export function getReminderBySource(
@@ -318,8 +149,7 @@ export function getReminderBySource(
 			)
 		)
 		.executeSync();
-	if (rows[0]) return toReminderRow(rows[0]);
-	return reminderFromLegacyBySource(kind, refType, refId);
+	return rows[0] ? toReminderRow(rows[0]) : null;
 }
 
 export function createReminder(input: CreateReminderInput): ReminderRow {
@@ -336,7 +166,6 @@ export function createReminder(input: CreateReminderInput): ReminderRow {
 			sent_at: input.sentAt ?? null
 		} as Insert<typeof kitReminders>)
 		.executeSync();
-	syncReminderToLegacy(row);
 	return toReminderRow(row);
 }
 
@@ -375,34 +204,21 @@ export function updateReminder(id: number, patch: UpdateReminderInput): Reminder
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncReminderToLegacy(row);
 	return toReminderRow(row);
 }
 
 export function deleteReminder(id: number): boolean {
 	const deleted = kit.deleteFrom(kitReminders).where(kitEq(kitReminders.id, toBigInt(id))).executeSync();
-	deleteReminderFromLegacy(id);
-	return deleted > 0n || reminderFromLegacy(id) !== null;
+	return deleted > 0n;
 }
 
 export function deleteRemindersForRef(refType: string, refId: number): bigint {
-	const ids = kit
-		.selectFrom(kitReminders)
-		.where(
-			kitAnd(kitEq(kitReminders.ref_type, refType), kitEq(kitReminders.ref_id, toBigInt(refId)))
-		)
-		.executeSync()
-		.map((r) => num(r.id));
-	const deleted = kit
+	return kit
 		.deleteFrom(kitReminders)
 		.where(
 			kitAnd(kitEq(kitReminders.ref_type, refType), kitEq(kitReminders.ref_id, toBigInt(refId)))
 		)
 		.executeSync();
-	for (const id of ids) {
-		deleteReminderFromLegacy(id);
-	}
-	return deleted;
 }
 
 export function markReminderSent(id: number, sentAt = nowIso()): ReminderRow | null {
@@ -425,32 +241,17 @@ export function listNotificationsForUser(userId: number, opts: ListNotifications
 	const includeRead = opts.includeRead ?? true;
 	const limit = opts.limit;
 
-	const kitConditions = [kitEq(kitNotifications.user_id, toBigInt(userId))];
-	if (!includeRead) kitConditions.push(kitIsNull(kitNotifications.read_at));
-	const kitRows = kit
+	const conditions = [kitEq(kitNotifications.user_id, toBigInt(userId))];
+	if (!includeRead) conditions.push(kitIsNull(kitNotifications.read_at));
+
+	const rows = kit
 		.selectFrom(kitNotifications)
-		.where(kitAnd(...kitConditions))
+		.where(kitAnd(...conditions))
 		.orderBy(kitDesc(kitNotifications.created_at), kitDesc(kitNotifications.id))
 		.executeSync()
 		.map(toNotificationRow);
 
-	const legacyConditions = [drizzleEq(drizzleNotifications.userId, userId)];
-	if (!includeRead) legacyConditions.push(drizzleIsNull(drizzleNotifications.readAt));
-	const legacyRows = db
-		.select()
-		.from(drizzleNotifications)
-		.where(drizzleAnd(...legacyConditions))
-		.orderBy(drizzleNotifications.createdAt)
-		.all();
-
-	const kitIds = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows, ...legacyRows.filter((r) => !kitIds.has(r.id))];
-	merged.sort((a, b) => {
-		if (a.createdAt > b.createdAt) return -1;
-		if (a.createdAt < b.createdAt) return 1;
-		return b.id - a.id;
-	});
-	return limit != null ? merged.slice(0, limit) : merged;
+	return limit != null ? rows.slice(0, limit) : rows;
 }
 
 export function countUnreadNotificationsForUser(userId: number): number {
@@ -459,65 +260,21 @@ export function countUnreadNotificationsForUser(userId: number): number {
 
 export function countNotificationsForUser(userId: number, opts: { unreadOnly?: boolean } = {}): number {
 	const unreadOnly = opts.unreadOnly ?? false;
-	const kitPredicates = [kitEq(kitNotifications.user_id, toBigInt(userId))];
-	const legacyPredicates = [drizzleEq(drizzleNotifications.userId, userId)];
+	const predicates = [kitEq(kitNotifications.user_id, toBigInt(userId))];
 	if (unreadOnly) {
-		kitPredicates.push(kitIsNull(kitNotifications.read_at));
-		legacyPredicates.push(drizzleIsNull(drizzleNotifications.readAt));
+		predicates.push(kitIsNull(kitNotifications.read_at));
 	}
-
-	const kitCount = Number(
+	return Number(
 		kit
 			.selectFrom(kitNotifications)
 			.selectCount()
-			.where(kitAnd(...kitPredicates))
+			.where(kitAnd(...predicates))
 			.executeSync()
 	);
-
-	const kitIds = (
-		kit
-			.selectFrom(kitNotifications)
-			.where(kitAnd(...kitPredicates))
-			.executeSync() as KitNotification[]
-	).map((r) => num(r.id));
-
-	if (kitIds.length === 0) {
-		const legacyRow = db
-			.select({ count: drizzleCount() })
-			.from(drizzleNotifications)
-			.where(drizzleAnd(...legacyPredicates))
-			.get();
-		return legacyRow?.count ?? 0;
-	}
-
-	const legacyRow = db
-		.select({ count: drizzleCount() })
-		.from(drizzleNotifications)
-		.where(
-			drizzleAnd(
-				...legacyPredicates,
-				drizzleNot(drizzleInArray(drizzleNotifications.id, kitIds))
-			)
-		)
-		.get();
-	return kitCount + (legacyRow?.count ?? 0);
 }
 
 export function countNotifications(): number {
-	const kitCount = Number(kit.selectFrom(kitNotifications).selectCount().executeSync());
-	const kitIds = (kit.selectFrom(kitNotifications).executeSync() as KitNotification[]).map((r) =>
-		num(r.id)
-	);
-	if (kitIds.length === 0) {
-		const legacyRow = db.select({ count: drizzleCount() }).from(drizzleNotifications).get();
-		return legacyRow?.count ?? 0;
-	}
-	const legacyRow = db
-		.select({ count: drizzleCount() })
-		.from(drizzleNotifications)
-		.where(drizzleNot(drizzleInArray(drizzleNotifications.id, kitIds)))
-		.get();
-	return kitCount + (legacyRow?.count ?? 0);
+	return Number(kit.selectFrom(kitNotifications).selectCount().executeSync());
 }
 
 export function getNotificationById(id: number): NotificationRow | null {
@@ -525,8 +282,7 @@ export function getNotificationById(id: number): NotificationRow | null {
 		.selectFrom(kitNotifications)
 		.where(kitEq(kitNotifications.id, toBigInt(id)))
 		.executeSync();
-	if (rows[0]) return toNotificationRow(rows[0]);
-	return notificationFromLegacy(id);
+	return rows[0] ? toNotificationRow(rows[0]) : null;
 }
 
 export function createNotification(input: CreateNotificationInput): NotificationRow {
@@ -539,7 +295,6 @@ export function createNotification(input: CreateNotificationInput): Notification
 			link: input.link ?? null
 		} as Insert<typeof kitNotifications>)
 		.executeSync();
-	syncNotificationToLegacy(row);
 	return toNotificationRow(row);
 }
 
@@ -565,7 +320,6 @@ export function updateNotification(id: number, patch: UpdateNotificationInput): 
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncNotificationToLegacy(row);
 	return toNotificationRow(row);
 }
 
@@ -582,28 +336,14 @@ export function deleteNotification(id: number): boolean {
 		.deleteFrom(kitNotifications)
 		.where(kitEq(kitNotifications.id, toBigInt(id)))
 		.executeSync();
-	deleteNotificationFromLegacy(id);
-	return deleted > 0n || notificationFromLegacy(id) !== null;
+	return deleted > 0n;
 }
 
 export function deleteOldNotifications(before: string): bigint {
-	const kitIds = (
-		kit
-			.selectFrom(kitNotifications)
-			.where(kitLt(kitNotifications.created_at, before))
-			.executeSync() as KitNotification[]
-	).map((r) => num(r.id));
-	const deleted = kit
+	return kit
 		.deleteFrom(kitNotifications)
 		.where(kitLt(kitNotifications.created_at, before))
 		.executeSync();
-	db.delete(drizzleNotifications)
-		.where(drizzleLt(drizzleNotifications.createdAt, before))
-		.run();
-	for (const id of kitIds) {
-		deleteNotificationFromLegacy(id);
-	}
-	return deleted;
 }
 
 // Scheduler runs
@@ -622,7 +362,6 @@ export function startSchedulerRun(_kind?: string): SchedulerRunRow {
 			error_message: null
 		} as Insert<typeof kitSchedulerRuns>)
 		.executeSync();
-	syncSchedulerRunToLegacy(row);
 	return toSchedulerRunRow(row);
 }
 
@@ -658,49 +397,21 @@ export function updateSchedulerRun(id: number, patch: UpdateSchedulerRunInput): 
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncSchedulerRunToLegacy(row);
 	return toSchedulerRunRow(row);
 }
 
 export function listRecentSchedulerRuns(limit: number): SchedulerRunRow[] {
-	const kitRows = kit
+	return kit
 		.selectFrom(kitSchedulerRuns)
 		.orderBy(kitDesc(kitSchedulerRuns.started_at), kitDesc(kitSchedulerRuns.id))
 		.executeSync()
+		.slice(0, limit)
 		.map(toSchedulerRunRow);
-
-	const legacyRows = db
-		.select()
-		.from(drizzleSchedulerRuns)
-		.orderBy(drizzleSchedulerRuns.startedAt)
-		.all();
-
-	const kitIds = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows, ...legacyRows.filter((r) => !kitIds.has(r.id))];
-	merged.sort((a, b) => {
-		if (a.startedAt > b.startedAt) return -1;
-		if (a.startedAt < b.startedAt) return 1;
-		return b.id - a.id;
-	});
-	return merged.slice(0, limit);
 }
 
 export function pruneOldSchedulerRuns(before: string): bigint {
-	const kitIds = (
-		kit
-			.selectFrom(kitSchedulerRuns)
-			.where(kitLt(kitSchedulerRuns.started_at, before))
-			.executeSync() as KitSchedulerRun[]
-	).map((r) => num(r.id));
-	const deleted = kit
+	return kit
 		.deleteFrom(kitSchedulerRuns)
 		.where(kitLt(kitSchedulerRuns.started_at, before))
 		.executeSync();
-	db.delete(drizzleSchedulerRuns)
-		.where(drizzleLt(drizzleSchedulerRuns.startedAt, before))
-		.run();
-	for (const id of kitIds) {
-		deleteSchedulerRunFromLegacy(id);
-	}
-	return deleted;
 }

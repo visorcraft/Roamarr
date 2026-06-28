@@ -1,5 +1,4 @@
-import { db, kit } from './db';
-import { applyMigrations } from './db/migrate';
+import { kit } from './db';
 import { startScheduler } from './scheduler';
 import { ensureDefaultBenefitTemplates } from './benefitTemplates';
 import { applyPendingRestore, cleanupRestoreOldDirectories } from './restore';
@@ -12,8 +11,8 @@ let booted = false;
 
 /**
  * Idempotent one-time boot: enforce secret, apply any pending restore from a
- * previous backup upload, open/migrate the kit database, apply legacy Drizzle
- * migrations, ensure the settings singleton, then start the scheduler.
+ * previous backup upload, open/migrate the kit database, ensure the settings
+ * singleton, then start the scheduler.
  * Migrations always run before the scheduler ticks (global constraint:
  * "Migrations run on boot before the scheduler starts").
  */
@@ -33,7 +32,6 @@ export function bootApp() {
 	// kept as a backup.
 	cleanupRestoreOldDirectories();
 
-	applyMigrations(db);
 	ensureDefaultBenefitTemplates();
 	startScheduler();
 }

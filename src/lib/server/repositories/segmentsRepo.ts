@@ -1,12 +1,6 @@
 import { eq as kitEq, and as kitAnd, ne as kitNe, lt as kitLt, gt as kitGt, inList as kitInList, asc as kitAsc } from '@mongreldb/kit';
-import { eq, and, inArray as inList, asc, lt, gt, ne, not, sql } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
-import {
-	segments as drizzleSegments,
-	segmentAttendees as drizzleSegmentAttendees,
-	tripCompanions as drizzleTripCompanions
-} from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 import type { SegmentType, SegmentStatus, SegmentAttendeeStatus } from '$lib/server/db/schema';
 
@@ -19,9 +13,6 @@ export type UpdateSegmentInput = Update<typeof segments>;
 
 export type CreateAttendeeInput = Pick<Row<typeof segmentAttendees>, 'segment_id' | 'companion_id'> &
 	Partial<Omit<Row<typeof segmentAttendees>, 'id' | 'created_at' | 'segment_id' | 'companion_id'>>;
-
-export type SegmentRow = typeof drizzleSegments.$inferSelect;
-export type SegmentAttendeeRow = typeof drizzleSegmentAttendees.$inferSelect;
 
 export type AttendeeWithCompanion = {
 	id: number;
@@ -51,7 +42,7 @@ function serializeDetailsJson(value: unknown): string | null {
 	return JSON.stringify(value);
 }
 
-function toSegmentRow(row: KitSegment): SegmentRow {
+export function toSegmentRow(row: KitSegment) {
 	return {
 		id: Number(row.id),
 		tripId: Number(row.trip_id),
@@ -80,7 +71,7 @@ function toSegmentRow(row: KitSegment): SegmentRow {
 	};
 }
 
-function toAttendeeRow(row: KitSegmentAttendee): SegmentAttendeeRow {
+function toAttendeeRow(row: KitSegmentAttendee) {
 	return {
 		id: Number(row.id),
 		segmentId: Number(row.segment_id),
@@ -90,170 +81,44 @@ function toAttendeeRow(row: KitSegmentAttendee): SegmentAttendeeRow {
 	};
 }
 
-function kitSegmentToDrizzleRow(row: KitSegment): typeof drizzleSegments.$inferInsert {
-	return {
-		id: Number(row.id),
-		tripId: Number(row.trip_id),
-		type: row.type,
-		title: row.title,
-		startAt: row.start_at,
-		startTz: row.start_tz,
-		endAt: row.end_at,
-		endTz: row.end_tz,
-		status: row.status,
-		location: row.location,
-		countryCode: row.country_code,
-		cityName: row.city_name,
-		cityLat: row.city_lat,
-		cityLng: row.city_lng,
-		venue: row.venue,
-		confirmationNumber: row.confirmation_number,
-		detailsJson: serializeDetailsJson(row.details_json),
-		meetingPoint: row.meeting_point,
-		meetingAt: row.meeting_at,
-		paymentStatus: row.payment_status,
-		paymentDueDate: row.payment_due_date,
-		cardId: nullableIntToNumber(row.card_id),
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
-	};
-}
-
-function kitAttendeeToDrizzleRow(row: KitSegmentAttendee): typeof drizzleSegmentAttendees.$inferInsert {
-	return {
-		id: Number(row.id),
-		segmentId: Number(row.segment_id),
-		companionId: Number(row.companion_id),
-		status: row.status,
-		createdAt: row.created_at
-	};
-}
-
-function syncSegmentToDrizzle(row: KitSegment) {
-	const existing = db.select().from(drizzleSegments).where(eq(drizzleSegments.id, Number(row.id))).get();
-	if (existing) {
-		db.update(drizzleSegments)
-			.set(kitSegmentToDrizzleRow(row))
-			.where(eq(drizzleSegments.id, Number(row.id)))
-			.run();
-	} else {
-		db.insert(drizzleSegments).values(kitSegmentToDrizzleRow(row)).run();
-	}
-}
-
-function syncAttendeeToDrizzle(row: KitSegmentAttendee) {
-	const existing = db
-		.select()
-		.from(drizzleSegmentAttendees)
-		.where(eq(drizzleSegmentAttendees.id, Number(row.id)))
-		.get();
-	if (existing) {
-		db.update(drizzleSegmentAttendees)
-			.set(kitAttendeeToDrizzleRow(row))
-			.where(eq(drizzleSegmentAttendees.id, Number(row.id)))
-			.run();
-	} else {
-		db.insert(drizzleSegmentAttendees).values(kitAttendeeToDrizzleRow(row)).run();
-	}
-}
-
-function deleteSegmentFromDrizzle(id: number) {
-	db.delete(drizzleSegments).where(eq(drizzleSegments.id, id)).run();
-}
-
-function deleteAttendeeFromDrizzle(id: number) {
-	db.delete(drizzleSegmentAttendees).where(eq(drizzleSegmentAttendees.id, id)).run();
-}
-
-// Fallback to legacy Drizzle rows during the migration window. Tests and
-// not-yet-migrated code may still seed segments directly in the Drizzle table.
-function segmentFromLegacy(id: number): SegmentRow | null {
-	return db.select().from(drizzleSegments).where(eq(drizzleSegments.id, id)).get() ?? null;
-}
-
-function segmentsFromLegacy(tripIds: number[]): SegmentRow[] {
-	if (tripIds.length === 0) return [];
-	return db
-		.select()
-		.from(drizzleSegments)
-		.where(inList(drizzleSegments.tripId, tripIds))
-		.orderBy(asc(drizzleSegments.startAt))
-		.all();
-}
-
-function attendeesFromLegacy(segmentIds: number[]): SegmentAttendeeRow[] {
-	if (segmentIds.length === 0) return [];
-	return db
-		.select()
-		.from(drizzleSegmentAttendees)
-		.where(inList(drizzleSegmentAttendees.segmentId, segmentIds))
-		.orderBy(asc(drizzleSegmentAttendees.companionId))
-		.all();
-}
-
-function companionsFromLegacy(ids: number[]) {
-	if (ids.length === 0) return [];
-	return db.select().from(drizzleTripCompanions).where(inList(drizzleTripCompanions.id, ids)).all();
-}
-
-function mergeUniqueById<T extends { id: number }>(kitRows: T[], legacyRows: T[]): T[] {
-	const seen = new Set(kitRows.map((r) => r.id));
-	const merged = [...kitRows];
-	for (const row of legacyRows) {
-		if (!seen.has(row.id)) {
-			merged.push(row);
-			seen.add(row.id);
-		}
-	}
-	return merged;
-}
-
 export function countSegments(): bigint {
 	return kit.selectFrom(segments).selectCount().executeSync();
 }
 
-export function listSegmentsForTrip(tripId: number): SegmentRow[] {
+export function listSegmentsForTrip(tripId: number) {
 	return listSegmentsForTrips([tripId]);
 }
 
-export function listSegmentsForTrips(tripIds: number[]): SegmentRow[] {
+export function listSegmentsForTrips(tripIds: number[]) {
 	if (tripIds.length === 0) return [];
-	const kitRows = kit
+	return kit
 		.selectFrom(segments)
 		.where(kitInList(segments.trip_id, tripIds.map(toBigInt)))
 		.orderBy(kitAsc(segments.start_at))
 		.executeSync()
 		.map(toSegmentRow);
-	const legacyRows = segmentsFromLegacy(tripIds);
-	return mergeUniqueById(kitRows, legacyRows);
 }
 
-export function getSegmentById(id: number): SegmentRow | null {
+export function getSegmentById(id: number) {
 	const rows = kit.selectFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync();
-	if (rows[0]) return toSegmentRow(rows[0]);
-	return segmentFromLegacy(id);
+	return rows[0] ? toSegmentRow(rows[0]) : null;
 }
 
-export function getSegmentsByIds(ids: number[]): SegmentRow[] {
+export function getSegmentsByIds(ids: number[]) {
 	if (ids.length === 0) return [];
-	const kitRows = kit
+	return kit
 		.selectFrom(segments)
 		.where(kitInList(segments.id, ids.map(toBigInt)))
 		.executeSync()
 		.map(toSegmentRow);
-	const legacyRows = ids
-		.map((id) => segmentFromLegacy(id))
-		.filter((r): r is SegmentRow => r !== null);
-	return mergeUniqueById(kitRows, legacyRows);
 }
 
-export function createSegment(input: CreateSegmentInput): SegmentRow {
+export function createSegment(input: CreateSegmentInput) {
 	const created = kit.insertInto(segments).values(input as Insert<typeof segments>).executeSync();
-	syncSegmentToDrizzle(created);
 	return toSegmentRow(created);
 }
 
-export function updateSegment(id: number, patch: UpdateSegmentInput): SegmentRow | null {
+export function updateSegment(id: number, patch: UpdateSegmentInput) {
 	const existing = kit.selectFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync()[0];
 	if (!existing) return null;
 	const merged: Update<typeof segments> = { ...existing, ...patch, id: existing.id };
@@ -261,15 +126,12 @@ export function updateSegment(id: number, patch: UpdateSegmentInput): SegmentRow
 	const updated = kit.updateTable(segments).set(merged).where(kitEq(segments.id, toBigInt(id))).executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncSegmentToDrizzle(row);
 	return toSegmentRow(row);
 }
 
 export function deleteSegment(id: number): boolean {
-	const existedInLegacy = segmentFromLegacy(id) !== null;
 	const deleted = kit.deleteFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync();
-	deleteSegmentFromDrizzle(id);
-	return deleted > 0n || existedInLegacy;
+	return deleted > 0n;
 }
 
 export function deleteSegmentsForTrip(tripId: number, ids?: number[]): bigint {
@@ -277,12 +139,7 @@ export function deleteSegmentsForTrip(tripId: number, ids?: number[]): bigint {
 	const predicate = ids?.length
 		? kitAnd(kitEq(segments.trip_id, toBigInt(tripId)), kitInList(segments.id, ids.map(toBigInt)))
 		: kitEq(segments.trip_id, toBigInt(tripId));
-	const deleted = kit.deleteFrom(segments).where(predicate).executeSync();
-	const drizzleIds = ids ?? db.select({ id: drizzleSegments.id }).from(drizzleSegments).where(eq(drizzleSegments.tripId, tripId)).all().map((r) => r.id);
-	for (const id of drizzleIds) {
-		deleteSegmentFromDrizzle(id);
-	}
-	return deleted;
+	return kit.deleteFrom(segments).where(predicate).executeSync();
 }
 
 export function countOverlappingSegments(
@@ -291,49 +148,25 @@ export function countOverlappingSegments(
 	endAt: string,
 	excludeSegmentId?: number
 ): bigint {
-	const kitPredicates = [
+	const predicates = [
 		kitEq(segments.trip_id, toBigInt(tripId)),
 		kitLt(segments.start_at, endAt),
 		kitGt(segments.end_at, startAt)
 	];
 	if (excludeSegmentId != null) {
-		kitPredicates.push(kitNe(segments.id, toBigInt(excludeSegmentId)));
+		predicates.push(kitNe(segments.id, toBigInt(excludeSegmentId)));
 	}
-	const kitRows = kit.selectFrom(segments).where(kitAnd(...kitPredicates)).executeSync();
-	const kitIds = new Set(kitRows.map((r) => Number(r.id)));
-
-	const legacyConditions = [
-		eq(drizzleSegments.tripId, tripId),
-		lt(drizzleSegments.startAt, endAt),
-		gt(drizzleSegments.endAt, startAt)
-	];
-	if (excludeSegmentId != null) {
-		legacyConditions.push(ne(drizzleSegments.id, excludeSegmentId));
-	}
-	if (kitIds.size > 0) {
-		legacyConditions.push(not(inList(drizzleSegments.id, Array.from(kitIds))));
-	}
-	const legacyCount = BigInt(
-		db
-			.select({ count: sql<number>`count(*)` })
-			.from(drizzleSegments)
-			.where(and(...legacyConditions))
-			.get()?.count ?? 0
-	);
-
-	return BigInt(kitRows.length) + legacyCount;
+	return BigInt(kit.selectFrom(segments).where(kitAnd(...predicates)).executeSync().length);
 }
 
 export function listAttendeesForSegment(segmentId: number): AttendeeWithCompanion[] {
-	const kitRows = kit
+	const rows = kit
 		.selectFrom(segmentAttendees)
 		.where(kitEq(segmentAttendees.segment_id, toBigInt(segmentId)))
 		.orderBy(kitAsc(segmentAttendees.companion_id))
 		.executeSync()
 		.map(toAttendeeRow);
-	const legacyRows = attendeesFromLegacy([segmentId]);
-	const merged = mergeUniqueById(kitRows, legacyRows);
-	return hydrateAttendeesWithCompanions(merged);
+	return hydrateAttendeesWithCompanions(rows);
 }
 
 export function listAttendeesForSegments(segmentIds: number[]): Map<number, AttendeeWithCompanion[]> {
@@ -341,23 +174,21 @@ export function listAttendeesForSegments(segmentIds: number[]): Map<number, Atte
 	for (const id of segmentIds) map.set(id, []);
 	if (segmentIds.length === 0) return map;
 
-	const kitRows = kit
+	const rows = kit
 		.selectFrom(segmentAttendees)
 		.where(kitInList(segmentAttendees.segment_id, segmentIds.map(toBigInt)))
 		.orderBy(kitAsc(segmentAttendees.companion_id))
 		.executeSync()
 		.map(toAttendeeRow);
-	const legacyRows = attendeesFromLegacy(segmentIds);
-	const merged = mergeUniqueById(kitRows, legacyRows);
 
-	const hydrated = hydrateAttendeesWithCompanions(merged);
+	const hydrated = hydrateAttendeesWithCompanions(rows);
 	for (const a of hydrated) {
 		map.get(a.segmentId)?.push(a);
 	}
 	return map;
 }
 
-function hydrateAttendeesWithCompanions(rows: SegmentAttendeeRow[]): AttendeeWithCompanion[] {
+function hydrateAttendeesWithCompanions(rows: ReturnType<typeof toAttendeeRow>[]): AttendeeWithCompanion[] {
 	if (rows.length === 0) return [];
 	const companionIds = Array.from(new Set(rows.map((r) => r.companionId)));
 	const companionMap = new Map<number, { name: string; category: string }>();
@@ -374,7 +205,7 @@ function hydrateAttendeesWithCompanions(rows: SegmentAttendeeRow[]): AttendeeWit
 			companionId: r.companionId,
 			name: c?.name ?? '',
 			category: (c?.category as 'adult' | 'child' | 'other') ?? 'other',
-			status: r.status as SegmentAttendeeStatus
+			status: r.status
 		};
 	});
 }
@@ -382,27 +213,15 @@ function hydrateAttendeesWithCompanions(rows: SegmentAttendeeRow[]): AttendeeWit
 function getCompanionById(id: number): { name: string; category: string } | null {
 	const kitRow = kit.selectFrom(tripCompanions).where(kitEq(tripCompanions.id, toBigInt(id))).executeSync()[0];
 	if (kitRow) return { name: kitRow.name, category: kitRow.category };
-	const legacyRow = db
-		.select()
-		.from(drizzleTripCompanions)
-		.where(eq(drizzleTripCompanions.id, id))
-		.get();
-	if (legacyRow) return { name: legacyRow.name, category: legacyRow.category };
 	return null;
 }
 
-function listCompanionsByIds(ids: number[]) {
-	if (ids.length === 0) return [];
-	return kit.selectFrom(tripCompanions).where(kitInList(tripCompanions.id, ids.map(toBigInt))).executeSync();
-}
-
-export function addAttendee(input: CreateAttendeeInput): SegmentAttendeeRow {
+export function addAttendee(input: CreateAttendeeInput) {
 	const created = kit.insertInto(segmentAttendees).values(input as Insert<typeof segmentAttendees>).executeSync();
-	syncAttendeeToDrizzle(created);
 	return toAttendeeRow(created);
 }
 
-export function upsertAttendee(segmentId: number, companionId: number, status: string): SegmentAttendeeRow {
+export function upsertAttendee(segmentId: number, companionId: number, status: string) {
 	const existing = getAttendeeBySegmentAndCompanion(segmentId, companionId);
 	if (existing) {
 		return updateAttendee(existing.id, { status })!;
@@ -414,7 +233,7 @@ export function upsertAttendee(segmentId: number, companionId: number, status: s
 	});
 }
 
-export function updateAttendee(id: number, patch: Update<typeof segmentAttendees>): SegmentAttendeeRow | null {
+export function updateAttendee(id: number, patch: Update<typeof segmentAttendees>) {
 	const existing = kit.selectFrom(segmentAttendees).where(kitEq(segmentAttendees.id, toBigInt(id))).executeSync()[0];
 	if (!existing) return null;
 	const merged: Update<typeof segmentAttendees> = { ...existing, ...patch, id: existing.id };
@@ -425,15 +244,12 @@ export function updateAttendee(id: number, patch: Update<typeof segmentAttendees
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncAttendeeToDrizzle(row);
 	return toAttendeeRow(row);
 }
 
 export function removeAttendee(id: number): boolean {
-	const existedInLegacy = db.select().from(drizzleSegmentAttendees).where(eq(drizzleSegmentAttendees.id, id)).get() !== undefined;
 	const deleted = kit.deleteFrom(segmentAttendees).where(kitEq(segmentAttendees.id, toBigInt(id))).executeSync();
-	deleteAttendeeFromDrizzle(id);
-	return deleted > 0n || existedInLegacy;
+	return deleted > 0n;
 }
 
 export function removeAttendeeBySegmentAndCompanion(segmentId: number, companionId: number): boolean {
@@ -445,7 +261,7 @@ export function removeAttendeeBySegmentAndCompanion(segmentId: number, companion
 export function getAttendeeBySegmentAndCompanion(
 	segmentId: number,
 	companionId: number
-): SegmentAttendeeRow | null {
+) {
 	const rows = kit
 		.selectFrom(segmentAttendees)
 		.where(
@@ -455,17 +271,5 @@ export function getAttendeeBySegmentAndCompanion(
 			)
 		)
 		.executeSync();
-	if (rows[0]) return toAttendeeRow(rows[0]);
-	return (
-		db
-			.select()
-			.from(drizzleSegmentAttendees)
-			.where(
-				and(
-					eq(drizzleSegmentAttendees.segmentId, segmentId),
-					eq(drizzleSegmentAttendees.companionId, companionId)
-				)
-			)
-			.get() ?? null
-	);
+	return rows[0] ? toAttendeeRow(rows[0]) : null;
 }

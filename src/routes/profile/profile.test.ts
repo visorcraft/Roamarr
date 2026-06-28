@@ -127,7 +127,7 @@ test('updateProgram edits a loyalty program and is user-scoped', () => {
 
 test('update profile changes display name, timezone and reminder leads', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p1@x.c', passwordHash: 'x', displayName: 'P1', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p1@x.c', passwordHash: 'x', displayName: 'P1', timezone: 'UTC' });
 	_updateProfile(u.id, {
 		displayName: 'Ada',
 		timezone: 'America/New_York',
@@ -149,7 +149,7 @@ test('update profile changes display name, timezone and reminder leads', () => {
 
 test('update profile rejects invalid timezone', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p2@x.c', passwordHash: 'x', displayName: 'P2', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p2@x.c', passwordHash: 'x', displayName: 'P2', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
 			displayName: 'P2',
@@ -166,7 +166,7 @@ test('update profile rejects invalid timezone', () => {
 
 test('update profile rejects negative or fractional reminder leads', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p-lead@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p-lead@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
 			displayName: 'P',
@@ -195,7 +195,7 @@ test('update profile rejects negative or fractional reminder leads', () => {
 
 test('update profile rejects invalid theme', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p-theme@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p-theme@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
 			displayName: 'P',
@@ -212,7 +212,7 @@ test('update profile rejects invalid theme', () => {
 
 test('update profile rejects invalid default currency', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p-currency@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p-currency@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	expect(() =>
 		_updateProfile(u.id, {
 			displayName: 'P',
@@ -230,7 +230,7 @@ test('update profile rejects invalid default currency', () => {
 test('update password requires old password and hashes new password', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, {
+	const u = makeUser(kit, {
 			email: 'p3@x.c',
 			passwordHash: initialHash,
 			displayName: 'P3',
@@ -255,7 +255,7 @@ test('update password requires old password and hashes new password', async () =
 test('update password rejects wrong old password', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, {
+	const u = makeUser(kit, {
 			email: 'p4@x.c',
 			passwordHash: initialHash,
 			displayName: 'P4',
@@ -273,7 +273,7 @@ test('update password rejects wrong old password', async () => {
 test('update password rejects mismatched confirmation', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, {
+	const u = makeUser(kit, {
 			email: 'p5@x.c',
 			passwordHash: initialHash,
 			displayName: 'P5',
@@ -291,7 +291,7 @@ test('update password rejects mismatched confirmation', async () => {
 test('update password enforces password policy', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, {
+	const u = makeUser(kit, {
 			email: 'p6@x.c',
 			passwordHash: initialHash,
 			displayName: 'P6',
@@ -336,7 +336,7 @@ test('update password invalidates all other sessions for the user', async () => 
 
 test('updateProfile action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'p-action@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p-action@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -360,7 +360,7 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 test('updatePassword action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, { email: 'p-pw-action@x.c', passwordHash: initialHash, displayName: 'P', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'p-pw-action@x.c', passwordHash: initialHash, displayName: 'P', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: () => 'current-token' };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -380,7 +380,7 @@ test('updatePassword action sets a flash cookie and redirects', async () => {
 
 test('regenerate user calendar token mints a new token and audits', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'cal@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+	const u = makeUser(kit, { email: 'cal@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
 
 	const token = _regenerateUserCalendarToken(u.id);
 	expect(token).not.toBe('old-token');
@@ -398,7 +398,7 @@ test('regenerate user calendar token mints a new token and audits', () => {
 
 test('regenerate user calendar token can set an expiry', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'cal-exp@x.c', passwordHash: 'x', displayName: 'Cal' });
+	const u = makeUser(kit, { email: 'cal-exp@x.c', passwordHash: 'x', displayName: 'Cal' });
 
 	const expiresAt = '2030-01-01T00:00:00Z';
 	const token = _regenerateUserCalendarToken(u.id, expiresAt);
@@ -410,7 +410,7 @@ test('regenerate user calendar token can set an expiry', () => {
 
 test('regenerateCalendarToken action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'cal-action@x.c', passwordHash: 'x', displayName: 'Cal' });
+	const u = makeUser(kit, { email: 'cal-action@x.c', passwordHash: 'x', displayName: 'Cal' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -430,7 +430,7 @@ test('regenerateCalendarToken action sets a flash cookie and redirects', async (
 test('change email requires current password and updates the email', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, { email: 'old@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'old@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
 	await _changeEmail(u.id, {
 		currentPassword: 'oldsecret',
@@ -450,7 +450,7 @@ test('change email requires current password and updates the email', async () =>
 test('change email rejects a duplicate email', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const a = makeUser(db, kit, { email: 'dup-a@x.c', passwordHash: initialHash, displayName: 'A', timezone: 'UTC' });
+	const a = makeUser(kit, { email: 'dup-a@x.c', passwordHash: initialHash, displayName: 'A', timezone: 'UTC' });
 	db.insert(users)
 		.values({ email: 'dup-b@x.c', passwordHash: initialHash, displayName: 'B', timezone: 'UTC' })
 		.returning()
@@ -464,7 +464,7 @@ test('change email rejects a duplicate email', async () => {
 test('change email rejects wrong current password', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, { email: 'wrong@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'wrong@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
 	await expect(
 		_changeEmail(u.id, { currentPassword: 'nope', newEmail: 'new@x.c', confirmEmail: 'new@x.c' })
@@ -474,7 +474,7 @@ test('change email rejects wrong current password', async () => {
 test('change email rejects mismatched confirmation', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, { email: 'mismatch@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'mismatch@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 
 	await expect(
 		_changeEmail(u.id, { currentPassword: 'oldsecret', newEmail: 'new@x.c', confirmEmail: 'other@x.c' })
@@ -484,7 +484,7 @@ test('change email rejects mismatched confirmation', async () => {
 test('changeEmail action sets a flash cookie and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = makeUser(db, kit, { email: 'action@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
+	const u = makeUser(kit, { email: 'action@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',

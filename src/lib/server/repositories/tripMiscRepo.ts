@@ -10,8 +10,7 @@ import {
 	type Insert,
 	type Update
 } from '@mongreldb/kit';
-import { eq as drizzleEq, and as drizzleAnd } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	tripChecklists,
 	tripChecklistItems,
@@ -25,19 +24,6 @@ import {
 	tripCompanions,
 	users
 } from '$lib/server/db/mongrelSchema';
-import {
-	tripChecklists as drizzleTripChecklists,
-	tripChecklistItems as drizzleTripChecklistItems,
-	tripJournalEntries as drizzleTripJournalEntries,
-	tripDocumentLinks as drizzleTripDocumentLinks,
-	tripHomeTasks as drizzleTripHomeTasks,
-	tripMedications as drizzleTripMedications,
-	tripEntryRequirements as drizzleTripEntryRequirements,
-	tripImportantItems as drizzleTripImportantItems,
-	trips as drizzleTrips,
-	tripCompanions as drizzleTripCompanions,
-	users as drizzleUsers
-} from '$lib/server/db/schema';
 import { nowIso } from '$lib/server/tz';
 
 // ============================================================================
@@ -73,113 +59,8 @@ function nullIntPredicate(column: typeof tripChecklistItems.assigned_to_companio
 // the legacy Drizzle tables. Copy them into the kit tables on demand so that
 // kit foreign-key constraints are satisfied.
 
-function ensureUserInKit(userId: number) {
-	const existing = kit.selectFrom(users).where(eq(users.id, kitId(userId))).executeSync();
-	if (existing.length > 0) return;
 
-	const legacy = db.select().from(drizzleUsers).where(drizzleEq(drizzleUsers.id, userId)).get();
-	if (!legacy) throw new Error(`User ${userId} not found`);
 
-	kit.insertInto(users)
-		.values({
-			id: kitId(legacy.id),
-			email: legacy.email,
-			password_hash: legacy.passwordHash,
-			display_name: legacy.displayName,
-			role: legacy.role ?? 'user',
-			disabled: legacy.disabled ?? false,
-			must_reset_password: legacy.mustResetPassword ?? false,
-			timezone: legacy.timezone ?? 'UTC',
-			flight_checkin_lead_hours: BigInt(legacy.flightCheckinLeadHours ?? 24),
-			document_expiry_lead_days: BigInt(legacy.documentExpiryLeadDays ?? 90),
-			email_notifications: legacy.emailNotifications ?? true,
-			webhook_notifications: legacy.webhookNotifications ?? true,
-			theme_id: legacy.themeId ?? 'midnight-travels',
-			default_currency: legacy.defaultCurrency ?? 'USD',
-			calendar_token: legacy.calendarToken ?? null,
-			calendar_token_expires_at: legacy.calendarTokenExpiresAt ?? null
-		} as Insert<typeof users>)
-		.executeSync();
-}
-
-function ensureTripInKit(tripId: number) {
-	const existing = kit.selectFrom(trips).where(eq(trips.id, kitId(tripId))).executeSync();
-	if (existing.length > 0) return;
-
-	const legacy = db.select().from(drizzleTrips).where(drizzleEq(drizzleTrips.id, tripId)).get();
-	if (!legacy) throw new Error(`Trip ${tripId} not found`);
-
-	ensureUserInKit(legacy.ownerId);
-
-	kit.insertInto(trips)
-		.values({
-			id: kitId(legacy.id),
-			owner_id: kitId(legacy.ownerId),
-			name: legacy.name,
-			destination: legacy.destination ?? null,
-			destination_country_code: legacy.destinationCountryCode ?? null,
-			destination_city_name: legacy.destinationCityName ?? null,
-			destination_city_lat: legacy.destinationCityLat ?? null,
-			destination_city_lng: legacy.destinationCityLng ?? null,
-			start_date: legacy.startDate ?? null,
-			end_date: legacy.endDate ?? null,
-			notes: legacy.notes ?? null,
-			tags: legacy.tags ?? '[]',
-			archived: legacy.archived ?? false,
-			favorite: legacy.favorite ?? false,
-			default_visibility: legacy.defaultVisibility ?? 'private',
-			public_token: legacy.publicToken ?? null,
-			public_token_expires_at: legacy.publicTokenExpiresAt ?? null,
-			public_show_details: legacy.publicShowDetails ?? false,
-			calendar_token: legacy.calendarToken ?? null,
-			calendar_token_expires_at: legacy.calendarTokenExpiresAt ?? null,
-			base_currency: legacy.baseCurrency ?? 'USD',
-			status: legacy.status ?? 'booked',
-			created_at: legacy.createdAt,
-			updated_at: legacy.updatedAt
-		} as Insert<typeof trips>)
-		.executeSync();
-}
-
-function ensureCompanionInKit(companionId: number) {
-	const existing = kit
-		.selectFrom(tripCompanions)
-		.where(eq(tripCompanions.id, kitId(companionId)))
-		.executeSync();
-	if (existing.length > 0) return;
-
-	const legacy = db
-		.select()
-		.from(drizzleTripCompanions)
-		.where(drizzleEq(drizzleTripCompanions.id, companionId))
-		.get();
-	if (!legacy) throw new Error(`Companion ${companionId} not found`);
-
-	ensureTripInKit(legacy.tripId);
-
-	kit.insertInto(tripCompanions)
-		.values({
-			id: kitId(legacy.id),
-			trip_id: kitId(legacy.tripId),
-			name: legacy.name,
-			category: legacy.category ?? 'adult',
-			dietary: legacy.dietary ?? null,
-			allergies: legacy.allergies ?? null,
-			medical_notes: legacy.medicalNotes ?? null,
-			needs_car_seat: legacy.needsCarSeat ?? false,
-			needs_stroller: legacy.needsStroller ?? false,
-			needs_crib: legacy.needsCrib ?? false,
-			needs_kids_meal: legacy.needsKidsMeal ?? false,
-			child_ticket_discount: legacy.childTicketDiscount ?? null,
-			seat_preference: legacy.seatPreference ?? null,
-			bed_preference: legacy.bedPreference ?? null,
-			accessibility_needs: legacy.accessibilityNeeds ?? null,
-			room_notes: legacy.roomNotes ?? null,
-			notes: legacy.notes ?? null,
-			created_at: legacy.createdAt
-		} as Insert<typeof tripCompanions>)
-		.executeSync();
-}
 
 // ============================================================================
 // Checklists
@@ -232,61 +113,9 @@ function toChecklistItem(row: Row<typeof tripChecklistItems>): ChecklistItem {
 	};
 }
 
-function mirrorChecklistToLegacy(row: Row<typeof tripChecklists>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripChecklists)
-		.where(drizzleEq(drizzleTripChecklists.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		createdAt: row.created_at
-	};
-	if (existing) {
-		db.update(drizzleTripChecklists)
-			.set(values)
-			.where(drizzleEq(drizzleTripChecklists.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripChecklists).values({ id, ...values }).run();
-	}
-}
 
-function deleteChecklistFromLegacy(id: number) {
-	db.delete(drizzleTripChecklists).where(drizzleEq(drizzleTripChecklists.id, id)).run();
-}
 
-function mirrorChecklistItemToLegacy(row: Row<typeof tripChecklistItems>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripChecklistItems)
-		.where(drizzleEq(drizzleTripChecklistItems.id, id))
-		.get();
-	const values = {
-		checklistId: num(row.checklist_id),
-		text: row.text,
-		packed: row.packed,
-		assignedToCompanionId:
-			row.assigned_to_companion_id == null || row.assigned_to_companion_id === 0n
-				? null
-					: num(row.assigned_to_companion_id),
-		createdAt: row.created_at
-	};
-	if (existing) {
-		db.update(drizzleTripChecklistItems)
-			.set(values)
-			.where(drizzleEq(drizzleTripChecklistItems.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripChecklistItems).values({ id, ...values }).run();
-	}
-}
 
-function deleteChecklistItemFromLegacy(id: number) {
-	db.delete(drizzleTripChecklistItems).where(drizzleEq(drizzleTripChecklistItems.id, id)).run();
-}
 
 export function listChecklistsForTrip(tripId: number): Checklist[] {
 	const rows = kit
@@ -313,12 +142,12 @@ export function getChecklistByTripId(tripId: number): Checklist | null {
 }
 
 export function createChecklist(tripId: number): Checklist {
-	ensureTripInKit(tripId);
+	(tripId);
 	const row = kit
 		.insertInto(tripChecklists)
 		.values({ trip_id: kitId(tripId) } as Insert<typeof tripChecklists>)
 		.executeSync();
-	mirrorChecklistToLegacy(row);
+	(row);
 	return toChecklist(row);
 }
 
@@ -338,7 +167,7 @@ export function updateChecklist(id: number, patch: UpdateChecklistInput): Checkl
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorChecklistToLegacy(row);
+	(row);
 	return toChecklist(row);
 }
 
@@ -347,7 +176,7 @@ export function deleteChecklist(id: number): number {
 		.deleteFrom(tripChecklists)
 		.where(eq(tripChecklists.id, kitId(id)))
 		.executeSync();
-	deleteChecklistFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -400,7 +229,7 @@ export type UpdateChecklistItemInput = Partial<
 
 export function createChecklistItem(input: CreateChecklistItemInput): ChecklistItem {
 	if (input.assignedToCompanionId != null) {
-		ensureCompanionInKit(input.assignedToCompanionId);
+		(input.assignedToCompanionId);
 	}
 	const row = kit
 		.insertInto(tripChecklistItems)
@@ -411,7 +240,7 @@ export function createChecklistItem(input: CreateChecklistItemInput): ChecklistI
 			assigned_to_companion_id: nullableInt(input.assignedToCompanionId)
 		} as Insert<typeof tripChecklistItems>)
 		.executeSync();
-	mirrorChecklistItemToLegacy(row);
+	(row);
 	return toChecklistItem(row);
 }
 
@@ -423,7 +252,7 @@ export function updateChecklistItem(
 	if (patch.text !== undefined) set.text = patch.text;
 	if (patch.packed !== undefined) set.packed = patch.packed;
 	if (patch.assignedToCompanionId !== undefined) {
-		if (patch.assignedToCompanionId != null) ensureCompanionInKit(patch.assignedToCompanionId);
+		if (patch.assignedToCompanionId != null) (patch.assignedToCompanionId);
 		set.assigned_to_companion_id = nullableInt(patch.assignedToCompanionId);
 	}
 	const updated = kit
@@ -433,7 +262,7 @@ export function updateChecklistItem(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorChecklistItemToLegacy(row);
+	(row);
 	return toChecklistItem(row);
 }
 
@@ -442,7 +271,7 @@ export function deleteChecklistItem(id: number): number {
 		.deleteFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.id, kitId(id)))
 		.executeSync();
-	deleteChecklistItemFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -481,34 +310,7 @@ function toJournalEntry(row: Row<typeof tripJournalEntries>): JournalEntry {
 	};
 }
 
-function mirrorJournalEntryToLegacy(row: Row<typeof tripJournalEntries>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripJournalEntries)
-		.where(drizzleEq(drizzleTripJournalEntries.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		entryDate: row.entry_date,
-		title: row.title,
-		body: row.body,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
-	};
-	if (existing) {
-		db.update(drizzleTripJournalEntries)
-			.set(values)
-			.where(drizzleEq(drizzleTripJournalEntries.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripJournalEntries).values({ id, ...values }).run();
-	}
-}
 
-function deleteJournalEntryFromLegacy(id: number) {
-	db.delete(drizzleTripJournalEntries).where(drizzleEq(drizzleTripJournalEntries.id, id)).run();
-}
 
 export function listJournalEntriesForTrip(tripId: number): JournalEntry[] {
 	const rows = kit
@@ -532,7 +334,7 @@ export function getJournalEntryById(id: number): JournalEntry | null {
 }
 
 export function createJournalEntry(input: CreateJournalEntryInput): JournalEntry {
-	ensureTripInKit(input.tripId);
+	(input.tripId);
 	const row = kit
 		.insertInto(tripJournalEntries)
 		.values({
@@ -542,7 +344,7 @@ export function createJournalEntry(input: CreateJournalEntryInput): JournalEntry
 			body: input.body
 		} as Insert<typeof tripJournalEntries>)
 		.executeSync();
-	mirrorJournalEntryToLegacy(row);
+	(row);
 	return toJournalEntry(row);
 }
 
@@ -562,7 +364,7 @@ export function updateJournalEntry(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorJournalEntryToLegacy(row);
+	(row);
 	return toJournalEntry(row);
 }
 
@@ -571,7 +373,7 @@ export function deleteJournalEntry(id: number): number {
 		.deleteFrom(tripJournalEntries)
 		.where(eq(tripJournalEntries.id, kitId(id)))
 		.executeSync();
-	deleteJournalEntryFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -608,33 +410,7 @@ function toDocumentLink(row: Row<typeof tripDocumentLinks>): DocumentLink {
 	};
 }
 
-function mirrorDocumentLinkToLegacy(row: Row<typeof tripDocumentLinks>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripDocumentLinks)
-		.where(drizzleEq(drizzleTripDocumentLinks.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		label: row.label,
-		url: row.url,
-		notes: row.notes,
-		createdAt: row.created_at
-	};
-	if (existing) {
-		db.update(drizzleTripDocumentLinks)
-			.set(values)
-			.where(drizzleEq(drizzleTripDocumentLinks.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripDocumentLinks).values({ id, ...values }).run();
-	}
-}
 
-function deleteDocumentLinkFromLegacy(id: number) {
-	db.delete(drizzleTripDocumentLinks).where(drizzleEq(drizzleTripDocumentLinks.id, id)).run();
-}
 
 export function listDocumentLinksForTrip(tripId: number): DocumentLink[] {
 	const rows = kit
@@ -654,7 +430,7 @@ export function getDocumentLinkById(id: number): DocumentLink | null {
 }
 
 export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink {
-	ensureTripInKit(input.tripId);
+	(input.tripId);
 	const row = kit
 		.insertInto(tripDocumentLinks)
 		.values({
@@ -664,7 +440,7 @@ export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink
 			notes: input.notes ?? null
 		} as Insert<typeof tripDocumentLinks>)
 		.executeSync();
-	mirrorDocumentLinkToLegacy(row);
+	(row);
 	return toDocumentLink(row);
 }
 
@@ -683,7 +459,7 @@ export function updateDocumentLink(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorDocumentLinkToLegacy(row);
+	(row);
 	return toDocumentLink(row);
 }
 
@@ -692,7 +468,7 @@ export function deleteDocumentLink(id: number): number {
 		.deleteFrom(tripDocumentLinks)
 		.where(eq(tripDocumentLinks.id, kitId(id)))
 		.executeSync();
-	deleteDocumentLinkFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -732,34 +508,7 @@ function toHomeTask(row: Row<typeof tripHomeTasks>): HomeTask {
 	};
 }
 
-function mirrorHomeTaskToLegacy(row: Row<typeof tripHomeTasks>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripHomeTasks)
-		.where(drizzleEq(drizzleTripHomeTasks.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		text: row.text,
-		dueDate: nullableDate(row.due_date),
-		done: row.done,
-		sortOrder: Number(row.sort_order),
-		createdAt: row.created_at
-	};
-	if (existing) {
-		db.update(drizzleTripHomeTasks)
-			.set(values)
-			.where(drizzleEq(drizzleTripHomeTasks.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripHomeTasks).values({ id, ...values }).run();
-	}
-}
 
-function deleteHomeTaskFromLegacy(id: number) {
-	db.delete(drizzleTripHomeTasks).where(drizzleEq(drizzleTripHomeTasks.id, id)).run();
-}
 
 export function listHomeTasksForTrip(tripId: number): HomeTask[] {
 	const rows = kit
@@ -779,7 +528,7 @@ export function getHomeTaskById(id: number): HomeTask | null {
 }
 
 export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
-	ensureTripInKit(input.tripId);
+	(input.tripId);
 	const row = kit
 		.insertInto(tripHomeTasks)
 		.values({
@@ -790,7 +539,7 @@ export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
 			sort_order: 0n
 		} as Insert<typeof tripHomeTasks>)
 		.executeSync();
-	mirrorHomeTaskToLegacy(row);
+	(row);
 	return toHomeTask(row);
 }
 
@@ -807,7 +556,7 @@ export function updateHomeTask(id: number, patch: UpdateHomeTaskInput): HomeTask
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorHomeTaskToLegacy(row);
+	(row);
 	return toHomeTask(row);
 }
 
@@ -816,7 +565,7 @@ export function deleteHomeTask(id: number): number {
 		.deleteFrom(tripHomeTasks)
 		.where(eq(tripHomeTasks.id, kitId(id)))
 		.executeSync();
-	deleteHomeTaskFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -869,38 +618,7 @@ function toMedication(row: Row<typeof tripMedications>, companionName: string | 
 	};
 }
 
-function mirrorMedicationToLegacy(row: Row<typeof tripMedications>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripMedications)
-		.where(drizzleEq(drizzleTripMedications.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		companionId: row.companion_id == null || row.companion_id === 0n ? null : num(row.companion_id),
-		name: row.name,
-		dosage: row.dosage,
-		schedule: row.schedule,
-		startsAt: nullableTimestamp(row.starts_at),
-		endsAt: nullableTimestamp(row.ends_at),
-		notes: row.notes,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
-	};
-	if (existing) {
-		db.update(drizzleTripMedications)
-			.set(values)
-			.where(drizzleEq(drizzleTripMedications.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripMedications).values({ id, ...values }).run();
-	}
-}
 
-function deleteMedicationFromLegacy(id: number) {
-	db.delete(drizzleTripMedications).where(drizzleEq(drizzleTripMedications.id, id)).run();
-}
 
 export function listMedicationsForTrip(tripId: number): Medication[] {
 	const rows = kit
@@ -952,8 +670,8 @@ export function getMedicationById(id: number): Medication | null {
 }
 
 export function createMedication(input: CreateMedicationInput): Medication {
-	ensureTripInKit(input.tripId);
-	if (input.companionId != null) ensureCompanionInKit(input.companionId);
+	(input.tripId);
+	if (input.companionId != null) (input.companionId);
 	const row = kit
 		.insertInto(tripMedications)
 		.values({
@@ -967,14 +685,14 @@ export function createMedication(input: CreateMedicationInput): Medication {
 			notes: input.notes ?? null
 		} as Insert<typeof tripMedications>)
 		.executeSync();
-	mirrorMedicationToLegacy(row);
+	(row);
 	return toMedication(row);
 }
 
 export function updateMedication(id: number, patch: UpdateMedicationInput): Medication | null {
 	const set: Update<typeof tripMedications> = {};
 	if (patch.companionId !== undefined) {
-		if (patch.companionId != null) ensureCompanionInKit(patch.companionId);
+		if (patch.companionId != null) (patch.companionId);
 		set.companion_id = nullableInt(patch.companionId);
 	}
 	if (patch.name !== undefined) set.name = patch.name;
@@ -991,7 +709,7 @@ export function updateMedication(id: number, patch: UpdateMedicationInput): Medi
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorMedicationToLegacy(row);
+	(row);
 	return toMedication(row);
 }
 
@@ -1000,7 +718,7 @@ export function deleteMedication(id: number): number {
 		.deleteFrom(tripMedications)
 		.where(eq(tripMedications.id, kitId(id)))
 		.executeSync();
-	deleteMedicationFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -1050,36 +768,7 @@ function toEntryRequirement(row: Row<typeof tripEntryRequirements>): EntryRequir
 	};
 }
 
-function mirrorEntryRequirementToLegacy(row: Row<typeof tripEntryRequirements>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripEntryRequirements)
-		.where(drizzleEq(drizzleTripEntryRequirements.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		country: row.country,
-		requirementType: row.requirement_type,
-		status: row.status,
-		dueDate: nullableDate(row.due_date),
-		notes: row.notes,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
-	};
-	if (existing) {
-		db.update(drizzleTripEntryRequirements)
-			.set(values)
-			.where(drizzleEq(drizzleTripEntryRequirements.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripEntryRequirements).values({ id, ...values }).run();
-	}
-}
 
-function deleteEntryRequirementFromLegacy(id: number) {
-	db.delete(drizzleTripEntryRequirements).where(drizzleEq(drizzleTripEntryRequirements.id, id)).run();
-}
 
 export function listEntryRequirementsForTrip(tripId: number): EntryRequirement[] {
 	const rows = kit
@@ -1099,7 +788,7 @@ export function getEntryRequirementById(id: number): EntryRequirement | null {
 }
 
 export function createEntryRequirement(input: CreateEntryRequirementInput): EntryRequirement {
-	ensureTripInKit(input.tripId);
+	(input.tripId);
 	const row = kit
 		.insertInto(tripEntryRequirements)
 		.values({
@@ -1111,7 +800,7 @@ export function createEntryRequirement(input: CreateEntryRequirementInput): Entr
 			notes: input.notes ?? null
 		} as Insert<typeof tripEntryRequirements>)
 		.executeSync();
-	mirrorEntryRequirementToLegacy(row);
+	(row);
 	return toEntryRequirement(row);
 }
 
@@ -1131,7 +820,7 @@ export function updateEntryRequirement(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorEntryRequirementToLegacy(row);
+	(row);
 	return toEntryRequirement(row);
 }
 
@@ -1140,7 +829,7 @@ export function deleteEntryRequirement(id: number): number {
 		.deleteFrom(tripEntryRequirements)
 		.where(eq(tripEntryRequirements.id, kitId(id)))
 		.executeSync();
-	deleteEntryRequirementFromLegacy(id);
+	(id);
 	return Number(deleted);
 }
 
@@ -1191,36 +880,7 @@ function toImportantItem(
 	};
 }
 
-function mirrorImportantItemToLegacy(row: Row<typeof tripImportantItems>) {
-	const id = num(row.id);
-	const existing = db
-		.select()
-		.from(drizzleTripImportantItems)
-		.where(drizzleEq(drizzleTripImportantItems.id, id))
-		.get();
-	const values = {
-		tripId: num(row.trip_id),
-		companionId: row.companion_id == null || row.companion_id === 0n ? null : num(row.companion_id),
-		name: row.name,
-		serialNumber: row.serial_number,
-		trackerId: row.tracker_id,
-		notes: row.notes,
-		createdAt: row.created_at,
-		updatedAt: row.updated_at
-	};
-	if (existing) {
-		db.update(drizzleTripImportantItems)
-			.set(values)
-			.where(drizzleEq(drizzleTripImportantItems.id, id))
-			.run();
-	} else {
-		db.insert(drizzleTripImportantItems).values({ id, ...values }).run();
-	}
-}
 
-function deleteImportantItemFromLegacy(id: number) {
-	db.delete(drizzleTripImportantItems).where(drizzleEq(drizzleTripImportantItems.id, id)).run();
-}
 
 export function listImportantItemsForTrip(tripId: number): ImportantItem[] {
 	const rows = kit
@@ -1272,8 +932,8 @@ export function getImportantItemById(id: number): ImportantItem | null {
 }
 
 export function createImportantItem(input: CreateImportantItemInput): ImportantItem {
-	ensureTripInKit(input.tripId);
-	if (input.companionId != null) ensureCompanionInKit(input.companionId);
+	(input.tripId);
+	if (input.companionId != null) (input.companionId);
 	const row = kit
 		.insertInto(tripImportantItems)
 		.values({
@@ -1285,7 +945,7 @@ export function createImportantItem(input: CreateImportantItemInput): ImportantI
 			notes: input.notes ?? null
 		} as Insert<typeof tripImportantItems>)
 		.executeSync();
-	mirrorImportantItemToLegacy(row);
+	(row);
 	return toImportantItem(row);
 }
 
@@ -1295,7 +955,7 @@ export function updateImportantItem(
 ): ImportantItem | null {
 	const set: Update<typeof tripImportantItems> = {};
 	if (patch.companionId !== undefined) {
-		if (patch.companionId != null) ensureCompanionInKit(patch.companionId);
+		if (patch.companionId != null) (patch.companionId);
 		set.companion_id = nullableInt(patch.companionId);
 	}
 	if (patch.name !== undefined) set.name = patch.name;
@@ -1310,7 +970,7 @@ export function updateImportantItem(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	mirrorImportantItemToLegacy(row);
+	(row);
 	return toImportantItem(row);
 }
 
@@ -1319,6 +979,5 @@ export function deleteImportantItem(id: number): number {
 		.deleteFrom(tripImportantItems)
 		.where(eq(tripImportantItems.id, kitId(id)))
 		.executeSync();
-	deleteImportantItemFromLegacy(id);
-	return Number(deleted);
+		return Number(deleted);
 }

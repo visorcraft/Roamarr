@@ -1,13 +1,16 @@
-import { count } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import { groups, trips, users } from '$lib/server/db/schema';
+import { kit } from '$lib/server/db';
+import { users, trips, groups } from '$lib/server/db/mongrelSchema';
 import { countSegments } from '$lib/server/repositories/segmentsRepo';
 import { countNotifications } from '$lib/server/repositories/remindersRepo';
 import { getSettings } from '$lib/server/settings';
 import { appInfo } from '$lib/appInfo';
 import { getDatabasePath } from '$lib/server/paths';
 import type { PageServerLoad } from './$types';
+
+function countTable(table: typeof users | typeof trips | typeof groups): number {
+	return Number(kit.selectFrom(table).selectCount().executeSync());
+}
 
 export const load: PageServerLoad = ({ locals }) => {
 	const user = requireUser(locals);
@@ -22,10 +25,10 @@ export const load: PageServerLoad = ({ locals }) => {
 		databasePath: isAdmin ? getDatabasePath() : null,
 		stats: isAdmin
 			? {
-					users: db.select({ count: count() }).from(users).get()?.count ?? 0,
-					trips: db.select({ count: count() }).from(trips).get()?.count ?? 0,
+					users: countTable(users),
+					trips: countTable(trips),
 					segments: Number(countSegments()),
-					groups: db.select({ count: count() }).from(groups).get()?.count ?? 0,
+					groups: countTable(groups),
 					notifications: countNotifications()
 				}
 			: null

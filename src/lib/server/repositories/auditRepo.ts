@@ -6,15 +6,13 @@ import {
 	desc as kitDesc,
 	inList as kitInList
 } from '@mongreldb/kit';
-import { eq as drizzleEq, inArray as drizzleInArray } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	auditLogs as kitAuditLogs,
 	users as kitUsers,
 	trips as kitTrips,
 	groups as kitGroups
 } from '$lib/server/db/mongrelSchema';
-import { auditLogs as drizzleAuditLogs, users as drizzleUsers } from '$lib/server/db/schema';
 import { countNotifications } from './remindersRepo';
 import { countSegments } from './segmentsRepo';
 import type { Row, Insert, Update } from '@mongreldb/kit';
@@ -70,34 +68,7 @@ function idFromBigInt(id: bigint): number {
 	return Number(id);
 }
 
-function kitAuditToDrizzleRow(row: KitAuditLog): typeof drizzleAuditLogs.$inferInsert {
-	return {
-		id: idFromBigInt(row.id),
-		userId: idFromBigInt(row.user_id),
-		action: row.action,
-		entityType: row.entity_type,
-		entityId: idFromBigInt(row.entity_id),
-		metaJson: row.meta_json as string,
-		createdAt: row.created_at
-	};
-}
 
-function syncAuditLogToLegacy(row: KitAuditLog) {
-	const values = kitAuditToDrizzleRow(row);
-	const existing = db
-		.select()
-		.from(drizzleAuditLogs)
-		.where(drizzleEq(drizzleAuditLogs.id, values.id!))
-		.get();
-	if (existing) {
-		db.update(drizzleAuditLogs)
-			.set(values)
-			.where(drizzleEq(drizzleAuditLogs.id, values.id!))
-			.run();
-	} else {
-		db.insert(drizzleAuditLogs).values(values).run();
-	}
-}
 
 export function logAudit(
 	userId: number,
@@ -116,8 +87,7 @@ export function logAudit(
 			meta_json: JSON.stringify(meta)
 		} as Insert<typeof kitAuditLogs>)
 		.executeSync();
-	syncAuditLogToLegacy(row);
-}
+	}
 
 function buildKitConditions(filters: AuditFilters) {
 	const conditions: ReturnType<typeof kitEq>[] = [];
@@ -143,21 +113,6 @@ function hydrateUsers(userIds: number[]): Map<number, { id: number; email: strin
 		map.set(id, { id, email: u.email, displayName: u.display_name });
 	}
 
-	const missing = uniqueIds.filter((id) => !map.has(id));
-	if (missing.length) {
-		const legacyRows = db
-			.select({
-				id: drizzleUsers.id,
-				email: drizzleUsers.email,
-				displayName: drizzleUsers.displayName
-			})
-			.from(drizzleUsers)
-			.where(drizzleInArray(drizzleUsers.id, missing))
-			.all();
-		for (const u of legacyRows) {
-			map.set(u.id, { id: u.id, email: u.email, displayName: u.displayName });
-		}
-	}
 	return map;
 }
 

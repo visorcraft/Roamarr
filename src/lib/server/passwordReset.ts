@@ -1,9 +1,6 @@
 import { randomBytes, createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import * as usersRepo from './repositories/usersRepo';
-import { db } from './db';
-import { users } from './db/schema';
 import { hashPassword } from './auth';
 import { nowIso } from './tz';
 
@@ -40,8 +37,6 @@ export async function consumePasswordResetToken(token: string, newPassword: stri
 		password_hash: passwordHash,
 		must_reset_password: false
 	});
-	// Keep legacy Drizzle users table in sync during transition.
-	db.update(users).set({ passwordHash, mustResetPassword: false }).where(eq(users.id, userId)).run();
 	usersRepo.deletePasswordResetTokensByUserId(userId);
 	return true;
 }

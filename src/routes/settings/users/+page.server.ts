@@ -2,27 +2,22 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
-import { db } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { adminCreateUser, adminDeleteUser, adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	requireAdmin(locals);
-	const allUsers = db
-		.select({
-			id: users.id,
-			email: users.email,
-			displayName: users.displayName,
-			role: users.role,
-			disabled: users.disabled,
-			mustResetPassword: users.mustResetPassword,
-			createdAt: users.createdAt
-		})
-		.from(users)
-		.orderBy(users.email)
-		.all();
-	return { users: allUsers };
+	const rows = usersRepo.listAllUsers().map((u) => ({
+		id: Number(u.id),
+		email: u.email,
+		displayName: u.display_name ?? '',
+		role: u.role,
+		disabled: u.disabled,
+		mustResetPassword: u.must_reset_password,
+		createdAt: u.created_at
+	}));
+	return { users: rows };
 };
 
 function parseUpdate(formData: FormData) {

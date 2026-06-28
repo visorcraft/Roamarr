@@ -1,25 +1,48 @@
 import { eq as kitEq, and as kitAnd, asc } from '@mongreldb/kit';
-import { eq } from 'drizzle-orm';
 import type { Row, Insert, Update } from '@mongreldb/kit';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	tripExpenses,
 	tripExpenseAttachments,
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
-import {
-	tripExpenses as drizzleTripExpenses,
-	tripExpenseAttachments as drizzleTripExpenseAttachments,
-	tripBudgetCategories as drizzleTripBudgetCategories
-} from '$lib/server/db/schema';
 
 export type KitExpense = Row<typeof tripExpenses>;
 export type KitAttachment = Row<typeof tripExpenseAttachments>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
 
-export type ExpenseRow = typeof drizzleTripExpenses.$inferSelect;
-export type AttachmentRow = typeof drizzleTripExpenseAttachments.$inferSelect;
-export type BudgetCategoryRow = typeof drizzleTripBudgetCategories.$inferSelect;
+export interface ExpenseRow {
+	id: number;
+	tripId: number;
+	description: string;
+	amount: number;
+	currency: string;
+	category: string | null;
+	exchangeRate: number;
+	baseAmount: number;
+	paidByCompanionId: number | null;
+	splitAmong: string;
+	createdAt: string;
+}
+
+export interface AttachmentRow {
+	id: number;
+	expenseId: number;
+	filename: string;
+	storageKey: string;
+	contentType: string;
+	sizeBytes: number;
+	createdAt: string;
+}
+
+export interface BudgetCategoryRow {
+	id: number;
+	tripId: number;
+	category: string;
+	amount: number;
+	currency: string;
+	createdAt: string;
+}
 
 export type CreateExpenseInput = Pick<ExpenseRow, 'tripId' | 'description' | 'amount' | 'currency'> &
 	Partial<Pick<ExpenseRow, 'category' | 'exchangeRate' | 'baseAmount'>> & {
@@ -138,68 +161,11 @@ function kitBudgetCategoryToDrizzleInsert(row: KitBudgetCategory) {
 	};
 }
 
-function syncExpenseToLegacy(row: KitExpense) {
-	const values = kitExpenseToDrizzleInsert(row);
-	const existing = db
-		.select()
-		.from(drizzleTripExpenses)
-		.where(eq(drizzleTripExpenses.id, values.id))
-		.get();
-	if (existing) {
-		db.update(drizzleTripExpenses)
-			.set(values)
-			.where(eq(drizzleTripExpenses.id, values.id))
-			.run();
-	} else {
-		db.insert(drizzleTripExpenses).values(values).run();
-	}
-}
 
-function syncAttachmentToLegacy(row: KitAttachment) {
-	const values = kitAttachmentToDrizzleInsert(row);
-	const existing = db
-		.select()
-		.from(drizzleTripExpenseAttachments)
-		.where(eq(drizzleTripExpenseAttachments.id, values.id))
-		.get();
-	if (existing) {
-		db.update(drizzleTripExpenseAttachments)
-			.set(values)
-			.where(eq(drizzleTripExpenseAttachments.id, values.id))
-			.run();
-	} else {
-		db.insert(drizzleTripExpenseAttachments).values(values).run();
-	}
-}
 
-function syncBudgetCategoryToLegacy(row: KitBudgetCategory) {
-	const values = kitBudgetCategoryToDrizzleInsert(row);
-	const existing = db
-		.select()
-		.from(drizzleTripBudgetCategories)
-		.where(eq(drizzleTripBudgetCategories.id, values.id))
-		.get();
-	if (existing) {
-		db.update(drizzleTripBudgetCategories)
-			.set(values)
-			.where(eq(drizzleTripBudgetCategories.id, values.id))
-			.run();
-	} else {
-		db.insert(drizzleTripBudgetCategories).values(values).run();
-	}
-}
 
-function deleteExpenseFromLegacy(id: number) {
-	db.delete(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, id)).run();
-}
 
-function deleteAttachmentFromLegacy(id: number) {
-	db.delete(drizzleTripExpenseAttachments).where(eq(drizzleTripExpenseAttachments.id, id)).run();
-}
 
-function deleteBudgetCategoryFromLegacy(id: number) {
-	db.delete(drizzleTripBudgetCategories).where(eq(drizzleTripBudgetCategories.id, id)).run();
-}
 
 // Expenses
 
@@ -232,7 +198,7 @@ export function createExpense(input: CreateExpenseInput): ExpenseRow {
 			split_among: input.splitAmong == null ? '[]' : input.splitAmong
 		} as Insert<typeof tripExpenses>)
 		.executeSync();
-	syncExpenseToLegacy(row);
+(row);
 	return toExpenseRow(row);
 }
 
@@ -268,13 +234,13 @@ export function updateExpense(id: number, patch: UpdateExpenseInput): ExpenseRow
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncExpenseToLegacy(row);
+(row);
 	return toExpenseRow(row);
 }
 
 export function deleteExpense(id: number): boolean {
 	const deleted = kit.deleteFrom(tripExpenses).where(kitEq(tripExpenses.id, toBigInt(id))).executeSync();
-	deleteExpenseFromLegacy(id);
+	(id);
 	return deleted > 0n;
 }
 
@@ -289,7 +255,7 @@ export function deleteExpensesForTrip(tripId: number): bigint {
 		.where(kitEq(tripExpenses.trip_id, toBigInt(tripId)))
 		.executeSync();
 	for (const id of ids) {
-		deleteExpenseFromLegacy(id);
+		(id);
 	}
 	return deleted;
 }
@@ -332,7 +298,7 @@ export function createAttachment(input: CreateAttachmentInput): AttachmentRow {
 			size_bytes: BigInt(input.sizeBytes)
 		} as Insert<typeof tripExpenseAttachments>)
 		.executeSync();
-	syncAttachmentToLegacy(row);
+	(row);
 	return toAttachmentRow(row);
 }
 
@@ -341,7 +307,7 @@ export function deleteAttachment(id: number): boolean {
 		.deleteFrom(tripExpenseAttachments)
 		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
 		.executeSync();
-	deleteAttachmentFromLegacy(id);
+	(id);
 	return deleted > 0n;
 }
 
@@ -356,7 +322,7 @@ export function deleteAttachmentsForExpense(expenseId: number): bigint {
 		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
 		.executeSync();
 	for (const id of ids) {
-		deleteAttachmentFromLegacy(id);
+		(id);
 	}
 	return deleted;
 }
@@ -405,7 +371,7 @@ export function createBudgetCategory(input: CreateBudgetCategoryInput): BudgetCa
 			currency: input.currency ?? 'USD'
 		} as Insert<typeof tripBudgetCategories>)
 		.executeSync();
-	syncBudgetCategoryToLegacy(row);
+	(row);
 	return toBudgetCategoryRow(row);
 }
 
@@ -431,7 +397,7 @@ export function updateBudgetCategory(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	syncBudgetCategoryToLegacy(row);
+	(row);
 	return toBudgetCategoryRow(row);
 }
 
@@ -440,8 +406,7 @@ export function deleteBudgetCategory(id: number): boolean {
 		.deleteFrom(tripBudgetCategories)
 		.where(kitEq(tripBudgetCategories.id, toBigInt(id)))
 		.executeSync();
-	deleteBudgetCategoryFromLegacy(id);
-	return deleted > 0n;
+		return deleted > 0n;
 }
 
 export function deleteBudgetCategoriesForTrip(tripId: number): bigint {
@@ -455,7 +420,6 @@ export function deleteBudgetCategoriesForTrip(tripId: number): bigint {
 		.where(kitEq(tripBudgetCategories.trip_id, toBigInt(tripId)))
 		.executeSync();
 	for (const id of ids) {
-		deleteBudgetCategoryFromLegacy(id);
-	}
+			}
 	return deleted;
 }

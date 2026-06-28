@@ -1,5 +1,4 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { db } from './db';
 import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { getSegmentById } from './repositories/segmentsRepo';

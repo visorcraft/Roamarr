@@ -68,8 +68,8 @@ function formEvent(user: { id: number }, tripId: number, body: FormData) {
 
 test('load includes fare watches with segment titles', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
 	db.insert(insurancePolicies).values({ userId: u.id, provider: 'X', tripId: t.id }).run();
 
@@ -80,10 +80,10 @@ test('load includes fare watches with segment titles', () => {
 
 test('load includes attached insurance policies and user cards for the owner', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'td@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	makeFareProvider(db, kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
-	makeInsurancePolicy(db, kit, u.id, {
+	const u = makeUser(kit, { email: 'td@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	makeFareProvider(kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
+	makeInsurancePolicy(kit, u.id, {
 		provider: 'Acme Insurance',
 		policyNumber: 'ACME-123',
 		coverageSummary: 'Trip cancellation',
@@ -103,11 +103,11 @@ test('load includes attached insurance policies and user cards for the owner', (
 
 test('load separates available unattached policies from attached policies', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'td2@x.c', passwordHash: 'x', displayName: 'U' });
-	const t1 = makeTrip(db, kit, u.id, { name: 'T1' });
-	const t2 = makeTrip(db, kit, u.id, { name: 'T2' });
-	makeInsurancePolicy(db, kit, u.id, { provider: 'Attached', tripId: t1.id });
-	makeInsurancePolicy(db, kit, u.id, { provider: 'Free', tripId: t2.id });
+	const u = makeUser(kit, { email: 'td2@x.c', passwordHash: 'x', displayName: 'U' });
+	const t1 = makeTrip(kit, u.id, { name: 'T1' });
+	const t2 = makeTrip(kit, u.id, { name: 'T2' });
+	makeInsurancePolicy(kit, u.id, { provider: 'Attached', tripId: t1.id });
+	makeInsurancePolicy(kit, u.id, { provider: 'Free', tripId: t2.id });
 
 	const result = load(event(u, t1.id)) as {
 		policies: { provider: string }[];
@@ -119,9 +119,9 @@ test('load separates available unattached policies from attached policies', () =
 
 test('attachPolicy action links an existing policy to the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ap@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const pol = makeInsurancePolicy(db, kit, u.id, { provider: 'P', tripId: null });
+	const u = makeUser(kit, { email: 'ap@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const pol = makeInsurancePolicy(kit, u.id, { provider: 'P', tripId: null });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -138,10 +138,10 @@ test('attachPolicy action links an existing policy to the trip', async () => {
 
 test('attachPolicy action rejects a policy owned by another user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = makeUser(db, kit, { email: 'ap-owner@x.c', passwordHash: 'x', displayName: 'O' });
-	const other = makeUser(db, kit, { email: 'ap-other@x.c', passwordHash: 'x', displayName: 'X' });
-	const t = makeTrip(db, kit, owner.id, { name: 'T' });
-	const pol = makeInsurancePolicy(db, kit, other.id, { provider: 'P', tripId: null });
+	const owner = makeUser(kit, { email: 'ap-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'ap-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const pol = makeInsurancePolicy(kit, other.id, { provider: 'P', tripId: null });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -152,9 +152,9 @@ test('attachPolicy action rejects a policy owned by another user', async () => {
 
 test('detachPolicy action unlinks a policy from the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'dp@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const pol = makeInsurancePolicy(db, kit, u.id, { provider: 'P', tripId: t.id });
+	const u = makeUser(kit, { email: 'dp@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const pol = makeInsurancePolicy(kit, u.id, { provider: 'P', tripId: t.id });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -171,8 +171,8 @@ test('detachPolicy action unlinks a policy from the trip', async () => {
 
 test('addComment action creates a comment on the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'cc@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'cc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -190,8 +190,8 @@ test('addComment action creates a comment on the trip', async () => {
 
 test('deleteComment action removes the users own comment', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'dc@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'dc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = addComment(u.id, t.id, 'X');
 
 	const request = new Request('http://localhost/trips/' + t.id, {
@@ -208,8 +208,8 @@ test('deleteComment action removes the users own comment', async () => {
 
 test('delete action removes trip-level reminders', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'Del', startDate: '2099-01-01' });
+	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'Del', startDate: '2099-01-01' });
 	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
 	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
 
@@ -220,9 +220,9 @@ test('delete action removes trip-level reminders', () => {
 
 test('duplicateSegment action copies a segment and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ds@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const u = makeUser(kit, { email: 'ds@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'event',
 			title: 'City tour',
 			startAt: '2026-09-01T14:00:00Z',
@@ -255,8 +255,8 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 
 test('duplicateSegment action rejects invalid segment id', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -269,10 +269,10 @@ test('duplicateSegment action rejects invalid segment id', async () => {
 
 test('duplicateSegment action rejects a non-editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = makeUser(db, kit, { email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' });
-	const other = makeUser(db, kit, { email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' });
-	const t = makeTrip(db, kit, owner.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const owner = makeUser(kit, { email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-10-01T10:00:00Z',
@@ -290,10 +290,10 @@ test('duplicateSegment action rejects a non-editor', async () => {
 
 test('load strips companion notes from shared viewers', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = makeUser(db, kit, { email: 'co@x.c', passwordHash: 'x', displayName: 'O' });
-	const reader = makeUser(db, kit, { email: 'cr@x.c', passwordHash: 'x', displayName: 'R' });
-	const t = makeTrip(db, kit, owner.id, { name: 'T' });
-	makeCompanion(db, kit, t.id, {
+	const owner = makeUser(kit, { email: 'co@x.c', passwordHash: 'x', displayName: 'O' });
+	const reader = makeUser(kit, { email: 'cr@x.c', passwordHash: 'x', displayName: 'R' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	makeCompanion(kit, t.id, {
 		name: 'Sam',
 		category: 'adult',
 		dietary: 'Vegetarian',
@@ -301,7 +301,7 @@ test('load strips companion notes from shared viewers', () => {
 		medicalNotes: 'EpiPen',
 		notes: 'Likes windows'
 	});
-	makeShare(db, kit, { tripId: t.id, sharedWithUserId: reader.id });
+	makeShare(kit, { tripId: t.id, sharedWithUserId: reader.id });
 
 	const result = load(event(reader, t.id)) as { companions: { name: string; dietary: string | null; allergies: string | null; medicalNotes: string | null; notes: string | null }[] };
 	expect(result.companions).toHaveLength(1);
@@ -314,9 +314,9 @@ test('load strips companion notes from shared viewers', () => {
 
 test('setSegmentStatus action updates segment status for an editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const u = makeUser(kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
@@ -338,9 +338,9 @@ test('setSegmentStatus action updates segment status for an editor', async () =>
 
 test('setSegmentStatus action rejects invalid status', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const u = makeUser(kit, { email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
@@ -356,10 +356,10 @@ test('setSegmentStatus action rejects invalid status', async () => {
 
 test('setSegmentStatus action rejects a non-editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = makeUser(db, kit, { email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' });
-	const other = makeUser(db, kit, { email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' });
-	const t = makeTrip(db, kit, owner.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const owner = makeUser(kit, { email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
@@ -375,9 +375,9 @@ test('setSegmentStatus action rejects a non-editor', async () => {
 
 test('moveSegmentDate action moves a segment to a new local date', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const s = makeSegment(db, kit, t.id, {
+	const u = makeUser(kit, { email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
 			type: 'food',
 			title: 'Lunch',
 			startAt: '2026-09-16T03:30:00.000Z',
@@ -426,8 +426,8 @@ test('saveTripTemplate action saves a template and redirects', async () => {
 
 test('addHomeTask action creates a task and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('text', 'Stop mail');
@@ -442,8 +442,8 @@ test('addHomeTask action creates a task and redirects', async () => {
 
 test('addMedication action creates a schedule and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('name', 'Claritin');
@@ -458,8 +458,8 @@ test('addMedication action creates a schedule and redirects', async () => {
 
 test('addEntryRequirement action creates a requirement and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('country', 'Japan');
@@ -477,8 +477,8 @@ test('addEntryRequirement action creates a requirement and redirects', async () 
 
 test('addImportantItem action creates an item and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const u = makeUser(kit, { email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('name', 'Passport');
@@ -495,9 +495,9 @@ test('addImportantItem action creates an item and redirects', async () => {
 
 test('addAttachment action uploads a receipt and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'T' });
-	const e = makeExpense(db, kit, { tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' });
+	const u = makeUser(kit, { email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const e = makeExpense(kit, { tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' });
 
 	const f = new FormData();
 	f.set('expenseId', String(e.id));

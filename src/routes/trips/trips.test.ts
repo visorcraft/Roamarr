@@ -24,8 +24,8 @@ function event(user: { id: number; email: string }, search = '') {
 
 test('owner sees full trip; non-owner without share is blocked', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
 	expect(t.publicToken).toBeTruthy();
 	expect(loadTripFor(a.id, t.id).owner).toBe(true);
@@ -34,19 +34,19 @@ test('owner sees full trip; non-owner without share is blocked', () => {
 
 test('trip list includes shared trips and labels them shared', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'list-a@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'list-b@x.c', passwordHash: 'x', displayName: 'B' });
-	const c = makeUser(db, kit, { email: 'list-c@x.c', passwordHash: 'x', displayName: 'C' });
+	const a = makeUser(kit, { email: 'list-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'list-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const c = makeUser(kit, { email: 'list-c@x.c', passwordHash: 'x', displayName: 'C' });
 
-	makeTrip(db, kit, a.id, { name: 'Owned Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01', notes: 'OWNER NOTE' });
+	makeTrip(kit, a.id, { name: 'Owned Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01', notes: 'OWNER NOTE' });
 
-	const shared = makeTrip(db, kit, a.id, { name: 'Shared Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01', notes: 'SECRET' });
-	makeShare(db, kit, { tripId: shared.id, sharedWithUserId: b.id });
+	const shared = makeTrip(kit, a.id, { name: 'Shared Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01', notes: 'SECRET' });
+	makeShare(kit, { tripId: shared.id, sharedWithUserId: b.id });
 
-	const groupTrip = makeTrip(db, kit, a.id, { name: 'Group Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01' });
-	const g = makeGroup(db, kit, a.id, 'fam');
-	makeGroupMember(db, kit, g.id, c.id);
-	makeShare(db, kit, { tripId: groupTrip.id, sharedWithGroupId: g.id });
+	const groupTrip = makeTrip(kit, a.id, { name: 'Group Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01' });
+	const g = makeGroup(kit, a.id, 'fam');
+	makeGroupMember(kit, g.id, c.id);
+	makeShare(kit, { tripId: groupTrip.id, sharedWithGroupId: g.id });
 
 	const forB = load(event(b)) as any;
 	expect(forB.trips.map((t: any) => t.name)).toEqual(['Shared Trip']);
@@ -65,11 +65,11 @@ test('trip list includes shared trips and labels them shared', () => {
 
 test('trip list defaults to startDate ascending', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'sort-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const a = makeUser(kit, { email: 'sort-a@x.c', passwordHash: 'x', displayName: 'A' });
 
-	makeTrip(db, kit, a.id, { name: 'Zulu', startDate: '2026-09-01' });
-	makeTrip(db, kit, a.id, { name: 'Alpha', startDate: '2026-07-01' });
-	makeTrip(db, kit, a.id, { name: 'Mike', startDate: '2026-08-01' });
+	makeTrip(kit, a.id, { name: 'Zulu', startDate: '2026-09-01' });
+	makeTrip(kit, a.id, { name: 'Alpha', startDate: '2026-07-01' });
+	makeTrip(kit, a.id, { name: 'Mike', startDate: '2026-08-01' });
 
 	const result = load(event(a)) as any;
 	expect(result.trips.map((t: any) => t.name)).toEqual(['Alpha', 'Mike', 'Zulu']);
@@ -79,13 +79,13 @@ test('trip list defaults to startDate ascending', () => {
 
 test('trip list filters by query on name and destination', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'q-a@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeUser(db, kit, { email: 'q-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const a = makeUser(kit, { email: 'q-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'q-b@x.c', passwordHash: 'x', displayName: 'B' });
 
-	makeTrip(db, kit, a.id, { name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
-	makeTrip(db, kit, a.id, { name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' });
-	const shared = makeTrip(db, kit, a.id, { name: 'Berlin Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01', notes: 'SECRET' });
-	makeShare(db, kit, { tripId: shared.id, sharedWithUserId: b.id });
+	makeTrip(kit, a.id, { name: 'Paris Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: '2026-07-01' });
+	makeTrip(kit, a.id, { name: 'Tokyo Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: '2026-08-01' });
+	const shared = makeTrip(kit, a.id, { name: 'Berlin Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: '2026-09-01', notes: 'SECRET' });
+	makeShare(kit, { tripId: shared.id, sharedWithUserId: b.id });
 
 	const byName = load(event(a, '?q=tokyo')) as any;
 	expect(byName.trips.map((t: any) => t.name)).toEqual(['Tokyo Trip']);
@@ -100,11 +100,11 @@ test('trip list filters by query on name and destination', () => {
 
 test('trip list sorts by name and order', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'name-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const a = makeUser(kit, { email: 'name-a@x.c', passwordHash: 'x', displayName: 'A' });
 
-	makeTrip(db, kit, a.id, { name: 'Zebra', startDate: '2026-09-01' });
-	makeTrip(db, kit, a.id, { name: 'Apple', startDate: '2026-07-01' });
-	makeTrip(db, kit, a.id, { name: 'Mango', startDate: '2026-08-01' });
+	makeTrip(kit, a.id, { name: 'Zebra', startDate: '2026-09-01' });
+	makeTrip(kit, a.id, { name: 'Apple', startDate: '2026-07-01' });
+	makeTrip(kit, a.id, { name: 'Mango', startDate: '2026-08-01' });
 
 	const asc = load(event(a, '?sort=name&order=asc')) as any;
 	expect(asc.trips.map((t: any) => t.name)).toEqual(['Apple', 'Mango', 'Zebra']);
@@ -115,10 +115,10 @@ test('trip list sorts by name and order', () => {
 
 test('trip list filters archived and favorite trips', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'af-a@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'Active', startDate: '2026-07-01' });
-	makeTrip(db, kit, a.id, { name: 'Archived', startDate: '2026-08-01', archived: true });
-	makeTrip(db, kit, a.id, { name: 'Favorite', startDate: '2026-09-01', favorite: true });
+	const a = makeUser(kit, { email: 'af-a@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'Active', startDate: '2026-07-01' });
+	makeTrip(kit, a.id, { name: 'Archived', startDate: '2026-08-01', archived: true });
+	makeTrip(kit, a.id, { name: 'Favorite', startDate: '2026-09-01', favorite: true });
 
 	const active = load(event(a, '?filter=active')) as any;
 	expect(active.trips.map((t: any) => t.name).sort()).toEqual(['Active', 'Favorite']);
@@ -132,11 +132,11 @@ test('trip list filters archived and favorite trips', () => {
 
 test('trip list filters by status', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'status-a@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'Planning Trip', startDate: '2026-07-01', status: 'planning' });
-	makeTrip(db, kit, a.id, { name: 'Booked Trip', startDate: '2026-08-01', status: 'booked' });
-	makeTrip(db, kit, a.id, { name: 'Active Trip', startDate: '2026-09-01', status: 'active' });
-	makeTrip(db, kit, a.id, { name: 'Completed Trip', startDate: '2026-06-01', status: 'completed' });
+	const a = makeUser(kit, { email: 'status-a@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'Planning Trip', startDate: '2026-07-01', status: 'planning' });
+	makeTrip(kit, a.id, { name: 'Booked Trip', startDate: '2026-08-01', status: 'booked' });
+	makeTrip(kit, a.id, { name: 'Active Trip', startDate: '2026-09-01', status: 'active' });
+	makeTrip(kit, a.id, { name: 'Completed Trip', startDate: '2026-06-01', status: 'completed' });
 
 	const planning = load(event(a, '?status=planning')) as any;
 	expect(planning.trips.map((t: any) => t.name)).toEqual(['Planning Trip']);
@@ -152,8 +152,8 @@ test('trip list filters by status', () => {
 
 test('trip list rejects invalid status values', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'status-bad@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'Only', startDate: '2026-07-01' });
+	const a = makeUser(kit, { email: 'status-bad@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'Only', startDate: '2026-07-01' });
 
 	const bad = load(event(a, '?status=foo')) as any;
 	expect(bad.trips.map((t: any) => t.name)).toEqual(['Only']);
@@ -162,8 +162,8 @@ test('trip list rejects invalid status values', () => {
 
 test('trip list rejects invalid sort and order values', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'Only', startDate: '2026-07-01' });
+	const a = makeUser(kit, { email: 'bad-a@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'Only', startDate: '2026-07-01' });
 
 	const badSort = load(event(a, '?sort=ownerId&order=asc')) as any;
 	expect(badSort.trips.map((t: any) => t.name)).toEqual(['Only']);
@@ -184,9 +184,9 @@ function makeEvent(user: { id: number }, body: FormData) {
 
 test('bulk unarchive and unfavorite actions update selected trips', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'bulk@x.c', passwordHash: 'x', displayName: 'A' });
-	const t1 = makeTrip(db, kit, a.id, { name: 'A', archived: true, favorite: true });
-	const t2 = makeTrip(db, kit, a.id, { name: 'B', archived: true, favorite: true });
+	const a = makeUser(kit, { email: 'bulk@x.c', passwordHash: 'x', displayName: 'A' });
+	const t1 = makeTrip(kit, a.id, { name: 'A', archived: true, favorite: true });
+	const t2 = makeTrip(kit, a.id, { name: 'B', archived: true, favorite: true });
 
 	const unarchive = new FormData();
 	unarchive.append('selected', String(t1.id));
@@ -211,8 +211,8 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 
 test('bulk delete removes trip-level and segment reminders', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'del-a@x.c', passwordHash: 'x', displayName: 'A' });
-	const t = makeTrip(db, kit, a.id, { name: 'ToDelete', startDate: '2099-01-01' });
+	const a = makeUser(kit, { email: 'del-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(kit, a.id, { name: 'ToDelete', startDate: '2099-01-01' });
 	upsertCustomReminder(a.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
 	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
 

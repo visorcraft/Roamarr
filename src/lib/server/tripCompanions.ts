@@ -1,41 +1,92 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
-import { withTripAction } from '$lib/server/actions';
-import { db } from '$lib/server/db';
+import { eq as kitEq, and as kitAnd, asc } from '@mongreldb/kit';
+import { kit } from '$lib/server/db';
+import { tripCompanions } from '$lib/server/db/mongrelSchema';
 import {
-	tripCompanions,
 	COMPANION_CATEGORIES,
 	SEAT_PREFERENCES,
 	BED_PREFERENCES,
 	type CompanionCategory
 } from '$lib/server/db/schema';
+import { withTripAction } from '$lib/server/actions';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
 import { bumpTripUpdatedAt } from './tz';
 
-export function listTripCompanions(tripId: number) {
-	return db
-		.select()
-		.from(tripCompanions)
-		.where(eq(tripCompanions.tripId, tripId))
-		.orderBy(tripCompanions.createdAt)
-		.all();
+export interface TripCompanion {
+	id: number;
+	tripId: number;
+	name: string;
+	category: CompanionCategory;
+	dietary: string | null;
+	allergies: string | null;
+	medicalNotes: string | null;
+	needsCarSeat: boolean;
+	needsStroller: boolean;
+	needsCrib: boolean;
+	needsKidsMeal: boolean;
+	childTicketDiscount: string | null;
+	seatPreference: string | null;
+	bedPreference: string | null;
+	accessibilityNeeds: string | null;
+	roomNotes: string | null;
+	notes: string | null;
+	createdAt: string;
+}
+
+function toCompanion(row: Record<string, unknown>): TripCompanion {
+	return {
+		id: Number(row.id),
+		tripId: Number(row.trip_id),
+		name: row.name as string,
+		category: row.category as CompanionCategory,
+		dietary: (row.dietary as string | null) ?? null,
+		allergies: (row.allergies as string | null) ?? null,
+		medicalNotes: (row.medical_notes as string | null) ?? null,
+		needsCarSeat: Boolean(row.needs_car_seat),
+		needsStroller: Boolean(row.needs_stroller),
+		needsCrib: Boolean(row.needs_crib),
+		needsKidsMeal: Boolean(row.needs_kids_meal),
+		childTicketDiscount: (row.child_ticket_discount as string | null) ?? null,
+		seatPreference: (row.seat_preference as string | null) ?? null,
+		bedPreference: (row.bed_preference as string | null) ?? null,
+		accessibilityNeeds: (row.accessibility_needs as string | null) ?? null,
+		roomNotes: (row.room_notes as string | null) ?? null,
+		notes: (row.notes as string | null) ?? null,
+		createdAt: row.created_at as string
+	};
+}
+
+export function listTripCompanions(tripId: number): TripCompanion[] {
+	const rows = kit
+		.selectFrom(tripCompanions)
+		.where(kitEq(tripCompanions.trip_id, BigInt(tripId)))
+		.orderBy(asc(tripCompanions.created_at))
+		.executeSync();
+	return rows.map(toCompanion);
 }
 
 export function getCompanionTripId(companionId: number): number | null {
-	const c = db.select({ tripId: tripCompanions.tripId }).from(tripCompanions).where(eq(tripCompanions.id, companionId)).get();
-	return c?.tripId ?? null;
+	const c = kit
+		.selectFrom(tripCompanions)
+		.where(kitEq(tripCompanions.id, BigInt(companionId)))
+		.executeSync()[0];
+	return c ? Number(c.trip_id) : null;
 }
 
 function requireCompanion(tripId: number, companionId: number) {
-	const c = db
-		.select()
-		.from(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.get();
+	const c = kit
+		.selectFrom(tripCompanions)
+		.where(
+			kitAnd(
+				kitEq(tripCompanions.id, BigInt(companionId)),
+				kitEq(tripCompanions.trip_id, BigInt(tripId))
+			)
+		)
+		.executeSync()[0];
 	if (!c) throw error(404, 'Companion not found');
-	return c;
+	return toCompanion(c);
 }
 
 interface CompanionInput {
@@ -140,33 +191,36 @@ function validateCompanionInput(form: FormData): CompanionInput & { errors?: Rec
 	};
 }
 
+function buildCompanionValues(input: CompanionInput): Record<string, unknown> {
+	return {
+		name: input.name,
+		category: input.category ?? 'adult',
+		notes: input.notes ?? null,
+		dietary: input.dietary ?? null,
+		allergies: input.allergies ?? null,
+		medical_notes: input.medicalNotes ?? null,
+		needs_car_seat: input.needsCarSeat ?? false,
+		needs_stroller: input.needsStroller ?? false,
+		needs_crib: input.needsCrib ?? false,
+		needs_kids_meal: input.needsKidsMeal ?? false,
+		child_ticket_discount: input.childTicketDiscount ?? null,
+		seat_preference: input.seatPreference ?? null,
+		bed_preference: input.bedPreference ?? null,
+		accessibility_needs: input.accessibilityNeeds ?? null,
+		room_notes: input.roomNotes ?? null
+	};
+}
+
 export function insertTripCompanion(userId: number, tripId: number, input: CompanionInput) {
 	requireEditableTrip(userId, tripId);
-	const c = db
-		.insert(tripCompanions)
-		.values({
-			tripId,
-			name: input.name,
-			category: input.category,
-			notes: input.notes ?? null,
-			dietary: input.dietary ?? null,
-			allergies: input.allergies ?? null,
-			medicalNotes: input.medicalNotes ?? null,
-			needsCarSeat: input.needsCarSeat ?? false,
-			needsStroller: input.needsStroller ?? false,
-			needsCrib: input.needsCrib ?? false,
-			needsKidsMeal: input.needsKidsMeal ?? false,
-			childTicketDiscount: input.childTicketDiscount ?? null,
-			seatPreference: input.seatPreference ?? null,
-			bedPreference: input.bedPreference ?? null,
-			accessibilityNeeds: input.accessibilityNeeds ?? null,
-			roomNotes: input.roomNotes ?? null
-		})
-		.returning()
-		.get();
+	const c = kit
+		.insertInto(tripCompanions)
+		.values({ trip_id: BigInt(tripId), ...buildCompanionValues(input) } as never)
+		.executeSync();
+	const companion = toCompanion(c);
 	bumpTripUpdatedAt(tripId);
-	logAudit(userId, 'create', 'trip_companion', c.id, { tripId, name: c.name });
-	return c;
+	logAudit(userId, 'create', 'trip_companion', companion.id, { tripId, name: companion.name });
+	return companion;
 }
 
 function nullablePatchField(value: string | undefined): string | null | undefined {
@@ -181,39 +235,49 @@ export function patchTripCompanion(
 ) {
 	requireEditableTrip(userId, tripId);
 	requireCompanion(tripId, companionId);
-	const c = db
-		.update(tripCompanions)
-		.set({
-			name: input.name,
-			category: input.category,
-			notes: nullablePatchField(input.notes),
-			dietary: nullablePatchField(input.dietary),
-			allergies: nullablePatchField(input.allergies),
-			medicalNotes: nullablePatchField(input.medicalNotes),
-			needsCarSeat: input.needsCarSeat,
-			needsStroller: input.needsStroller,
-			needsCrib: input.needsCrib,
-			needsKidsMeal: input.needsKidsMeal,
-			childTicketDiscount: nullablePatchField(input.childTicketDiscount),
-			seatPreference: input.seatPreference,
-			bedPreference: input.bedPreference,
-			accessibilityNeeds: nullablePatchField(input.accessibilityNeeds),
-			roomNotes: nullablePatchField(input.roomNotes)
-		})
-		.where(eq(tripCompanions.id, companionId))
-		.returning()
-		.get();
+	const set: Record<string, unknown> = {};
+	if (input.name !== undefined) set.name = input.name;
+	if (input.category !== undefined) set.category = input.category;
+	if (input.notes !== undefined) set.notes = nullablePatchField(input.notes);
+	if (input.dietary !== undefined) set.dietary = nullablePatchField(input.dietary);
+	if (input.allergies !== undefined) set.allergies = nullablePatchField(input.allergies);
+	if (input.medicalNotes !== undefined) set.medical_notes = nullablePatchField(input.medicalNotes);
+	if (input.needsCarSeat !== undefined) set.needs_car_seat = input.needsCarSeat;
+	if (input.needsStroller !== undefined) set.needs_stroller = input.needsStroller;
+	if (input.needsCrib !== undefined) set.needs_crib = input.needsCrib;
+	if (input.needsKidsMeal !== undefined) set.needs_kids_meal = input.needsKidsMeal;
+	if (input.childTicketDiscount !== undefined)
+		set.child_ticket_discount = nullablePatchField(input.childTicketDiscount);
+	if (input.seatPreference !== undefined) set.seat_preference = input.seatPreference;
+	if (input.bedPreference !== undefined) set.bed_preference = input.bedPreference;
+	if (input.accessibilityNeeds !== undefined)
+		set.accessibility_needs = nullablePatchField(input.accessibilityNeeds);
+	if (input.roomNotes !== undefined) set.room_notes = nullablePatchField(input.roomNotes);
+
+	const rows = kit
+		.updateTable(tripCompanions)
+		.set(set as never)
+		.where(kitEq(tripCompanions.id, BigInt(companionId)))
+		.executeSync();
+	const c = rows[0];
+	if (!c) throw error(404, 'Companion not found');
 	bumpTripUpdatedAt(tripId);
 	logAudit(userId, 'update', 'trip_companion', companionId, { tripId });
-	return c;
+	return toCompanion(c);
 }
 
 export function removeTripCompanion(userId: number, tripId: number, companionId: number) {
 	requireEditableTrip(userId, tripId);
 	requireCompanion(tripId, companionId);
-	db.delete(tripCompanions)
-		.where(and(eq(tripCompanions.id, companionId), eq(tripCompanions.tripId, tripId)))
-		.run();
+	kit
+		.deleteFrom(tripCompanions)
+		.where(
+			kitAnd(
+				kitEq(tripCompanions.id, BigInt(companionId)),
+				kitEq(tripCompanions.trip_id, BigInt(tripId))
+			)
+		)
+		.executeSync();
 	bumpTripUpdatedAt(tripId);
 	logAudit(userId, 'delete', 'trip_companion', companionId, { tripId });
 }
@@ -239,5 +303,3 @@ export async function updateCompanion(event: RequestEvent) {
 	patchTripCompanion(u.id, tripId, companionId, input);
 	throw redirect(303, `/trips/${tripId}`);
 }
-
-

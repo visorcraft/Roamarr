@@ -1,8 +1,6 @@
 import { requireUser } from '$lib/server/auth';
 import { parseTripId } from '$lib/server/params';
-import { db } from '$lib/server/db';
-import { tripCompanions } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { listTripCompanions } from '$lib/server/tripCompanions';
 import { loadTripFor } from '../../shared';
 import type { PageServerLoad } from './$types';
 
@@ -10,11 +8,7 @@ export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
 	const tripId = parseTripId(params);
 	const view = loadTripFor(u.id, tripId);
-	const companions = db
-		.select()
-		.from(tripCompanions)
-		.where(eq(tripCompanions.tripId, view.trip.id))
-		.all();
+	const companions = listTripCompanions(view.trip.id);
 	const segments = 'segments' in view ? view.segments : view.trip.segments;
 	return {
 		trip: view.trip,

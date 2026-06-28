@@ -19,9 +19,9 @@ import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
 test('valid token returns projection without sensitive data; bad token 404s', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
-	const t = makeTrip(db, kit, a.id, { name: 'T', notes: 'SECRET', publicToken: 'tok123' });
-	makeSegment(db, kit, t.id, {
+	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(kit, a.id, { name: 'T', notes: 'SECRET', publicToken: 'tok123' });
+	makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2026-07-01T00:00:00Z',
@@ -37,8 +37,8 @@ test('valid token returns projection without sensitive data; bad token 404s', ()
 test('load is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'rl@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'T', publicToken: 'rltok' });
+	const a = makeUser(kit, { email: 'rl@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'T', publicToken: 'rltok' });
 
 	for (let i = 0; i < 20; i++) {
 		load({ params: { token: 'rltok' }, getClientAddress: () => '1.2.3.4' } as any);
@@ -55,8 +55,8 @@ test('load is rate limited after many requests from the same IP', () => {
 test('rate limit does not block a different IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'rl2@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, { name: 'T', publicToken: 'rltok2' });
+	const a = makeUser(kit, { email: 'rl2@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, { name: 'T', publicToken: 'rltok2' });
 
 	for (let i = 0; i < 20; i++) {
 		load({ params: { token: 'rltok2' }, getClientAddress: () => '1.2.3.4' } as any);
@@ -70,8 +70,8 @@ test('rate limit does not block a different IP', () => {
 test('expired public token returns 404', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'exp@x.c', passwordHash: 'x', displayName: 'A' });
-	makeTrip(db, kit, a.id, {
+	const a = makeUser(kit, { email: 'exp@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(kit, a.id, {
 		name: 'T',
 		publicToken: 'expired',
 		publicTokenExpiresAt: '2020-01-01T00:00:00Z'
@@ -87,9 +87,9 @@ test('expired public token returns 404', () => {
 
 test('public link hides details by default and shows them when publicShowDetails is enabled', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, kit, { email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' });
-	const t = makeTrip(db, kit, a.id, { name: 'T', publicToken: 'det-hidden' });
-	makeSegment(db, kit, t.id, {
+	const a = makeUser(kit, { email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(kit, a.id, { name: 'T', publicToken: 'det-hidden' });
+	makeSegment(kit, t.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2026-07-01T00:00:00Z',

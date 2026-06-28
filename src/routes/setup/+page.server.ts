@@ -1,12 +1,12 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
-import { db, sqlite } from '$lib/server/db';
-import { users } from '$lib/server/db/schema';
-import { sql } from 'drizzle-orm';
+import { kit } from '$lib/server/db';
+import { users } from '$lib/server/db/mongrelSchema';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+import type { Insert } from '@mongreldb/kit';
 
 export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },
@@ -14,46 +14,34 @@ export function _createAdmin(
 ) {
 	const email = normalizeEmail(i.email);
 	const s = getSettings();
-	const tx = sqlite.transaction(() => {
-		const n = db.select({ c: sql<number>`count(*)` }).from(users).get()!.c;
-		if (s.setupComplete || n > 0) throw new Error('already set up');
-		const u = db
-			.insert(users)
-			.values({
-				email,
-				passwordHash: passwordHash ?? 'PLACEHOLDER',
-				displayName: i.displayName,
-				role: 'admin',
-				timezone: i.timezone,
-				flightCheckinLeadHours: s.defaultFlightCheckinLeadHours,
-				documentExpiryLeadDays: s.defaultDocumentExpiryLeadDays
-			})
-			.returning()
-			.get();
-		return u;
-	});
-	const u = tx.immediate();
+	const existing = kit.selectFrom(users).executeSync();
+	if (s.setupComplete || existing.length > 0) throw new Error('already set up');
+
+	const u = usersRepo.createUser({
+		email,
+		password_hash: passwordHash ?? 'PLACEHOLDER',
+		display_name: i.displayName,
+		role: 'admin',
+		disabled: false,
+		must_reset_password: false,
+		timezone: i.timezone,
+		flight_checkin_lead_hours: s.defaultFlightCheckinLeadHours,
+		document_expiry_lead_days: s.defaultDocumentExpiryLeadDays,
+		email_notifications: true,
+		webhook_notifications: true,
+		theme_id: 'midnight-travels',
+		default_currency: s.defaultCurrency,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	} as Insert<typeof users>);
+
 	updateSettings({ setupComplete: true, instanceName: i.instanceName, defaultTimezone: i.timezone });
-	// Mirror the admin into the kit users table so kit auth/session resolution works.
-	usersRepo.createUser({
-		id: BigInt(u.id),
+	return {
+		id: Number(u.id),
 		email: u.email,
-		password_hash: u.passwordHash,
-		display_name: u.displayName,
-		role: u.role,
-		disabled: u.disabled,
-		must_reset_password: u.mustResetPassword,
-		timezone: u.timezone,
-		flight_checkin_lead_hours: BigInt(u.flightCheckinLeadHours),
-		document_expiry_lead_days: BigInt(u.documentExpiryLeadDays),
-		email_notifications: u.emailNotifications,
-		webhook_notifications: u.webhookNotifications,
-		theme_id: u.themeId,
-		default_currency: u.defaultCurrency,
-		calendar_token: u.calendarToken,
-		calendar_token_expires_at: u.calendarTokenExpiresAt
-	} as any);
-	return u;
+		displayName: u.display_name ?? '',
+		role: u.role
+	};
 }
 
 export const actions: Actions = {

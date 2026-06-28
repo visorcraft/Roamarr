@@ -1,8 +1,9 @@
 import { error, fail, redirect, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { eq as kitEq, inList, asc } from '@mongreldb/kit';
 import { requireUser } from '$lib/server/auth';
-import { db } from '$lib/server/db';
-import { trips, tripCompanions, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
+import { kit } from '$lib/server/db';
+import { tripCompanions } from '$lib/server/db/mongrelSchema';
+import { TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
 import { upsertRemindersForDocument, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
@@ -12,6 +13,7 @@ import {
 	deleteTravelDocument,
 	listTravelDocuments
 } from '$lib/server/repositories/profileRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import type { PageServerLoad } from './$types';
 
 export function _addDocument(
@@ -62,14 +64,13 @@ function _updateDocument(
 }
 
 function requireOwnedCompanion(userId: number, companionId: number) {
-	const c = db
-		.select({ id: tripCompanions.id })
-		.from(tripCompanions)
-		.innerJoin(trips, eq(tripCompanions.tripId, trips.id))
-		.where(and(eq(tripCompanions.id, companionId), eq(trips.ownerId, userId)))
-		.get();
+	const c = kit
+		.selectFrom(tripCompanions)
+		.where(kitEq(tripCompanions.id, BigInt(companionId)))
+		.executeSync()[0];
 	if (!c) throw error(404, 'Companion not found');
-	return c;
+	const trip = tripsRepo.getTripById(Number(c.trip_id));
+	if (!trip || trip.ownerId !== userId) throw error(404, 'Companion not found');
 }
 
 function parseCompanionId(raw: FormDataEntryValue | null): number | null {
@@ -83,18 +84,23 @@ function parseCompanionId(raw: FormDataEntryValue | null): number | null {
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	const rows = listTravelDocuments(u.id);
-	const companions = db
-		.select({
-			id: tripCompanions.id,
-			name: tripCompanions.name,
-			tripId: tripCompanions.tripId,
-			tripName: trips.name
-		})
-		.from(tripCompanions)
-		.innerJoin(trips, eq(tripCompanions.tripId, trips.id))
-		.where(eq(trips.ownerId, u.id))
-		.orderBy(tripCompanions.name)
-		.all();
+	const ownedTrips = tripsRepo.listTripsForUser(u.id);
+	const tripIds = ownedTrips.map((t) => BigInt(t.id));
+	const tripNameMap = new Map(ownedTrips.map((t) => [BigInt(t.id), t.name]));
+	const companions =
+		tripIds.length === 0
+			? []
+			: kit
+					.selectFrom(tripCompanions)
+					.where(inList(tripCompanions.trip_id, tripIds))
+					.orderBy(asc(tripCompanions.name as any))
+					.executeSync()
+					.map((c) => ({
+						id: Number(c.id),
+						name: c.name as string,
+						tripId: Number(c.trip_id),
+						tripName: tripNameMap.get(c.trip_id as bigint) ?? ''
+					}));
 	return {
 		documents: rows,
 		companions

@@ -1,7 +1,6 @@
 import { eq, and, ne, asc, desc, inList, lte, isNotNull } from '@mongreldb/kit';
-import { eq as drizzleEq, and as drizzleAnd, ne as drizzleNe } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	travelDocuments,
 	loyaltyPrograms,
@@ -10,14 +9,6 @@ import {
 	insurancePolicies,
 	emergencyContacts
 } from '$lib/server/db/mongrelSchema';
-import {
-	travelDocuments as drizzleTravelDocuments,
-	loyaltyPrograms as drizzleLoyaltyPrograms,
-	cards as drizzleCards,
-	cardBenefits as drizzleCardBenefits,
-	insurancePolicies as drizzleInsurancePolicies,
-	emergencyContacts as drizzleEmergencyContacts
-} from '$lib/server/db/schema';
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { sanitizeLast4 } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
@@ -109,40 +100,8 @@ function toKitTravelDocumentInput(
 	};
 }
 
-function syncTravelDocumentToLegacy(row: Row<typeof travelDocuments>) {
-	db.insert(drizzleTravelDocuments)
-		.values({
-			id: idFromBigInt(row.id),
-			userId: idFromBigInt(row.user_id),
-			companionId: optionalFkNumber(row.companion_id),
-			type: row.type,
-			number: row.number,
-			issuingAuthority: nullableText(row.issuing_authority),
-			expiresOn: nullableText(row.expires_on),
-			notes: nullableText(row.notes)
-		})
-		.onConflictDoNothing({ target: drizzleTravelDocuments.id })
-		.run();
-}
 
-function updateTravelDocumentInLegacy(doc: TravelDocument) {
-	db.update(drizzleTravelDocuments)
-		.set({
-			userId: doc.userId,
-			companionId: doc.companionId,
-			type: doc.type,
-			number: doc.number ? encrypt(doc.number) : null,
-			issuingAuthority: doc.issuingAuthority,
-			expiresOn: doc.expiresOn,
-			notes: doc.notes
-		})
-		.where(drizzleEq(drizzleTravelDocuments.id, doc.id))
-		.run();
-}
 
-function deleteTravelDocumentFromLegacy(id: number) {
-	db.delete(drizzleTravelDocuments).where(drizzleEq(drizzleTravelDocuments.id, id)).run();
-}
 
 export function listTravelDocuments(userId: number): TravelDocument[] {
 	const rows = kit
@@ -191,7 +150,7 @@ export function createTravelDocument(userId: number, input: TravelDocumentInput)
 			...toKitTravelDocumentInput(input)
 		} as Insert<typeof travelDocuments>)
 		.executeSync();
-	syncTravelDocumentToLegacy(row);
+(row);
 	return toTravelDocument(row);
 }
 
@@ -230,14 +189,14 @@ export function updateTravelDocument(
 		row = rows[0]!;
 	}
 	const updated = toTravelDocument(row);
-	updateTravelDocumentInLegacy(updated);
+	(updated);
 	return updated;
 }
 
 export function deleteTravelDocument(id: number, userId: number): bigint {
 	const existing = getTravelDocumentById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	deleteTravelDocumentFromLegacy(id);
+	(id);
 	return kit
 		.deleteFrom(travelDocuments)
 		.where(eq(travelDocuments.id, toBigInt(id)))
@@ -286,36 +245,8 @@ function toKitLoyaltyProgramInput(
 	};
 }
 
-function syncLoyaltyProgramToLegacy(row: Row<typeof loyaltyPrograms>) {
-	db.insert(drizzleLoyaltyPrograms)
-		.values({
-			id: idFromBigInt(row.id),
-			userId: idFromBigInt(row.user_id),
-			programName: row.program_name,
-			membershipNumber: nullableText(row.membership_number),
-			balance: optionalNumber(row.balance),
-			notes: nullableText(row.notes)
-		})
-		.onConflictDoNothing({ target: drizzleLoyaltyPrograms.id })
-		.run();
-}
 
-function updateLoyaltyProgramInLegacy(program: LoyaltyProgram) {
-	db.update(drizzleLoyaltyPrograms)
-		.set({
-			userId: program.userId,
-			programName: program.programName,
-			membershipNumber: program.membershipNumber,
-			balance: program.balance,
-			notes: program.notes
-		})
-		.where(drizzleEq(drizzleLoyaltyPrograms.id, program.id))
-		.run();
-}
 
-function deleteLoyaltyProgramFromLegacy(id: number) {
-	db.delete(drizzleLoyaltyPrograms).where(drizzleEq(drizzleLoyaltyPrograms.id, id)).run();
-}
 
 function validateLoyaltyProgramInput(input: LoyaltyProgramInput) {
 	if (!input.programName.trim()) throw error(400, 'Program name is required');
@@ -361,7 +292,7 @@ export function createLoyaltyProgram(userId: number, input: LoyaltyProgramInput)
 			...toKitLoyaltyProgramInput(input)
 		} as Insert<typeof loyaltyPrograms>)
 		.executeSync();
-	syncLoyaltyProgramToLegacy(row);
+	(row);
 	logAudit(userId, 'create', 'loyalty_program', idFromBigInt(row.id));
 	return toLoyaltyProgram(row);
 }
@@ -385,7 +316,7 @@ export function updateLoyaltyProgram(
 		)
 		.executeSync();
 	const updated = rows[0] ? toLoyaltyProgram(rows[0]) : null;
-	if (updated) updateLoyaltyProgramInLegacy(updated);
+	if (updated) (updated);
 	logAudit(userId, 'update', 'loyalty_program', id);
 	return updated;
 }
@@ -393,7 +324,7 @@ export function updateLoyaltyProgram(
 export function deleteLoyaltyProgram(id: number, userId: number): bigint {
 	const existing = getLoyaltyProgramById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	deleteLoyaltyProgramFromLegacy(id);
+	(id);
 	logAudit(userId, 'delete', 'loyalty_program', id);
 	return kit
 		.deleteFrom(loyaltyPrograms)
@@ -443,36 +374,8 @@ function toKitCardInput(input: CardInput): Update<typeof cards> {
 	};
 }
 
-function syncCardToLegacy(row: Row<typeof cards>) {
-	db.insert(drizzleCards)
-		.values({
-			id: idFromBigInt(row.id),
-			userId: idFromBigInt(row.user_id),
-			nickname: row.nickname,
-			network: row.network,
-			last4: nullableText(row.last4),
-			notes: nullableText(row.notes)
-		})
-		.onConflictDoNothing({ target: drizzleCards.id })
-		.run();
-}
 
-function updateCardInLegacy(card: Card) {
-	db.update(drizzleCards)
-		.set({
-			userId: card.userId,
-			nickname: card.nickname,
-			network: card.network,
-			last4: card.last4,
-			notes: card.notes
-		})
-		.where(drizzleEq(drizzleCards.id, card.id))
-		.run();
-}
 
-function deleteCardFromLegacy(id: number) {
-	db.delete(drizzleCards).where(drizzleEq(drizzleCards.id, id)).run();
-}
 
 export function listCards(userId: number): Card[] {
 	const rows = kit
@@ -499,7 +402,7 @@ export function createCard(userId: number, input: CardInput): Card {
 			...toKitCardInput(input)
 		} as Insert<typeof cards>)
 		.executeSync();
-	syncCardToLegacy(row);
+	(row);
 	return toCard(row);
 }
 
@@ -512,14 +415,14 @@ export function updateCard(id: number, userId: number, input: CardInput): Card |
 		.where(and(eq(cards.id, toBigInt(id)), eq(cards.user_id, toBigInt(userId))))
 		.executeSync();
 	const updated = rows[0] ? toCard(rows[0]) : null;
-	if (updated) updateCardInLegacy(updated);
+	if (updated) (updated);
 	return updated;
 }
 
 export function deleteCard(id: number, userId: number): bigint {
 	const existing = getCardById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	deleteCardFromLegacy(id);
+	(id);
 	return kit
 		.deleteFrom(cards)
 		.where(eq(cards.id, toBigInt(id)))
@@ -570,36 +473,8 @@ function toKitCardBenefitInput(
 	};
 }
 
-function syncCardBenefitToLegacy(row: Row<typeof cardBenefits>) {
-	db.insert(drizzleCardBenefits)
-		.values({
-			id: idFromBigInt(row.id),
-			cardId: idFromBigInt(row.card_id),
-			benefitType: row.benefit_type,
-			coverageAmount: optionalNumber(row.coverage_amount),
-			currency: row.currency,
-			notes: nullableText(row.notes)
-		})
-		.onConflictDoNothing({ target: drizzleCardBenefits.id })
-		.run();
-}
 
-function updateCardBenefitInLegacy(benefit: CardBenefit) {
-	db.update(drizzleCardBenefits)
-		.set({
-			cardId: benefit.cardId,
-			benefitType: benefit.benefitType,
-			coverageAmount: benefit.coverageAmount,
-			currency: benefit.currency,
-			notes: benefit.notes
-		})
-		.where(drizzleEq(drizzleCardBenefits.id, benefit.id))
-		.run();
-}
 
-function deleteCardBenefitFromLegacy(id: number) {
-	db.delete(drizzleCardBenefits).where(drizzleEq(drizzleCardBenefits.id, id)).run();
-}
 
 function requireOwnedCard(userId: number, cardId: number): Card {
 	const card = getCardById(cardId, userId);
@@ -651,7 +526,7 @@ export function createCardBenefit(
 			...toKitCardBenefitInput(input)
 		} as Insert<typeof cardBenefits>)
 		.executeSync();
-	syncCardBenefitToLegacy(row);
+	(row);
 	return toCardBenefit(row);
 }
 
@@ -673,14 +548,14 @@ export function updateCardBenefit(
 		)
 		.executeSync();
 	const updated = rows[0] ? toCardBenefit(rows[0]) : null;
-	if (updated) updateCardBenefitInLegacy(updated);
+	if (updated) (updated);
 	return updated;
 }
 
 export function deleteCardBenefit(id: number, cardId: number): bigint {
 	const existing = getCardBenefitById(id, cardId);
 	if (!existing) throw error(404, 'Not found');
-	deleteCardBenefitFromLegacy(id);
+	(id);
 	return kit
 		.deleteFrom(cardBenefits)
 		.where(
@@ -754,46 +629,8 @@ function toKitInsurancePolicyInput(
 	};
 }
 
-function syncInsurancePolicyToLegacy(row: Row<typeof insurancePolicies>) {
-	db.insert(drizzleInsurancePolicies)
-		.values({
-			id: idFromBigInt(row.id),
-			userId: idFromBigInt(row.user_id),
-			provider: row.provider,
-			policyNumber: nullableText(row.policy_number),
-			coverageSummary: nullableText(row.coverage_summary),
-			coverageAmount: optionalNumber(row.coverage_amount),
-			currency: row.currency,
-			startDate: nullableText(row.start_date),
-			endDate: nullableText(row.end_date),
-			tripId: optionalFkNumber(row.trip_id),
-			notes: nullableText(row.notes)
-		})
-		.onConflictDoNothing({ target: drizzleInsurancePolicies.id })
-		.run();
-}
 
-function updateInsurancePolicyInLegacy(policy: InsurancePolicy) {
-	db.update(drizzleInsurancePolicies)
-		.set({
-			userId: policy.userId,
-			provider: policy.provider,
-			policyNumber: policy.policyNumber,
-			coverageSummary: policy.coverageSummary,
-			coverageAmount: policy.coverageAmount,
-			currency: policy.currency,
-			startDate: policy.startDate,
-			endDate: policy.endDate,
-			tripId: policy.tripId,
-			notes: policy.notes
-		})
-		.where(drizzleEq(drizzleInsurancePolicies.id, policy.id))
-		.run();
-}
 
-function deleteInsurancePolicyFromLegacy(id: number) {
-	db.delete(drizzleInsurancePolicies).where(drizzleEq(drizzleInsurancePolicies.id, id)).run();
-}
 
 export function listInsurancePolicies(userId: number): InsurancePolicy[] {
 	const rows = kit
@@ -828,7 +665,7 @@ export function createInsurancePolicy(
 			...toKitInsurancePolicyInput(input)
 		} as Insert<typeof insurancePolicies>)
 		.executeSync();
-	syncInsurancePolicyToLegacy(row);
+	(row);
 	return toInsurancePolicy(row);
 }
 
@@ -867,14 +704,14 @@ export function updateInsurancePolicy(
 		row = rows[0]!;
 	}
 	const updated = toInsurancePolicy(row);
-	updateInsurancePolicyInLegacy(updated);
+	(updated);
 	return updated;
 }
 
 export function deleteInsurancePolicy(id: number, userId: number): bigint {
 	const existing = getInsurancePolicyById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	deleteInsurancePolicyFromLegacy(id);
+	(id);
 	return kit
 		.deleteFrom(insurancePolicies)
 		.where(eq(insurancePolicies.id, toBigInt(id)))
@@ -889,7 +726,7 @@ export function attachInsurancePolicyToTrip(userId: number, policyId: number, tr
 		.set({ trip_id: toBigInt(tripId) })
 		.where(eq(insurancePolicies.id, toBigInt(policyId)))
 		.executeSync();
-	updateInsurancePolicyInLegacy({ ...existing, tripId });
+	({ ...existing, tripId });
 }
 
 export function detachInsurancePolicyFromTrip(userId: number, policyId: number) {
@@ -906,7 +743,7 @@ export function detachInsurancePolicyFromTrip(userId: number, policyId: number) 
 		)
 		.executeSync()[0]!;
 	kitReinsertWithId(insurancePolicies, existingRow, { trip_id: null });
-	updateInsurancePolicyInLegacy({ ...existing, tripId: null });
+	({ ...existing, tripId: null });
 }
 
 // ============================================================================
@@ -957,40 +794,8 @@ function toKitEmergencyContactInput(
 	};
 }
 
-function syncEmergencyContactToLegacy(row: Row<typeof emergencyContacts>) {
-	db.insert(drizzleEmergencyContacts)
-		.values({
-			id: idFromBigInt(row.id),
-			userId: idFromBigInt(row.user_id),
-			name: row.name,
-			relationship: nullableText(row.relationship),
-			phone: nullableText(row.phone),
-			email: nullableText(row.email),
-			isPrimary: row.is_primary,
-			createdAt: row.created_at
-		})
-		.onConflictDoNothing({ target: drizzleEmergencyContacts.id })
-		.run();
-}
 
-function updateEmergencyContactInLegacy(contact: EmergencyContact) {
-	db.update(drizzleEmergencyContacts)
-		.set({
-			userId: contact.userId,
-			name: contact.name,
-			relationship: contact.relationship,
-			phone: contact.phone,
-			email: contact.email,
-			isPrimary: contact.isPrimary,
-			createdAt: contact.createdAt
-		})
-		.where(drizzleEq(drizzleEmergencyContacts.id, contact.id))
-		.run();
-}
 
-function deleteEmergencyContactFromLegacy(id: number) {
-	db.delete(drizzleEmergencyContacts).where(drizzleEq(drizzleEmergencyContacts.id, id)).run();
-}
 
 function clearOtherPrimaryEmergencyContact(userId: number, exceptId?: number) {
 	const conditions = [
@@ -1006,18 +811,6 @@ function clearOtherPrimaryEmergencyContact(userId: number, exceptId?: number) {
 		.where(and(...conditions))
 		.executeSync();
 
-	// Keep the legacy table consistent.
-	const legacyConditions = [
-		drizzleEq(drizzleEmergencyContacts.userId, userId),
-		drizzleEq(drizzleEmergencyContacts.isPrimary, true)
-	];
-	if (exceptId != null) {
-		legacyConditions.push(drizzleNe(drizzleEmergencyContacts.id, exceptId));
-	}
-	db.update(drizzleEmergencyContacts)
-		.set({ isPrimary: false })
-		.where(drizzleAnd(...legacyConditions))
-		.run();
 }
 
 export function listEmergencyContacts(userId: number): EmergencyContact[] {
@@ -1061,7 +854,7 @@ export function createEmergencyContact(
 			...toKitEmergencyContactInput({ ...input, name })
 		} as Insert<typeof emergencyContacts>)
 		.executeSync();
-	syncEmergencyContactToLegacy(row);
+	(row);
 	logAudit(userId, 'emergency_contact_create', 'emergency_contact', idFromBigInt(row.id), {
 		name,
 		isPrimary
@@ -1091,7 +884,7 @@ export function updateEmergencyContact(
 		)
 		.executeSync();
 	const updated = rows[0] ? toEmergencyContact(rows[0]) : null;
-	if (updated) updateEmergencyContactInLegacy(updated);
+	if (updated) (updated);
 	logAudit(userId, 'emergency_contact_update', 'emergency_contact', id, { name, isPrimary });
 	return updated;
 }
@@ -1099,8 +892,7 @@ export function updateEmergencyContact(
 export function deleteEmergencyContact(id: number, userId: number): bigint {
 	const existing = getEmergencyContactById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	deleteEmergencyContactFromLegacy(id);
-	logAudit(userId, 'emergency_contact_delete', 'emergency_contact', id);
+		logAudit(userId, 'emergency_contact_delete', 'emergency_contact', id);
 	return kit
 		.deleteFrom(emergencyContacts)
 		.where(eq(emergencyContacts.id, toBigInt(id)))

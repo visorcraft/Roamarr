@@ -38,12 +38,12 @@ test('load returns recent scheduler runs newest first', () => {
 	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
 	const admin = makeAdminLocals(db);
-	makeSchedulerRun(db, kit, {
+	makeSchedulerRun(kit, {
 		startedAt: '2026-06-01T10:00:00.000Z',
 		finishedAt: '2026-06-01T10:00:01.000Z',
 		success: true
 	});
-	makeSchedulerRun(db, kit, {
+	makeSchedulerRun(kit, {
 		startedAt: '2026-06-01T11:00:00.000Z',
 		finishedAt: '2026-06-01T11:00:01.000Z',
 		success: false,
@@ -65,7 +65,7 @@ test('load limits to 50 runs', () => {
 	const admin = makeAdminLocals(db);
 	const base = new Date('2026-06-01T00:00:00.000Z').getTime();
 	for (let i = 0; i < 55; i++) {
-		makeSchedulerRun(db, kit, {
+		makeSchedulerRun(kit, {
 			startedAt: new Date(base + i * 1000).toISOString(),
 			finishedAt: new Date(base + i * 1000 + 1).toISOString(),
 			success: true

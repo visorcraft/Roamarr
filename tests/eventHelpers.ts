@@ -1,6 +1,5 @@
 import type { RequestEvent } from '@sveltejs/kit';
-import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { kit } from '../src/lib/server/db';
+import type { KitDatabase } from '@mongreldb/kit';
 import { makeUser, makeAdmin } from './helpers';
 
 // Email is optional because many tests only need a user id for authorization checks.
@@ -34,12 +33,12 @@ export function makeActionEvent(
 	} as unknown as RequestEvent;
 }
 
-export function makeAdminLocals(db: BetterSQLite3Database<Record<string, unknown>>) {
-	return { user: makeAdmin(db, kit, { email: 'admin@x.c', displayName: 'Admin' }) };
+export function makeAdminLocals(kit: KitDatabase) {
+	return { user: makeAdmin(kit, { email: 'admin@x.c', displayName: 'Admin' }) };
 }
 
-export function makeUserLocals(db: BetterSQLite3Database<Record<string, unknown>>) {
-	return { user: makeUser(db, kit, { email: 'user@x.c', displayName: 'User' }) };
+export function makeUserLocals(kit: KitDatabase) {
+	return { user: makeUser(kit, { email: 'user@x.c', displayName: 'User' }) };
 }
 
 function baseEvent(

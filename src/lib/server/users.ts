@@ -1,13 +1,10 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq as kitEq } from '@mongreldb/kit';
 import { randomBytes } from 'node:crypto';
-import {
-	hashPassword,
-	invalidateAllSessions,
-	invalidateOtherSessions
-} from './auth';
+import { hashPassword, invalidateAllSessions, invalidateOtherSessions } from './auth';
 import { logAudit } from './audit';
-import { db } from './db';
-import { users } from './db/schema';
+import { kit } from './db';
+import { users } from './db/mongrelSchema';
+import * as usersRepo from './repositories/usersRepo';
 import { createPasswordResetToken } from './passwordReset';
 import { deliver } from './notify';
 
@@ -16,17 +13,17 @@ export function normalizeEmail(raw: string): string {
 }
 
 function countAdmins() {
-	return db.select({ c: sql<number>`count(*)` }).from(users).where(eq(users.role, 'admin')).get()!.c;
+	return kit.selectFrom(users).where(kitEq(users.role, 'admin')).executeSync().length;
 }
 
 function assertCanChangeAdminAccess(
-	target: typeof users.$inferSelect,
+	target: usersRepo.KitUser,
 	patch: { role?: 'admin' | 'user'; disabled?: boolean },
 	actorId: number
 ) {
 	const demoting = patch.role === 'user' && target.role === 'admin';
 	const disabling = patch.disabled === true && !target.disabled;
-	const affectsSelf = target.id === actorId;
+	const affectsSelf = Number(target.id) === actorId;
 	if ((demoting || disabling) && affectsSelf && countAdmins() <= 1) {
 		throw new Error('Cannot remove the last admin.');
 	}
@@ -44,38 +41,35 @@ export async function adminCreateUser(actorId: number, input: AdminCreateUserInp
 	if (!displayName) throw new Error('Display name is required.');
 	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
 
-	const duplicate = db.select().from(users).where(eq(users.email, email)).get();
+	const duplicate = usersRepo.getUserByEmail(email);
 	if (duplicate) throw new Error('That email is already in use.');
 
 	const role = input.role === 'admin' ? 'admin' : 'user';
 	const temporaryPassword = randomBytes(16).toString('base64url');
 	const passwordHash = await hashPassword(temporaryPassword);
 
-	const created = db
-		.insert(users)
-		.values({
-			email,
-			passwordHash,
-			displayName,
-			role,
-			mustResetPassword: true
-		})
-		.returning()
-		.get();
+	const created = usersRepo.createUser({
+		email,
+		password_hash: passwordHash,
+		display_name: displayName
+	} as usersRepo.CreateUserInput);
+	if (role === 'admin') {
+		usersRepo.updateUser(Number(created.id), { role: 'admin' });
+	}
 
-	logAudit(actorId, 'user_create', 'user', created.id, { role });
+	logAudit(actorId, 'user_create', 'user', Number(created.id), { role });
 	return { user: created, temporaryPassword };
 }
 
 export async function adminDeleteUser(actorId: number, userId: number) {
-	const target = db.select().from(users).where(eq(users.id, userId)).get();
+	const target = usersRepo.getUserById(userId);
 	if (!target) throw new Error('User not found.');
 
 	if (target.role === 'admin' && countAdmins() <= 1) {
 		throw new Error('Cannot delete the last admin.');
 	}
 
-	db.delete(users).where(eq(users.id, userId)).run();
+	usersRepo.deleteUser(userId);
 	logAudit(actorId, 'user_delete', 'user', userId, { email: target.email, role: target.role });
 }
 
@@ -94,7 +88,7 @@ export async function adminUpdateUser(
 	userId: number,
 	input: AdminUpdateUserInput
 ) {
-	const target = db.select().from(users).where(eq(users.id, userId)).get();
+	const target = usersRepo.getUserById(userId);
 	if (!target) throw new Error('User not found.');
 
 	const displayName = input.displayName.trim();
@@ -102,31 +96,33 @@ export async function adminUpdateUser(
 	if (!displayName) throw new Error('Display name is required.');
 	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
 
-	const duplicate = db.select().from(users).where(eq(users.email, email)).get();
-	if (duplicate && duplicate.id !== userId) throw new Error('That email is already in use.');
+	const duplicate = usersRepo.getUserByEmail(email);
+	if (duplicate && Number(duplicate.id) !== userId) throw new Error('That email is already in use.');
 
 	assertCanChangeAdminAccess(target, { role: input.role, disabled: input.disabled }, actorId);
 
-	const patch: Partial<typeof users.$inferInsert> = {
-		displayName,
+	const patch: Partial<usersRepo.KitUser> = {
+		display_name: displayName,
 		email,
 		role: input.role,
 		disabled: input.disabled,
-		mustResetPassword: input.mustResetPassword
+		must_reset_password: input.mustResetPassword
 	};
 
 	const newPassword = input.newPassword?.trim() ?? '';
 	const confirmPassword = input.confirmPassword?.trim() ?? '';
+	let passwordChanged = false;
 	if (newPassword || confirmPassword) {
 		if (newPassword.length < 8) throw new Error('New password must be at least 8 characters.');
 		if (newPassword !== confirmPassword) throw new Error('New passwords do not match.');
-		patch.passwordHash = await hashPassword(newPassword);
-		if (!input.mustResetPassword) patch.mustResetPassword = false;
+		patch.password_hash = await hashPassword(newPassword);
+		if (!input.mustResetPassword) patch.must_reset_password = false;
+		passwordChanged = true;
 	}
 
-	db.update(users).set(patch).where(eq(users.id, userId)).run();
+	usersRepo.updateUser(userId, patch);
 
-	if (patch.passwordHash) invalidateAllSessions(userId);
+	if (passwordChanged) invalidateAllSessions(userId);
 
 	logAudit(actorId, 'user_update', 'user', userId, {
 		changed: Object.keys(patch),
@@ -137,13 +133,13 @@ export async function adminUpdateUser(
 }
 
 export async function adminSendPasswordReset(userId: number, origin: string) {
-	const target = db.select().from(users).where(eq(users.id, userId)).get();
+	const target = usersRepo.getUserById(userId);
 	if (!target) throw new Error('User not found.');
 	if (target.disabled) throw new Error('Cannot reset password for a disabled account.');
 
-	const token = createPasswordResetToken(userId);
+	const token = createPasswordResetToken(Number(target.id));
 	const link = `${origin}/reset-password/${token}`;
-	await deliver(userId, {
+	await deliver(Number(target.id), {
 		title: 'Reset your Roamarr password',
 		body: 'An administrator requested a password reset. Click the link below to choose a new password. This link expires in 1 hour.',
 		link
@@ -156,15 +152,15 @@ export async function completeRequiredPasswordChange(
 	newPassword: string,
 	confirmPassword: string
 ) {
-	const u = db.select().from(users).where(eq(users.id, userId)).get();
-	if (!u?.mustResetPassword) throw new Error('Password change is not required.');
+	const u = usersRepo.getUserById(userId);
+	if (!u?.must_reset_password) throw new Error('Password change is not required.');
 	if (newPassword.length < 8) throw new Error('Password must be at least 8 characters.');
 	if (newPassword !== confirmPassword) throw new Error('Passwords do not match.');
 
-	db.update(users)
-		.set({ passwordHash: await hashPassword(newPassword), mustResetPassword: false })
-		.where(eq(users.id, userId))
-		.run();
+	usersRepo.updateUser(userId, {
+		password_hash: await hashPassword(newPassword),
+		must_reset_password: false
+	});
 	invalidateOtherSessions(userId, sessionToken);
 	logAudit(userId, 'password_change', 'user', userId, { forced: true });
 }

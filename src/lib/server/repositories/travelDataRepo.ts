@@ -10,18 +10,12 @@ import {
 	type Insert,
 	type Update
 } from '@mongreldb/kit';
-import { eq as drizzleEq, and as drizzleAnd } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { kit } from '$lib/server/db';
 import {
 	geonamesCities,
 	fareProviders,
 	fareWatches
 } from '$lib/server/db/mongrelSchema';
-import {
-	geonamesCities as drizzleGeonamesCities,
-	fareProviders as drizzleFareProviders,
-	fareWatches as drizzleFareWatches
-} from '$lib/server/db/schema';
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { nowIso } from '$lib/server/tz';
 
@@ -66,50 +60,11 @@ function toKitGeonamesCityInput(row: GeonamesCityRow): Insert<typeof geonamesCit
 	};
 }
 
-function mirrorGeonamesCitiesToLegacy(cities: GeonamesCityRow[]) {
-	db.delete(drizzleGeonamesCities).run();
-	if (cities.length === 0) return;
-	db.insert(drizzleGeonamesCities)
-		.values(
-			cities.map((c) => ({
-				geonameId: c.geonameId,
-				name: c.name,
-				asciiName: c.asciiName,
-				countryCode: c.countryCode,
-				lat: c.lat,
-				lng: c.lng,
-				population: c.population,
-				timezone: c.timezone
-			}))
-		)
-		.run();
-}
-
-function cityFromLegacy(geonameId: number): GeonamesCityRow | null {
-	const row = db
-		.select()
-		.from(drizzleGeonamesCities)
-		.where(drizzleEq(drizzleGeonamesCities.geonameId, geonameId))
-		.get();
-	if (!row) return null;
-	return {
-		geonameId: row.geonameId,
-		name: row.name,
-		asciiName: row.asciiName,
-		countryCode: row.countryCode,
-		lat: row.lat,
-		lng: row.lng,
-		population: row.population ?? null,
-		timezone: row.timezone ?? null
-	};
-}
-
 export function importCitiesBatch(cities: GeonamesCityRow[]): number {
 	kit.deleteFrom(geonamesCities).executeSync();
 	for (const city of cities) {
 		kit.insertInto(geonamesCities).values(toKitGeonamesCityInput(city) as Insert<typeof geonamesCities>).executeSync();
 	}
-	mirrorGeonamesCitiesToLegacy(cities);
 	return cities.length;
 }
 
@@ -118,7 +73,7 @@ export function getCityByGeoNameId(geonameId: number): GeonamesCityRow | null {
 		.selectFrom(geonamesCities)
 		.where(eq(geonamesCities.geoname_id, BigInt(geonameId)))
 		.executeSync();
-	return rows[0] ? toGeonamesCityRow(rows[0]) : cityFromLegacy(geonameId);
+	return rows[0] ? toGeonamesCityRow(rows[0]) : null;
 }
 
 export function findCityByCountryAndName(countryCode: string, name: string): GeonamesCityRow | null {
@@ -130,30 +85,7 @@ export function findCityByCountryAndName(countryCode: string, name: string): Geo
 		.where(eq(geonamesCities.country_code, code))
 		.executeSync();
 	const match = rows.find((r) => r.name === name);
-	if (match) return toGeonamesCityRow(match);
-
-	const legacy = db
-		.select()
-		.from(drizzleGeonamesCities)
-		.where(
-			drizzleAnd(
-				drizzleEq(drizzleGeonamesCities.countryCode, code),
-				drizzleEq(drizzleGeonamesCities.name, name)
-			)
-		)
-		.get();
-	return legacy
-		? {
-				geonameId: legacy.geonameId,
-				name: legacy.name,
-				asciiName: legacy.asciiName,
-				countryCode: legacy.countryCode,
-				lat: legacy.lat,
-				lng: legacy.lng,
-				population: legacy.population ?? null,
-				timezone: legacy.timezone ?? null
-		  }
-		: null;
+	return match ? toGeonamesCityRow(match) : null;
 }
 
 export function searchCities(
@@ -262,23 +194,6 @@ function toFareProviderAccount(row: Row<typeof fareProviders>): FareProviderAcco
 	};
 }
 
-function fareProviderFromLegacy(id: number): FareProviderAccount | null {
-	const row = db
-		.select()
-		.from(drizzleFareProviders)
-		.where(drizzleEq(drizzleFareProviders.id, id))
-		.get();
-	if (!row) return null;
-	return {
-		id: row.id,
-		userId: row.userId,
-		providerKey: row.providerKey,
-		label: row.label,
-		apiKey: row.apiKey ? decrypt(row.apiKey) : null,
-		enabled: row.enabled
-	};
-}
-
 function toKitFareProviderInput(input: CreateFareProviderInput): Record<string, unknown> {
 	return {
 		user_id: BigInt(input.userId),
@@ -287,34 +202,6 @@ function toKitFareProviderInput(input: CreateFareProviderInput): Record<string, 
 		api_key: input.apiKey ? encrypt(input.apiKey) : null,
 		enabled: input.enabled
 	};
-}
-
-function mirrorFareProviderToLegacy(row: Row<typeof fareProviders>) {
-	const id = Number(row.id);
-	const existing = db
-		.select()
-		.from(drizzleFareProviders)
-		.where(drizzleEq(drizzleFareProviders.id, id))
-		.get();
-	const values = {
-		userId: Number(row.user_id),
-		providerKey: row.provider_key,
-		label: row.label,
-		apiKey: row.api_key,
-		enabled: row.enabled
-	};
-	if (existing) {
-		db.update(drizzleFareProviders)
-			.set(values)
-			.where(drizzleEq(drizzleFareProviders.id, id))
-			.run();
-	} else {
-		db.insert(drizzleFareProviders).values({ id, ...values }).run();
-	}
-}
-
-function deleteFareProviderFromLegacy(id: number) {
-	db.delete(drizzleFareProviders).where(drizzleEq(drizzleFareProviders.id, id)).run();
 }
 
 export function listFareProvidersForUser(userId: number): FareProviderAccount[] {
@@ -331,7 +218,7 @@ export function getFareProviderById(id: number): FareProviderAccount | null {
 		.selectFrom(fareProviders)
 		.where(eq(fareProviders.id, BigInt(id)))
 		.executeSync();
-	return rows[0] ? toFareProviderAccount(rows[0]) : fareProviderFromLegacy(id);
+	return rows[0] ? toFareProviderAccount(rows[0]) : null;
 }
 
 export function getFareProviderByIdAndUser(id: number, userId: number): FareProviderAccount | null {
@@ -355,14 +242,10 @@ export function createFareProvider(input: CreateFareProviderInput): FareProvider
 			...toKitFareProviderInput(input)
 		} as unknown as Insert<typeof fareProviders>)
 		.executeSync();
-	mirrorFareProviderToLegacy(row);
 	return toFareProviderAccount(row);
 }
 
 export function updateFareProvider(id: number, patch: UpdateFareProviderInput): FareProviderAccount | null {
-	const existing = getFareProviderById(id);
-	if (!existing) return null;
-
 	const set: Update<typeof fareProviders> = {};
 	if (patch.label !== undefined) set.label = patch.label.trim();
 	if (patch.enabled !== undefined) set.enabled = patch.enabled;
@@ -372,8 +255,7 @@ export function updateFareProvider(id: number, patch: UpdateFareProviderInput): 
 
 	const updated = kit.updateTable(fareProviders).set(set).where(eq(fareProviders.id, BigInt(id))).executeSync();
 	const row = updated[0];
-	if (!row) return existing;
-	mirrorFareProviderToLegacy(row);
+	if (!row) return getFareProviderById(id);
 	return toFareProviderAccount(row);
 }
 
@@ -381,7 +263,6 @@ export function deleteFareProvider(id: number): boolean {
 	const existing = getFareProviderById(id);
 	if (!existing) return false;
 	kit.deleteFrom(fareProviders).where(eq(fareProviders.id, BigInt(id))).executeSync();
-	deleteFareProviderFromLegacy(id);
 	return true;
 }
 
@@ -437,25 +318,6 @@ function toFareWatch(row: Row<typeof fareWatches>): FareWatch {
 	};
 }
 
-function fareWatchFromLegacy(id: number): FareWatch | null {
-	const row = db
-		.select()
-		.from(drizzleFareWatches)
-		.where(drizzleEq(drizzleFareWatches.id, id))
-		.get();
-	if (!row) return null;
-	return {
-		id: row.id,
-		tripId: row.tripId,
-		segmentId: row.segmentId ?? null,
-		providerId: row.providerId,
-		status: row.status as FareWatchStatus,
-		lastCheckedAt: row.lastCheckedAt ?? null,
-		lastResultJson: row.lastResultJson ?? null,
-		createdAt: row.createdAt
-	};
-}
-
 function toKitFareWatchInput(input: CreateFareWatchInput): Record<string, unknown> {
 	return {
 		trip_id: BigInt(input.tripId),
@@ -467,42 +329,12 @@ function toKitFareWatchInput(input: CreateFareWatchInput): Record<string, unknow
 	};
 }
 
-function mirrorFareWatchToLegacy(row: Row<typeof fareWatches>) {
-	const id = Number(row.id);
-	const existing = db
-		.select()
-		.from(drizzleFareWatches)
-		.where(drizzleEq(drizzleFareWatches.id, id))
-		.get();
-	const values = {
-		tripId: Number(row.trip_id),
-		segmentId: row.segment_id == null || row.segment_id === 0n ? null : Number(row.segment_id),
-		providerId: Number(row.provider_id),
-		status: row.status,
-		lastCheckedAt: row.last_checked_at,
-		lastResultJson: row.last_result_json ? String(row.last_result_json) : null,
-		createdAt: row.created_at
-	};
-	if (existing) {
-		db.update(drizzleFareWatches)
-			.set(values)
-			.where(drizzleEq(drizzleFareWatches.id, id))
-			.run();
-	} else {
-		db.insert(drizzleFareWatches).values({ id, ...values }).run();
-	}
-}
-
-function deleteFareWatchFromLegacy(id: number) {
-	db.delete(drizzleFareWatches).where(drizzleEq(drizzleFareWatches.id, id)).run();
-}
-
 export function getFareWatchById(id: number): FareWatch | null {
 	const rows = kit
 		.selectFrom(fareWatches)
 		.where(eq(fareWatches.id, BigInt(id)))
 		.executeSync();
-	return rows[0] ? toFareWatch(rows[0]) : fareWatchFromLegacy(id);
+	return rows[0] ? toFareWatch(rows[0]) : null;
 }
 
 function nullIntPredicate(column: typeof fareWatches.segment_id) {
@@ -580,7 +412,6 @@ export function createFareWatch(input: CreateFareWatchInput): FareWatch {
 			...toKitFareWatchInput(input)
 		} as unknown as Insert<typeof fareWatches>)
 		.executeSync();
-	mirrorFareWatchToLegacy(row);
 	return toFareWatch(row);
 }
 
@@ -598,7 +429,6 @@ export function updateFareWatch(id: number, patch: UpdateFareWatchInput): FareWa
 	const updated = kit.updateTable(fareWatches).set(set).where(eq(fareWatches.id, BigInt(id))).executeSync();
 	const row = updated[0];
 	if (!row) return getFareWatchById(id);
-	mirrorFareWatchToLegacy(row);
 	return toFareWatch(row);
 }
 
@@ -606,7 +436,6 @@ export function deleteFareWatch(id: number): boolean {
 	const existing = getFareWatchById(id);
 	if (!existing) return false;
 	kit.deleteFrom(fareWatches).where(eq(fareWatches.id, BigInt(id))).executeSync();
-	deleteFareWatchFromLegacy(id);
 	return true;
 }
 

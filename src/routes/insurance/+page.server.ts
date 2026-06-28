@@ -1,9 +1,7 @@
-import { eq } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
-import { db } from '$lib/server/db';
-import { trips } from '$lib/server/db/schema';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import {
 	listInsurancePolicies,
 	createInsurancePolicy,
@@ -70,7 +68,7 @@ export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	return {
 		policies: listInsurancePolicies(u.id),
-		trips: db.select().from(trips).where(eq(trips.ownerId, u.id)).all()
+		trips: tripsRepo.listTripsForUser(u.id)
 	};
 };
 

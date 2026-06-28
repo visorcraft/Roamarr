@@ -50,10 +50,10 @@ beforeEach(() => {
 function seed() {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'med@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
-	const c = makeSyncedCompanion(db, kit, { tripId: t.id, name: 'Sam', category: 'child' });
-	const other = makeSyncedUser(db, kit, { email: 'oth@x.c' });
+	const u = makeSyncedUser(kit, { email: 'med@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const c = makeSyncedCompanion(kit, { tripId: t.id, name: 'Sam', category: 'child' });
+	const other = makeSyncedUser(kit, { email: 'oth@x.c' });
 	return { db, u, t, c, other };
 }
 

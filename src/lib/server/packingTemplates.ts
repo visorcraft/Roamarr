@@ -1,9 +1,7 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { db, sqlite } from './db';
-import { tripChecklists, tripChecklistItems } from './db/schema';
 import * as templatesRepo from './repositories/templatesRepo';
+import * as tripMiscRepo from './repositories/tripMiscRepo';
 import { getOrCreateChecklist } from './tripChecklists';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
@@ -23,14 +21,11 @@ function requireTemplateOwner(userId: number, templateId: number) {
 }
 
 function loadChecklistItems(tripId: number) {
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, tripId)).get();
+	const checklist = tripMiscRepo.getChecklistByTripId(tripId);
 	if (!checklist) return [];
-	return db
-		.select({ text: tripChecklistItems.text })
-		.from(tripChecklistItems)
-		.where(eq(tripChecklistItems.checklistId, checklist.id))
-		.orderBy(tripChecklistItems.createdAt)
-		.all();
+	return tripMiscRepo
+		.listItemsForChecklist(checklist.id)
+		.map((i) => ({ text: i.text }));
 }
 
 function validateTemplateInput(name: unknown, items: { label: string; category?: string }[]) {
@@ -58,23 +53,21 @@ function insertTemplate(
 	items: { label: string; category?: string }[],
 	fromTripId?: number
 ) {
-	return sqlite.transaction(() => {
-		const template = templatesRepo.createPackingTemplate({ userId, name });
-		if (items.length) {
-			for (const item of items) {
-				templatesRepo.createPackingTemplateItem({
-					templateId: template.id,
-					label: item.label,
-					category: item.category
-				});
-			}
+	const template = templatesRepo.createPackingTemplate({ userId, name });
+	if (items.length) {
+		for (const item of items) {
+			templatesRepo.createPackingTemplateItem({
+				templateId: template.id,
+				label: item.label,
+				category: item.category
+			});
 		}
-		logAudit(userId, 'packing_template_save', 'packing_template', template.id, {
-			fromTripId,
-			itemCount: items.length
-		});
-		return template.id;
-	})();
+	}
+	logAudit(userId, 'packing_template_save', 'packing_template', template.id, {
+		fromTripId,
+		itemCount: items.length
+	});
+	return template.id;
 }
 
 export function saveTemplate(
@@ -97,22 +90,20 @@ export function listTemplates(userId: number): templatesRepo.PackingTemplate[] {
 }
 
 function applyTx(templateId: number, tripId: number, userId: number) {
-	return sqlite.transaction(() => {
-		const template = requireTemplateOwner(userId, templateId);
-		const items = templatesRepo.listPackingTemplateItems(templateId);
-		const checklist = getOrCreateChecklist(tripId);
-		if (items.length) {
-			db.insert(tripChecklistItems)
-				.values(items.map((item) => ({ checklistId: checklist.id, text: item.label })))
-				.run();
+	const template = requireTemplateOwner(userId, templateId);
+	const items = templatesRepo.listPackingTemplateItems(templateId);
+	const checklist = getOrCreateChecklist(tripId);
+	if (items.length) {
+		for (const item of items) {
+			tripMiscRepo.createChecklistItem({ checklistId: checklist.id, text: item.label });
 		}
-		logAudit(userId, 'packing_template_apply', 'trip_checklist', checklist.id, {
-			templateId,
-			tripId,
-			itemCount: items.length
-		});
-		return { template, itemCount: items.length };
-	})();
+	}
+	logAudit(userId, 'packing_template_apply', 'trip_checklist', checklist.id, {
+		templateId,
+		tripId,
+		itemCount: items.length
+	});
+	return { template, itemCount: items.length };
 }
 
 export function applyTemplate(templateId: number, tripId: number, userId: number) {

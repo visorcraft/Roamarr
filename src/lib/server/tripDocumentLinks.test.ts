@@ -31,8 +31,8 @@ function getKit() {
 test('listDocumentLinks returns links ordered by newest first', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	createDocumentLink(u.id, t.id, { label: 'First', url: 'https://first.example' });
 	createDocumentLink(u.id, t.id, { label: 'Second', url: 'https://second.example' });
@@ -44,8 +44,8 @@ test('listDocumentLinks returns links ordered by newest first', () => {
 test('createDocumentLink inserts a link and audits', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl2@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl2@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const link = createDocumentLink(u.id, t.id, {
 		label: 'Booking',
@@ -66,8 +66,8 @@ test('createDocumentLink inserts a link and audits', () => {
 test('createDocumentLink trims whitespace and stores null for blank notes', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl3@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl3@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const link = createDocumentLink(u.id, t.id, {
 		label: '  Booking  ',
@@ -83,8 +83,8 @@ test('createDocumentLink trims whitespace and stores null for blank notes', () =
 test('createDocumentLink rejects invalid URLs', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl4@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl4@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'not-a-url' })).toThrow(
 		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
@@ -97,8 +97,8 @@ test('createDocumentLink rejects invalid URLs', () => {
 test('editDocumentLink updates a link and audits', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl5@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl5@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const link = createDocumentLink(u.id, t.id, { label: 'Old', url: 'https://old.example' });
 
 	const updated = editDocumentLink(u.id, t.id, link.id, {
@@ -118,9 +118,9 @@ test('editDocumentLink updates a link and audits', () => {
 test('editDocumentLink is scoped to the trip', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl6@x.c' });
-	const t1 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T1' });
-	const t2 = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T2' });
+	const u = makeSyncedUser(kit, { email: 'dl6@x.c' });
+	const t1 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T1' });
+	const t2 = makeSyncedTrip(kit, { ownerId: u.id, name: 'T2' });
 	const link = createDocumentLink(u.id, t1.id, { label: 'L', url: 'https://a.example' });
 
 	try {
@@ -134,9 +134,9 @@ test('editDocumentLink is scoped to the trip', () => {
 test('removeDocumentLink deletes only the owned trip link', () => {
 	const db = getDb();
 	const kit = getKit();
-	const a = makeSyncedUser(db, kit, { email: 'dl7-a@x.c' });
-	const b = makeSyncedUser(db, kit, { email: 'dl7-b@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: a.id, name: 'T' });
+	const a = makeSyncedUser(kit, { email: 'dl7-a@x.c' });
+	const b = makeSyncedUser(kit, { email: 'dl7-b@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: a.id, name: 'T' });
 	const link = createDocumentLink(a.id, t.id, { label: 'L', url: 'https://a.example' });
 
 	try {
@@ -157,8 +157,8 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 test('addDocumentLink action creates a link and redirects', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl8@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl8@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const event = makeFormEvent(
 		u,
@@ -178,8 +178,8 @@ test('addDocumentLink action creates a link and redirects', async () => {
 test('addDocumentLink action returns validation errors', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl9@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl9@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	const event = makeFormEvent(u, { id: String(t.id) }, { label: '', url: 'not-a-url' });
 	const result = (await addDocumentLink(event)) as {
@@ -194,8 +194,8 @@ test('addDocumentLink action returns validation errors', async () => {
 test('deleteDocumentLink action removes a link and redirects', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'dl10@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'dl10@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const link = createDocumentLink(u.id, t.id, { label: 'Remove', url: 'https://remove.example' });
 
 	const event = makeFormEvent(u, { id: String(t.id) }, { linkId: String(link.id) });

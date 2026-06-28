@@ -27,7 +27,7 @@ function makeEvent(form: FormData, params: Record<string, string> = {}, userId =
 
 test('creates a trip with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const u = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const form = makeFormData({
 		name: 'Summer Escape',
 		startDate: '2026-07-01',
@@ -47,7 +47,7 @@ test('creates a trip with valid data', async () => {
 
 test('rejects missing name and invalid date range', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const u = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const form = makeFormData({
 		name: '  ',
 		startDate: '2026-07-10',
@@ -66,7 +66,7 @@ test('rejects missing name and invalid date range', async () => {
 
 test('rejects invalid visibility enum', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
+	const u = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
 	const form = makeFormData({ name: 'T', defaultVisibility: 'secret' });
 	const result = (await actions.default(makeEvent(form, {}, u.id))) as {
 		status: number;

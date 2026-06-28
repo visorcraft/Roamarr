@@ -1,7 +1,5 @@
 import { error, fail, redirect, type RequestEvent } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from './db';
-import { users } from './db/schema';
+import * as usersRepo from './repositories/usersRepo';
 import * as expensesRepo from './repositories/expensesRepo';
 import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
@@ -140,8 +138,8 @@ export function setTripBudget(
 	amount: number
 ) {
 	requireEditableTrip(userId, tripId);
-	const u = db.select({ defaultCurrency: users.defaultCurrency }).from(users).where(eq(users.id, userId)).get();
-	const row = setBudget(tripId, category, amount, u?.defaultCurrency ?? 'USD');
+	const u = usersRepo.getUserById(userId);
+	const row = setBudget(tripId, category, amount, u?.default_currency ?? 'USD');
 	logAudit(userId, 'set', 'trip_budget_category', row.id, {
 		tripId,
 		category,

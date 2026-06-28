@@ -26,8 +26,8 @@ function event(tripId: number, token: string, ip: string) {
 test('GET returns an ICS calendar for a valid trip and token', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'feed@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'F', calendarToken: 'cal-tok-1' });
+	const u = makeUser(kit, { email: 'feed@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-1' });
 
 	const res = GET(event(t.id, 'cal-tok-1', '1.2.3.4')) as Response;
 	expect(res.status).toBe(200);
@@ -37,8 +37,8 @@ test('GET returns an ICS calendar for a valid trip and token', () => {
 test('GET is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'feed-rl@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'F', calendarToken: 'cal-tok-2' });
+	const u = makeUser(kit, { email: 'feed-rl@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-2' });
 
 	for (let i = 0; i < 30; i++) {
 		GET(event(t.id, 'cal-tok-2', '1.2.3.4'));
@@ -51,8 +51,8 @@ test('GET is rate limited after many requests from the same IP', () => {
 test('rate limit does not block a different IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'feed-rl2@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, { name: 'F', calendarToken: 'cal-tok-3' });
+	const u = makeUser(kit, { email: 'feed-rl2@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'F', calendarToken: 'cal-tok-3' });
 
 	for (let i = 0; i < 30; i++) {
 		GET(event(t.id, 'cal-tok-3', '1.2.3.4'));
@@ -64,8 +64,8 @@ test('rate limit does not block a different IP', () => {
 test('expired calendar token returns 404', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db, kit, { email: 'feed-exp@x.c', passwordHash: 'x', displayName: 'U' });
-	const t = makeTrip(db, kit, u.id, {
+	const u = makeUser(kit, { email: 'feed-exp@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, {
 			name: 'F',
 			calendarToken: 'cal-expired',
 			calendarTokenExpiresAt: '2020-01-01T00:00:00Z'

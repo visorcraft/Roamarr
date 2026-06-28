@@ -1,45 +1,40 @@
-import { eq, desc } from 'drizzle-orm';
-import type { SQL } from 'drizzle-orm';
-import type { SQLiteTable, AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
-import { db } from './db';
+import { eq as kitEq, asc, desc, type OrderBy, type TableSpec, type Row, type Insert } from '@mongreldb/kit';
+import { kit } from './db';
 import { logAudit } from './audit';
 import { requireEditableTrip, requireOwnedTripRow, requireOwnedUserRow } from './ownership';
 
-type TripOwnedTable = SQLiteTable & {
-	id: AnySQLiteColumn;
-	tripId: AnySQLiteColumn;
-	createdAt: AnySQLiteColumn;
-};
+type KitTableWithTrip = TableSpec & { id: unknown; trip_id: unknown };
+type KitTableWithUser = TableSpec & { id: unknown; user_id: unknown };
 
 interface TripCrudOptions<
-	TTable extends TripOwnedTable,
+	TTable extends KitTableWithTrip,
 	Input,
 	UpdateInput = never,
-	ListRow = TTable['$inferSelect']
+	ListRow = Row<TTable>
 > {
 	table: TTable;
 	auditEntity: string;
-	orderBy?: SQL | SQL[];
+	orderBy?: OrderBy | OrderBy[];
 	validate(input: Input): void;
-	buildInsert(input: Input, tripId: number): TTable['$inferInsert'];
+	buildInsert(input: Input, tripId: number): Insert<TTable>;
 	list?: (tripId: number) => ListRow[];
 	update?: {
 		validate(input: UpdateInput): void;
-		buildSet(input: UpdateInput): Partial<TTable['$inferInsert']>;
+		buildSet(input: UpdateInput): Partial<Row<TTable>>;
 		action?: string;
 	};
 }
 
 export function tripCrudFactory<
-	TTable extends TripOwnedTable,
+	TTable extends KitTableWithTrip,
 	Input,
 	UpdateInput = never,
-	ListRow = TTable['$inferSelect']
+	ListRow = Row<TTable>
 >(options: TripCrudOptions<TTable, Input, UpdateInput, ListRow>) {
 	const {
 		table,
 		auditEntity,
-		orderBy = desc(table.createdAt),
+		orderBy = desc(table.id as any),
 		validate,
 		buildInsert,
 		list: customList,
@@ -48,81 +43,75 @@ export function tripCrudFactory<
 
 	function list(tripId: number): ListRow[] {
 		if (customList) return customList(tripId);
-		return db
-			.select()
-			.from(table)
-			.where(eq(table.tripId, tripId))
-			.orderBy(...(Array.isArray(orderBy) ? orderBy : [orderBy]))
-			.all() as ListRow[];
+		const orders = Array.isArray(orderBy) ? orderBy : [orderBy];
+		return kit
+			.selectFrom(table)
+			.where(kitEq(table.trip_id as any, BigInt(tripId)))
+			.orderBy(...orders)
+			.executeSync() as ListRow[];
 	}
 
-	function add(userId: number, tripId: number, input: Input): TTable['$inferSelect'] {
+	function add(userId: number, tripId: number, input: Input): Row<TTable> {
 		requireEditableTrip(userId, tripId);
 		validate(input);
-		const inserted = db
-			.insert(table)
-			.values(buildInsert(input, tripId) as TTable['$inferInsert'])
-			.returning()
-			.get() as TTable['$inferSelect'];
-		logAudit(userId, 'create', auditEntity, inserted.id, { tripId });
-		return inserted;
+		const inserted = kit
+			.insertInto(table)
+			.values(buildInsert(input, tripId) as Insert<TTable>)
+			.executeSync();
+		logAudit(userId, 'create', auditEntity, Number((inserted as Record<string, unknown>).id), { tripId });
+		return inserted as Row<TTable>;
 	}
 
-	function modify(userId: number, tripId: number, id: number, input: UpdateInput): TTable['$inferSelect'] {
+	function modify(userId: number, tripId: number, id: number, input: UpdateInput): Row<TTable> {
 		if (!updateOptions) throw new Error('Update not supported for this CRUD factory');
 		requireEditableTrip(userId, tripId);
 		updateOptions.validate(input);
 		requireOwnedTripRow(table, tripId, id, 'Not found');
-		const updated = db
-			.update(table)
-			.set(updateOptions.buildSet(input) as TTable['$inferInsert'])
-			.where(eq(table.id, id))
-			.returning()
-			.get() as TTable['$inferSelect'];
+		const updated = kit
+			.updateTable(table)
+			.set(updateOptions.buildSet(input) as Partial<Row<TTable>>)
+			.where(kitEq(table.id as any, BigInt(id)))
+			.executeSync();
+		const row = updated[0];
+		if (!row) throw new Error('Update failed');
 		logAudit(userId, updateOptions.action ?? 'update', auditEntity, id, { tripId });
-		return updated;
+		return row as Row<TTable>;
 	}
 
 	function remove(userId: number, tripId: number, id: number): void {
 		requireEditableTrip(userId, tripId);
 		requireOwnedTripRow(table, tripId, id, 'Not found');
-		db.delete(table).where(eq(table.id, id)).run();
+		kit.deleteFrom(table).where(kitEq(table.id as any, BigInt(id))).executeSync();
 		logAudit(userId, 'delete', auditEntity, id, { tripId });
 	}
 
 	return { list, add, modify, remove };
 }
 
-type UserOwnedTable = SQLiteTable & {
-	id: AnySQLiteColumn;
-	userId: AnySQLiteColumn;
-	createdAt?: AnySQLiteColumn;
-};
-
 interface UserCrudOptions<
-	TTable extends UserOwnedTable,
+	TTable extends KitTableWithUser,
 	Input,
 	UpdateInput = never,
-	ListRow = TTable['$inferSelect']
+	ListRow = Row<TTable>
 > {
 	table: TTable;
 	auditEntity: string;
-	orderBy: SQL | SQL[];
+	orderBy: OrderBy | OrderBy[];
 	validate(input: Input): void;
-	buildInsert(input: Input, userId: number): TTable['$inferInsert'];
+	buildInsert(input: Input, userId: number): Insert<TTable>;
 	list?: (userId: number) => ListRow[];
 	update?: {
 		validate(input: UpdateInput): void;
-		buildSet(input: UpdateInput): Partial<TTable['$inferInsert']>;
+		buildSet(input: UpdateInput): Partial<Row<TTable>>;
 		action?: string;
 	};
 }
 
 export function userCrudFactory<
-	TTable extends UserOwnedTable,
+	TTable extends KitTableWithUser,
 	Input,
 	UpdateInput = never,
-	ListRow = TTable['$inferSelect']
+	ListRow = Row<TTable>
 >(options: UserCrudOptions<TTable, Input, UpdateInput, ListRow>) {
 	const {
 		table,
@@ -136,44 +125,46 @@ export function userCrudFactory<
 
 	function list(userId: number): ListRow[] {
 		if (customList) return customList(userId);
-		return db
-			.select()
-			.from(table)
-			.where(eq(table.userId, userId))
-			.orderBy(...(Array.isArray(orderBy) ? orderBy : [orderBy]))
-			.all() as ListRow[];
+		const orders = Array.isArray(orderBy) ? orderBy : [orderBy];
+		return kit
+			.selectFrom(table)
+			.where(kitEq(table.user_id as any, BigInt(userId)))
+			.orderBy(...orders)
+			.executeSync() as ListRow[];
 	}
 
-	function add(userId: number, input: Input): TTable['$inferSelect'] {
+	function add(userId: number, input: Input): Row<TTable> {
 		validate(input);
-		const inserted = db
-			.insert(table)
-			.values(buildInsert(input, userId) as TTable['$inferInsert'])
-			.returning()
-			.get() as TTable['$inferSelect'];
-		logAudit(userId, 'create', auditEntity, inserted.id);
-		return inserted;
+		const inserted = kit
+			.insertInto(table)
+			.values(buildInsert(input, userId) as Insert<TTable>)
+			.executeSync();
+		logAudit(userId, 'create', auditEntity, Number((inserted as Record<string, unknown>).id));
+		return inserted as Row<TTable>;
 	}
 
-	function modify(userId: number, id: number, input: UpdateInput): TTable['$inferSelect'] {
+	function modify(userId: number, id: number, input: UpdateInput): Row<TTable> {
 		if (!updateOptions) throw new Error('Update not supported for this CRUD factory');
 		updateOptions.validate(input);
 		requireOwnedUserRow(table, userId, id, 'Not found');
-		const updated = db
-			.update(table)
-			.set(updateOptions.buildSet(input) as TTable['$inferInsert'])
-			.where(eq(table.id, id))
-			.returning()
-			.get() as TTable['$inferSelect'];
+		const updated = kit
+			.updateTable(table)
+			.set(updateOptions.buildSet(input) as Partial<Row<TTable>>)
+			.where(kitEq(table.id as any, BigInt(id)))
+			.executeSync();
+		const row = updated[0];
+		if (!row) throw new Error('Update failed');
 		logAudit(userId, updateOptions.action ?? 'update', auditEntity, id);
-		return updated;
+		return row as Row<TTable>;
 	}
 
 	function remove(userId: number, id: number): void {
 		requireOwnedUserRow(table, userId, id, 'Not found');
-		db.delete(table).where(eq(table.id, id)).run();
+		kit.deleteFrom(table).where(kitEq(table.id as any, BigInt(id))).executeSync();
 		logAudit(userId, 'delete', auditEntity, id);
 	}
 
 	return { list, add, modify, remove };
 }
+
+export { asc, desc };

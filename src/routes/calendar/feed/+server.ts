@@ -1,8 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import { buildAggregateCalendar, type CalendarSegment, type CalendarTrip } from '$lib/server/ical';
-import { db } from '$lib/server/db';
-import { users, trips, tripShares, groupMembers } from '$lib/server/db/schema';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { loadTripFor } from '../../trips/shared';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { isExpired } from '$lib/server/dates';
@@ -56,42 +55,23 @@ export const GET: RequestHandler = ({ url, getClientAddress }) => {
 	const token = url.searchParams.get('token');
 	if (!token) throw error(404, 'Not found');
 
-	const u = db.select().from(users).where(eq(users.calendarToken, token)).get();
-	if (!u || isExpired(u.calendarTokenExpiresAt)) throw error(404, 'Not found');
+	const u = usersRepo.getUserByCalendarToken(token);
+	if (!u || isExpired(u.calendar_token_expires_at)) throw error(404, 'Not found');
 
-	const owned = db.select().from(trips).where(eq(trips.ownerId, u.id)).all();
-	const sharedByUser = db
-		.select({ trip: trips })
-		.from(trips)
-		.innerJoin(tripShares, eq(trips.id, tripShares.tripId))
-		.where(eq(tripShares.sharedWithUserId, u.id))
-		.all();
-	const sharedByGroup = db
-		.select({ trip: trips })
-		.from(trips)
-		.innerJoin(tripShares, eq(trips.id, tripShares.tripId))
-		.innerJoin(groupMembers, eq(tripShares.sharedWithGroupId, groupMembers.groupId))
-		.where(eq(groupMembers.userId, u.id))
-		.all();
+	const userId = Number(u.id);
+	const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
 
-	const map = new Map<number, Parameters<typeof loadTripFor>[1]>();
-	for (const t of owned) map.set(t.id, t.id);
-	for (const { trip: t } of [...sharedByUser, ...sharedByGroup]) {
-		if (map.has(t.id)) continue;
-		map.set(t.id, t.id);
-	}
-
-	const inputs = Array.from(map.values())
+	const inputs = tripIds
 		.map((tripId) => {
 			try {
-				return toCalendarInput(loadTripFor(u.id, tripId));
+				return toCalendarInput(loadTripFor(userId, tripId));
 			} catch {
 				return null;
 			}
 		})
 		.filter((input): input is { trip: CalendarTrip; segments: CalendarSegment[] } => input != null);
 
-	const calendar = buildAggregateCalendar(`Roamarr - ${u.displayName}`, inputs);
+	const calendar = buildAggregateCalendar(`Roamarr - ${u.display_name ?? ''}`, inputs);
 
 	return new Response(calendar, {
 		headers: {

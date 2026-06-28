@@ -1,6 +1,6 @@
-import { and, gte, inArray, sql } from 'drizzle-orm';
-import { db } from './db';
-import { segments } from './db/schema';
+import { inList } from '@mongreldb/kit';
+import { kit } from './db';
+import { segments } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import type { Trip } from './repositories/tripsRepo';
 
@@ -9,7 +9,18 @@ import type { TripStatus } from '../tripStatus';
 
 export { listGroupsForUser } from './repositories/tripsRepo';
 
-type Segment = typeof segments.$inferSelect;
+type Segment = {
+	type: string;
+	title: string;
+	startAt: string;
+	endAt: string | null;
+	status: string;
+	location: string | null;
+	meetingPoint: string | null;
+	meetingAt: string | null;
+	confirmationNumber: string | null;
+	detailsJson: string | null;
+};
 
 export function tripTags(trip: { tags: string }): string[] {
 	try {
@@ -52,6 +63,25 @@ export function canViewDetails(userId: number, trip: Trip) {
 	if (direct?.showDetails) return true;
 	const viaGroup = tripsRepo.getGroupShareForTrip(trip.id, userId);
 	return viaGroup?.showDetails ?? false;
+}
+
+function toSegmentProjection(row: Record<string, unknown>, includeDetails = false) {
+	const base = {
+		type: row.type as string,
+		title: row.title as string,
+		startAt: row.start_at as string,
+		endAt: (row.end_at as string | null) ?? null,
+		status: row.status as string,
+		location: (row.location as string | null) ?? null,
+		meetingPoint: (row.meeting_point as string | null) ?? null,
+		meetingAt: (row.meeting_at as string | null) ?? null
+	};
+	if (!includeDetails) return base;
+	return {
+		...base,
+		confirmationNumber: (row.confirmation_number as string | null) ?? null,
+		detailsJson: (row.details_json as string | null) ?? null
+	};
 }
 
 export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = false) {
@@ -119,21 +149,18 @@ export function listViewableTrips(
 	const q = options?.q?.trim();
 	if (q) {
 		const needle = q.toLowerCase();
-		const pattern = `%${q.toLowerCase()}%`;
 		const ownedIds = result.filter((t) => !t.isShared).map((t) => t.id);
-		const segmentMatches = ownedIds.length
-			? db
-					.select({ tripId: segments.tripId })
-					.from(segments)
-					.where(
-						and(
-							inArray(segments.tripId, ownedIds),
-							sql`lower(${segments.title}) like ${pattern} or lower(${segments.location}) like ${pattern} or lower(${segments.confirmationNumber}) like ${pattern}`
-						)
-					)
-					.all()
-			: [];
-		const segmentTripIds = new Set(segmentMatches.map((s) => s.tripId));
+		let segmentTripIds = new Set<number>();
+		if (ownedIds.length) {
+			const segmentRows = kit
+				.selectFrom(segments)
+				.where(inList(segments.trip_id, ownedIds.map(BigInt)))
+				.executeSync();
+			for (const s of segmentRows) {
+				const haystack = `${s.title ?? ''} ${s.location ?? ''} ${s.confirmation_number ?? ''}`.toLowerCase();
+				if (haystack.includes(needle)) segmentTripIds.add(Number(s.trip_id));
+			}
+		}
 		result = result.filter((t) => {
 			const city = t.isShared
 				? (t as ReturnType<typeof viewerProjection>).destinationCityName ?? ''

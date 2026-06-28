@@ -48,8 +48,8 @@ function makeEvent(
 test('listJournalEntries sorts by entryDate descending', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j1@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j1@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-10',
 		title: 'Older',
@@ -73,8 +73,8 @@ test('listJournalEntries sorts by entryDate descending', () => {
 test('createJournalEntry inserts entry and logs audit', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j2@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j2@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'Day one',
@@ -95,10 +95,10 @@ test('createJournalEntry inserts entry and logs audit', () => {
 test('createJournalEntry rejects viewers and non-members', () => {
 	const db = getDb();
 	const kit = getKit();
-	const owner = makeSyncedUser(db, kit, { email: 'j3-owner@x.c' });
-	const viewer = makeSyncedUser(db, kit, { email: 'j3-viewer@x.c' });
-	const stranger = makeSyncedUser(db, kit, { email: 'j3-stranger@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
+	const owner = makeSyncedUser(kit, { email: 'j3-owner@x.c' });
+	const viewer = makeSyncedUser(kit, { email: 'j3-viewer@x.c' });
+	const stranger = makeSyncedUser(kit, { email: 'j3-stranger@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 	db.insert(tripShares).values({
 		tripId: t.id,
 		sharedWithUserId: viewer.id,
@@ -124,9 +124,9 @@ test('createJournalEntry rejects viewers and non-members', () => {
 test('createJournalEntry allows shared editors', () => {
 	const db = getDb();
 	const kit = getKit();
-	const owner = makeSyncedUser(db, kit, { email: 'j4-owner@x.c' });
-	const editor = makeSyncedUser(db, kit, { email: 'j4-editor@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
+	const owner = makeSyncedUser(kit, { email: 'j4-owner@x.c' });
+	const editor = makeSyncedUser(kit, { email: 'j4-editor@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 	db.insert(tripShares).values({
 		tripId: t.id,
 		sharedWithUserId: editor.id,
@@ -144,8 +144,8 @@ test('createJournalEntry allows shared editors', () => {
 test('modifyJournalEntry updates fields and updatedAt', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j5@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j5@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'Original',
@@ -167,9 +167,9 @@ test('modifyJournalEntry updates fields and updatedAt', () => {
 test('modifyJournalEntry rejects non-editors', () => {
 	const db = getDb();
 	const kit = getKit();
-	const owner = makeSyncedUser(db, kit, { email: 'j6-owner@x.c' });
-	const viewer = makeSyncedUser(db, kit, { email: 'j6-viewer@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: owner.id, name: 'T' });
+	const owner = makeSyncedUser(kit, { email: 'j6-owner@x.c' });
+	const viewer = makeSyncedUser(kit, { email: 'j6-viewer@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 	const entry = createJournalEntry(owner.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'X',
@@ -187,8 +187,8 @@ test('modifyJournalEntry rejects non-editors', () => {
 test('removeJournalEntry deletes entry and logs audit', () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j7@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j7@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-15',
 		title: 'To delete',
@@ -208,8 +208,8 @@ test('removeJournalEntry deletes entry and logs audit', () => {
 test('addJournalEntry action validates and redirects', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j8@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j8@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const event = makeEvent(u, { id: String(t.id) }, {
 		entryDate: '2026-06-20',
 		title: 'Action title',
@@ -222,8 +222,8 @@ test('addJournalEntry action validates and redirects', async () => {
 test('addJournalEntry action returns fail for invalid input', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j9@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j9@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const event = makeEvent(u, { id: String(t.id) }, {
 		entryDate: '',
 		title: '',
@@ -237,8 +237,8 @@ test('addJournalEntry action returns fail for invalid input', async () => {
 test('deleteJournalEntry action deletes and redirects', async () => {
 	const db = getDb();
 	const kit = getKit();
-	const u = makeSyncedUser(db, kit, { email: 'j10@x.c' });
-	const t = makeSyncedTrip(db, kit, { ownerId: u.id, name: 'T' });
+	const u = makeSyncedUser(kit, { email: 'j10@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 	const entry = createJournalEntry(u.id, t.id, {
 		entryDate: '2026-06-20',
 		title: 'Delete me',

@@ -1,26 +1,20 @@
-import { eq as kitEq, and, inList, asc, ne as kitNe } from '@mongreldb/kit';
-import { eq as drizzleEq, and as drizzleAnd, inArray as drizzleInArray } from 'drizzle-orm';
-import { db, kit } from '$lib/server/db';
+import { eq as kitEq, and as kitAnd, and, inList, asc, ne as kitNe } from '@mongreldb/kit';
+import { kit } from '$lib/server/db';
 import {
 	users as usersTable,
 	trips,
 	tripComments,
 	groups,
-	groupMembers
+	groupMembers,
+	tripShares
 } from '$lib/server/db/mongrelSchema';
-import {
-	trips as drizzleTrips,
-	tripComments as drizzleTripComments,
-	tripShares as drizzleTripShares,
-	groups as drizzleGroups,
-	groupMembers as drizzleGroupMembers
-} from '$lib/server/db/schema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
 
 export type KitTrip = Row<typeof trips>;
 export type KitTripComment = Row<typeof tripComments>;
 export type KitGroup = Row<typeof groups>;
 export type KitGroupMember = Row<typeof groupMembers>;
+export type KitTripShare = Row<typeof tripShares>;
 
 export type SharePermission = 'read' | 'edit';
 export type Visibility = 'private' | 'groups' | 'public';
@@ -120,17 +114,19 @@ export function toTrip(row: KitTrip): Trip {
 	};
 }
 
-type DrizzleTripShare = typeof drizzleTripShares.$inferSelect;
-
-export function toTripShare(row: DrizzleTripShare): TripShare {
+export function toTripShare(row: KitTripShare): TripShare {
 	return {
-		id: row.id,
-		tripId: row.tripId,
-		sharedWithUserId: row.sharedWithUserId ?? null,
-		sharedWithGroupId: row.sharedWithGroupId ?? null,
+		id: num(row.id),
+		tripId: num(row.trip_id),
+		sharedWithUserId: row.shared_with_user_id == null || row.shared_with_user_id === 0n
+			? null
+			: num(row.shared_with_user_id),
+		sharedWithGroupId: row.shared_with_group_id == null || row.shared_with_group_id === 0n
+			? null
+			: num(row.shared_with_group_id),
 		permission: row.permission as SharePermission,
-		showDetails: row.showDetails,
-		createdAt: row.createdAt
+		showDetails: row.show_details,
+		createdAt: row.created_at
 	};
 }
 
@@ -160,148 +156,9 @@ export function toGroupMember(row: KitGroupMember): GroupMember {
 	};
 }
 
-// Keep the legacy Drizzle tables in sync during the migration so that
-// not-yet-migrated code (segments, expenses, etc.) can still read and
-// foreign-key to trip, share, comment, and group rows.
-
-function syncTripToLegacy(row: KitTrip) {
-	db.insert(drizzleTrips)
-		.values({
-			id: num(row.id),
-			ownerId: num(row.owner_id),
-			name: row.name,
-			destination: row.destination,
-			destinationCountryCode: row.destination_country_code,
-			destinationCityName: row.destination_city_name,
-			destinationCityLat: row.destination_city_lat,
-			destinationCityLng: row.destination_city_lng,
-			startDate: row.start_date,
-			endDate: row.end_date,
-			notes: row.notes,
-			tags: row.tags,
-			archived: row.archived,
-			favorite: row.favorite,
-			defaultVisibility: row.default_visibility as Visibility,
-			publicToken: row.public_token,
-			publicTokenExpiresAt: row.public_token_expires_at,
-			publicShowDetails: row.public_show_details,
-			calendarToken: row.calendar_token,
-			calendarTokenExpiresAt: row.calendar_token_expires_at,
-			baseCurrency: row.base_currency,
-			status: row.status as TripStatus,
-			createdAt: row.created_at,
-			updatedAt: row.updated_at
-		} as any)
-		.onConflictDoNothing({ target: drizzleTrips.id })
-		.run();
-}
-
-function updateTripInLegacy(trip: Trip) {
-	db.update(drizzleTrips)
-		.set({
-			ownerId: trip.ownerId,
-			name: trip.name,
-			destination: trip.destination,
-			destinationCountryCode: trip.destinationCountryCode,
-			destinationCityName: trip.destinationCityName,
-			destinationCityLat: trip.destinationCityLat,
-			destinationCityLng: trip.destinationCityLng,
-			startDate: trip.startDate,
-			endDate: trip.endDate,
-			notes: trip.notes,
-			tags: trip.tags,
-			archived: trip.archived,
-			favorite: trip.favorite,
-			defaultVisibility: trip.defaultVisibility,
-			publicToken: trip.publicToken,
-			publicTokenExpiresAt: trip.publicTokenExpiresAt,
-			publicShowDetails: trip.publicShowDetails,
-			calendarToken: trip.calendarToken,
-			calendarTokenExpiresAt: trip.calendarTokenExpiresAt,
-			baseCurrency: trip.baseCurrency,
-			status: trip.status,
-			createdAt: trip.createdAt,
-			updatedAt: trip.updatedAt
-		})
-		.where(drizzleEq(drizzleTrips.id, trip.id))
-		.run();
-}
-
-function deleteTripFromLegacy(id: number) {
-	db.delete(drizzleTrips).where(drizzleEq(drizzleTrips.id, id)).run();
-}
-
-function syncTripCommentToLegacy(row: KitTripComment) {
-	db.insert(drizzleTripComments)
-		.values({
-			id: num(row.id),
-			tripId: num(row.trip_id),
-			userId: num(row.user_id),
-			body: row.body,
-			createdAt: row.created_at
-		} as any)
-		.onConflictDoNothing({ target: drizzleTripComments.id })
-		.run();
-}
-
-function deleteTripCommentFromLegacy(id: number) {
-	db.delete(drizzleTripComments).where(drizzleEq(drizzleTripComments.id, id)).run();
-}
-
-function syncGroupToLegacy(row: KitGroup) {
-	db.insert(drizzleGroups)
-		.values({
-			id: num(row.id),
-			ownerId: num(row.owner_id),
-			name: row.name,
-			createdAt: row.created_at
-		} as any)
-		.onConflictDoNothing({ target: drizzleGroups.id })
-		.run();
-}
-
-function updateGroupInLegacy(group: Group) {
-	db.update(drizzleGroups)
-		.set({ ownerId: group.ownerId, name: group.name })
-		.where(drizzleEq(drizzleGroups.id, group.id))
-		.run();
-}
-
-function deleteGroupFromLegacy(id: number) {
-	db.delete(drizzleGroups).where(drizzleEq(drizzleGroups.id, id)).run();
-}
-
-function syncGroupMemberToLegacy(groupId: number, userId: number) {
-	db.insert(drizzleGroupMembers)
-		.values({ groupId, userId })
-		.onConflictDoNothing()
-		.run();
-}
-
-function deleteGroupMemberFromLegacy(groupId: number, userId: number) {
-	db.delete(drizzleGroupMembers)
-		.where(drizzleAnd(drizzleEq(drizzleGroupMembers.groupId, groupId), drizzleEq(drizzleGroupMembers.userId, userId)))
-		.run();
-}
-
-// Fallback to the legacy Drizzle row for reads. During normal operation all
-// trip rows live in the kit table (and are mirrored to legacy), but tests for
-// not-yet-migrated domains still create legacy trips directly.
-function tripFromLegacy(id: number): Trip | null {
-	const row = db.select().from(drizzleTrips).where(drizzleEq(drizzleTrips.id, id)).get();
-	if (!row) return null;
-	return {
-		...row,
-		defaultVisibility: row.defaultVisibility as Visibility,
-		status: (row.status as TripStatus) ?? 'booked',
-		tags: row.tags ?? '[]'
-	} as Trip;
-}
-
 export function getTripById(id: number): Trip | null {
 	const rows = kit.selectFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
-	if (rows[0]) return toTrip(rows[0]);
-	return tripFromLegacy(id);
+	return rows[0] ? toTrip(rows[0]) : null;
 }
 
 export function listTripsForUser(userId: number): Trip[] {
@@ -365,9 +222,7 @@ export function createTrip(ownerId: number, input: CreateTripInput): Trip {
 			status: input.status ?? 'booked'
 		} as Insert<typeof trips>)
 		.executeSync();
-	const trip = toTrip(row);
-	syncTripToLegacy(row);
-	return trip;
+	return toTrip(row);
 }
 
 export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
@@ -394,49 +249,29 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	if (patch.status !== undefined) set.status = patch.status;
 	if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
 
-	const existing = kit.selectFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync()[0];
-	if (!existing) {
-		// If the row only exists in legacy, try to update it there.
-		const legacy = tripFromLegacy(id);
-		if (!legacy) return null;
-		const merged = {
-			...legacy,
-			...patch,
-			defaultVisibility: (patch.defaultVisibility ?? legacy.defaultVisibility) as Visibility,
-			status: (patch.status ?? legacy.status) as TripStatus,
-			tags: patch.tags ?? legacy.tags ?? '[]'
-		} as Trip;
-		updateTripInLegacy(merged);
-		return merged;
-	}
-	const merged = { ...existing, ...set, id: existing.id } as Update<typeof trips>;
-	const updated = kit.updateTable(trips).set(merged).where(kitEq(trips.id, kitId(id))).executeSync();
+	const updated = kit.updateTable(trips).set(set).where(kitEq(trips.id, kitId(id))).executeSync();
 	const row = updated[0];
-	const trip = toTrip(row);
-	updateTripInLegacy(trip);
-	return trip;
+	return row ? toTrip(row) : null;
 }
 
 export function deleteTrip(id: number): number {
 	const deleted = kit.deleteFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
-	deleteTripFromLegacy(id);
 	return Number(deleted);
 }
 
 export function listEditableTripIdsForUser(userId: number): number[] {
 	const owned = listTripsForUser(userId).map((t) => t.id);
 
-	const directShares = db
-		.select({ tripId: drizzleTripShares.tripId })
-		.from(drizzleTripShares)
+	const directShares = kit
+		.selectFrom(tripShares)
 		.where(
-			drizzleAnd(
-				drizzleEq(drizzleTripShares.sharedWithUserId, userId),
-				drizzleEq(drizzleTripShares.permission, 'edit')
+			kitAnd(
+				kitEq(tripShares.shared_with_user_id, kitId(userId)),
+				kitEq(tripShares.permission, 'edit')
 			)
 		)
-		.all();
-	const directIds = directShares.map((s) => s.tripId);
+		.executeSync();
+	const directIds = directShares.map((s) => num(s.trip_id));
 
 	const memberships = kit
 		.selectFrom(groupMembers)
@@ -446,17 +281,16 @@ export function listEditableTripIdsForUser(userId: number): number[] {
 
 	let groupIdsResult: number[] = [];
 	if (groupIds.length) {
-		const groupShares = db
-			.select({ tripId: drizzleTripShares.tripId })
-			.from(drizzleTripShares)
+		const groupShares = kit
+			.selectFrom(tripShares)
 			.where(
-				drizzleAnd(
-					drizzleInArray(drizzleTripShares.sharedWithGroupId, groupIds),
-					drizzleEq(drizzleTripShares.permission, 'edit')
+				kitAnd(
+					inList(tripShares.shared_with_group_id, groupIds.map(kitId)),
+					kitEq(tripShares.permission, 'edit')
 				)
 			)
-			.all();
-		groupIdsResult = groupShares.map((s) => s.tripId);
+			.executeSync();
+		groupIdsResult = groupShares.map((s) => num(s.trip_id));
 	}
 
 	return Array.from(new Set([...owned, ...directIds, ...groupIdsResult]));
@@ -465,12 +299,11 @@ export function listEditableTripIdsForUser(userId: number): number[] {
 export function listViewableTripIdsForUser(userId: number): number[] {
 	const owned = listTripsForUser(userId).map((t) => t.id);
 
-	const directShares = db
-		.select({ tripId: drizzleTripShares.tripId })
-		.from(drizzleTripShares)
-		.where(drizzleEq(drizzleTripShares.sharedWithUserId, userId))
-		.all();
-	const directIds = directShares.map((s) => s.tripId);
+	const directShares = kit
+		.selectFrom(tripShares)
+		.where(kitEq(tripShares.shared_with_user_id, kitId(userId)))
+		.executeSync();
+	const directIds = directShares.map((s) => num(s.trip_id));
 
 	const memberships = kit
 		.selectFrom(groupMembers)
@@ -480,24 +313,22 @@ export function listViewableTripIdsForUser(userId: number): number[] {
 
 	let groupIdsResult: number[] = [];
 	if (groupIds.length) {
-		const groupShares = db
-			.select({ tripId: drizzleTripShares.tripId })
-			.from(drizzleTripShares)
-			.where(drizzleInArray(drizzleTripShares.sharedWithGroupId, groupIds))
-			.all();
-		groupIdsResult = groupShares.map((s) => s.tripId);
+		const groupShares = kit
+			.selectFrom(tripShares)
+			.where(inList(tripShares.shared_with_group_id, groupIds.map(kitId)))
+			.executeSync();
+		groupIdsResult = groupShares.map((s) => num(s.trip_id));
 	}
 
 	return Array.from(new Set([...owned, ...directIds, ...groupIdsResult]));
 }
 
 export function listTripsSharedWithUser(userId: number): Trip[] {
-	const directShares = db
-		.select({ tripId: drizzleTripShares.tripId })
-		.from(drizzleTripShares)
-		.where(drizzleEq(drizzleTripShares.sharedWithUserId, userId))
-		.all();
-	const directTripIds = directShares.map((s) => s.tripId);
+	const directShares = kit
+		.selectFrom(tripShares)
+		.where(kitEq(tripShares.shared_with_user_id, kitId(userId)))
+		.executeSync();
+	const directTripIds = directShares.map((s) => num(s.trip_id));
 
 	const memberships = kit
 		.selectFrom(groupMembers)
@@ -507,12 +338,11 @@ export function listTripsSharedWithUser(userId: number): Trip[] {
 
 	let groupTripIds: number[] = [];
 	if (groupIds.length) {
-		const groupShares = db
-			.select({ tripId: drizzleTripShares.tripId })
-			.from(drizzleTripShares)
-			.where(drizzleInArray(drizzleTripShares.sharedWithGroupId, groupIds.map(Number)))
-			.all();
-		groupTripIds = groupShares.map((s) => s.tripId);
+		const groupShares = kit
+			.selectFrom(tripShares)
+			.where(inList(tripShares.shared_with_group_id, groupIds))
+			.executeSync();
+		groupTripIds = groupShares.map((s) => num(s.trip_id));
 	}
 
 	const ids = Array.from(new Set([...directTripIds, ...groupTripIds]));
@@ -574,7 +404,6 @@ export function createComment(userId: number, tripId: number, body: string): Tri
 			body: text
 		} as Insert<typeof tripComments>)
 		.executeSync();
-	syncTripCommentToLegacy(row);
 	return toTripComment(row);
 }
 
@@ -583,9 +412,6 @@ export function deleteComment(userId: number, commentId: number): number {
 		.deleteFrom(tripComments)
 		.where(and(kitEq(tripComments.id, kitId(commentId)), kitEq(tripComments.user_id, kitId(userId))))
 		.executeSync();
-	if (deleted > 0) {
-		deleteTripCommentFromLegacy(commentId);
-	}
 	return Number(deleted);
 }
 
@@ -604,34 +430,28 @@ export type UpdateTripShareInput = Partial<
 >;
 
 export function listSharesForTrip(tripId: number): TripShare[] {
-	const rows = db
-		.select()
-		.from(drizzleTripShares)
-		.where(drizzleEq(drizzleTripShares.tripId, tripId))
-		.all();
+	const rows = kit
+		.selectFrom(tripShares)
+		.where(kitEq(tripShares.trip_id, kitId(tripId)))
+		.executeSync();
 	return rows.map(toTripShare);
 }
 
 export function getShareById(id: number): TripShare | null {
-	const rows = db
-		.select()
-		.from(drizzleTripShares)
-		.where(drizzleEq(drizzleTripShares.id, id))
-		.all();
+	const rows = kit.selectFrom(tripShares).where(kitEq(tripShares.id, kitId(id))).executeSync();
 	return rows[0] ? toTripShare(rows[0]) : null;
 }
 
 export function getDirectShareForTrip(tripId: number, userId: number): TripShare | null {
-	const rows = db
-		.select()
-		.from(drizzleTripShares)
+	const rows = kit
+		.selectFrom(tripShares)
 		.where(
-			drizzleAnd(
-				drizzleEq(drizzleTripShares.tripId, tripId),
-				drizzleEq(drizzleTripShares.sharedWithUserId, userId)
+			kitAnd(
+				kitEq(tripShares.trip_id, kitId(tripId)),
+				kitEq(tripShares.shared_with_user_id, kitId(userId))
 			)
 		)
-		.all();
+		.executeSync();
 	return rows[0] ? toTripShare(rows[0]) : null;
 }
 
@@ -642,16 +462,15 @@ export function getGroupShareForTrip(tripId: number, userId: number): TripShare 
 		.executeSync();
 	const groupIds = memberships.map((m) => num(m.group_id));
 	if (groupIds.length === 0) return null;
-	const rows = db
-		.select()
-		.from(drizzleTripShares)
+	const rows = kit
+		.selectFrom(tripShares)
 		.where(
-			drizzleAnd(
-				drizzleEq(drizzleTripShares.tripId, tripId),
-				drizzleInArray(drizzleTripShares.sharedWithGroupId, groupIds)
+			kitAnd(
+				kitEq(tripShares.trip_id, kitId(tripId)),
+				inList(tripShares.shared_with_group_id, groupIds.map(kitId))
 			)
 		)
-		.all();
+		.executeSync();
 	return rows[0] ? toTripShare(rows[0]) : null;
 }
 
@@ -660,64 +479,60 @@ export function createShare(input: CreateTripShareInput): TripShare {
 	const sharedWithGroupId = input.sharedWithGroupId ?? null;
 
 	if (sharedWithUserId != null) {
-		const existing = db
-			.select()
-			.from(drizzleTripShares)
+		const existing = kit
+			.selectFrom(tripShares)
 			.where(
-				drizzleAnd(
-					drizzleEq(drizzleTripShares.tripId, input.tripId),
-					drizzleEq(drizzleTripShares.sharedWithUserId, sharedWithUserId)
+				kitAnd(
+					kitEq(tripShares.trip_id, kitId(input.tripId)),
+					kitEq(tripShares.shared_with_user_id, kitId(sharedWithUserId))
 				)
 			)
-			.all()[0];
+			.executeSync()[0];
 		if (existing) return toTripShare(existing);
 	}
 	if (sharedWithGroupId != null) {
-		const existing = db
-			.select()
-			.from(drizzleTripShares)
+		const existing = kit
+			.selectFrom(tripShares)
 			.where(
-				drizzleAnd(
-					drizzleEq(drizzleTripShares.tripId, input.tripId),
-					drizzleEq(drizzleTripShares.sharedWithGroupId, sharedWithGroupId)
+				kitAnd(
+					kitEq(tripShares.trip_id, kitId(input.tripId)),
+					kitEq(tripShares.shared_with_group_id, kitId(sharedWithGroupId))
 				)
 			)
-			.all()[0];
+			.executeSync()[0];
 		if (existing) return toTripShare(existing);
 	}
 
-	const row = db
-		.insert(drizzleTripShares)
+	const row = kit
+		.insertInto(tripShares)
 		.values({
-			tripId: input.tripId,
-			sharedWithUserId,
-			sharedWithGroupId,
+			trip_id: kitId(input.tripId),
+			shared_with_user_id: sharedWithUserId != null ? kitId(sharedWithUserId) : null,
+			shared_with_group_id: sharedWithGroupId != null ? kitId(sharedWithGroupId) : null,
 			permission: input.permission ?? 'read',
-			showDetails: input.showDetails ?? false
-		})
-		.returning()
-		.get();
+			show_details: input.showDetails ?? false
+		} as Insert<typeof tripShares>)
+		.executeSync();
 	return toTripShare(row);
 }
 
 export function updateShare(id: number, patch: UpdateTripShareInput): TripShare | null {
-	const set: Partial<typeof drizzleTripShares.$inferInsert> = {};
+	const set: Update<typeof tripShares> = {};
 	if (patch.permission !== undefined) set.permission = patch.permission;
-	if (patch.showDetails !== undefined) set.showDetails = patch.showDetails;
+	if (patch.showDetails !== undefined) set.show_details = patch.showDetails;
 
-	const rows = db
-		.update(drizzleTripShares)
+	const rows = kit
+		.updateTable(tripShares)
 		.set(set)
-		.where(drizzleEq(drizzleTripShares.id, id))
-		.returning()
-		.all();
+		.where(kitEq(tripShares.id, kitId(id)))
+		.executeSync();
 	const row = rows[0];
 	if (!row) return null;
 	return toTripShare(row);
 }
 
 export function deleteShare(id: number): number {
-	return db.delete(drizzleTripShares).where(drizzleEq(drizzleTripShares.id, id)).run().changes;
+	return Number(kit.deleteFrom(tripShares).where(kitEq(tripShares.id, kitId(id))).executeSync());
 }
 
 // Groups
@@ -755,7 +570,6 @@ export function createGroup(input: CreateGroupInput): Group {
 			name: input.name.trim()
 		} as Insert<typeof groups>)
 		.executeSync();
-	syncGroupToLegacy(row);
 	return toGroup(row);
 }
 
@@ -770,15 +584,11 @@ export function updateGroup(id: number, patch: UpdateGroupInput): Group | null {
 	const updated = kit.updateTable(groups).set(set).where(kitEq(groups.id, kitId(id))).executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	const group = toGroup(row);
-	updateGroupInLegacy(group);
-	return group;
+	return toGroup(row);
 }
 
 export function deleteGroup(id: number): number {
-	const deleted = kit.deleteFrom(groups).where(kitEq(groups.id, kitId(id))).executeSync();
-	deleteGroupFromLegacy(id);
-	return Number(deleted);
+	return Number(kit.deleteFrom(groups).where(kitEq(groups.id, kitId(id))).executeSync());
 }
 
 // Group members
@@ -815,7 +625,12 @@ export function listMembersForGroup(groupId: number): GroupMemberWithEmail[] {
 export function addGroupMember(groupId: number, userId: number): GroupMember {
 	const existing = kit
 		.selectFrom(groupMembers)
-		.where(and(kitEq(groupMembers.group_id, kitId(groupId)), kitEq(groupMembers.user_id, kitId(userId))))
+		.where(
+			kitAnd(
+				kitEq(groupMembers.group_id, kitId(groupId)),
+				kitEq(groupMembers.user_id, kitId(userId))
+			)
+		)
 		.executeSync()[0];
 	if (existing) return toGroupMember(existing);
 
@@ -826,15 +641,19 @@ export function addGroupMember(groupId: number, userId: number): GroupMember {
 			user_id: kitId(userId)
 		} as Insert<typeof groupMembers>)
 		.executeSync();
-	syncGroupMemberToLegacy(groupId, userId);
 	return toGroupMember(row);
 }
 
 export function removeGroupMember(groupId: number, userId: number): number {
-	const deleted = kit
-		.deleteFrom(groupMembers)
-		.where(and(kitEq(groupMembers.group_id, kitId(groupId)), kitEq(groupMembers.user_id, kitId(userId))))
-		.executeSync();
-	deleteGroupMemberFromLegacy(groupId, userId);
-	return Number(deleted);
+	return Number(
+		kit
+			.deleteFrom(groupMembers)
+			.where(
+				kitAnd(
+					kitEq(groupMembers.group_id, kitId(groupId)),
+					kitEq(groupMembers.user_id, kitId(userId))
+				)
+			)
+			.executeSync()
+	);
 }

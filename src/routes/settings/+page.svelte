@@ -163,19 +163,41 @@
 		<section class="card p-5 sm:p-6">
 			<h2 class="section-title">Maps</h2>
 			<p class="mt-1 text-sm text-slate-400">
-				Show a map of the next upcoming city on each trip page. City data comes from GeoNames.
+				Show a 2D map of the next upcoming city on each trip page, plus a 3D globe you can open
+				from it. City data comes from GeoNames; the Earth texture from NASA; borders from Natural Earth.
 			</p>
 
-			{#if m.mapsEnabled && m.cityCount > 0}
-				<p class="notice notice-success mt-4">
-					Maps are enabled. City database: {m.cityCount.toLocaleString()} cities imported
-					{#if m.mapsGeonamesImportedAt}
-						on {new Date(m.mapsGeonamesImportedAt).toLocaleString()}.
+			{#if m.mapsEnabled}
+				<p class="notice notice-success mt-4">Maps are enabled.</p>
+				<ul class="mt-3 space-y-1 text-sm text-slate-400">
+					<li>
+						City database: {m.cityCount.toLocaleString()} cities
+						{#if m.mapsGeonamesImportedAt}(imported {new Date(m.mapsGeonamesImportedAt).toLocaleString()}){/if}
+					</li>
+					<li>
+						Earth texture:
+						{#if m.textureReady}
+							ready{#if m.textureImportedAt} (downloaded {new Date(m.textureImportedAt).toLocaleString()}){/if}
+						{:else}
+							<span class="text-amber-400">not downloaded — use “Re-import textures”</span>
+						{/if}
+					</li>
+					<li>Country borders: bundled (Natural Earth, public domain)</li>
+				</ul>
+				<div class="mt-4 flex flex-wrap gap-3">
+					<button class="btn btn-secondary" type="submit" formaction="?/reimportCities">Re-import city database</button>
+					<button class="btn btn-secondary" type="submit" formaction="?/reimportTexture">Re-import textures</button>
+					<button class="btn btn-secondary" type="submit" formaction="?/disableMaps">Disable Maps</button>
+				</div>
+			{:else}
+				<p class="notice mt-4">
+					{#if m.cityCount > 0 || m.textureReady}
+						Maps are disabled. Some data is already downloaded ({m.cityCount.toLocaleString()} cities{#if m.textureReady}, texture ready{/if}).
+						Re-enabling re-checks and fetches anything missing.
+					{:else}
+						Maps are not set up yet. Enabling downloads the city database and Earth texture.
 					{/if}
 				</p>
-				<button class="btn btn-secondary mt-4" type="submit" formaction="?/enableMaps">Re-import city database</button>
-			{:else}
-				<p class="notice mt-4">No city database imported.</p>
 				<button class="btn btn-primary mt-4" type="submit" formaction="?/enableMaps">Enable Maps</button>
 				<p class="mt-4 text-sm text-slate-400">
 					Automatic download not working? Download

@@ -3,6 +3,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { Readable } from 'node:stream';
 import { requireAdmin } from '$lib/server/auth';
 import { getMapSettings, getSettings, updateSettings } from '$lib/server/settings';
+import { importMapTexture, hasMapTexture } from '$lib/server/mapsAssets';
 import { encrypt } from '$lib/server/crypto';
 import { listAuditLogs, logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
@@ -128,14 +129,62 @@ export const actions: Actions = {
 		setFlash(cookies, 'Settings saved.');
 		throw redirect(303, '/settings');
 	},
+	// Idempotent: re-checks what's already downloaded and only fetches the missing
+	// pieces, so re-enabling after a disable (or a failed asset) resumes cleanly.
 	enableMaps: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		try {
+			const before = getMapSettings();
+			let imported = 0;
+			if (before.cityCount === 0) {
+				({ imported } = await importCitiesFromUrl());
+			}
+			if (!hasMapTexture()) {
+				await importMapTexture();
+			}
+			updateSettings({ mapsEnabled: true });
+			logAudit(u.id, 'maps_enable', 'settings', 1, {
+				citiesImported: imported,
+				textureReady: hasMapTexture()
+			});
+			const parts = [
+				imported
+					? `${imported.toLocaleString()} cities imported`
+					: `${before.cityCount.toLocaleString()} cities already present`,
+				hasMapTexture() ? 'Earth texture ready' : 'texture missing'
+			];
+			setFlash(cookies, `Maps enabled (${parts.join(', ')}).`);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to enable maps' });
+		}
+		throw redirect(303, '/settings');
+	},
+	disableMaps: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		updateSettings({ mapsEnabled: false });
+		logAudit(u.id, 'maps_disable', 'settings', 1, {});
+		setFlash(cookies, 'Maps disabled. Downloaded data was kept; re-enable to re-check and resume.');
+		throw redirect(303, '/settings');
+	},
+	reimportCities: async ({ locals, cookies }) => {
 		const u = requireAdmin(locals);
 		try {
 			const { imported } = await importCitiesFromUrl();
 			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'download', imported });
-			setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities). Maps enabled.`);
+			setFlash(cookies, `GeoNames cities re-imported (${imported.toLocaleString()} cities).`);
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import GeoNames data' });
+		}
+		throw redirect(303, '/settings');
+	},
+	reimportTexture: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		try {
+			await importMapTexture();
+			logAudit(u.id, 'maps_texture_import', 'settings', 1, {});
+			setFlash(cookies, 'Earth texture re-imported.');
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import Earth texture' });
 		}
 		throw redirect(303, '/settings');
 	},

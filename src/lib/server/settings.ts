@@ -1,6 +1,7 @@
 import { count, eq } from 'drizzle-orm';
 import { db } from './db';
 import { geonamesCities, settings } from './db/schema';
+import { hasMapTexture, mapTextureImportedAt } from './mapsAssets';
 
 export function getSettings() {
 	return db.select().from(settings).where(eq(settings.id, 1)).get()!;
@@ -24,6 +25,8 @@ export function getMapSettings() {
 		mapsTileUrl: s.mapsTileUrl,
 		mapsTileAttribution: s.mapsTileAttribution,
 		mapsTileApiKey: s.mapsTileApiKey ? '********' : '',
-		cityCount
+		cityCount,
+		textureReady: hasMapTexture(),
+		textureImportedAt: mapTextureImportedAt()
 	};
 }

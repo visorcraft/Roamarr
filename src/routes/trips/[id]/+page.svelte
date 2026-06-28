@@ -22,12 +22,14 @@
 	import { onMount, tick } from 'svelte';
 	import type { PageData, SubmitFunction } from './$types';
 	import TripMap from '$lib/components/TripMap.svelte';
+	import GlobeModal from '$lib/components/GlobeModal.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
 	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
 	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents', 'tools'] as const;
 
+	let globeOpen = $state(false);
 	let editingId = $state<number | null>(null);
 	let editingCompanionId = $state<number | null>(null);
 	let showCompanionNotesId = $state<number | null>(null);
@@ -535,8 +537,15 @@
 				cityName={data.nextCity.cityName}
 				tileUrls={data.tileConfig.tileUrls}
 				attribution={data.tileConfig.attribution}
+				onExpand={() => (globeOpen = true)}
 			/>
 		</section>
+		<GlobeModal
+			bind:open={globeOpen}
+			lat={data.nextCity.lat}
+			lng={data.nextCity.lng}
+			cityName={data.nextCity.cityName}
+		/>
 	{/if}
 
 	<div class="trip-detail-body mt-6">

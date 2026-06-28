@@ -1,8 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { eq } from 'drizzle-orm';
-import { users } from '../src/lib/server/db/schema';
-import * as usersRepo from '../src/lib/server/repositories/usersRepo';
+import { kit } from '../src/lib/server/db';
+import { makeUser, makeAdmin } from './helpers';
 
 // Email is optional because many tests only need a user id for authorization checks.
 export function makeLocals(user: { id: number; email?: string }) {
@@ -36,29 +35,11 @@ export function makeActionEvent(
 }
 
 export function makeAdminLocals(db: BetterSQLite3Database<Record<string, unknown>>) {
-	const created = usersRepo.createUser({
-		email: 'admin@x.c',
-		password_hash: 'x',
-		display_name: 'Admin',
-		role: 'admin',
-		calendar_token: null,
-		calendar_token_expires_at: null
-	} as any);
-	const u = db.select().from(users).where(eq(users.id, Number(created.id))).get();
-	return { user: u! };
+	return { user: makeAdmin(db, kit, { email: 'admin@x.c', displayName: 'Admin' }) };
 }
 
 export function makeUserLocals(db: BetterSQLite3Database<Record<string, unknown>>) {
-	const created = usersRepo.createUser({
-		email: 'user@x.c',
-		password_hash: 'x',
-		display_name: 'User',
-		role: 'user',
-		calendar_token: null,
-		calendar_token_expires_at: null
-	} as any);
-	const u = db.select().from(users).where(eq(users.id, Number(created.id))).get();
-	return { user: u! };
+	return { user: makeUser(db, kit, { email: 'user@x.c', displayName: 'User' }) };
 }
 
 function baseEvent(

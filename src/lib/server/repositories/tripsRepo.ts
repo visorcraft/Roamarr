@@ -392,10 +392,10 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	if (patch.calendarTokenExpiresAt !== undefined) set.calendar_token_expires_at = patch.calendarTokenExpiresAt;
 	if (patch.baseCurrency !== undefined) set.base_currency = patch.baseCurrency;
 	if (patch.status !== undefined) set.status = patch.status;
+	if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
 
-	const updated = kit.updateTable(trips).set(set).where(kitEq(trips.id, kitId(id))).executeSync();
-	const row = updated[0];
-	if (!row) {
+	const existing = kit.selectFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync()[0];
+	if (!existing) {
 		// If the row only exists in legacy, try to update it there.
 		const legacy = tripFromLegacy(id);
 		if (!legacy) return null;
@@ -409,6 +409,9 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 		updateTripInLegacy(merged);
 		return merged;
 	}
+	const merged = { ...existing, ...set, id: existing.id } as Update<typeof trips>;
+	const updated = kit.updateTable(trips).set(merged).where(kitEq(trips.id, kitId(id))).executeSync();
+	const row = updated[0];
 	const trip = toTrip(row);
 	updateTripInLegacy(trip);
 	return trip;
@@ -580,7 +583,9 @@ export function deleteComment(userId: number, commentId: number): number {
 		.deleteFrom(tripComments)
 		.where(and(kitEq(tripComments.id, kitId(commentId)), kitEq(tripComments.user_id, kitId(userId))))
 		.executeSync();
-	deleteTripCommentFromLegacy(commentId);
+	if (deleted > 0) {
+		deleteTripCommentFromLegacy(commentId);
+	}
 	return Number(deleted);
 }
 

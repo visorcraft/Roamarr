@@ -6,6 +6,10 @@ vi.mock('./db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from './db';
+
+import { makeUser, makeTrip } from '../../../tests/helpers';
+
 
 import { tripCrudFactory } from './crud';
 import { users, trips, tripHomeTasks } from './db/schema';
@@ -13,8 +17,8 @@ import { Validator, formFail } from './validation';
 
 test('tripCrudFactory lists, adds and removes rows scoped to a trip', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const user = db.insert(users).values({ email: 'u@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const trip = db.insert(trips).values({ ownerId: user.id, name: 'T' }).returning().get();
+	const user = makeUser(db, kit, { email: 'u@x.c', passwordHash: 'x', displayName: 'U' });
+	const trip = makeTrip(db, kit, user.id, { name: 'T' });
 
 	const crud = tripCrudFactory({
 		table: tripHomeTasks,

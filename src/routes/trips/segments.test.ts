@@ -7,6 +7,10 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import { makeUser, makeTrip, makeCard, makeShare } from '../../../tests/helpers';
+
 
 import { actions } from './[id]/segments/+page.server';
 import { addSegment, updateSegment } from '$lib/server/segments';
@@ -23,22 +27,10 @@ beforeEach(() => {
 
 test('flight start_at is stored as a UTC instant; foreign card rejected', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const bCard = db
-		.insert(cards)
-		.values({ userId: b.id, nickname: 'B', network: 'visa' })
-		.returning()
-		.get();
+	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
+	const bCard = makeCard(db, kit, b.id, { nickname: 'B', network: 'visa' });
 	addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -59,12 +51,8 @@ test('flight start_at is stored as a UTC instant; foreign card rejected', () => 
 
 test('update segment edits fields and re-arms reminders when flight time changes', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'update-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'update-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -104,18 +92,10 @@ test('update segment edits fields and re-arms reminders when flight time changes
 
 test('update segment is ownership-checked', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'owner-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'owner-b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
-	const otherTrip = db.insert(trips).values({ ownerId: b.id, name: 'O' }).returning().get();
+	const a = makeUser(db, kit, { email: 'owner-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'owner-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
+	const otherTrip = makeTrip(db, kit, b.id, { name: 'O' });
 	const seg = addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -141,12 +121,8 @@ test('update segment is ownership-checked', () => {
 
 test('extra segment types can be added and do not arm flight reminders', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'extra-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'extra-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 
 	for (const type of ['hotel', 'rental_car', 'train', 'boat'] as const) {
 		const seg = addSegment(a.id, t.id, {
@@ -197,8 +173,8 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 
 test('add action validates required fields and timezone', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'act-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'act-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 
 	const form = makeFormData({
 		title: '',
@@ -218,8 +194,8 @@ test('add action validates required fields and timezone', async () => {
 
 test('add action creates a segment with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'act-b@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'act-b@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const form = makeFormData({
 		title: 'UA1',
 		localStart: '2026-07-01T15:00',
@@ -234,8 +210,8 @@ test('add action creates a segment with valid data', async () => {
 
 test('add action stores endTz and converts endAt to UTC', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'act-endtz@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'act-endtz@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const form = makeFormData({
 		title: 'UA1',
 		localStart: '2026-07-01T08:00',
@@ -257,8 +233,8 @@ test('add action stores endTz and converts endAt to UTC', async () => {
 
 test('delete action validates segmentId', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'act-c@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'act-c@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const form = makeFormData({ segmentId: 'abc' });
 	const result = (await actions.delete(makeEvent(form, { id: String(t.id) }, a.id))) as {
 		status: number;
@@ -270,8 +246,8 @@ test('delete action validates segmentId', async () => {
 
 test('update action validates segmentId and required fields', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'act-d@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'act-d@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -294,8 +270,8 @@ test('update action validates segmentId and required fields', async () => {
 
 test('update action stores country, city, and venue', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'city@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'city@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	db.insert(geonamesCities)
 		.values({ geonameId: 1, name: 'Paris', asciiName: 'Paris', countryCode: 'FR', lat: 48.85, lng: 2.35 })
 		.run();
@@ -333,12 +309,12 @@ test('update action stores country, city, and venue', async () => {
 
 test('shared editor can add, update and delete segments; read-only viewer cannot', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'seg-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const editor = db.insert(users).values({ email: 'seg-editor@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
-	const reader = db.insert(users).values({ email: 'seg-reader@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
+	const owner = makeUser(db, kit, { email: 'seg-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(db, kit, { email: 'seg-editor@x.c', passwordHash: 'x', displayName: 'E' });
+	const reader = makeUser(db, kit, { email: 'seg-reader@x.c', passwordHash: 'x', displayName: 'R' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' });
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: reader.id, permission: 'read' });
 
 	const addForm = makeFormData({
 		title: 'UA1',
@@ -379,8 +355,8 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 
 test('add and update actions store meeting point and rally time', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'meet-act@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'meet-act@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 
 	const addForm = makeFormData({
 		title: 'Coffee',
@@ -417,8 +393,8 @@ test('add and update actions store meeting point and rally time', async () => {
 
 test('flight add action stores meeting point and rally time', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'flight-meet@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'flight-meet@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 
 	const form = makeFormData({
 		title: 'UA1',
@@ -439,8 +415,8 @@ test('flight add action stores meeting point and rally time', async () => {
 
 test('rental_car add action stores meeting point and rally time', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'car-meet@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'car-meet@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 
 	const form = makeFormData({
 		title: 'Hertz',
@@ -463,17 +439,17 @@ test('rental_car add action stores meeting point and rally time', async () => {
 
 test('update action attaches an owned card and rejects a foreign card', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'card-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'card-b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'card-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'card-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
 		localStart: '2026-07-01T15:00:00',
 		startTz: 'UTC'
 	});
-	const aCard = db.insert(cards).values({ userId: a.id, nickname: 'A', network: 'visa' }).returning().get();
-	const bCard = db.insert(cards).values({ userId: b.id, nickname: 'B', network: 'mc' }).returning().get();
+	const aCard = makeCard(db, kit, a.id, { nickname: 'A', network: 'visa' });
+	const bCard = makeCard(db, kit, b.id, { nickname: 'B', network: 'mc' });
 
 	const okForm = makeFormData({
 		segmentId: String(seg.id),
@@ -509,8 +485,8 @@ function makeTripEvent(user: { id: number }, body: FormData, tripId: number) {
 
 test('segmentReminder action creates a custom reminder for a segment', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'rem-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'rem-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const seg = addSegment(a.id, t.id, {
 		type: 'flight',
 		title: 'UA1',

@@ -6,34 +6,28 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
+
 
 import { _loadByToken as loadByToken, load } from './[token]/+page.server';
 import { eq } from 'drizzle-orm';
 import { users, trips, segments } from '$lib/server/db/schema';
 import { resetRateLimit } from '$lib/server/rateLimit';
+import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
 test('valid token returns projection without sensitive data; bad token 404s', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const t = db
-		.insert(trips)
-		.values({ ownerId: a.id, name: 'T', notes: 'SECRET', publicToken: 'tok123' })
-		.returning()
-		.get();
-	db.insert(segments)
-		.values({
-			tripId: t.id,
+	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T', notes: 'SECRET', publicToken: 'tok123' });
+	makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2026-07-01T00:00:00Z',
 			startTz: 'UTC',
 			confirmationNumber: 'CONF'
-		})
-		.run();
+		});
 	const data = loadByToken('tok123') as { trip: { segments: unknown[] } };
 	expect(JSON.stringify(data)).not.toContain('SECRET');
 	expect(JSON.stringify(data)).not.toContain('CONF');
@@ -43,8 +37,8 @@ test('valid token returns projection without sensitive data; bad token 404s', ()
 test('load is rate limited after many requests from the same IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'rl@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	db.insert(trips).values({ ownerId: a.id, name: 'T', publicToken: 'rltok' }).run();
+	const a = makeUser(db, kit, { email: 'rl@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(db, kit, a.id, { name: 'T', publicToken: 'rltok' });
 
 	for (let i = 0; i < 20; i++) {
 		load({ params: { token: 'rltok' }, getClientAddress: () => '1.2.3.4' } as any);
@@ -61,8 +55,8 @@ test('load is rate limited after many requests from the same IP', () => {
 test('rate limit does not block a different IP', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'rl2@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	db.insert(trips).values({ ownerId: a.id, name: 'T', publicToken: 'rltok2' }).run();
+	const a = makeUser(db, kit, { email: 'rl2@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(db, kit, a.id, { name: 'T', publicToken: 'rltok2' });
 
 	for (let i = 0; i < 20; i++) {
 		load({ params: { token: 'rltok2' }, getClientAddress: () => '1.2.3.4' } as any);
@@ -76,13 +70,12 @@ test('rate limit does not block a different IP', () => {
 test('expired public token returns 404', () => {
 	resetRateLimit();
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'exp@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	db.insert(trips).values({
-		ownerId: a.id,
+	const a = makeUser(db, kit, { email: 'exp@x.c', passwordHash: 'x', displayName: 'A' });
+	makeTrip(db, kit, a.id, {
 		name: 'T',
 		publicToken: 'expired',
 		publicTokenExpiresAt: '2020-01-01T00:00:00Z'
-	}).run();
+	});
 
 	try {
 		loadByToken('expired');
@@ -94,25 +87,22 @@ test('expired public token returns 404', () => {
 
 test('public link hides details by default and shows them when publicShowDetails is enabled', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T', publicToken: 'det-hidden' }).returning().get();
-	db.insert(segments)
-		.values({
-			tripId: t.id,
+	const a = makeUser(db, kit, { email: 'pub-det@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = makeTrip(db, kit, a.id, { name: 'T', publicToken: 'det-hidden' });
+	makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'UA1',
 			startAt: '2026-07-01T00:00:00Z',
 			startTz: 'UTC',
 			confirmationNumber: 'CONF123',
 			detailsJson: '{"seat":"12A"}'
-		})
-		.run();
+		});
 
 	const hidden = loadByToken('det-hidden') as { trip: { segments: unknown[] } };
 	expect(JSON.stringify(hidden)).not.toContain('CONF123');
 	expect(JSON.stringify(hidden)).not.toContain('12A');
 
-	db.update(trips).set({ publicShowDetails: true }).where(eq(trips.id, t.id)).run();
+	tripsRepo.updateTrip(t.id, { publicShowDetails: true });
 
 	const visible = loadByToken('det-hidden') as { trip: { segments: unknown[] } };
 	expect(JSON.stringify(visible)).toContain('CONF123');

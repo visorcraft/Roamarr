@@ -10,6 +10,21 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import {
+	makeUser,
+	makeTrip,
+	makeSegment,
+	makeGroup,
+	makeGroupMember,
+	makeShare,
+	makeNotification,
+	makeTravelDocument,
+	makeFareProvider,
+	makeFareWatch
+} from '../../tests/helpers';
+
 
 import { load } from './+page.server';
 import { users, trips, groups, groupMembers, tripShares, segments, travelDocuments, notifications, fareProviders, fareWatches } from '$lib/server/db/schema';
@@ -17,41 +32,29 @@ import { makeLocals } from '../../tests/eventHelpers';
 
 test('dashboard includes upcoming trips shared with the user and labels them shared', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const c = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
+	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const c = makeUser(db, kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
 
 	const future = '2026-07-01';
 	const past = '2026-01-01';
 
 	// Owned by A, shared directly with B
-	const shared = db
-		.insert(trips)
-		.values({ ownerId: a.id, name: 'Shared Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: future, notes: 'SECRET' })
-		.returning()
-		.get();
-	db.insert(tripShares).values({ tripId: shared.id, sharedWithUserId: b.id }).run();
+	const shared = makeTrip(db, kit, a.id, { name: 'Shared Trip', destinationCountryCode: 'FR', destinationCityName: 'Paris', destinationCityLat: 48.8566, destinationCityLng: 2.3522, startDate: future, notes: 'SECRET' });
+	makeShare(db, kit, { tripId: shared.id, sharedWithUserId: b.id });
 
 	// Owned by A, shared with group containing C
-	const groupShared = db
-		.insert(trips)
-		.values({ ownerId: a.id, name: 'Group Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: future })
-		.returning()
-		.get();
-	const g = db.insert(groups).values({ ownerId: a.id, name: 'fam' }).returning().get();
-	db.insert(groupMembers).values({ groupId: g.id, userId: c.id }).run();
-	db.insert(tripShares).values({ tripId: groupShared.id, sharedWithGroupId: g.id }).run();
+	const groupShared = makeTrip(db, kit, a.id, { name: 'Group Trip', destinationCountryCode: 'JP', destinationCityName: 'Tokyo', destinationCityLat: 35.6762, destinationCityLng: 139.6503, startDate: future });
+	const g = makeGroup(db, kit, a.id, 'fam');
+	makeGroupMember(db, kit, g.id, c.id);
+	makeShare(db, kit, { tripId: groupShared.id, sharedWithGroupId: g.id });
 
 	// Owned by A, not shared
-	db.insert(trips)
-		.values({ ownerId: a.id, name: 'Private Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: future })
-		.run();
+	makeTrip(db, kit, a.id, { name: 'Private Trip', destinationCountryCode: 'DE', destinationCityName: 'Berlin', destinationCityLat: 52.52, destinationCityLng: 13.405, startDate: future });
 
 	// Past shared trip should not appear in upcoming list
-	db.insert(trips)
-		.values({ ownerId: a.id, name: 'Past Shared', destinationCountryCode: 'IT', destinationCityName: 'Rome', destinationCityLat: 41.9028, destinationCityLng: 12.4964, startDate: past })
-		.run();
-	db.insert(tripShares).values({ tripId: 4, sharedWithUserId: b.id }).run();
+	const pastShared = makeTrip(db, kit, a.id, { name: 'Past Shared', destinationCountryCode: 'IT', destinationCityName: 'Rome', destinationCityLat: 41.9028, destinationCityLng: 12.4964, startDate: past });
+	makeShare(db, kit, { tripId: pastShared.id, sharedWithUserId: b.id });
 
 	const forB = load({ locals: makeLocals(b) } as any) as any;
 	expect(forB.upcoming.map((t: any) => t.name)).toEqual(['Shared Trip']);
@@ -70,11 +73,7 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 
 test('dashboard uses user document expiry lead', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'lead@x.c', passwordHash: 'x', displayName: 'U', documentExpiryLeadDays: 30 })
-		.returning()
-		.get();
+	const u = makeUser(db, kit, { email: 'lead@x.c', passwordHash: 'x', displayName: 'U', documentExpiryLeadDays: 30 });
 	// Expires in 60 days, outside the 30-day lead window
 	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-08-24' }).run();
 	const data = load({ locals: makeLocals(u) } as any) as any;
@@ -83,13 +82,13 @@ test('dashboard uses user document expiry lead', () => {
 
 test('dashboard stats reflect unread notifications, expiring docs and fare watches', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'stats@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	db.insert(notifications).values({ userId: u.id, title: 'A', body: 'B' }).run();
-	db.insert(travelDocuments).values({ userId: u.id, type: 'passport', expiresOn: '2026-06-25' }).run();
+	const u = makeUser(db, kit, { email: 'stats@x.c', passwordHash: 'x', displayName: 'U' });
+	makeNotification(db, kit, u.id, { title: 'A', body: 'B' });
+	makeTravelDocument(db, kit, u.id, { type: 'passport', expiresOn: '2026-06-25' });
 
-	const fp = db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'S' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T', startDate: '2026-07-01' }).returning().get();
-	db.insert(fareWatches).values({ tripId: t.id, providerId: fp.id }).run();
+	const fp = makeFareProvider(db, kit, u.id, { providerKey: 'stub', label: 'S' });
+	const t = makeTrip(db, kit, u.id, { name: 'T', startDate: '2026-07-01' });
+	makeFareWatch(db, kit, { tripId: t.id, providerId: fp.id });
 
 	const data = load({ locals: makeLocals(u) } as any) as any;
 	expect(data.stats.upcoming).toBe(1);
@@ -103,45 +102,28 @@ test('dashboard agenda includes trips covering today and segments starting/endin
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
 
-	const u = db
-		.insert(users)
-		.values({ email: 'agenda@x.c', passwordHash: 'x', displayName: 'U', timezone: 'America/New_York' })
-		.returning()
-		.get();
+	const u = makeUser(db, kit, { email: 'agenda@x.c', passwordHash: 'x', displayName: 'U', timezone: 'America/New_York' });
 
 	// Trip covering today in NY (2026-07-15)
-	const covering = db
-		.insert(trips)
-		.values({ ownerId: u.id, name: 'Summer Trip', destinationCountryCode: 'US', destinationCityName: 'Boston', destinationCityLat: 42.3601, destinationCityLng: -71.0589, startDate: '2026-07-10', endDate: '2026-07-20' })
-		.returning()
-		.get();
+	const covering = makeTrip(db, kit, u.id, { name: 'Summer Trip', destinationCountryCode: 'US', destinationCityName: 'Boston', destinationCityLat: 42.3601, destinationCityLng: -71.0589, startDate: '2026-07-10', endDate: '2026-07-20' });
 
 	// Trip not covering today
-	db.insert(trips)
-		.values({ ownerId: u.id, name: 'Past Trip', startDate: '2026-07-01', endDate: '2026-07-14' })
-		.run();
+	makeTrip(db, kit, u.id, { name: 'Past Trip', startDate: '2026-07-01', endDate: '2026-07-14' });
 
 	// Segment starting today at 8:00 AM NY (12:00 UTC)
-	db.insert(segments)
-		.values({ tripId: covering.id, type: 'flight', title: 'Outbound', startAt: '2026-07-15T12:00:00Z', startTz: 'America/New_York' })
-		.run();
+	makeSegment(db, kit, covering.id, { type: 'flight', title: 'Outbound', startAt: '2026-07-15T12:00:00Z', startTz: 'America/New_York' });
 
 	// Segment ending today at 6:00 PM NY (22:00 UTC)
-	db.insert(segments)
-		.values({
-			tripId: covering.id,
+	makeSegment(db, kit, covering.id, {
 			type: 'hotel',
 			title: 'Checkout',
 			startAt: '2026-07-14T15:00:00Z',
 			startTz: 'America/New_York',
 			endAt: '2026-07-15T22:00:00Z'
-		})
-		.run();
+		});
 
 	// Segment starting tomorrow in NY
-	db.insert(segments)
-		.values({ tripId: covering.id, type: 'event', title: 'Tomorrow event', startAt: '2026-07-16T04:00:00Z', startTz: 'America/New_York' })
-		.run();
+	makeSegment(db, kit, covering.id, { type: 'event', title: 'Tomorrow event', startAt: '2026-07-16T04:00:00Z', startTz: 'America/New_York' });
 
 	const data = load({ locals: makeLocals(u) } as any) as any;
 	expect(data.agenda).toHaveLength(3);
@@ -170,8 +152,8 @@ test('dashboard agenda is empty when nothing happens today', () => {
 	vi.useFakeTimers();
 	vi.setSystemTime(new Date('2026-07-15T12:00:00Z'));
 
-	const u = db.insert(users).values({ email: 'empty@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	db.insert(trips).values({ ownerId: u.id, name: 'Future Trip', startDate: '2026-08-01', endDate: '2026-08-10' }).run();
+	const u = makeUser(db, kit, { email: 'empty@x.c', passwordHash: 'x', displayName: 'U' });
+	makeTrip(db, kit, u.id, { name: 'Future Trip', startDate: '2026-08-01', endDate: '2026-08-10' });
 
 	const data = load({ locals: makeLocals(u) } as any) as any;
 	expect(data.agenda).toHaveLength(0);

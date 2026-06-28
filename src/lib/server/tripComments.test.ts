@@ -6,6 +6,10 @@ vi.mock('./db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from './db';
+
+import { makeUser, makeTrip } from '../../../tests/helpers';
+
 
 import { listComments, addComment, deleteComment } from './tripComments';
 import { users, trips, tripComments } from './db/schema';
@@ -13,8 +17,8 @@ import { eq } from 'drizzle-orm';
 
 test('comment lifecycle', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const comment = addComment(u.id, t.id, 'Hello');
 	expect(listComments(t.id).map((c) => c.body)).toEqual(['Hello']);
@@ -25,9 +29,9 @@ test('comment lifecycle', () => {
 
 test('deleteComment only removes the users own comment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: a.id, name: 'T' }).returning().get();
+	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const t = makeTrip(db, kit, a.id, { name: 'T' });
 	const comment = addComment(a.id, t.id, 'Mine');
 
 	deleteComment(b.id, comment.id);

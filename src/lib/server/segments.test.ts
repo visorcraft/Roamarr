@@ -6,6 +6,10 @@ vi.mock('./db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from './db';
+
+import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helpers';
+
 
 import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
 import { users, trips, segments, cards, auditLogs } from './db/schema';
@@ -13,18 +17,15 @@ import { eq } from 'drizzle-orm';
 
 test('detects overlap with existing segment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	db.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'A',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC',
 			endAt: '2026-01-01T12:00:00Z'
-		})
-		.run();
+		});
 
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T11:00:00Z', '2026-01-01T13:00:00Z')).toBe(true);
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T13:00:00Z', '2026-01-01T14:00:00Z')).toBe(false);
@@ -32,48 +33,36 @@ test('detects overlap with existing segment', () => {
 
 test('excluding current segment avoids self-overlap', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'A',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC',
 			endAt: '2026-01-01T12:00:00Z'
-		})
-		.returning()
-		.get();
+		});
 
 	expect(hasOverlappingSegment(t.id, s.id, '2026-01-01T10:00:00Z', '2026-01-01T12:00:00Z')).toBe(false);
 });
 
 test('duplicateSegment copies a segment shifted 24 hours and clears confirmation', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dup@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const c = db
-		.insert(cards)
-		.values({ userId: u.id, nickname: 'Travel', network: 'visa', last4: '1234' })
-		.returning()
-		.get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'dup@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const c = makeCard(db, kit, u.id, { nickname: 'Travel', network: 'visa', last4: '1234' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'shuttle',
 			title: 'Airport shuttle',
 			startAt: '2026-07-01T09:00:00Z',
 			startTz: 'America/New_York',
 			endAt: '2026-07-01T10:00:00Z',
+			endTz: 'America/New_York',
 			location: 'JFK',
 			confirmationNumber: 'ABC123',
 			cardId: c.id,
 			detailsJson: JSON.stringify({ note: 'x' })
-		})
-		.returning()
-		.get();
+		});
 
 	const copy = duplicateSegment(u.id, t.id, s.id);
 	expect(copy.id).not.toBe(s.id);
@@ -99,21 +88,16 @@ test('duplicateSegment copies a segment shifted 24 hours and clears confirmation
 
 test('duplicateSegment rejects a segment from another trip or non-editor', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'dup-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'dup-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t1 = db.insert(trips).values({ ownerId: owner.id, name: 'T1' }).returning().get();
-	const t2 = db.insert(trips).values({ ownerId: owner.id, name: 'T2' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t1.id,
+	const owner = makeUser(db, kit, { email: 'dup-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(db, kit, { email: 'dup-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t1 = makeTrip(db, kit, owner.id, { name: 'T1' });
+	const t2 = makeTrip(db, kit, owner.id, { name: 'T2' });
+	const s = makeSegment(db, kit, t1.id, {
 			type: 'flight',
 			title: 'A',
 			startAt: '2026-08-01T08:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	expect(() => duplicateSegment(owner.id, t2.id, s.id)).toThrow();
 	expect(() => duplicateSegment(other.id, t1.id, s.id)).toThrow();
@@ -121,8 +105,8 @@ test('duplicateSegment rejects a segment from another trip or non-editor', () =>
 
 test('addSegment stores meeting point and rally time as UTC', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'meet@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'meet@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const seg = addSegment(u.id, t.id, {
 		type: 'meetup',
@@ -138,8 +122,8 @@ test('addSegment stores meeting point and rally time as UTC', () => {
 
 test('updateSegment stores and clears meeting info', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'meet-update@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'meet-update@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 	const seg = addSegment(u.id, t.id, {
 		type: 'meetup',
 		title: 'Coffee',
@@ -168,12 +152,9 @@ test('updateSegment stores and clears meeting info', () => {
 
 test('duplicateSegment copies meeting point and shifts rally time by 24h', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'dup-meet@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'dup-meet@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'meetup',
 			title: 'Coffee',
 			startAt: '2026-07-01T14:00:00Z',
@@ -181,9 +162,7 @@ test('duplicateSegment copies meeting point and shifts rally time by 24h', () =>
 			endAt: '2026-07-01T15:00:00Z',
 			meetingPoint: 'Lobby',
 			meetingAt: '2026-07-01T13:30:00Z'
-		})
-		.returning()
-		.get();
+		});
 
 	const copy = duplicateSegment(u.id, t.id, s.id);
 	expect(copy.meetingPoint).toBe('Lobby');
@@ -192,12 +171,9 @@ test('duplicateSegment copies meeting point and shifts rally time by 24h', () =>
 
 test('moveSegmentToDate preserves local time, duration and rally offset', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'move-date@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'move-date@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'food',
 			title: 'Lunch',
 			startAt: '2026-09-16T03:30:00.000Z',
@@ -205,9 +181,7 @@ test('moveSegmentToDate preserves local time, duration and rally offset', () => 
 			endAt: '2026-09-16T04:30:00.000Z',
 			endTz: 'Asia/Tokyo',
 			meetingAt: '2026-09-16T03:15:00.000Z'
-		})
-		.returning()
-		.get();
+		});
 
 	const moved = moveSegmentToDate(u.id, t.id, s.id, '2026-09-15');
 	expect(moved.startAt).toBe('2026-09-15T03:30:00.000Z');
@@ -221,8 +195,8 @@ test('moveSegmentToDate preserves local time, duration and rally offset', () => 
 
 test('addSegment stores endTz and defaults to startTz', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'endtz@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'endtz@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const withEndTz = addSegment(u.id, t.id, {
 		type: 'flight',
@@ -250,19 +224,16 @@ test('addSegment stores endTz and defaults to startTz', () => {
 
 test('hasOverlappingSegment uses UTC endAt for comparison', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'overlap-tz@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	db.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'overlap-tz@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'A',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC',
 			endAt: '2026-01-01T12:00:00Z',
 			endTz: 'UTC'
-		})
-		.run();
+		});
 
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T11:00:00Z', '2026-01-01T13:00:00Z')).toBe(true);
 	expect(hasOverlappingSegment(t.id, undefined, '2026-01-01T12:00:00Z', '2026-01-01T13:00:00Z')).toBe(false);
@@ -270,19 +241,14 @@ test('hasOverlappingSegment uses UTC endAt for comparison', () => {
 
 test('updateSegmentStatus updates segment status', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'status@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'status@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const updated = updateSegmentStatus(s.id, 'checked_in');
 	expect(updated.status).toBe('checked_in');
@@ -292,38 +258,28 @@ test('updateSegmentStatus updates segment status', () => {
 
 test('updateSegmentStatus rejects invalid status', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'status-bad@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'status-bad@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	expect(() => updateSegmentStatus(s.id, 'invalid' as any)).toThrow();
 });
 
 test('setSegmentStatus updates status for an editor and logs audit', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'status-editor@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'status-editor@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const updated = setSegmentStatus(u.id, t.id, s.id, 'boarded');
 	expect(updated.status).toBe('boarded');
@@ -334,28 +290,23 @@ test('setSegmentStatus updates status for an editor and logs audit', () => {
 
 test('setSegmentStatus rejects a non-editor', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const owner = db.insert(users).values({ email: 'status-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'status-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const owner = makeUser(db, kit, { email: 'status-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(db, kit, { email: 'status-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	expect(() => setSegmentStatus(other.id, t.id, s.id, 'completed')).toThrow();
 });
 
 test('addSegment defaults payment status and stores payment details', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'pay@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'pay@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const defaulted = addSegment(u.id, t.id, {
 		type: 'flight',
@@ -379,8 +330,8 @@ test('addSegment defaults payment status and stores payment details', () => {
 
 test('updateSegment changes payment status and due date', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'pay-up@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'pay-up@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 	const s = addSegment(u.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -403,8 +354,8 @@ test('updateSegment changes payment status and due date', () => {
 
 test('updateSegment preserves existing payment status when omitted', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'pay-pres@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'pay-pres@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 	const s = addSegment(u.id, t.id, {
 		type: 'flight',
 		title: 'UA1',
@@ -426,11 +377,11 @@ test('updateSegment preserves existing payment status when omitted', () => {
 
 test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'bulk@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s1 = db.insert(segments).values({ tripId: t.id, type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' }).returning().get();
-	const s2 = db.insert(segments).values({ tripId: t.id, type: 'hotel', title: 'B', startAt: '2026-01-01T14:00:00Z', startTz: 'UTC' }).returning().get();
-	const s3 = db.insert(segments).values({ tripId: t.id, type: 'food', title: 'C', startAt: '2026-01-01T18:00:00Z', startTz: 'UTC' }).returning().get();
+	const u = makeUser(db, kit, { email: 'bulk@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s1 = makeSegment(db, kit, t.id, { type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' });
+	const s2 = makeSegment(db, kit, t.id, { type: 'hotel', title: 'B', startAt: '2026-01-01T14:00:00Z', startTz: 'UTC' });
+	const s3 = makeSegment(db, kit, t.id, { type: 'food', title: 'C', startAt: '2026-01-01T18:00:00Z', startTz: 'UTC' });
 
 	deleteSegments(u.id, t.id, [s1.id, s2.id, 9999, -1]);
 
@@ -440,8 +391,8 @@ test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 
 test('addSegment stores country, city, coordinates, and venue', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'loc@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'loc@x.c', passwordHash: 'x', displayName: 'L' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const seg = addSegment(u.id, t.id, {
 		type: 'hotel',
@@ -464,8 +415,8 @@ test('addSegment stores country, city, coordinates, and venue', () => {
 
 test('updateSegment updates city fields and clears venue when omitted', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'loc-up@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'loc-up@x.c', passwordHash: 'x', displayName: 'L' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 	const seg = addSegment(u.id, t.id, {
 		type: 'food',
 		title: 'Lunch',

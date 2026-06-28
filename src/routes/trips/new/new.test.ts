@@ -6,6 +6,10 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import { makeUser } from '../../../../tests/helpers';
+
 
 import { actions } from './+page.server';
 import { users, trips } from '$lib/server/db/schema';
@@ -23,7 +27,7 @@ function makeEvent(form: FormData, params: Record<string, string> = {}, userId =
 
 test('creates a trip with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const u = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const form = makeFormData({
 		name: 'Summer Escape',
 		startDate: '2026-07-01',
@@ -31,7 +35,7 @@ test('creates a trip with valid data', async () => {
 		notes: 'note',
 		defaultVisibility: 'public'
 	});
-	await expect(actions.default(makeEvent(form))).rejects.toMatchObject({
+	await expect(actions.default(makeEvent(form, {}, u.id))).rejects.toMatchObject({
 		status: 303,
 		location: expect.stringMatching(/^\/trips\/\d+$/)
 	});
@@ -43,7 +47,7 @@ test('creates a trip with valid data', async () => {
 
 test('rejects missing name and invalid date range', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const u = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const form = makeFormData({
 		name: '  ',
 		startDate: '2026-07-10',
@@ -62,7 +66,7 @@ test('rejects missing name and invalid date range', async () => {
 
 test('rejects invalid visibility enum', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
+	const u = makeUser(db, kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
 	const form = makeFormData({ name: 'T', defaultVisibility: 'secret' });
 	const result = (await actions.default(makeEvent(form, {}, u.id))) as {
 		status: number;

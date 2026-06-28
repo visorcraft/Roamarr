@@ -54,3 +54,5 @@ playwright-report/
 test-results/
 roamarr-*.png
 attachments/
+roamarr.kitdb/
+roamarr.db

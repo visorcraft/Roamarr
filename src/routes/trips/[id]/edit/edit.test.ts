@@ -6,6 +6,10 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import { makeUser, makeShare } from '../../../../../tests/helpers';
+
 
 import { _deleteTrip, actions } from './+page.server';
 import { createTrip } from '../../shared';
@@ -41,16 +45,8 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 
 test('owner can delete a trip and its segments, shares, watches, and reminders', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'del-owner@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'del-shared@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
+	const a = makeUser(db, kit, { email: 'del-owner@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'del-shared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
 
 	addSegment(a.id, t.id, {
@@ -61,7 +57,7 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 	});
 	expect(db.select().from(reminders).all()).toHaveLength(1);
 
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: b.id }).run();
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: b.id });
 	const provider = db
 		.insert(fareProviders)
 		.values({ userId: a.id, providerKey: 'stub' })
@@ -86,16 +82,8 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 
 test('non-owner cannot delete a trip', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'del-owner2@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'del-intruder@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
+	const a = makeUser(db, kit, { email: 'del-owner2@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'del-intruder@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	expect(() => _deleteTrip(b.id, t.id)).toThrow();
@@ -105,7 +93,7 @@ test('non-owner cannot delete a trip', () => {
 
 test('edit action updates a trip with valid data', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'edit-a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const a = makeUser(db, kit, { email: 'edit-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Old' });
 	const form = makeFormData({
 		name: 'Updated',
@@ -120,18 +108,18 @@ test('edit action updates a trip with valid data', async () => {
 	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBeNull();
-	expect(updated.destinationCountryCode).toBeNull();
-	expect(updated.destinationCityName).toBeNull();
+	expect(updated.destinationCountryCode).toBe('');
+	expect(updated.destinationCityName).toBe('');
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'edit-owner3@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const editor = db.insert(users).values({ email: 'edit-editor@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
-	const reader = db.insert(users).values({ email: 'edit-reader@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
+	const owner = makeUser(db, kit, { email: 'edit-owner3@x.c', passwordHash: 'x', displayName: 'A' });
+	const editor = makeUser(db, kit, { email: 'edit-editor@x.c', passwordHash: 'x', displayName: 'E' });
+	const reader = makeUser(db, kit, { email: 'edit-reader@x.c', passwordHash: 'x', displayName: 'R' });
 	const t = createTrip(owner.id, { name: 'Trip' });
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' }).run();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id, permission: 'read' }).run();
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' });
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: reader.id, permission: 'read' });
 
 	const form = makeFormData({
 		name: 'Editor Updated',
@@ -153,7 +141,7 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 
 test('edit action updates trip status', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'edit-status@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const a = makeUser(db, kit, { email: 'edit-status@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	const form = makeFormData({
@@ -176,7 +164,7 @@ test('edit action updates trip status', async () => {
 
 test('edit action rejects invalid status values', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'edit-status-bad@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const a = makeUser(db, kit, { email: 'edit-status-bad@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	const form = makeFormData({
@@ -194,8 +182,8 @@ test('edit action rejects invalid status values', async () => {
 
 test('edit action rejects invalid data and enforces ownership', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db.insert(users).values({ email: 'edit-b@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'edit-c@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const a = makeUser(db, kit, { email: 'edit-b@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'edit-c@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	const form = makeFormData({

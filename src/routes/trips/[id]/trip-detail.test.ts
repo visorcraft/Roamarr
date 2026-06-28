@@ -6,9 +6,24 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from '$lib/server/db';
+
+import {
+	makeUser,
+	makeTrip,
+	makeSegment,
+	makeCompanion,
+	makeShare,
+	makeInsurancePolicy,
+	makeFareProvider,
+	makeFareWatch,
+	makeExpense
+} from '../../../../tests/helpers';
+
 
 import { load, actions } from './+page.server';
 import { _deleteTrip } from './edit/+page.server';
+import { addComment } from '$lib/server/tripComments';
 import {
 	users,
 	trips,
@@ -53,8 +68,8 @@ function formEvent(user: { id: number }, tripId: number, body: FormData) {
 
 test('load includes fare watches with segment titles', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
 	db.insert(insurancePolicies).values({ userId: u.id, provider: 'X', tripId: t.id }).run();
 
@@ -65,16 +80,15 @@ test('load includes fare watches with segment titles', () => {
 
 test('load includes attached insurance policies and user cards for the owner', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'td@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	db.insert(fareProviders).values({ userId: u.id, providerKey: 'stub', label: 'Stub', enabled: true }).run();
-	db.insert(insurancePolicies).values({
-		userId: u.id,
+	const u = makeUser(db, kit, { email: 'td@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	makeFareProvider(db, kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
+	makeInsurancePolicy(db, kit, u.id, {
 		provider: 'Acme Insurance',
 		policyNumber: 'ACME-123',
 		coverageSummary: 'Trip cancellation',
 		tripId: t.id
-	}).run();
+	});
 
 	const result = load(event(u, t.id)) as {
 		policies: { provider: string; policyNumber: string }[];
@@ -89,11 +103,11 @@ test('load includes attached insurance policies and user cards for the owner', (
 
 test('load separates available unattached policies from attached policies', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'td2@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t1 = db.insert(trips).values({ ownerId: u.id, name: 'T1' }).returning().get();
-	const t2 = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
-	db.insert(insurancePolicies).values({ userId: u.id, provider: 'Attached', tripId: t1.id }).run();
-	db.insert(insurancePolicies).values({ userId: u.id, provider: 'Free', tripId: t2.id }).run();
+	const u = makeUser(db, kit, { email: 'td2@x.c', passwordHash: 'x', displayName: 'U' });
+	const t1 = makeTrip(db, kit, u.id, { name: 'T1' });
+	const t2 = makeTrip(db, kit, u.id, { name: 'T2' });
+	makeInsurancePolicy(db, kit, u.id, { provider: 'Attached', tripId: t1.id });
+	makeInsurancePolicy(db, kit, u.id, { provider: 'Free', tripId: t2.id });
 
 	const result = load(event(u, t1.id)) as {
 		policies: { provider: string }[];
@@ -105,9 +119,9 @@ test('load separates available unattached policies from attached policies', () =
 
 test('attachPolicy action links an existing policy to the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ap@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const pol = db.insert(insurancePolicies).values({ userId: u.id, provider: 'P', tripId: null }).returning().get();
+	const u = makeUser(db, kit, { email: 'ap@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const pol = makeInsurancePolicy(db, kit, u.id, { provider: 'P', tripId: null });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -124,10 +138,10 @@ test('attachPolicy action links an existing policy to the trip', async () => {
 
 test('attachPolicy action rejects a policy owned by another user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'ap-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'ap-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const pol = db.insert(insurancePolicies).values({ userId: other.id, provider: 'P', tripId: null }).returning().get();
+	const owner = makeUser(db, kit, { email: 'ap-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(db, kit, { email: 'ap-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	const pol = makeInsurancePolicy(db, kit, other.id, { provider: 'P', tripId: null });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -138,9 +152,9 @@ test('attachPolicy action rejects a policy owned by another user', async () => {
 
 test('detachPolicy action unlinks a policy from the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'dp@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const pol = db.insert(insurancePolicies).values({ userId: u.id, provider: 'P', tripId: t.id }).returning().get();
+	const u = makeUser(db, kit, { email: 'dp@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const pol = makeInsurancePolicy(db, kit, u.id, { provider: 'P', tripId: t.id });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -157,8 +171,8 @@ test('detachPolicy action unlinks a policy from the trip', async () => {
 
 test('addComment action creates a comment on the trip', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'cc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'cc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -176,10 +190,9 @@ test('addComment action creates a comment on the trip', async () => {
 
 test('deleteComment action removes the users own comment', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'dc@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	db.insert(tripComments).values({ userId: u.id, tripId: t.id, body: 'X' }).run();
-	const c = db.select().from(tripComments).where(eq(tripComments.tripId, t.id)).get()!;
+	const u = makeUser(db, kit, { email: 'dc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const c = addComment(u.id, t.id, 'X');
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -195,8 +208,8 @@ test('deleteComment action removes the users own comment', async () => {
 
 test('delete action removes trip-level reminders', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'del@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'Del', startDate: '2099-01-01' }).returning().get();
+	const u = makeUser(db, kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'Del', startDate: '2099-01-01' });
 	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
 	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
 
@@ -207,21 +220,16 @@ test('delete action removes trip-level reminders', () => {
 
 test('duplicateSegment action copies a segment and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ds@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'ds@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'event',
 			title: 'City tour',
 			startAt: '2026-09-01T14:00:00Z',
 			startTz: 'UTC',
 			endAt: '2026-09-01T16:00:00Z',
 			confirmationNumber: 'XYZ'
-		})
-		.returning()
-		.get();
+		});
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -247,8 +255,8 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 
 test('duplicateSegment action rejects invalid segment id', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'ds-bad@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -261,20 +269,15 @@ test('duplicateSegment action rejects invalid segment id', async () => {
 
 test('duplicateSegment action rejects a non-editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const owner = makeUser(db, kit, { email: 'ds-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(db, kit, { email: 'ds-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-10-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -287,19 +290,18 @@ test('duplicateSegment action rejects a non-editor', async () => {
 
 test('load strips companion notes from shared viewers', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'co@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const reader = db.insert(users).values({ email: 'cr@x.c', passwordHash: 'x', displayName: 'R' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	db.insert(tripCompanions).values({
-		tripId: t.id,
+	const owner = makeUser(db, kit, { email: 'co@x.c', passwordHash: 'x', displayName: 'O' });
+	const reader = makeUser(db, kit, { email: 'cr@x.c', passwordHash: 'x', displayName: 'R' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	makeCompanion(db, kit, t.id, {
 		name: 'Sam',
 		category: 'adult',
 		dietary: 'Vegetarian',
 		allergies: 'Peanuts',
 		medicalNotes: 'EpiPen',
 		notes: 'Likes windows'
-	}).run();
-	db.insert(tripShares).values({ tripId: t.id, sharedWithUserId: reader.id }).run();
+	});
+	makeShare(db, kit, { tripId: t.id, sharedWithUserId: reader.id });
 
 	const result = load(event(reader, t.id)) as { companions: { name: string; dietary: string | null; allergies: string | null; medicalNotes: string | null; notes: string | null }[] };
 	expect(result.companions).toHaveLength(1);
@@ -312,19 +314,14 @@ test('load strips companion notes from shared viewers', () => {
 
 test('setSegmentStatus action updates segment status for an editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ss@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'ss@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -341,19 +338,14 @@ test('setSegmentStatus action updates segment status for an editor', async () =>
 
 test('setSegmentStatus action rejects invalid status', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'ss-bad@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -364,20 +356,15 @@ test('setSegmentStatus action rejects invalid status', async () => {
 
 test('setSegmentStatus action rejects a non-editor', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const owner = db.insert(users).values({ email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const other = db.insert(users).values({ email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: owner.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const owner = makeUser(db, kit, { email: 'ss-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(db, kit, { email: 'ss-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(db, kit, owner.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'flight',
 			title: 'F',
 			startAt: '2026-01-01T10:00:00Z',
 			startTz: 'UTC'
-		})
-		.returning()
-		.get();
+		});
 
 	const request = new Request('http://localhost/trips/' + t.id, {
 		method: 'POST',
@@ -388,21 +375,16 @@ test('setSegmentStatus action rejects a non-editor', async () => {
 
 test('moveSegmentDate action moves a segment to a new local date', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({
-			tripId: t.id,
+	const u = makeUser(db, kit, { email: 'move-action@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, {
 			type: 'food',
 			title: 'Lunch',
 			startAt: '2026-09-16T03:30:00.000Z',
 			startTz: 'Asia/Tokyo',
 			endAt: '2026-09-16T04:30:00.000Z',
 			endTz: 'Asia/Tokyo'
-		})
-		.returning()
-		.get();
+		});
 
 	const f = new FormData();
 	f.set('segmentId', String(s.id));
@@ -444,8 +426,8 @@ test('saveTripTemplate action saves a template and redirects', async () => {
 
 test('addHomeTask action creates a task and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'ht-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('text', 'Stop mail');
@@ -460,8 +442,8 @@ test('addHomeTask action creates a task and redirects', async () => {
 
 test('addMedication action creates a schedule and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'med-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('name', 'Claritin');
@@ -476,8 +458,8 @@ test('addMedication action creates a schedule and redirects', async () => {
 
 test('addEntryRequirement action creates a requirement and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'er-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('country', 'Japan');
@@ -495,8 +477,8 @@ test('addEntryRequirement action creates a requirement and redirects', async () 
 
 test('addImportantItem action creates an item and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
+	const u = makeUser(db, kit, { email: 'ii-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
 
 	const f = new FormData();
 	f.set('name', 'Passport');
@@ -513,13 +495,9 @@ test('addImportantItem action creates an item and redirects', async () => {
 
 test('addAttachment action uploads a receipt and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const e = db
-		.insert(tripExpenses)
-		.values({ tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' })
-		.returning()
-		.get();
+	const u = makeUser(db, kit, { email: 'att-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const e = makeExpense(db, kit, { tripId: t.id, description: 'Dinner', amount: 5000, currency: 'USD' });
 
 	const f = new FormData();
 	f.set('expenseId', String(e.id));

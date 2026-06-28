@@ -6,6 +6,10 @@ vi.mock('./db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+import { kit } from './db';
+
+import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../tests/helpers';
+
 
 import { eq } from 'drizzle-orm';
 import {
@@ -29,14 +33,10 @@ function expectHttpError(fn: () => void, status: number) {
 
 test('sets and updates attendee status for a segment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'A', category: 'adult' }).returning().get();
+	const u = makeUser(db, kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(db, kit, u.id, { name: 'T' });
+	const s = makeSegment(db, kit, t.id, { type: 'flight', title: 'A', startAt: '2026-01-01T10:00:00Z', startTz: 'UTC' });
+	const c = makeCompanion(db, kit, t.id, { name: 'A', category: 'adult' });
 
 	upsertAttendee(u.id, t.id, s.id, c.id, 'going');
 	let rows = listAttendeesForSegment(s.id);
@@ -55,14 +55,10 @@ test('sets and updates attendee status for a segment', () => {
 
 test('deletes an attendee', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T2' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'B', startAt: '2026-01-02T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'B' }).returning().get();
+	const u = makeUser(db, kit, { email: 'o2@x.c', passwordHash: 'x', displayName: 'O2' });
+	const t = makeTrip(db, kit, u.id, { name: 'T2' });
+	const s = makeSegment(db, kit, t.id, { type: 'flight', title: 'B', startAt: '2026-01-02T10:00:00Z', startTz: 'UTC' });
+	const c = makeCompanion(db, kit, t.id, { name: 'B' });
 
 	upsertAttendee(u.id, t.id, s.id, c.id, 'going');
 	expect(listAttendeesForSegment(s.id)).toHaveLength(1);
@@ -76,20 +72,12 @@ test('deletes an attendee', () => {
 
 test('loads attendees grouped by segment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o3@x.c', passwordHash: 'x', displayName: 'O3' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T3' }).returning().get();
-	const s1 = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'hotel', title: 'H1', startAt: '2026-01-03T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const s2 = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'hotel', title: 'H2', startAt: '2026-01-04T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const c1 = db.insert(tripCompanions).values({ tripId: t.id, name: 'C1' }).returning().get();
-	const c2 = db.insert(tripCompanions).values({ tripId: t.id, name: 'C2' }).returning().get();
+	const u = makeUser(db, kit, { email: 'o3@x.c', passwordHash: 'x', displayName: 'O3' });
+	const t = makeTrip(db, kit, u.id, { name: 'T3' });
+	const s1 = makeSegment(db, kit, t.id, { type: 'hotel', title: 'H1', startAt: '2026-01-03T10:00:00Z', startTz: 'UTC' });
+	const s2 = makeSegment(db, kit, t.id, { type: 'hotel', title: 'H2', startAt: '2026-01-04T10:00:00Z', startTz: 'UTC' });
+	const c1 = makeCompanion(db, kit, t.id, { name: 'C1' });
+	const c2 = makeCompanion(db, kit, t.id, { name: 'C2' });
 
 	upsertAttendee(u.id, t.id, s1.id, c1.id, 'going');
 	upsertAttendee(u.id, t.id, s2.id, c2.id, 'not_going');
@@ -103,14 +91,10 @@ test('loads attendees grouped by segment', () => {
 
 test('rejects invalid status', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o4@x.c', passwordHash: 'x', displayName: 'O4' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T4' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'D', startAt: '2026-01-05T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'D' }).returning().get();
+	const u = makeUser(db, kit, { email: 'o4@x.c', passwordHash: 'x', displayName: 'O4' });
+	const t = makeTrip(db, kit, u.id, { name: 'T4' });
+	const s = makeSegment(db, kit, t.id, { type: 'flight', title: 'D', startAt: '2026-01-05T10:00:00Z', startTz: 'UTC' });
+	const c = makeCompanion(db, kit, t.id, { name: 'D' });
 
 	expectHttpError(
 		() => upsertAttendee(u.id, t.id, s.id, c.id, 'invalid' as 'going'),
@@ -120,16 +104,12 @@ test('rejects invalid status', () => {
 
 test('enforces trip ownership via segment and companion', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const a = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const b = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const tA = db.insert(trips).values({ ownerId: a.id, name: 'TA' }).returning().get();
-	const tB = db.insert(trips).values({ ownerId: b.id, name: 'TB' }).returning().get();
-	const sA = db
-		.insert(segments)
-		.values({ tripId: tA.id, type: 'flight', title: 'SA', startAt: '2026-01-06T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const cB = db.insert(tripCompanions).values({ tripId: tB.id, name: 'CB' }).returning().get();
+	const a = makeUser(db, kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(db, kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const tA = makeTrip(db, kit, a.id, { name: 'TA' });
+	const tB = makeTrip(db, kit, b.id, { name: 'TB' });
+	const sA = makeSegment(db, kit, tA.id, { type: 'flight', title: 'SA', startAt: '2026-01-06T10:00:00Z', startTz: 'UTC' });
+	const cB = makeCompanion(db, kit, tB.id, { name: 'CB' });
 
 	expectHttpError(() => upsertAttendee(b.id, tA.id, sA.id, cB.id, 'going'), 404);
 	expectHttpError(() => upsertAttendee(a.id, tA.id, sA.id, cB.id, 'going'), 404);
@@ -143,14 +123,10 @@ test('empty segment id list returns empty map', () => {
 
 test('deleting non-existing attendee is idempotent', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db.insert(users).values({ email: 'o5@x.c', passwordHash: 'x', displayName: 'O5' }).returning().get();
-	const t = db.insert(trips).values({ ownerId: u.id, name: 'T5' }).returning().get();
-	const s = db
-		.insert(segments)
-		.values({ tripId: t.id, type: 'flight', title: 'E', startAt: '2026-01-07T10:00:00Z', startTz: 'UTC' })
-		.returning()
-		.get();
-	const c = db.insert(tripCompanions).values({ tripId: t.id, name: 'E' }).returning().get();
+	const u = makeUser(db, kit, { email: 'o5@x.c', passwordHash: 'x', displayName: 'O5' });
+	const t = makeTrip(db, kit, u.id, { name: 'T5' });
+	const s = makeSegment(db, kit, t.id, { type: 'flight', title: 'E', startAt: '2026-01-07T10:00:00Z', startTz: 'UTC' });
+	const c = makeCompanion(db, kit, t.id, { name: 'E' });
 
 	expect(() => deleteAttendee(u.id, t.id, s.id, c.id)).not.toThrow();
 });

@@ -198,10 +198,11 @@ function deletePackingTemplateItemFromLegacy(id: number) {
 // Trip templates
 
 export function listTripTemplates(userId: number): TripTemplate[] {
+	const nameColumn = tripTemplates.columns.find((c) => c.name === 'name')!;
 	const rows = kit
 		.selectFrom(tripTemplates)
 		.where(kitEq(tripTemplates.user_id, toBigInt(userId)))
-		.orderBy(kitAsc(tripTemplates.columns.name))
+		.orderBy(kitAsc(nameColumn))
 		.executeSync();
 	return rows.map(toTripTemplate);
 }
@@ -282,10 +283,11 @@ function hydratePackingTemplates(rows: KitPackingTemplate[]): PackingTemplate[] 
 }
 
 export function listPackingTemplates(userId: number): PackingTemplate[] {
+	const nameColumn = packingTemplates.columns.find((c) => c.name === 'name')!;
 	const rows = kit
 		.selectFrom(packingTemplates)
 		.where(kitEq(packingTemplates.user_id, toBigInt(userId)))
-		.orderBy(kitAsc(packingTemplates.columns.name))
+		.orderBy(kitAsc(nameColumn))
 		.executeSync();
 	return hydratePackingTemplates(rows);
 }

@@ -11,6 +11,17 @@ import { actions } from './+page.server';
 import { users, trips, segments } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { makeLocals } from '../../../../tests/eventHelpers';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
+
+function makeTestUser(email: string) {
+	return usersRepo.createUser({
+		email,
+		password_hash: 'x',
+		display_name: email,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	});
+}
 
 function makeEvent(file: File, format = 'json', userId = 1) {
 	const f = new FormData();
@@ -26,7 +37,7 @@ function makeEvent(file: File, format = 'json', userId = 1) {
 
 test('imports a valid JSON file', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
+	const u = makeTestUser('a@x.c');
 	const json = JSON.stringify({
 		trips: [
 			{
@@ -56,7 +67,7 @@ test('imports a valid JSON file', async () => {
 
 test('imports a valid CSV file', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
+	const u = makeTestUser('b@x.c');
 	const csv =
 		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\n' +
 		'CSV Trip,IT,Rome,41.9028,12.4964,2026-10-01,2026-10-05,flight,Out,2026-10-01T09:00,UTC';
@@ -85,7 +96,7 @@ test('rejects missing file', async () => {
 
 test('rejects malformed JSON', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
+	const u = makeTestUser('c@x.c');
 	const file = new File(['not json'], 'trips.json', { type: 'application/json' });
 	const result = (await actions.default(makeEvent(file, 'json', u.id))) as {
 		status: number;
@@ -97,7 +108,7 @@ test('rejects malformed JSON', async () => {
 
 test('rejects invalid format parameter', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'd@x.c', passwordHash: 'x', displayName: 'D' }).returning().get();
+	const u = makeTestUser('d@x.c');
 	const file = new File(['{}'], 'trips.json', { type: 'application/json' });
 	const result = (await actions.default(makeEvent(file, 'xml', u.id))) as {
 		status: number;

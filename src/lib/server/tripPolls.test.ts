@@ -75,9 +75,6 @@ beforeEach(() => {
 	db.delete(auditLogs).run();
 	db.delete(users).run();
 	kit.deleteFrom(kitTripCompanions).executeSync();
-	kit.deleteFrom(kitTripPollVotes).executeSync();
-	kit.deleteFrom(kitTripPollOptions).executeSync();
-	kit.deleteFrom(kitTripPolls).executeSync();
 	kit.deleteFrom(kitTrips).executeSync();
 	kit.deleteFrom(kitUsers).executeSync();
 });

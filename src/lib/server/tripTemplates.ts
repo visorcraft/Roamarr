@@ -47,7 +47,7 @@ export function saveTripTemplate(userId: number, sourceTripId: number, name: str
 		userId,
 		sourceTripId,
 		name: name.trim(),
-		snapshot: snapshot as Record<string, unknown>
+		snapshot: snapshot as unknown as Record<string, unknown>
 	});
 	logAudit(userId, 'create', 'trip_template', inserted.id, { sourceTripId, name: inserted.name });
 	return inserted;

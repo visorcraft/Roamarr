@@ -9,6 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import * as templatesRepo from './templatesRepo';
 import * as usersRepo from './usersRepo';
+import * as tripsRepo from './tripsRepo';
 import {
 	users,
 	trips,
@@ -36,11 +37,12 @@ function makeUser(email: string) {
 }
 
 function makeTrip(ownerId: number, name: string) {
-	return (ctx as { db: import('$lib/server/db').DB }).db
-		.insert(trips)
-		.values({ ownerId, name })
-		.returning()
-		.get();
+	return tripsRepo.createTrip(ownerId, {
+		name,
+		archived: false,
+		startDate: null,
+		endDate: null
+	});
 }
 
 beforeEach(() => {

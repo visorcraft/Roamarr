@@ -41,7 +41,8 @@ test('load returns recent audit logs for admin', () => {
 	logAudit(Number(target.id), 'trip_delete', 'trip', 42, { name: 'Gone' });
 
 	const result = load({
-		locals: { user: { id: Number(admin.id), role: 'admin' } }
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
+		url: new URL('http://localhost/settings/audit-logs')
 	} as any) as {
 		logs: Array<{ action: string; user: { email: string } }>;
 	};
@@ -64,7 +65,8 @@ test('load rejects non-admin', () => {
 test('load returns empty logs when no events exist', () => {
 	const admin = makeUser('admin-empty@x.c', 'Admin', 'admin');
 	const result = load({
-		locals: { user: { id: Number(admin.id), role: 'admin' } }
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
+		url: new URL('http://localhost/settings/audit-logs')
 	} as any) as {
 		logs: unknown[];
 	};

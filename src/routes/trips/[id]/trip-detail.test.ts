@@ -1,6 +1,6 @@
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -432,7 +432,7 @@ test('saveTripTemplate action saves a template and redirects', async () => {
 	const templateForm = new FormData();
 	templateForm.set('name', 'Template');
 	await expect(
-		actions.saveTripTemplate(formEvent({ id: Number(u.id), email: String(u.email) }, t.id, templateForm))
+		actions.saveTripTemplate(formEvent({ id: Number(u.id) }, t.id, templateForm))
 	).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`

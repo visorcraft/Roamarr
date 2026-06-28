@@ -2,10 +2,10 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import {
 	listLoyaltyPrograms,
-	addLoyaltyProgram,
+	createLoyaltyProgram,
 	updateLoyaltyProgram,
 	deleteLoyaltyProgram
-} from '$lib/server/loyaltyPrograms';
+} from '$lib/server/repositories/profileRepo';
 import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
@@ -18,7 +18,7 @@ export const actions: Actions = {
 	add: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		addLoyaltyProgram(u.id, {
+		createLoyaltyProgram(u.id, {
 			programName: String(f.get('programName')),
 			membershipNumber: String(f.get('membershipNumber') || ''),
 			balance: f.get('balance') ? Number(f.get('balance')) : null,
@@ -31,7 +31,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
-		updateLoyaltyProgram(u.id, idResult.value, {
+		updateLoyaltyProgram(idResult.value, u.id, {
 			programName: String(f.get('programName')),
 			membershipNumber: String(f.get('membershipNumber') || '') || null,
 			balance: f.get('balance') ? Number(f.get('balance')) : null,
@@ -44,7 +44,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
-		deleteLoyaltyProgram(u.id, idResult.value);
+		deleteLoyaltyProgram(idResult.value, u.id);
 		throw redirect(303, '/profile/loyalty');
 	}
 };

@@ -1,9 +1,15 @@
+import { eq } from 'drizzle-orm';
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
-import { insurancePolicies, trips } from '$lib/server/db/schema';
+import { trips } from '$lib/server/db/schema';
+import {
+	listInsurancePolicies,
+	createInsurancePolicy,
+	updateInsurancePolicy,
+	deleteInsurancePolicy
+} from '$lib/server/repositories/profileRepo';
 import { positiveIdFromForm } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
@@ -21,21 +27,16 @@ export function _addPolicy(
 	}
 ) {
 	if (i.tripId != null) requireOwnedTrip(userId, i.tripId);
-	return db
-		.insert(insurancePolicies)
-		.values({
-			userId,
-			provider: i.provider,
-			policyNumber: i.policyNumber,
-			coverageSummary: i.coverageSummary,
-			coverageAmount: i.coverageAmount,
-			startDate: i.startDate,
-			endDate: i.endDate,
-			tripId: i.tripId,
-			notes: i.notes
-		})
-		.returning()
-		.get();
+	return createInsurancePolicy(userId, {
+		provider: i.provider,
+		policyNumber: i.policyNumber,
+		coverageSummary: i.coverageSummary,
+		coverageAmount: i.coverageAmount,
+		startDate: i.startDate,
+		endDate: i.endDate,
+		tripId: i.tripId,
+		notes: i.notes
+	});
 }
 
 export function _updatePolicy(
@@ -53,30 +54,22 @@ export function _updatePolicy(
 	}
 ) {
 	if (i.tripId != null) requireOwnedTrip(userId, i.tripId);
-	db.update(insurancePolicies)
-		.set({
-			provider: i.provider,
-			policyNumber: i.policyNumber || null,
-			coverageSummary: i.coverageSummary || null,
-			coverageAmount: i.coverageAmount ?? null,
-			startDate: i.startDate || null,
-			endDate: i.endDate || null,
-			tripId: i.tripId ?? null,
-			notes: i.notes || null
-		})
-		.where(and(eq(insurancePolicies.id, id), eq(insurancePolicies.userId, userId)))
-		.run();
+	return updateInsurancePolicy(id, userId, {
+		provider: i.provider,
+		policyNumber: i.policyNumber,
+		coverageSummary: i.coverageSummary,
+		coverageAmount: i.coverageAmount,
+		startDate: i.startDate,
+		endDate: i.endDate,
+		tripId: i.tripId,
+		notes: i.notes
+	});
 }
-
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
 	return {
-		policies: db
-			.select()
-			.from(insurancePolicies)
-			.where(eq(insurancePolicies.userId, u.id))
-			.all(),
+		policies: listInsurancePolicies(u.id),
 		trips: db.select().from(trips).where(eq(trips.ownerId, u.id)).all()
 	};
 };
@@ -132,9 +125,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
-		db.delete(insurancePolicies)
-			.where(and(eq(insurancePolicies.id, idResult.value), eq(insurancePolicies.userId, u.id)))
-			.run();
+		deleteInsurancePolicy(idResult.value, u.id);
 		throw redirect(303, '/insurance');
 	}
 };

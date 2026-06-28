@@ -10,7 +10,8 @@ import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { db } from '$lib/server/db';
-import { users, trips, segments, groups, notifications } from '$lib/server/db/schema';
+import { users, trips, groups, notifications } from '$lib/server/db/schema';
+import { countSegments } from '$lib/server/repositories/segmentsRepo';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import type { PageServerLoad } from './$types';
@@ -74,7 +75,7 @@ export const load: PageServerLoad = ({ locals }) => {
 	const stats = {
 		users: db.select({ count: count() }).from(users).get()?.count ?? 0,
 		trips: db.select({ count: count() }).from(trips).get()?.count ?? 0,
-		segments: db.select({ count: count() }).from(segments).get()?.count ?? 0,
+		segments: Number(countSegments()),
 		groups: db.select({ count: count() }).from(groups).get()?.count ?? 0,
 		notifications: db.select({ count: count() }).from(notifications).get()?.count ?? 0
 	};

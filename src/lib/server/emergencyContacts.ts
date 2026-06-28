@@ -1,11 +1,18 @@
-import { and, desc, eq, ne } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
-import { db } from './db';
-import { emergencyContacts, trips } from './db/schema';
+import * as tripsRepo from './repositories/tripsRepo';
 import { logAudit } from './audit';
 import { requireOwnedTrip } from './ownership';
 import { sendMail } from './notify';
+import {
+	listEmergencyContacts as listRepo,
+	createEmergencyContact as createRepo,
+	updateEmergencyContact as updateRepo,
+	deleteEmergencyContact as deleteRepo,
+	getEmergencyContactById
+} from './repositories/profileRepo';
+
+export { listEmergencyContacts } from './repositories/profileRepo';
 
 interface EmergencyContactInput {
 	name: string;
@@ -15,105 +22,32 @@ interface EmergencyContactInput {
 	isPrimary?: boolean;
 }
 
-interface EmergencyContactRow {
-	id: number;
-	userId: number;
-	name: string;
-	relationship: string | null;
-	phone: string | null;
-	email: string | null;
-	isPrimary: boolean;
-	createdAt: string;
-}
-
-function requireOwnedContact(userId: number, contactId: number): EmergencyContactRow {
-	const row = db
-		.select()
-		.from(emergencyContacts)
-		.where(and(eq(emergencyContacts.id, contactId), eq(emergencyContacts.userId, userId)))
-		.get();
-	if (!row) throw error(404, 'Not found');
-	return row as EmergencyContactRow;
-}
-
-function clearOtherPrimary(userId: number, exceptId?: number) {
-	const conditions = [eq(emergencyContacts.userId, userId), eq(emergencyContacts.isPrimary, true)];
-	if (exceptId != null) conditions.push(ne(emergencyContacts.id, exceptId));
-	db.update(emergencyContacts).set({ isPrimary: false }).where(and(...conditions)).run();
-}
-
-export function listEmergencyContacts(userId: number): EmergencyContactRow[] {
-	return db
-		.select()
-		.from(emergencyContacts)
-		.where(eq(emergencyContacts.userId, userId))
-		.orderBy(desc(emergencyContacts.isPrimary), emergencyContacts.name)
-		.all() as EmergencyContactRow[];
-}
-
-export function addEmergencyContact(userId: number, input: EmergencyContactInput): EmergencyContactRow {
-	const name = input.name.trim();
-	if (!name) throw error(400, 'Name is required');
-
-	const isPrimary = input.isPrimary ?? false;
-	if (isPrimary) clearOtherPrimary(userId);
-
-	const row = db
-		.insert(emergencyContacts)
-		.values({
-			userId,
-			name,
-			relationship: input.relationship?.trim() || null,
-			phone: input.phone?.trim() || null,
-			email: input.email?.trim() || null,
-			isPrimary
-		})
-		.returning()
-		.get();
-
-	logAudit(userId, 'emergency_contact_create', 'emergency_contact', row.id, {
-		name,
-		isPrimary
+export function addEmergencyContact(userId: number, input: EmergencyContactInput) {
+	return createRepo(userId, {
+		name: input.name,
+		relationship: input.relationship,
+		phone: input.phone,
+		email: input.email,
+		isPrimary: input.isPrimary
 	});
-	return row as EmergencyContactRow;
 }
 
 export function updateEmergencyContact(
 	userId: number,
 	contactId: number,
 	input: EmergencyContactInput
-): EmergencyContactRow {
-	requireOwnedContact(userId, contactId);
-	const name = input.name.trim();
-	if (!name) throw error(400, 'Name is required');
-
-	const isPrimary = input.isPrimary ?? false;
-	if (isPrimary) clearOtherPrimary(userId, contactId);
-
-	const row = db
-		.update(emergencyContacts)
-		.set({
-			name,
-			relationship: input.relationship?.trim() || null,
-			phone: input.phone?.trim() || null,
-			email: input.email?.trim() || null,
-			isPrimary
-		})
-		.where(eq(emergencyContacts.id, contactId))
-		.returning()
-		.get();
-
-	logAudit(userId, 'emergency_contact_update', 'emergency_contact', contactId, {
-		name,
-		isPrimary
+) {
+	return updateRepo(contactId, userId, {
+		name: input.name,
+		relationship: input.relationship,
+		phone: input.phone,
+		email: input.email,
+		isPrimary: input.isPrimary
 	});
-	return row as EmergencyContactRow;
 }
 
 export function deleteEmergencyContact(userId: number, contactId: number) {
-	requireOwnedContact(userId, contactId);
-	db.delete(emergencyContacts).where(eq(emergencyContacts.id, contactId)).run();
-	logAudit(userId, 'emergency_contact_delete', 'emergency_contact', contactId);
+	return deleteRepo(contactId, userId);
 }
 
 const SHARE_WINDOW_MS = 60_000;
@@ -155,11 +89,7 @@ export async function shareItineraryWithContact(
 	contactId: number,
 	origin: string
 ) {
-	const contact = db
-		.select()
-		.from(emergencyContacts)
-		.where(and(eq(emergencyContacts.id, contactId), eq(emergencyContacts.userId, userId)))
-		.get();
+	const contact = getEmergencyContactById(contactId, userId);
 	if (!contact) throw error(404, 'Not found');
 	if (!contact.email?.trim()) throw error(400, 'Contact has no email address');
 
@@ -172,7 +102,7 @@ export async function shareItineraryWithContact(
 	let token = trip.publicToken;
 	if (!token) {
 		token = randomBytes(24).toString('base64url');
-		db.update(trips).set({ publicToken: token }).where(eq(trips.id, tripId)).run();
+		tripsRepo.updateTrip(tripId, { publicToken: token });
 	}
 
 	const link = `${origin}/share/${encodeURIComponent(token)}`;

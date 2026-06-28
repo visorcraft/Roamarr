@@ -7,12 +7,12 @@ import {
 	fareWatches,
 	notifications,
 	segments,
-	travelDocuments,
 	tripComments,
 	tripJournalEntries,
 	trips,
 	users
 } from '$lib/server/db/schema';
+import { listTravelDocumentsExpiringBefore } from '$lib/server/repositories/profileRepo';
 import { listEditableTripIds, listViewableTrips } from '$lib/server/sharing';
 import { DateTime } from 'luxon';
 import type { PageServerLoad } from './$types';
@@ -145,17 +145,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		.from(notifications)
 		.where(and(eq(notifications.userId, u.id), isNull(notifications.readAt)))
 		.get();
-	const expiring = db
-		.select()
-		.from(travelDocuments)
-		.where(
-			and(
-				eq(travelDocuments.userId, u.id),
-				isNotNull(travelDocuments.expiresOn),
-				lte(travelDocuments.expiresOn, soon)
-			)
-		)
-		.all();
+	const expiring = listTravelDocumentsExpiringBefore(u.id, soon);
 	const watchesRow = db
 		.select({ count: count() })
 		.from(fareWatches)

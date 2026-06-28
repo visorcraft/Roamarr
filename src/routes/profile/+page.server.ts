@@ -9,7 +9,12 @@ import { setFlash } from '$lib/server/flash';
 import { db } from '$lib/server/db';
 import { users, sessions } from '$lib/server/db/schema';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
-import { listEmergencyContacts, addEmergencyContact, updateEmergencyContact, deleteEmergencyContact } from '$lib/server/emergencyContacts';
+import {
+	listEmergencyContacts,
+	createEmergencyContact as addEmergencyContact,
+	updateEmergencyContact,
+	deleteEmergencyContact
+} from '$lib/server/repositories/profileRepo';
 import { nowIso } from '$lib/server/tz';
 import { THEMES, isThemeId, normalizeThemeId } from '$lib/themes';
 import { normalizeEmail } from '$lib/server/users';
@@ -258,7 +263,7 @@ export const actions: Actions = {
 		const id = Number(f.get('id'));
 		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid contact' });
 		try {
-			updateEmergencyContact(u.id, id, {
+			updateEmergencyContact(id, u.id, {
 				name: String(f.get('name') ?? ''),
 				relationship: String(f.get('relationship') || '') || undefined,
 				phone: String(f.get('phone') || '') || undefined,
@@ -277,7 +282,7 @@ export const actions: Actions = {
 		const id = Number(f.get('id'));
 		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid contact' });
 		try {
-			deleteEmergencyContact(u.id, id);
+			deleteEmergencyContact(id, u.id);
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Failed to delete contact' });
 		}

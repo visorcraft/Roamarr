@@ -1,6 +1,10 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -9,18 +13,33 @@ vi.mock('$lib/server/db', async () => {
 
 import { _addBenefit as addBenefit, load } from './+page.server';
 import { _addCard as addCard } from './+page.server';
-import { cardBenefits, benefitTemplates } from '$lib/server/db/schema';
+import { cardBenefits, users } from '$lib/server/db/schema';
+import { listBenefitTemplates } from '$lib/server/benefitTemplates';
+import { cardBenefits as kitCardBenefits, cards as kitCards, users as kitUsers } from '$lib/server/db/mongrelSchema';
 import { eq } from 'drizzle-orm';
-import { makeUser } from '../../../tests/helpers';
-import { beforeEach } from 'vitest';
+import { makeKitUser } from '../../../tests/kitHelpers';
+
+function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kitUser = makeKitUser({
+		email: over.email,
+		password_hash: over.passwordHash,
+		display_name: over.displayName,
+		role: (over.role as 'admin' | 'user') ?? 'user'
+	});
+	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+}
 
 beforeEach(() => {
-	(ctx as any).sqlite.exec('delete from card_benefits; delete from cards; delete from users;');
+	ctx.sqlite.exec('delete from card_benefits; delete from cards; delete from users;');
+	ctx.kit.deleteFrom(kitCardBenefits).executeSync();
+	ctx.kit.deleteFrom(kitCards).executeSync();
+	ctx.kit.deleteFrom(kitUsers).executeSync();
 });
 
 test('load returns benefit templates', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db);
+	const u = makeTestUser();
 	const data = load({ locals: { user: u } } as Parameters<typeof load>[0]) as {
 		templates: Array<unknown>;
 		cards: Array<unknown>;
@@ -31,12 +50,13 @@ test('load returns benefit templates', () => {
 
 test('addBenefit applies a chosen template', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db);
+	const u = makeTestUser();
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
-	const template = db.select().from(benefitTemplates).where(eq(benefitTemplates.benefitType, 'trip_delay')).get()!;
+	const template = listBenefitTemplates().find((t) => t.benefitType === 'trip_delay')!;
 
 	addBenefit(u.id, card.id, { templateId: template.id });
-	const benefit = db.select().from(cardBenefits).get()!;
+	const allBenefits = db.select().from(cardBenefits).all();
+	const benefit = allBenefits[0]!;
 	expect(benefit.benefitType).toBe(template.benefitType);
 	expect(benefit.coverageAmount).toBe(template.coverageAmount);
 	expect(benefit.currency).toBe(template.currency);
@@ -44,7 +64,7 @@ test('addBenefit applies a chosen template', () => {
 
 test('addBenefit still works without a template', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db);
+	const u = makeTestUser();
 	const card = addCard(u.id, { nickname: 'Freedom', network: 'mc' });
 
 	addBenefit(u.id, card.id, { benefitType: 'other', coverageAmount: 123, currency: 'EUR', notes: 'manual' });
@@ -57,7 +77,7 @@ test('addBenefit still works without a template', () => {
 
 test('addBenefit rejects a missing template id', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = makeUser(db);
+	const u = makeTestUser();
 	const card = addCard(u.id, { nickname: 'Platinum', network: 'amex' });
 
 	try {
@@ -71,10 +91,10 @@ test('addBenefit rejects a missing template id', () => {
 
 test('addBenefit with template still enforces card ownership', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = makeUser(db, { email: 'a@x.c' });
-	const b = makeUser(db, { email: 'b@x.c' });
+	const a = makeTestUser({ email: 'a@x.c' });
+	const b = makeTestUser({ email: 'b@x.c' });
 	const aCard = addCard(a.id, { nickname: 'A card', network: 'visa' });
-	const template = db.select().from(benefitTemplates).get()!;
+	const template = listBenefitTemplates()[0]!;
 
 	try {
 		addBenefit(b.id, aCard.id, { templateId: template.id });

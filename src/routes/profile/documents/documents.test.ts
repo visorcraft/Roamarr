@@ -1,6 +1,10 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,9 +12,54 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _addDocument, load, actions } from './+page.server';
-import { users, travelDocuments, trips, tripCompanions, auditLogs } from '$lib/server/db/schema';
+import {
+	users,
+	travelDocuments,
+	trips,
+	tripCompanions,
+	auditLogs
+} from '$lib/server/db/schema';
+import {
+	travelDocuments as kitTravelDocuments,
+	tripCompanions as kitTripCompanions,
+	users as kitUsers
+} from '$lib/server/db/mongrelSchema';
 import { eq, and } from 'drizzle-orm';
 import { makeFormData } from '../../../../tests/eventHelpers';
+import { makeKitUser } from '../../../../tests/kitHelpers';
+import { createTrip } from '$lib/server/repositories/tripsRepo';
+
+function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kitUser = makeKitUser({
+		email: over.email,
+		password_hash: over.passwordHash,
+		display_name: over.displayName,
+		role: (over.role as 'admin' | 'user') ?? 'user',
+		timezone: over.timezone ?? 'UTC'
+	});
+	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+}
+
+function makeCompanion(tripId: number, name: string) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const c = db.insert(tripCompanions).values({ tripId, name }).returning().get();
+	ctx.kit.insertInto(kitTripCompanions).values({
+		id: BigInt(c.id),
+		trip_id: BigInt(tripId),
+		name
+	} as any).executeSync();
+	return c;
+}
+
+beforeEach(() => {
+	ctx.sqlite.exec(
+		'delete from travel_documents; delete from audit_logs; delete from trip_companions; delete from trips; delete from users;'
+	);
+	ctx.kit.deleteFrom(kitTravelDocuments).executeSync();
+	ctx.kit.deleteFrom(kitTripCompanions).executeSync();
+	ctx.kit.deleteFrom(kitUsers).executeSync();
+});
 
 function makeEvent(form: FormData, userId = 1) {
 	return {
@@ -21,8 +70,12 @@ function makeEvent(form: FormData, userId = 1) {
 
 test('visa is accepted as a travel-document type', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'visa@x.c', passwordHash: 'x', displayName: 'U' }).returning().get();
-	const doc = _addDocument(u.id, { type: 'visa', issuingAuthority: 'US Embassy', expiresOn: '2027-01-01' });
+	const u = makeTestUser({ email: 'visa@x.c', passwordHash: 'x', displayName: 'U' });
+	const doc = _addDocument(u.id, {
+		type: 'visa',
+		issuingAuthority: 'US Embassy',
+		expiresOn: '2027-01-01'
+	});
 	expect(doc.type).toBe('visa');
 	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
 	expect(row.type).toBe('visa');
@@ -30,13 +83,9 @@ test('visa is accepted as a travel-document type', () => {
 
 test('add action creates a document linked to a companion', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' }).returning().get();
-	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Paris' }).returning().get();
-	const companion = db
-		.insert(tripCompanions)
-		.values({ tripId: trip.id, name: 'Alex' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
+	const trip = createTrip(u.id, { name: 'Paris' });
+	const companion = makeCompanion(trip.id, 'Alex');
 
 	const form = makeFormData({
 		type: 'passport',
@@ -67,21 +116,14 @@ test('add action creates a document linked to a companion', async () => {
 
 test('load returns documents with companion context', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' }).returning().get();
-	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Tokyo' }).returning().get();
-	const companion = db
-		.insert(tripCompanions)
-		.values({ tripId: trip.id, name: 'Sam' })
-		.returning()
-		.get();
-	db.insert(travelDocuments)
-		.values({
-			userId: u.id,
-			companionId: companion.id,
-			type: 'passport',
-			expiresOn: '2031-06-01'
-		})
-		.run();
+	const u = makeTestUser({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
+	const trip = createTrip(u.id, { name: 'Tokyo' });
+	const companion = makeCompanion(trip.id, 'Sam');
+	_addDocument(u.id, {
+		type: 'passport',
+		companionId: companion.id,
+		expiresOn: '2031-06-01'
+	});
 
 	const data = (await load({ locals: { user: u } } as any)) as {
 		documents: { companionId: number | null }[];
@@ -95,14 +137,10 @@ test('load returns documents with companion context', async () => {
 
 test('add action rejects a companion from another user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' }).returning().get();
-	const other = db.insert(users).values({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' }).returning().get();
-	const otherTrip = db.insert(trips).values({ ownerId: other.id, name: 'Madrid' }).returning().get();
-	const otherCompanion = db
-		.insert(tripCompanions)
-		.values({ tripId: otherTrip.id, name: 'Jordan' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
+	const other = makeTestUser({ email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
+	const otherTrip = createTrip(other.id, { name: 'Madrid' });
+	const otherCompanion = makeCompanion(otherTrip.id, 'Jordan');
 
 	const form = makeFormData({
 		type: 'passport',
@@ -119,7 +157,7 @@ test('add action rejects a companion from another user', async () => {
 
 test('add action rejects an invalid document type', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'd@x.c', passwordHash: 'x', displayName: 'D' }).returning().get();
+	const u = makeTestUser({ email: 'd@x.c', passwordHash: 'x', displayName: 'D' });
 	const form = makeFormData({ type: 'not_a_type', number: 'P000' });
 
 	const result = await actions.add(makeEvent(form, u.id));
@@ -129,10 +167,10 @@ test('add action rejects an invalid document type', async () => {
 
 test('update action changes a document and its companion', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'e@x.c', passwordHash: 'x', displayName: 'E' }).returning().get();
-	const trip = db.insert(trips).values({ ownerId: u.id, name: 'Rome' }).returning().get();
-	const companion1 = db.insert(tripCompanions).values({ tripId: trip.id, name: 'Riley' }).returning().get();
-	const companion2 = db.insert(tripCompanions).values({ tripId: trip.id, name: 'Quinn' }).returning().get();
+	const u = makeTestUser({ email: 'e@x.c', passwordHash: 'x', displayName: 'E' });
+	const trip = createTrip(u.id, { name: 'Rome' });
+	const companion1 = makeCompanion(trip.id, 'Riley');
+	const companion2 = makeCompanion(trip.id, 'Quinn');
 
 	const doc = _addDocument(u.id, {
 		type: 'passport',
@@ -174,7 +212,7 @@ test('update action changes a document and its companion', async () => {
 
 test('update action encrypts the document number', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'f@x.c', passwordHash: 'x', displayName: 'F' }).returning().get();
+	const u = makeTestUser({ email: 'f@x.c', passwordHash: 'x', displayName: 'F' });
 	const doc = _addDocument(u.id, { type: 'passport', number: 'OLDNUM' });
 
 	const form = makeFormData({ id: String(doc.id), type: 'passport', number: 'NEWSECRET' });
@@ -188,7 +226,7 @@ test('update action encrypts the document number', async () => {
 
 test('delete action removes the document', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'g@x.c', passwordHash: 'x', displayName: 'G' }).returning().get();
+	const u = makeTestUser({ email: 'g@x.c', passwordHash: 'x', displayName: 'G' });
 	const doc = _addDocument(u.id, { type: 'passport' });
 
 	const form = makeFormData({ id: String(doc.id) });
@@ -210,8 +248,8 @@ test('delete action removes the document', async () => {
 
 test('update action rejects access to another users document', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'h@x.c', passwordHash: 'x', displayName: 'H' }).returning().get();
-	const other = db.insert(users).values({ email: 'i@x.c', passwordHash: 'x', displayName: 'I' }).returning().get();
+	const u = makeTestUser({ email: 'h@x.c', passwordHash: 'x', displayName: 'H' });
+	const other = makeTestUser({ email: 'i@x.c', passwordHash: 'x', displayName: 'I' });
 	const doc = _addDocument(other.id, { type: 'passport' });
 
 	const form = makeFormData({ id: String(doc.id), type: 'visa' });
@@ -223,8 +261,8 @@ test('update action rejects access to another users document', async () => {
 
 test('delete action rejects access to another users document', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'j@x.c', passwordHash: 'x', displayName: 'J' }).returning().get();
-	const other = db.insert(users).values({ email: 'k@x.c', passwordHash: 'x', displayName: 'K' }).returning().get();
+	const u = makeTestUser({ email: 'j@x.c', passwordHash: 'x', displayName: 'J' });
+	const other = makeTestUser({ email: 'k@x.c', passwordHash: 'x', displayName: 'K' });
 	const doc = _addDocument(other.id, { type: 'passport' });
 
 	const form = makeFormData({ id: String(doc.id) });
@@ -235,7 +273,7 @@ test('delete action rejects access to another users document', async () => {
 
 test('add action rejects an invalid companionId format', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'l@x.c', passwordHash: 'x', displayName: 'L' }).returning().get();
+	const u = makeTestUser({ email: 'l@x.c', passwordHash: 'x', displayName: 'L' });
 	const form = makeFormData({ type: 'passport', companionId: 'not-a-number' });
 
 	await expect(actions.add(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
@@ -244,7 +282,7 @@ test('add action rejects an invalid companionId format', async () => {
 
 test('update action rejects an invalid companionId format', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db.insert(users).values({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' }).returning().get();
+	const u = makeTestUser({ email: 'm@x.c', passwordHash: 'x', displayName: 'M' });
 	const doc = _addDocument(u.id, { type: 'passport' });
 	const form = makeFormData({ id: String(doc.id), type: 'passport', companionId: '-5' });
 

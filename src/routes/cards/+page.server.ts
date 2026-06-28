@@ -1,30 +1,30 @@
 import { fail, redirect, error, type Actions } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { assertOwnedRefs } from '$lib/server/ownership';
-import { db } from '$lib/server/db';
-import { cards, cardBenefits } from '$lib/server/db/schema';
 import { listBenefitTemplates, getBenefitTemplate } from '$lib/server/benefitTemplates';
 import { sanitizeLast4, positiveIdFromForm } from '$lib/server/validation';
+import {
+	listCards,
+	createCard,
+	updateCard,
+	deleteCard,
+	createCardBenefit,
+	updateCardBenefit,
+	deleteCardBenefit,
+	listBenefitsForCards,
+	getCardById
+} from '$lib/server/repositories/profileRepo';
 import type { PageServerLoad } from './$types';
 
 export function _addCard(
 	userId: number,
 	i: { nickname: string; network: string; last4?: string; notes?: string }
 ) {
-	// Never persist a full PAN: keep digits only and store at most the last four,
-	// whatever the form submits (spec: cards store last4 + network only).
-	return db
-		.insert(cards)
-		.values({
-			userId,
-			nickname: i.nickname,
-			network: i.network,
-			last4: sanitizeLast4(i.last4),
-			notes: i.notes
-		})
-		.returning()
-		.get();
+	return createCard(userId, {
+		nickname: i.nickname,
+		network: i.network,
+		last4: i.last4,
+		notes: i.notes
+	});
 }
 
 export function _addBenefit(
@@ -38,8 +38,6 @@ export function _addBenefit(
 		notes?: string;
 	}
 ) {
-	assertOwnedRefs(userId, { cardId });
-
 	let benefitType = i.benefitType;
 	let coverageAmount = i.coverageAmount;
 	let currency = i.currency;
@@ -51,17 +49,12 @@ export function _addBenefit(
 		currency = template.currency;
 	}
 
-	return db
-		.insert(cardBenefits)
-		.values({
-			cardId,
-			benefitType: benefitType!,
-			coverageAmount,
-			currency: currency ?? 'USD',
-			notes: i.notes
-		})
-		.returning()
-		.get();
+	return createCardBenefit(userId, cardId, {
+		benefitType: benefitType!,
+		coverageAmount,
+		currency: currency ?? 'USD',
+		notes: i.notes
+	});
 }
 
 export function _updateCard(
@@ -74,15 +67,12 @@ export function _updateCard(
 		notes?: string;
 	}
 ) {
-	db.update(cards)
-		.set({
-			nickname: i.nickname,
-			network: i.network,
-			last4: sanitizeLast4(i.last4),
-			notes: i.notes || null
-		})
-		.where(and(eq(cards.id, id), eq(cards.userId, userId)))
-		.run();
+	updateCard(id, userId, {
+		nickname: i.nickname,
+		network: i.network,
+		last4: sanitizeLast4(i.last4),
+		notes: i.notes || null
+	});
 }
 
 export function _updateBenefit(
@@ -96,31 +86,36 @@ export function _updateBenefit(
 		notes?: string;
 	}
 ) {
-	assertOwnedRefs(userId, { cardId });
-	db.update(cardBenefits)
-		.set({
-			benefitType: i.benefitType,
-			coverageAmount: i.coverageAmount ?? null,
-			currency: i.currency ?? 'USD',
-			notes: i.notes || null
-		})
-		.where(and(eq(cardBenefits.id, id), eq(cardBenefits.cardId, cardId)))
-		.run();
+	if (!getCardById(cardId, userId)) throw error(404, 'Not found');
+	updateCardBenefit(id, cardId, {
+		benefitType: i.benefitType,
+		coverageAmount: i.coverageAmount ?? null,
+		currency: i.currency ?? 'USD',
+		notes: i.notes || null
+	});
 }
 
 export function _deleteBenefit(userId: number, id: number, cardId: number) {
-	assertOwnedRefs(userId, { cardId });
-	db.delete(cardBenefits).where(and(eq(cardBenefits.id, id), eq(cardBenefits.cardId, cardId))).run();
+	if (!getCardById(cardId, userId)) throw error(404, 'Not found');
+	deleteCardBenefit(id, cardId);
 }
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	const mine = db.select().from(cards).where(eq(cards.userId, u.id)).all();
+	const mine = listCards(u.id);
+	const cardIds = mine.map((c) => c.id);
+	const allBenefits = listBenefitsForCards(cardIds);
+	const benefitsByCard = new Map<number, typeof allBenefits>();
+	for (const b of allBenefits) {
+		const list = benefitsByCard.get(b.cardId) ?? [];
+		list.push(b);
+		benefitsByCard.set(b.cardId, list);
+	}
 	return {
 		templates: listBenefitTemplates(),
 		cards: mine.map((c) => ({
 			...c,
-			benefits: db.select().from(cardBenefits).where(eq(cardBenefits.cardId, c.id)).all()
+			benefits: benefitsByCard.get(c.id) ?? []
 		}))
 	};
 };
@@ -205,7 +200,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
-		db.delete(cards).where(and(eq(cards.id, idResult.value), eq(cards.userId, u.id))).run();
+		deleteCard(idResult.value, u.id);
 		throw redirect(303, '/cards');
 	}
 };

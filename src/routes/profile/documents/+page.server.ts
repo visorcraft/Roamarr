@@ -1,13 +1,17 @@
 import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { requireUser } from '$lib/server/auth';
-import { requireOwnedDocument } from '$lib/server/ownership';
 import { db } from '$lib/server/db';
-import { travelDocuments, trips, tripCompanions, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
-import { encrypt, decrypt } from '$lib/server/crypto';
+import { trips, tripCompanions, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
 import { upsertRemindersForDocument, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
+import {
+	createTravelDocument,
+	updateTravelDocument,
+	deleteTravelDocument,
+	listTravelDocuments
+} from '$lib/server/repositories/profileRepo';
 import type { PageServerLoad } from './$types';
 
 export function _addDocument(
@@ -21,19 +25,14 @@ export function _addDocument(
 		companionId?: number | null;
 	}
 ) {
-	const doc = db
-		.insert(travelDocuments)
-		.values({
-			userId,
-			type: i.type,
-			number: i.number ? encrypt(i.number) : null,
-			issuingAuthority: i.issuingAuthority,
-			expiresOn: i.expiresOn,
-			notes: i.notes,
-			companionId: i.companionId ?? null
-		})
-		.returning()
-		.get();
+	const doc = createTravelDocument(userId, {
+		type: i.type,
+		number: i.number,
+		issuingAuthority: i.issuingAuthority,
+		expiresOn: i.expiresOn,
+		notes: i.notes,
+		companionId: i.companionId ?? null
+	});
 	upsertRemindersForDocument(doc);
 	return doc;
 }
@@ -50,20 +49,14 @@ function _updateDocument(
 		companionId?: number | null;
 	}
 ) {
-	requireOwnedDocument(userId, id);
-	const doc = db
-		.update(travelDocuments)
-		.set({
-			type: i.type,
-			number: i.number ? encrypt(i.number) : null,
-			issuingAuthority: i.issuingAuthority,
-			expiresOn: i.expiresOn,
-			notes: i.notes,
-			companionId: i.companionId ?? null
-		})
-		.where(eq(travelDocuments.id, id))
-		.returning()
-		.get();
+	const doc = updateTravelDocument(id, userId, {
+		type: i.type,
+		number: i.number,
+		issuingAuthority: i.issuingAuthority,
+		expiresOn: i.expiresOn,
+		notes: i.notes,
+		companionId: i.companionId ?? null
+	})!;
 	upsertRemindersForDocument(doc);
 	return doc;
 }
@@ -89,7 +82,7 @@ function parseCompanionId(raw: FormDataEntryValue | null): number | null {
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	const rows = db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).all();
+	const rows = listTravelDocuments(u.id);
 	const companions = db
 		.select({
 			id: tripCompanions.id,
@@ -103,7 +96,7 @@ export const load: PageServerLoad = ({ locals }) => {
 		.orderBy(tripCompanions.name)
 		.all();
 	return {
-		documents: rows.map((d) => ({ ...d, number: d.number ? decrypt(d.number) : null })),
+		documents: rows,
 		companions
 	};
 };
@@ -150,11 +143,8 @@ export const actions: Actions = {
 	delete: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const id = Number((await request.formData()).get('id'));
-		requireOwnedDocument(u.id, id);
 		cancelRemindersFor('document', id);
-		db.delete(travelDocuments)
-			.where(and(eq(travelDocuments.id, id), eq(travelDocuments.userId, u.id)))
-			.run();
+		deleteTravelDocument(id, u.id);
 		logAudit(u.id, 'document_delete', 'document', id);
 		throw redirect(303, '/profile/documents');
 	}

@@ -1,6 +1,10 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -16,21 +20,44 @@ import {
 } from './+page.server';
 import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
 import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/schema';
+import {
+	cards as kitCards,
+	cardBenefits as kitCardBenefits,
+	insurancePolicies as kitInsurancePolicies,
+	trips as kitTrips,
+	users as kitUsers
+} from '$lib/server/db/mongrelSchema';
 import { eq } from 'drizzle-orm';
+import { makeKitUser } from '../../../tests/kitHelpers';
+import { createTrip } from '$lib/server/repositories/tripsRepo';
+
+function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kitUser = makeKitUser({
+		email: over.email,
+		password_hash: over.passwordHash,
+		display_name: over.displayName,
+		role: (over.role as 'admin' | 'user') ?? 'user'
+	});
+	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+}
+
+beforeEach(() => {
+	ctx.sqlite.exec(
+		'delete from insurance_policies; delete from card_benefits; delete from cards; delete from trips; delete from users;'
+	);
+	ctx.kit.deleteFrom(kitInsurancePolicies).executeSync();
+	ctx.kit.deleteFrom(kitCardBenefits).executeSync();
+	ctx.kit.deleteFrom(kitCards).executeSync();
+	ctx.kit.deleteFrom(kitTrips).executeSync();
+	ctx.kit.deleteFrom(kitUsers).executeSync();
+});
 
 test('card + benefit are owner-scoped; insurance to foreign trip is rejected', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const bTrip = db.insert(trips).values({ ownerId: b.id, name: 'B trip' }).returning().get();
+	const a = makeTestUser({ email: 'a@x.c' });
+	const b = makeTestUser({ email: 'b@x.c' });
+	const bTrip = createTrip(b.id, { name: 'B trip' });
 	const card = addCard(a.id, { nickname: 'Sapphire', network: 'visa', last4: '1111' });
 	addBenefit(a.id, card.id, { benefitType: 'trip_delay', coverageAmount: 50000 });
 	expect(db.select().from(cardBenefits).all().length).toBe(1);
@@ -39,22 +66,14 @@ test('card + benefit are owner-scoped; insurance to foreign trip is rejected', (
 
 test('addCard never stores a full PAN — only the last 4 digits', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'pan@x.c', passwordHash: 'x', displayName: 'P' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'pan@x.c', passwordHash: 'x', displayName: 'P' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa', last4: '4111 1111 1111 1234' });
 	expect(db.select().from(cards).where(eq(cards.id, card.id)).get()!.last4).toBe('1234');
 });
 
 test('updateCard edits a card and still only stores the last 4 digits', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'update-card@x.c', passwordHash: 'x', displayName: 'U' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'update-card@x.c', passwordHash: 'x', displayName: 'U' });
 	const card = addCard(u.id, { nickname: 'Old', network: 'visa', last4: '1234' });
 	updateCard(u.id, card.id, {
 		nickname: 'Updated',
@@ -71,18 +90,12 @@ test('updateCard edits a card and still only stores the last 4 digits', () => {
 
 test('updateCard cannot modify another users card', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'a2@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'b2@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
+	const a = makeTestUser({ email: 'a2@x.c' });
+	const b = makeTestUser({ email: 'b2@x.c' });
 	const card = addCard(a.id, { nickname: 'A card', network: 'visa', last4: '1111' });
-	updateCard(b.id, card.id, { nickname: 'Hacked', network: 'amex' });
+	expect(() => updateCard(b.id, card.id, { nickname: 'Hacked', network: 'amex' })).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
 	const row = db.select().from(cards).where(eq(cards.id, card.id)).get()!;
 	expect(row.nickname).toBe('A card');
 	expect(row.network).toBe('visa');
@@ -90,16 +103,8 @@ test('updateCard cannot modify another users card', () => {
 
 test('updateBenefit edits a benefit and enforces card ownership', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'benefit-owner@x.c', passwordHash: 'x', displayName: 'O' })
-		.returning()
-		.get();
-	const other = db
-		.insert(users)
-		.values({ email: 'benefit-other@x.c', passwordHash: 'x', displayName: 'X' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'benefit-owner@x.c' });
+	const other = makeTestUser({ email: 'benefit-other@x.c' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
 	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
 	updateBenefit(u.id, benefit.id, card.id, {
@@ -121,16 +126,8 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 
 test('deleteBenefit removes a benefit and enforces card ownership', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'benefit-delete@x.c', passwordHash: 'x', displayName: 'D' })
-		.returning()
-		.get();
-	const other = db
-		.insert(users)
-		.values({ email: 'benefit-delete-other@x.c', passwordHash: 'x', displayName: 'E' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'benefit-delete@x.c' });
+	const other = makeTestUser({ email: 'benefit-delete-other@x.c' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
 	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay' });
 	deleteBenefit(u.id, benefit.id, card.id);
@@ -144,18 +141,10 @@ test('deleteBenefit removes a benefit and enforces card ownership', () => {
 
 test('updatePolicy edits a policy and rejects a foreign trip', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'ins-owner@x.c', passwordHash: 'x', displayName: 'I' })
-		.returning()
-		.get();
-	const other = db
-		.insert(users)
-		.values({ email: 'ins-other@x.c', passwordHash: 'x', displayName: 'J' })
-		.returning()
-		.get();
-	const myTrip = db.insert(trips).values({ ownerId: u.id, name: 'Mine' }).returning().get();
-	const otherTrip = db.insert(trips).values({ ownerId: other.id, name: 'Other' }).returning().get();
+	const u = makeTestUser({ email: 'ins-owner@x.c' });
+	const other = makeTestUser({ email: 'ins-other@x.c' });
+	const myTrip = createTrip(u.id, { name: 'Mine' });
+	const otherTrip = createTrip(other.id, { name: 'Other' });
 	const policy = addPolicy(u.id, { provider: 'Acme', tripId: myTrip.id });
 	updatePolicy(u.id, policy.id, {
 		provider: 'Allianz',
@@ -182,18 +171,12 @@ test('updatePolicy edits a policy and rejects a foreign trip', () => {
 
 test('updatePolicy cannot modify another users policy', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'ins-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'ins-b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
+	const a = makeTestUser({ email: 'ins-a@x.c' });
+	const b = makeTestUser({ email: 'ins-b@x.c' });
 	const policy = addPolicy(a.id, { provider: 'Acme' });
-	updatePolicy(b.id, policy.id, { provider: 'Hacked' });
+	expect(() => updatePolicy(b.id, policy.id, { provider: 'Hacked' })).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
 	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, policy.id)).get()!;
 	expect(row.provider).toBe('Acme');
 });

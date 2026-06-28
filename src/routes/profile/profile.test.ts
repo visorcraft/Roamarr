@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import { test, expect, vi } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
+const ctx = vi.hoisted(() => ({
+	db: null as unknown as import('$lib/server/db').DB,
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -27,24 +31,55 @@ import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergency
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
-import { users as kitUsers } from '$lib/server/db/mongrelSchema';
+import {
+	travelDocuments as kitTravelDocuments,
+	loyaltyPrograms as kitLoyaltyPrograms,
+	emergencyContacts as kitEmergencyContacts,
+	users as kitUsers
+} from '$lib/server/db/mongrelSchema';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../tests/kitHelpers';
+import * as profileRepo from '$lib/server/repositories/profileRepo';
+
+function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+	const db = (ctx as { db: import('$lib/server/db').DB }).db;
+	const kitUser = makeKitUser({
+		email: over.email,
+		password_hash: over.passwordHash,
+		display_name: over.displayName,
+		role: (over.role as 'admin' | 'user') ?? 'user',
+		timezone: over.timezone,
+		theme_id: over.themeId,
+		default_currency: over.defaultCurrency,
+		calendar_token: over.calendarToken ?? null,
+		calendar_token_expires_at: over.calendarTokenExpiresAt ?? null,
+		must_reset_password: over.mustResetPassword ?? false,
+		disabled: over.disabled ?? false,
+		flight_checkin_lead_hours: over.flightCheckinLeadHours
+			? BigInt(over.flightCheckinLeadHours)
+			: undefined,
+		document_expiry_lead_days: over.documentExpiryLeadDays
+			? BigInt(over.documentExpiryLeadDays)
+			: undefined,
+		email_notifications: over.emailNotifications ?? undefined,
+		webhook_notifications: over.webhookNotifications ?? undefined
+	});
+	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+}
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec(
 		'delete from audit_logs; delete from emergency_contacts; delete from loyalty_programs; delete from travel_documents; delete from sessions; delete from users;'
 	);
+	(ctx as any).kit.deleteFrom(kitEmergencyContacts).executeSync();
+	(ctx as any).kit.deleteFrom(kitLoyaltyPrograms).executeSync();
+	(ctx as any).kit.deleteFrom(kitTravelDocuments).executeSync();
 	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
 });
 
 test('document number is encrypted at rest and arms a reminder', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	addDocument(u.id, {
 		type: 'passport',
 		number: 'X1234567',
@@ -59,27 +94,14 @@ test('document number is encrypted at rest and arms a reminder', () => {
 
 test('updateProgram edits a loyalty program and is user-scoped', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const a = db
-		.insert(users)
-		.values({ email: 'loyal-a@x.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const b = db
-		.insert(users)
-		.values({ email: 'loyal-b@x.c', passwordHash: 'x', displayName: 'B' })
-		.returning()
-		.get();
-	const program = db
-		.insert(loyaltyPrograms)
-		.values({
-			userId: a.id,
-			programName: 'Old',
-			membershipNumber: '123',
-			balance: 1000,
-			notes: 'old note'
-		})
-		.returning()
-		.get();
+	const a = makeTestUser({ email: 'loyal-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeTestUser({ email: 'loyal-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const program = profileRepo.createLoyaltyProgram(a.id, {
+		programName: 'Old',
+		membershipNumber: '123',
+		balance: 1000,
+		notes: 'old note'
+	});
 	updateProgram(a.id, program.id, {
 		programName: 'United MileagePlus',
 		membershipNumber: 'UA999',
@@ -556,11 +578,7 @@ test('changeEmail action sets a flash cookie and redirects', async () => {
 
 test('addEmergencyContact action creates a contact and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'ec-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'ec-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -585,16 +603,8 @@ test('addEmergencyContact action creates a contact and redirects', async () => {
 
 test('updateEmergencyContact action edits a contact and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'ec-update-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
-		.returning()
-		.get();
-	const c = db
-		.insert(emergencyContacts)
-		.values({ userId: u.id, name: 'Old', phone: '000', isPrimary: false })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'ec-update-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
+	const c = profileRepo.createEmergencyContact(u.id, { name: 'Old', phone: '000', isPrimary: false });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -620,16 +630,8 @@ test('updateEmergencyContact action edits a contact and redirects', async () => 
 
 test('deleteEmergencyContact action removes a contact and redirects', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'ec-delete-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
-		.returning()
-		.get();
-	const c = db
-		.insert(emergencyContacts)
-		.values({ userId: u.id, name: 'Remove me', isPrimary: false })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'ec-delete-action@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
+	const c = profileRepo.createEmergencyContact(u.id, { name: 'Remove me', isPrimary: false });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 	const request = new Request('http://x/profile', {
 		method: 'POST',
@@ -644,12 +646,7 @@ test('deleteEmergencyContact action removes a contact and redirects', async () =
 });
 
 test('emergency contact actions reject invalid contact ids', async () => {
-	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'ec-invalid@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' })
-		.returning()
-		.get();
+	const u = makeTestUser({ email: 'ec-invalid@x.c', passwordHash: 'x', displayName: 'U', timezone: 'UTC' });
 	const cookies = { set: vi.fn(), get: vi.fn() };
 
 	const updateRequest = new Request('http://x/profile', {

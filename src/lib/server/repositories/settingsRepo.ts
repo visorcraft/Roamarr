@@ -83,7 +83,7 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		defaultFlightCheckinLeadHours: Number(row.default_flight_checkin_lead_hours),
 		defaultDocumentExpiryLeadDays: Number(row.default_document_expiry_lead_days),
 		smtpHost: nullableText(row.smtp_host),
-		smtpPort: row.smtp_port == null || row.smtp_port === '' ? null : Number(row.smtp_port),
+		smtpPort: row.smtp_port == null || row.smtp_port === 0n ? null : Number(row.smtp_port),
 		smtpUser: nullableText(row.smtp_user),
 		smtpPass: nullableText(row.smtp_pass),
 		smtpFrom: nullableText(row.smtp_from),

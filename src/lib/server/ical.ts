@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import type { SegmentType } from './db/schema';
+import type { SegmentType } from './db/mongrelSchema';
 import { formatDestination } from '$lib/tripDestination';
 import { nowIso } from './tz';
 

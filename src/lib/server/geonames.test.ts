@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { eq, sql } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('./db', async () => {
@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 });
 
 import { parseCities1000Line, bulkInsertCities } from './geonames';
-import { geonamesCities } from './db/schema';
+import { geonamesCities } from './db/mongrelSchema';
 
 const SAMPLE_LINE =
 	'2988507\tParis\tParis\t\t48.8534\t2.3488\tP\tPPLC\tFR\t\t\t11\t\t\t2161000\t\t\tEurope/Paris\t2024-01-01';
@@ -59,8 +59,8 @@ test('bulkInsertCities replaces existing data and inserts rows', () => {
 	]);
 
 	expect(imported).toBe(1);
-	const count = db.select({ count: sql<number>`count(*)` }).from(geonamesCities).get()!.count;
-	expect(count).toBe(1);
-	const row = db.select().from(geonamesCities).where(eq(geonamesCities.geonameId, 2988507)).get();
+	const count = (ctx as any).kit.selectFrom(geonamesCities).selectCount().executeSync();
+	expect(count).toBe(1n);
+	const row = db.select().from(geonamesCities).where(eq(geonamesCities.geoname_id, BigInt(2988507))).get();
 	expect(row?.name).toBe('Paris');
 });

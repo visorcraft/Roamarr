@@ -7,13 +7,13 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as repo from './tripMiscRepo';
 import {
 	tripChecklists as drizzleTripChecklists,
 	tripChecklistItems as drizzleTripChecklistItems,
 	tripJournalEntries as drizzleTripJournalEntries
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	tripChecklists as kitTripChecklists,
 	tripChecklistItems as kitTripChecklistItems,
@@ -57,7 +57,7 @@ test('checklist get-or-create and mirroring', () => {
 	const legacy = db
 		.select()
 		.from(drizzleTripChecklists)
-		.where(eq(drizzleTripChecklists.tripId, t.id))
+		.where(eq(drizzleTripChecklists.trip_id, BigInt(t.id)))
 		.get();
 	expect(legacy?.id).toBe(first.id);
 });
@@ -91,7 +91,7 @@ test('checklist item CRUD with companion name', () => {
 		db
 			.select()
 			.from(drizzleTripChecklistItems)
-			.where(eq(drizzleTripChecklistItems.id, item.id))
+			.where(eq(drizzleTripChecklistItems.id, BigInt(item.id)))
 			.get()
 	).toBeUndefined();
 });
@@ -116,7 +116,7 @@ test('journal entry CRUD and mirroring', () => {
 	const legacy = db
 		.select()
 		.from(drizzleTripJournalEntries)
-		.where(eq(drizzleTripJournalEntries.id, entry.id))
+		.where(eq(drizzleTripJournalEntries.id, BigInt(entry.id)))
 		.get();
 	expect(legacy?.title).toBe('Day one');
 
@@ -130,7 +130,7 @@ test('journal entry CRUD and mirroring', () => {
 		db
 			.select()
 			.from(drizzleTripJournalEntries)
-			.where(eq(drizzleTripJournalEntries.id, entry.id))
+			.where(eq(drizzleTripJournalEntries.id, BigInt(entry.id)))
 			.get()
 	).toBeUndefined();
 });

@@ -7,14 +7,14 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as repo from './remindersRepo';
 import * as usersRepo from './usersRepo';
 import {
 	reminders as drizzleReminders,
 	notifications as drizzleNotifications,
 	schedulerRuns as drizzleSchedulerRuns
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	reminders as kitReminders,
 	notifications as kitNotifications,
@@ -66,20 +66,20 @@ test('create/get/list/update/delete reminder', () => {
 	const legacy = db
 		.select()
 		.from(drizzleReminders)
-		.where(eq(drizzleReminders.id, created.id))
+		.where(eq(drizzleReminders.id, BigInt(created.id)))
 		.get();
 	expect(legacy?.fireAt).toBe('2026-01-01T00:00:00Z');
 
 	const updated = repo.updateReminder(created.id, { fireAt: '2026-01-02T00:00:00Z' });
 	expect(updated?.fireAt).toBe('2026-01-02T00:00:00Z');
 	expect(
-		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, created.id)).get()?.fireAt
+		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(created.id))).get()?.fireAt
 	).toBe('2026-01-02T00:00:00Z');
 
 	expect(repo.deleteReminder(created.id)).toBe(true);
 	expect(repo.getReminderById(created.id)).toBeNull();
 	expect(repo.listRemindersForUser(Number(u.id))).toHaveLength(0);
-	expect(db.select().from(drizzleReminders).where(eq(drizzleReminders.id, created.id)).get()).toBeUndefined();
+	expect(db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(created.id))).get()).toBeUndefined();
 });
 
 test('upsertReminderBySource updates existing row', () => {
@@ -147,7 +147,7 @@ test('markReminderSent updates status and mirrors to legacy', () => {
 	expect(updated?.status).toBe('sent');
 	expect(updated?.sentAt).toBe('2026-01-01T01:00:00Z');
 	expect(
-		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, r.id)).get()?.status
+		db.select().from(drizzleReminders).where(eq(drizzleReminders.id, BigInt(r.id))).get()?.status
 	).toBe('sent');
 });
 
@@ -185,7 +185,7 @@ test('create/list/count/get/mark-read/delete notification', () => {
 	const legacy = db
 		.select()
 		.from(drizzleNotifications)
-		.where(eq(drizzleNotifications.id, created.id))
+		.where(eq(drizzleNotifications.id, BigInt(created.id)))
 		.get();
 	expect(legacy?.title).toBe('Hello');
 
@@ -193,7 +193,7 @@ test('create/list/count/get/mark-read/delete notification', () => {
 	expect(read?.readAt).toBe('2026-01-01T00:00:00Z');
 	expect(repo.countUnreadNotificationsForUser(Number(u.id))).toBe(0);
 	expect(
-		db.select().from(drizzleNotifications).where(eq(drizzleNotifications.id, created.id)).get()
+		db.select().from(drizzleNotifications).where(eq(drizzleNotifications.id, BigInt(created.id))).get()
 			?.readAt
 	).not.toBeNull();
 
@@ -242,7 +242,7 @@ test('start/finish/list/prune scheduler runs', () => {
 	const legacy = db
 		.select()
 		.from(drizzleSchedulerRuns)
-		.where(eq(drizzleSchedulerRuns.id, run.id))
+		.where(eq(drizzleSchedulerRuns.id, BigInt(run.id)))
 		.get();
 	expect(legacy?.success).toBe(true);
 

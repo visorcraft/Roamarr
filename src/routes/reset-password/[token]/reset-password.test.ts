@@ -1,5 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { eq as drizzleEq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -10,7 +10,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { createPasswordResetToken } from '$lib/server/passwordReset';
-import { users } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/mongrelSchema';
 import { verifyPassword } from '$lib/server/auth';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { users as kitUsers, passwordResetTokens } from '$lib/server/db/mongrelSchema';
@@ -23,7 +23,7 @@ function makeEvent(token: string, formData?: Map<string, string>) {
 }
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	(ctx as { sqlite: any }).sqlite.exec(
 		'delete from password_reset_tokens; delete from users;'
 	);
 	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
@@ -57,6 +57,6 @@ test('action consumes token, updates password, and redirects', async () => {
 	await expect(
 		actions.default(makeEvent(token, new Map([['password', 'newpassword'], ['confirmPassword', 'newpassword']])))
 	).rejects.toEqual(expect.objectContaining({ status: 303, location: '/login' }));
-	const updated = (ctx as any).db.select().from(users).where(drizzleEq(users.id, Number(u.id))).get();
+	const updated = (ctx as any).db.select().from(users).where(eq(users.id, BigInt(u.id))).get();
 	expect(await verifyPassword(updated!.passwordHash, 'newpassword')).toBe(true);
 });

@@ -21,7 +21,7 @@ describe('mongrelMigrations', () => {
 	});
 
 	test('0001_initial creates all tables and seeds settings row id 1', async () => {
-		const row = await kit.selectFrom(settings).where(eq(settings.id, 1n)).execute();
+		const row = await kit.selectFrom(settings).where(eq(settings.id, BigInt(1n))).execute();
 		expect(row).toHaveLength(1);
 		expect(row[0].id).toBe(1n);
 		expect(row[0].instance_name).toBe('Roamarr');

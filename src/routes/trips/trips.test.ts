@@ -11,11 +11,11 @@ import { kit } from '$lib/server/db';
 import { makeUser, makeTrip, makeGroup, makeGroupMember, makeShare } from '../../../tests/helpers';
 
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';
-import { users, trips, groups, groupMembers, tripShares, reminders } from '$lib/server/db/schema';
+import { users, trips, groups, groupMembers, tripShares, reminders } from '$lib/server/db/mongrelSchema';
 import { makeGetEvent } from '../../../tests/eventHelpers';
 
 function event(user: { id: number; email: string }, search = '') {
@@ -195,8 +195,8 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 		status: 303,
 		location: '/trips'
 	});
-	expect(db.select().from(trips).where(eq(trips.id, t1.id)).get()!.archived).toBe(false);
-	expect(db.select().from(trips).where(eq(trips.id, t2.id)).get()!.archived).toBe(false);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t1.id))).get()!.archived).toBe(false);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t2.id))).get()!.archived).toBe(false);
 
 	const unfavorite = new FormData();
 	unfavorite.append('selected', String(t1.id));
@@ -204,8 +204,8 @@ test('bulk unarchive and unfavorite actions update selected trips', async () => 
 		status: 303,
 		location: '/trips'
 	});
-	expect(db.select().from(trips).where(eq(trips.id, t1.id)).get()!.favorite).toBe(false);
-	expect(db.select().from(trips).where(eq(trips.id, t2.id)).get()!.favorite).toBe(true);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t1.id))).get()!.favorite).toBe(false);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t2.id))).get()!.favorite).toBe(true);
 });
 
 
@@ -214,11 +214,11 @@ test('bulk delete removes trip-level and segment reminders', async () => {
 	const a = makeUser(kit, { email: 'del-a@x.c', passwordHash: 'x', displayName: 'A' });
 	const t = makeTrip(kit, a.id, { name: 'ToDelete', startDate: '2099-01-01' });
 	upsertCustomReminder(a.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
-	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
+	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(1);
 
 	const body = new FormData();
 	body.append('selected', String(t.id));
 	await expect(actions.delete(makeEvent(a, body))).rejects.toMatchObject({ status: 303, location: '/trips' });
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
-	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(0);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(0);
 });

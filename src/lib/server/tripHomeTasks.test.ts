@@ -8,13 +8,13 @@ vi.mock('./db', async () => {
 });
 
 import { addHomeTask, deleteHomeTask, listHomeTasks, toggleHomeTask } from './tripHomeTasks';
-import { tripHomeTasks } from './db/schema';
+import { tripHomeTasks } from './db/mongrelSchema';
 import {
 	tripHomeTasks as kitTripHomeTasks,
 	trips as kitTrips,
 	users as kitUsers
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getDb() {
@@ -51,7 +51,7 @@ test('addHomeTask creates a task and lists it', () => {
 	const rows = listHomeTasks(t.id);
 	expect(rows).toHaveLength(1);
 	expect(rows[0].text).toBe('Hold mail');
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, task.id)).get()).toBeTruthy();
+	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).get()).toBeTruthy();
 });
 
 test('addHomeTask validates text', () => {
@@ -71,7 +71,7 @@ test('deleteHomeTask removes the task', () => {
 	const { db, u, t } = seed();
 	const task = addHomeTask(u.id, t.id, { text: 'Pack' });
 	deleteHomeTask(u.id, t.id, task.id);
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, task.id)).get()).toBeUndefined();
+	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.id, BigInt(task.id))).get()).toBeUndefined();
 });
 
 test('non-editor cannot mutate home tasks', () => {

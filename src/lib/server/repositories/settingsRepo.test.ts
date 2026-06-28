@@ -51,7 +51,7 @@ test('updateSettings patches the singleton row', () => {
 
 	const raw = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
 		.selectFrom(settings)
-		.where(eq(settings.id, 1n))
+		.where(eq(settings.id, BigInt(1n)))
 		.executeSync()[0];
 	expect(raw.instance_name).toBe('Trips');
 	expect(raw.smtp_port).toBe(587n);

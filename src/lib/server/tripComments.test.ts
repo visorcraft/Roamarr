@@ -12,8 +12,8 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 
 import { listComments, addComment, deleteComment } from './tripComments';
-import { users, trips, tripComments } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, tripComments } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 test('comment lifecycle', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -24,7 +24,7 @@ test('comment lifecycle', () => {
 	expect(listComments(t.id).map((c) => c.body)).toEqual(['Hello']);
 
 	deleteComment(u.id, comment.id);
-	expect(db.select().from(tripComments).where(eq(tripComments.id, comment.id)).get()).toBeUndefined();
+	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(comment.id))).get()).toBeUndefined();
 });
 
 test('deleteComment only removes the users own comment', () => {
@@ -35,5 +35,5 @@ test('deleteComment only removes the users own comment', () => {
 	const comment = addComment(a.id, t.id, 'Mine');
 
 	deleteComment(b.id, comment.id);
-	expect(db.select().from(tripComments).where(eq(tripComments.id, comment.id)).get()).toBeDefined();
+	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(comment.id))).get()).toBeDefined();
 });

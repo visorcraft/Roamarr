@@ -1,5 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('./db', async () => {
@@ -10,7 +10,7 @@ vi.mock('./db', async () => {
 
 import { parseJson, parseCsv, importTrips } from './import';
 import { exportTripsCsv } from './export';
-import { users, trips, segments, reminders, auditLogs } from './db/schema';
+import { users, trips, segments, reminders, auditLogs } from './db/mongrelSchema';
 import { users as kitUsers, trips as kitTrips, segments as kitSegments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
@@ -118,10 +118,10 @@ test('importTrips creates trips and segments', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors).toHaveLength(0);
-	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
+	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Tokyo');
-	const s = db.select().from(segments).where(eq(segments.tripId, t!.id)).get();
+	const s = db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).get();
 	expect(s).toBeDefined();
 	expect(s!.type).toBe('flight');
 	expect(db.select().from(reminders).all()).toHaveLength(1);
@@ -134,7 +134,7 @@ test('importTrips mints public token for public visibility', () => {
 	importTrips(Number(u.id), {
 		trips: [{ name: 'Public Trip', defaultVisibility: 'public' }]
 	});
-	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
+	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
 	expect(t!.publicToken).toBeTruthy();
 });
 
@@ -149,7 +149,7 @@ test('importTrips collects validation errors without creating invalid trips', ()
 	});
 	expect(result.imported).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all()).toHaveLength(1);
+	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(1);
 });
 
 test('importTrips skips invalid segments but keeps the trip', () => {
@@ -169,14 +169,14 @@ test('importTrips skips invalid segments but keeps the trip', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(1);
 	expect(result.errors.length).toBeGreaterThan(0);
-	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
-	expect(db.select().from(segments).where(eq(segments.tripId, t!.id)).all()).toHaveLength(1);
+	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
+	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).all()).toHaveLength(1);
 });
 
 test('importTrips dryRun validates and previews without writing', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const u = makeUser('dry@x.c');
-	const beforeTrips = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all().length;
+	const beforeTrips = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all().length;
 	const result = importTrips(
 		Number(u.id),
 		{
@@ -194,7 +194,7 @@ test('importTrips dryRun validates and previews without writing', () => {
 	expect(result.segmentCount).toBe(1);
 	expect(result.preview).toHaveLength(1);
 	expect(result.preview![0].name).toBe('Dry');
-	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all().length).toBe(beforeTrips);
+	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all().length).toBe(beforeTrips);
 	expect(db.select().from(segments).all().length).toBe(0);
 });
 
@@ -222,5 +222,5 @@ test('csv round-trip preserves multi-segment trips', () => {
 	const result = importTrips(Number(u.id), parseCsv(csv));
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(2);
-	expect(db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).all()).toHaveLength(2);
+	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(2);
 });

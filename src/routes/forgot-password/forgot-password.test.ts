@@ -14,14 +14,14 @@ vi.mock('$lib/server/notify', () => ({
 
 import { _requestReset, actions } from './+page.server';
 import { users as kitUsers, passwordResetTokens } from '$lib/server/db/mongrelSchema';
-import { users } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/mongrelSchema';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 import { makeKitUser } from '../../../tests/kitHelpers';
 
 const origin = 'https://example.com';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	(ctx as { sqlite: any }).sqlite.exec(
 		'delete from password_reset_tokens; delete from users;'
 	);
 	// Cascading delete on kit users removes sessions and reset tokens too.

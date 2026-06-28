@@ -15,8 +15,8 @@ import {
 	addCompanion,
 	updateCompanion
 } from './tripCompanions';
-import { users, trips, tripCompanions, auditLogs } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, tripCompanions, auditLogs } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import type { KitDatabase } from '@mongreldb/kit';
 
@@ -54,7 +54,7 @@ test('patch companion updates fields', () => {
 	const c = insertTripCompanion(u.id, t.id, { name: 'Charlie', category: 'other' });
 
 	patchTripCompanion(u.id, t.id, c.id, { name: 'Charles', category: 'adult', notes: 'Updated' });
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
 	expect(row.name).toBe('Charles');
 	expect(row.category).toBe('adult');
 	expect(row.notes).toBe('Updated');
@@ -68,7 +68,7 @@ test('remove companion deletes the row', () => {
 	const c = insertTripCompanion(u.id, t.id, { name: 'Dana' });
 
 	removeTripCompanion(u.id, t.id, c.id);
-	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()).toBeUndefined();
+	expect(db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()).toBeUndefined();
 });
 
 test('mutations bump trip updated_at and write audit logs', () => {
@@ -79,11 +79,11 @@ test('mutations bump trip updated_at and write audit logs', () => {
 	const before = t.updatedAt;
 
 	const c = insertTripCompanion(u.id, t.id, { name: 'Eve' });
-	const afterInsert = db.select().from(trips).where(eq(trips.id, t.id)).get()!.updatedAt;
+	const afterInsert = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!.updatedAt;
 	expect(afterInsert).not.toBe(before);
 
 	removeTripCompanion(u.id, t.id, c.id);
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
 	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('delete');
 });
@@ -111,7 +111,7 @@ test('addCompanion action creates a companion and redirects', async () => {
 		addCompanion(event(u, t.id, new URLSearchParams({ name: 'Alice', category: 'adult', notes: 'A' })))
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.tripId, t.id)).all();
+	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].name).toBe('Alice');
 });
@@ -133,7 +133,7 @@ test('updateCompanion action updates a companion and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
 	expect(row.name).toBe('Benjamin');
 	expect(row.category).toBe('adult');
 });
@@ -188,7 +188,7 @@ test('patch companion updates dietary, allergy, and medical notes', () => {
 		allergies: 'Dairy',
 		medicalNotes: 'Asthma inhaler'
 	});
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
 	expect(row.dietary).toBe('Gluten-free');
 	expect(row.allergies).toBe('Dairy');
 	expect(row.medicalNotes).toBe('Asthma inhaler');
@@ -217,7 +217,7 @@ test('insert and list companion preferences and kid gear needs', () => {
 	expect(c.seatPreference).toBe('window');
 	expect(c.bedPreference).toBe('twin');
 
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
 	expect(row.needsCarSeat).toBe(true);
 	expect(row.needsStroller).toBe(true);
 	expect(row.needsCrib).toBe(true);
@@ -241,7 +241,7 @@ test('patch companion updates preferences and gear needs', () => {
 		needsCrib: false,
 		accessibilityNeeds: 'Wheelchair accessible room'
 	});
-	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, c.id)).get()!;
+	const row = db.select().from(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).get()!;
 	expect(row.seatPreference).toBe('aisle');
 	expect(row.bedPreference).toBe('king');
 	expect(row.needsCarSeat).toBe(true);
@@ -269,6 +269,6 @@ test('companion notes are rejected above max length', async () => {
 	expect(errors.allergies).toContain('1000');
 	expect(errors.medicalNotes).toContain('1000');
 
-	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.tripId, t.id)).all();
+	const rows = db.select().from(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(0);
 });

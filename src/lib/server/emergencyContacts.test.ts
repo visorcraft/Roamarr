@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
@@ -25,12 +25,12 @@ import {
 	shareItineraryWithContact,
 	resetEmergencyShareRateLimit
 } from './emergencyContacts';
-import { emergencyContacts, trips, users, auditLogs, tripShares } from './db/schema';
+import { emergencyContacts, trips, users, auditLogs, tripShares } from './db/mongrelSchema';
 import {
 	emergencyContacts as kitEmergencyContacts,
 	trips as kitTrips
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { updateSettings } from './settings';
 import { createTrip } from './repositories/tripsRepo';
 import { makeKitUser } from '../../../tests/kitHelpers';
@@ -61,7 +61,7 @@ test('addEmergencyContact creates a contact and audits', () => {
 	expect(c.email).toBe('jordan@x.c');
 	expect(c.isPrimary).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('emergency_contact_create');
 	expect(logs[0].entityType).toBe('emergency_contact');
@@ -78,7 +78,7 @@ test('addEmergencyContact enforces single primary contact', () => {
 		db
 			.select()
 			.from(emergencyContacts)
-			.where(eq(emergencyContacts.id, first.id))
+			.where(eq(emergencyContacts.id, BigInt(first.id)))
 			.get()!.isPrimary
 	).toBe(false);
 	expect(second.isPrimary).toBe(true);
@@ -116,18 +116,18 @@ test('updateEmergencyContact edits a contact and shifts primary status', () => {
 	const updatedA = db
 		.select()
 		.from(emergencyContacts)
-		.where(eq(emergencyContacts.id, a.id))
+		.where(eq(emergencyContacts.id, BigInt(a.id)))
 		.get()!;
 	const updatedB = db
 		.select()
 		.from(emergencyContacts)
-		.where(eq(emergencyContacts.id, b.id))
+		.where(eq(emergencyContacts.id, BigInt(b.id)))
 		.get()!;
 	expect(updatedA.isPrimary).toBe(false);
 	expect(updatedB.isPrimary).toBe(true);
 	expect(updatedB.name).toBe('B-updated');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'emergency_contact_update')).toBe(true);
 });
 
@@ -158,12 +158,12 @@ test('deleteEmergencyContact removes only the owned contact', () => {
 	const remainingA = db
 		.select()
 		.from(emergencyContacts)
-		.where(eq(emergencyContacts.userId, Number(a.id)))
+		.where(eq(emergencyContacts.user_id, BigInt(a.id)))
 		.all();
 	const remainingB = db
 		.select()
 		.from(emergencyContacts)
-		.where(eq(emergencyContacts.userId, Number(b.id)))
+		.where(eq(emergencyContacts.user_id, BigInt(b.id)))
 		.all();
 	expect(remainingA).toHaveLength(0);
 	expect(remainingB).toHaveLength(1);
@@ -194,10 +194,10 @@ test('shareItineraryWithContact sends link and audits', async () => {
 	expect(String(sent[0].text)).toContain('Tokyo Trip');
 	expect(String(sent[0].text)).toContain(result.link);
 
-	const updated = db.select().from(trips).where(eq(trips.id, trip.id)).get()!;
+	const updated = db.select().from(trips).where(eq(trips.id, BigInt(trip.id))).get()!;
 	expect(updated.publicToken).toBeTruthy();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(
 		logs.some(
 			(l: Record<string, unknown>) => l.action === 'emergency_share' && l.entityType === 'trip' && l.entityId === trip.id

@@ -11,14 +11,14 @@ import { kit } from './db';
 import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../tests/helpers';
 
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import {
 	listAttendeesForSegment,
 	listAttendeesForSegments,
 	upsertAttendee,
 	deleteAttendee
 } from './segmentAttendees';
-import { users, trips, segments, tripCompanions, auditLogs } from './db/schema';
+import { users, trips, segments, tripCompanions, auditLogs } from './db/mongrelSchema';
 
 function expectHttpError(fn: () => void, status: number) {
 	try {
@@ -48,7 +48,7 @@ test('sets and updates attendee status for a segment', () => {
 	expect(rows).toHaveLength(1);
 	expect(rows[0].status).toBe('maybe');
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
 	expect(audit.length).toBeGreaterThanOrEqual(2);
 	expect(audit[audit.length - 1].action).toBe('set_attendee_status');
 });
@@ -66,7 +66,7 @@ test('deletes an attendee', () => {
 	deleteAttendee(u.id, t.id, s.id, c.id);
 	expect(listAttendeesForSegment(s.id)).toHaveLength(0);
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'remove_attendee')).toBe(true);
 });
 

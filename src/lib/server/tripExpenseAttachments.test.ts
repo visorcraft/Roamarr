@@ -15,9 +15,9 @@ import {
 	getAttachmentWithPath,
 	listAttachments
 } from './tripExpenseAttachments';
-import { tripExpenseAttachments } from './db/schema';
+import { tripExpenseAttachments } from './db/mongrelSchema';
 import { tripExpenses as kitTripExpenses, users as kitUsers, trips as kitTrips } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 import * as expensesRepo from './repositories/expensesRepo';
 
@@ -26,7 +26,7 @@ function attachmentsDir() {
 }
 
 beforeEach(() => {
-	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
+	const sqlite = (ctx as { sqlite: any }).sqlite;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	sqlite.exec(
 		'delete from trip_expense_attachments; delete from trip_expenses; delete from trips; delete from users;'
@@ -66,7 +66,7 @@ test('addAttachment writes the file and database row', async () => {
 	expect(att.sizeBytes).toBe(5);
 	expect(att.expenseId).toBe(e.id);
 
-	const rows = db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expenseId, e.id)).all();
+	const rows = db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expense_id, BigInt(e.id))).all();
 	expect(rows).toHaveLength(1);
 
 	const withPath = getAttachmentWithPath(u.id, att.id);
@@ -101,7 +101,7 @@ test('deleteAttachment removes the row and file', async () => {
 
 	deleteAttachment(u.id, att.id);
 
-	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.id, att.id)).get()).toBeUndefined();
+	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.id, BigInt(att.id))).get()).toBeUndefined();
 	expect(existsSync(withPath.path)).toBe(false);
 });
 

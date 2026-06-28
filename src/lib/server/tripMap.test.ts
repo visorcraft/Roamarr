@@ -8,8 +8,8 @@ vi.mock('./db', async () => {
 });
 
 import { selectNextSegmentCity, tripMapCity } from './tripMap';
-import { users, trips, segments } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, segments } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 let fixtureCounter = 0;
 
@@ -55,7 +55,7 @@ test('tripMapCity prefers the next segment city', () => {
 	const { db, t } = insertFixtures();
 	db.update(trips)
 		.set({ destinationCityName: 'Tokyo', destinationCountryCode: 'JP', destinationCityLat: 35.68, destinationCityLng: 139.76 })
-		.where(eq(trips.id, t.id))
+		.where(eq(trips.id, BigInt(t.id)))
 		.run();
 	db.insert(segments).values([
 		{ tripId: t.id, type: 'hotel', title: 'Next', startAt: '2099-01-01T10:00:00Z', startTz: 'UTC', countryCode: 'FR', cityName: 'Paris', cityLat: 48.85, cityLng: 2.35 }
@@ -69,7 +69,7 @@ test('tripMapCity falls back to the destination city when no segment has one', (
 	const { db, t } = insertFixtures();
 	db.update(trips)
 		.set({ destinationCityName: 'Tokyo', destinationCountryCode: 'JP', destinationCityLat: 35.68, destinationCityLng: 139.76 })
-		.where(eq(trips.id, t.id))
+		.where(eq(trips.id, BigInt(t.id)))
 		.run();
 	db.insert(segments).values([
 		{ tripId: t.id, type: 'note', title: 'No coords', startAt: '2099-01-01T10:00:00Z', startTz: 'UTC' }

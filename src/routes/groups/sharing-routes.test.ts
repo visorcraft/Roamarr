@@ -19,8 +19,8 @@ import {
 	_deleteGroup as deleteGroup
 } from './+page.server';
 import { canView } from '$lib/server/sharing';
-import { groups, groupMembers } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { groups, groupMembers } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
@@ -69,13 +69,13 @@ test('group owner can remove a member and delete the group', () => {
 	const member = makeUser('m2@x.c');
 	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
 	addMember(owner.id, g.id, 'm2@x.c');
-	expect(db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id)).all()).toHaveLength(1);
+	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(1);
 
 	removeMember(owner.id, g.id, member.id);
-	expect(db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id)).all()).toHaveLength(0);
+	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(0);
 
 	deleteGroup(owner.id, g.id);
-	expect(db.select().from(groups).where(eq(groups.id, g.id)).get()).toBeUndefined();
+	expect(db.select().from(groups).where(eq(groups.id, BigInt(g.id))).get()).toBeUndefined();
 });
 
 test('non-owner cannot remove members or delete a group', () => {
@@ -88,6 +88,6 @@ test('non-owner cannot remove members or delete a group', () => {
 
 	expect(() => removeMember(b.id, g.id, member.id)).toThrow();
 	expect(() => deleteGroup(b.id, g.id)).toThrow();
-	expect(db.select().from(groupMembers).where(eq(groupMembers.groupId, g.id)).all()).toHaveLength(1);
-	expect(db.select().from(groups).where(eq(groups.id, g.id)).get()).toBeDefined();
+	expect(db.select().from(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).all()).toHaveLength(1);
+	expect(db.select().from(groups).where(eq(groups.id, BigInt(g.id))).get()).toBeDefined();
 });

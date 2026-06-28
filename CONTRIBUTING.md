@@ -4,8 +4,8 @@
 # Contributing to Roamarr
 
 Thank you for helping improve Roamarr. This project is a self-hosted SvelteKit
-and SQLite travel organizer. Changes should be small, tested, and aligned with
-the existing route, server-helper, and UI patterns.
+and MongrelDB Kit travel organizer. Changes should be small, tested, and aligned
+with the existing route, server-helper, and UI patterns.
 
 ## Contribution Workflow
 
@@ -50,8 +50,8 @@ when the change affects the UI.
 - `src/lib/server/` contains auth, settings, scheduler, sharing, ownership,
   travel-domain logic, import/export, notifications, expenses, and admin
   operations.
-- `src/lib/server/db/` contains Drizzle schema, migrations, SQLite setup, and
-  schema helpers.
+- `src/lib/server/db/` contains MongrelDB Kit schema, connection setup, and
+  repository helpers.
 - `src/lib/components/`, `src/lib/icons.ts`, and `src/app.css` contain shared UI
   components, icon names, Tailwind v4 tokens, and reusable app classes.
 - `tests/helpers.ts` and `tests/eventHelpers.ts` contain shared database and
@@ -67,7 +67,7 @@ Roamarr requires Node.js 22.12 or newer.
 ```sh
 npm ci
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export DATABASE_PATH="./roamarr.db"
+export MONGREL_DATABASE_PATH="./roamarr.kitdb"
 npm run dev
 ```
 
@@ -81,7 +81,6 @@ npm run check            # Svelte + TypeScript check
 npm test                 # Vitest suite once
 npm run build            # production build to ./build
 npm run credits:generate # regenerate bundled license and credits data
-npm run db:generate      # generate SQL migrations after schema changes
 ```
 
 Do not commit real `.env` files, local databases, logs, generated build output,
@@ -94,9 +93,8 @@ Playwright output, screenshots, dependencies, or machine-local state.
 - Keep route actions thin: validate input, enforce ownership or authorization,
   call server modules, and return SvelteKit `fail`, `redirect`, or `error`
   responses.
-- Prefer Drizzle builders over raw SQL except for migrations or
-  transaction-specific SQL.
-- Use `db.sqlite.transaction()` for atomic multi-step mutations.
+- Prefer repository helpers and kit query builders over raw SQL.
+- Use explicit transactions for atomic multi-step mutations.
 - Use Luxon for timezone and datetime math.
 - Reuse validators from `src/lib/server/validation.ts`, action helpers from
   `src/lib/server/actions.ts`, and parameter parsers from
@@ -133,7 +131,7 @@ Match test coverage to the risk of the change:
 
 - Server logic should have focused Vitest coverage near the source file.
 - Route actions should test validation, authorization, and mutation behavior.
-- Schema changes should include generated migrations and tests for affected
+- Schema changes should update `mongrelSchema.ts` and include tests for affected
   behavior.
 - Security-sensitive changes should cover negative authorization and validation
   paths.

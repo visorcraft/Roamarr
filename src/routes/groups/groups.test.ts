@@ -12,7 +12,7 @@ import { makeUser, makeGroup, makeGroupMember } from '../../../tests/helpers';
 
 
 import { load } from './+page.server';
-import { users, groups, groupMembers } from '$lib/server/db/schema';
+import { users, groups, groupMembers } from '$lib/server/db/mongrelSchema';
 
 test('load includes groups the user owns and groups they belong to', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;

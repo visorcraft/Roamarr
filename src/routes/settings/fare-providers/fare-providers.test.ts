@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));

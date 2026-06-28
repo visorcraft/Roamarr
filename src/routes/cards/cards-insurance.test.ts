@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
@@ -19,7 +19,7 @@ import {
 	_deleteBenefit as deleteBenefit
 } from './+page.server';
 import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
-import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/schema';
+import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/mongrelSchema';
 import {
 	cards as kitCards,
 	cardBenefits as kitCardBenefits,
@@ -27,11 +27,11 @@ import {
 	trips as kitTrips,
 	users as kitUsers
 } from '$lib/server/db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
-function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+function makeTestUser(over: any = {}) {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kitUser = makeKitUser({
 		email: over.email,
@@ -39,7 +39,7 @@ function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
 		display_name: over.displayName,
 		role: (over.role as 'admin' | 'user') ?? 'user'
 	});
-	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 }
 
 beforeEach(() => {
@@ -68,7 +68,7 @@ test('addCard never stores a full PAN — only the last 4 digits', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser({ email: 'pan@x.c', passwordHash: 'x', displayName: 'P' });
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa', last4: '4111 1111 1111 1234' });
-	expect(db.select().from(cards).where(eq(cards.id, card.id)).get()!.last4).toBe('1234');
+	expect(db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!.last4).toBe('1234');
 });
 
 test('updateCard edits a card and still only stores the last 4 digits', () => {
@@ -81,7 +81,7 @@ test('updateCard edits a card and still only stores the last 4 digits', () => {
 		last4: '4111 1111 1111 9999',
 		notes: 'note'
 	});
-	const row = db.select().from(cards).where(eq(cards.id, card.id)).get()!;
+	const row = db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!;
 	expect(row.nickname).toBe('Updated');
 	expect(row.network).toBe('mc');
 	expect(row.last4).toBe('9999');
@@ -96,7 +96,7 @@ test('updateCard cannot modify another users card', () => {
 	expect(() => updateCard(b.id, card.id, { nickname: 'Hacked', network: 'amex' })).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
-	const row = db.select().from(cards).where(eq(cards.id, card.id)).get()!;
+	const row = db.select().from(cards).where(eq(cards.id, BigInt(card.id))).get()!;
 	expect(row.nickname).toBe('A card');
 	expect(row.network).toBe('visa');
 });
@@ -113,7 +113,7 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 		currency: 'EUR',
 		notes: 'bag notes'
 	});
-	const row = db.select().from(cardBenefits).where(eq(cardBenefits.id, benefit.id)).get()!;
+	const row = db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).get()!;
 	expect(row.benefitType).toBe('baggage_delay');
 	expect(row.coverageAmount).toBe(250);
 	expect(row.currency).toBe('EUR');
@@ -131,12 +131,12 @@ test('deleteBenefit removes a benefit and enforces card ownership', () => {
 	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
 	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay' });
 	deleteBenefit(u.id, benefit.id, card.id);
-	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, benefit.id)).get()).toBeUndefined();
+	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).get()).toBeUndefined();
 
 	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
 	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
 	expect(() => deleteBenefit(u.id, otherBenefit.id, otherCard.id)).toThrow();
-	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, otherBenefit.id)).get()).toBeDefined();
+	expect(db.select().from(cardBenefits).where(eq(cardBenefits.id, BigInt(otherBenefit.id))).get()).toBeDefined();
 });
 
 test('updatePolicy edits a policy and rejects a foreign trip', () => {
@@ -156,7 +156,7 @@ test('updatePolicy edits a policy and rejects a foreign trip', () => {
 		tripId: myTrip.id,
 		notes: 'policy notes'
 	});
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, policy.id)).get()!;
+	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).get()!;
 	expect(row.provider).toBe('Allianz');
 	expect(row.policyNumber).toBe('PN-123');
 	expect(row.coverageSummary).toBe('Full coverage');
@@ -177,6 +177,6 @@ test('updatePolicy cannot modify another users policy', () => {
 	expect(() => updatePolicy(b.id, policy.id, { provider: 'Hacked' })).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, policy.id)).get()!;
+	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(policy.id))).get()!;
 	expect(row.provider).toBe('Acme');
 });

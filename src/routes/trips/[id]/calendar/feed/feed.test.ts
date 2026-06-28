@@ -12,7 +12,7 @@ import { makeUser, makeTrip } from '../../../../../../tests/helpers';
 
 
 import { GET } from './+server';
-import { users, trips } from '$lib/server/db/schema';
+import { users, trips } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
 function event(tripId: number, token: string, ip: string) {

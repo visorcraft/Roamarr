@@ -21,7 +21,7 @@ describe('license attribution data', () => {
 
 		expect(credits.packages.length).toBeGreaterThan(0);
 		expect(credits.packages.some((pkg) => pkg.name === 'svelte')).toBe(true);
-		expect(credits.packages.some((pkg) => pkg.name === 'better-sqlite3')).toBe(true);
+		expect(credits.packages.some((pkg) => pkg.name === '@mongreldb/kit')).toBe(true);
 		expect(credits.runtimeComponents.some((component) => component.name === 'Node.js runtime')).toBe(true);
 		expect(credits.counts.packages).toBe(credits.packages.length);
 	});

@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
@@ -31,9 +31,9 @@ import {
 	cardBenefits as drizzleCardBenefits,
 	insurancePolicies as drizzleInsurancePolicies,
 	emergencyContacts as drizzleEmergencyContacts
-} from '../db/schema';
+} from '../db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(travelDocuments).executeSync();
@@ -83,7 +83,7 @@ test('travel document CRUD encrypts number and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleTravelDocuments)
-		.where(eq(drizzleTravelDocuments.id, doc.id))
+		.where(eq(drizzleTravelDocuments.id, BigInt(doc.id)))
 		.get()!;
 	expect(legacyRow.number).not.toBe('P1234567');
 
@@ -107,7 +107,7 @@ test('travel document CRUD encrypts number and syncs to legacy', () => {
 	profileRepo.deleteTravelDocument(doc.id, Number(u.id));
 	expect(profileRepo.listTravelDocuments(Number(u.id))).toHaveLength(0);
 	expect(
-		ctx.db.select().from(drizzleTravelDocuments).where(eq(drizzleTravelDocuments.id, doc.id)).get()
+		ctx.db.select().from(drizzleTravelDocuments).where(eq(drizzleTravelDocuments.id, BigInt(doc.id))).get()
 	).toBeUndefined();
 });
 
@@ -127,7 +127,7 @@ test('loyalty program CRUD validates balance and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleLoyaltyPrograms)
-		.where(eq(drizzleLoyaltyPrograms.id, program.id))
+		.where(eq(drizzleLoyaltyPrograms.id, BigInt(program.id)))
 		.get()!;
 	expect(legacyRow.programName).toBe('United MileagePlus');
 
@@ -165,7 +165,7 @@ test('card CRUD sanitizes last4 and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleCards)
-		.where(eq(drizzleCards.id, card.id))
+		.where(eq(drizzleCards.id, BigInt(card.id)))
 		.get()!;
 	expect(legacyRow.last4).toBe('1234');
 
@@ -183,7 +183,7 @@ test('card CRUD sanitizes last4 and syncs to legacy', () => {
 
 	profileRepo.deleteCard(card.id, Number(u.id));
 	expect(profileRepo.listCards(Number(u.id))).toHaveLength(0);
-	expect(ctx.db.select().from(drizzleCards).where(eq(drizzleCards.id, card.id)).get()).toBeUndefined();
+	expect(ctx.db.select().from(drizzleCards).where(eq(drizzleCards.id, BigInt(card.id))).get()).toBeUndefined();
 });
 
 // Card benefits
@@ -203,7 +203,7 @@ test('card benefit CRUD is scoped to card and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleCardBenefits)
-		.where(eq(drizzleCardBenefits.id, benefit.id))
+		.where(eq(drizzleCardBenefits.id, BigInt(benefit.id)))
 		.get()!;
 	expect(legacyRow.benefitType).toBe('trip_delay');
 
@@ -248,7 +248,7 @@ test('insurance policy CRUD supports trip link and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleInsurancePolicies)
-		.where(eq(drizzleInsurancePolicies.id, policy.id))
+		.where(eq(drizzleInsurancePolicies.id, BigInt(policy.id)))
 		.get()!;
 	expect(legacyRow.provider).toBe('Acme');
 	expect(legacyRow.tripId).toBe(trip.id);
@@ -287,7 +287,7 @@ test('emergency contact CRUD clears other primary and syncs to legacy', () => {
 	const legacyRow = ctx.db
 		.select()
 		.from(drizzleEmergencyContacts)
-		.where(eq(drizzleEmergencyContacts.id, c2.id))
+		.where(eq(drizzleEmergencyContacts.id, BigInt(c2.id)))
 		.get()!;
 	expect(legacyRow.isPrimary).toBe(true);
 

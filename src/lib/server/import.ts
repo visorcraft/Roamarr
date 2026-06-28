@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { SEGMENT_TYPES, type SegmentType } from '$lib/server/db/schema';
+import { SEGMENT_TYPES, type SegmentType } from '$lib/server/db/mongrelSchema';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { Validator } from '$lib/server/validation';
 import { localToUtc } from '$lib/server/tz';

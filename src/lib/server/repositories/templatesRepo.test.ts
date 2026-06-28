@@ -16,7 +16,7 @@ import {
 	tripTemplates,
 	packingTemplates,
 	packingTemplateItems
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -24,7 +24,7 @@ import {
 	packingTemplates as kitPackingTemplates,
 	packingTemplateItems as kitPackingTemplateItems
 } from '$lib/server/db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -178,7 +178,7 @@ test('legacy tables stay in sync with kit writes', () => {
 	const legacyTripTpl = db
 		.select()
 		.from(tripTemplates)
-		.where(eq(tripTemplates.id, tripTpl.id))
+		.where(eq(tripTemplates.id, BigInt(tripTpl.id)))
 		.get();
 	expect(legacyTripTpl?.name).toBe('Legacy trip template');
 	expect(legacyTripTpl?.snapshotJson).toContain('value');
@@ -188,13 +188,13 @@ test('legacy tables stay in sync with kit writes', () => {
 	const legacyPackTpl = db
 		.select()
 		.from(packingTemplates)
-		.where(eq(packingTemplates.id, packTpl.id))
+		.where(eq(packingTemplates.id, BigInt(packTpl.id)))
 		.get();
 	expect(legacyPackTpl?.name).toBe('Legacy packing');
 	const legacyItems = db
 		.select()
 		.from(packingTemplateItems)
-		.where(eq(packingTemplateItems.templateId, packTpl.id))
+		.where(eq(packingTemplateItems.template_id, BigInt(packTpl.id)))
 		.all();
 	expect(legacyItems).toHaveLength(1);
 });

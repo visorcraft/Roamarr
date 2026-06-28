@@ -7,7 +7,7 @@ import {
 	SEAT_PREFERENCES,
 	BED_PREFERENCES,
 	type CompanionCategory
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import { withTripAction } from '$lib/server/actions';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';

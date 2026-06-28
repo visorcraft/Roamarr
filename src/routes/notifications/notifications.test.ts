@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never, kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -14,7 +14,7 @@ import {
 	markUnread,
 	markAllRead
 } from '$lib/server/notifications';
-import { notifications } from '$lib/server/db/schema';
+import { notifications } from '$lib/server/db/mongrelSchema';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { createNotification } from '$lib/server/repositories/remindersRepo';
 
@@ -57,7 +57,7 @@ test('markUnread clears readAt for the caller’s own notification', () => {
 		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
 	);
 	markUnread(b.id, nB.id);
-	expect(db.select().from(notifications).where(eq(notifications.id, nB.id)).get()!.readAt).toBeNull();
+	expect(db.select().from(notifications).where(eq(notifications.id, BigInt(nB.id))).get()!.readAt).toBeNull();
 });
 
 test('markAllRead only affects the caller’s unread notifications', () => {

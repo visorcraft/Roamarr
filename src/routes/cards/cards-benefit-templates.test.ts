@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
@@ -13,13 +13,13 @@ vi.mock('$lib/server/db', async () => {
 
 import { _addBenefit as addBenefit, load } from './+page.server';
 import { _addCard as addCard } from './+page.server';
-import { cardBenefits, users } from '$lib/server/db/schema';
+import { cardBenefits, users } from '$lib/server/db/mongrelSchema';
 import { listBenefitTemplates } from '$lib/server/benefitTemplates';
 import { cardBenefits as kitCardBenefits, cards as kitCards, users as kitUsers } from '$lib/server/db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { makeKitUser } from '../../../tests/kitHelpers';
 
-function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+function makeTestUser(over: any = {}) {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kitUser = makeKitUser({
 		email: over.email,
@@ -27,7 +27,7 @@ function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
 		display_name: over.displayName,
 		role: (over.role as 'admin' | 'user') ?? 'user'
 	});
-	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 }
 
 beforeEach(() => {

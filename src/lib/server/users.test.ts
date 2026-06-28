@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('./db', async () => {
@@ -16,9 +16,9 @@ vi.mock('./notify', () => ({
 }));
 
 import { createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { hashPassword, verifyPassword } from './auth';
-import { users, sessions } from './db/schema';
+import { users, sessions } from './db/mongrelSchema';
 import { users as kitUsers } from './db/mongrelSchema';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { makeSyncedUser } from '../../../tests/helpers';
@@ -60,7 +60,7 @@ test('adminUpdateUser updates profile fields', async () => {
 		mustResetPassword: true
 	});
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, target.id)).get()!;
+	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
 	expect(updated.displayName).toBe('Target');
 	expect(updated.email).toBe('new@x.c');
 	expect(updated.mustResetPassword).toBe(true);
@@ -91,7 +91,7 @@ test('adminUpdateUser sets a new password and clears forced reset', async () => 
 		confirmPassword: 'newpassword'
 	});
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, target.id)).get()!;
+	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
 	expect(await verifyPassword(updated.passwordHash, 'newpassword')).toBe(true);
 	expect(updated.mustResetPassword).toBe(false);
 	expect(ctx.db.select().from(sessions).all()).toHaveLength(0);
@@ -109,7 +109,7 @@ test('completeRequiredPasswordChange clears mustResetPassword', async () => {
 
 	await completeRequiredPasswordChange(u.id, 'keep-token', 'newpassword', 'newpassword');
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(updated.mustResetPassword).toBe(false);
 	expect(await verifyPassword(updated.passwordHash, 'newpassword')).toBe(true);
 	expect(ctx.db.select().from(sessions).all()).toHaveLength(1);
@@ -154,7 +154,7 @@ test('adminDeleteUser removes a user', async () => {
 
 	await adminDeleteUser(admin.id, target.id);
 
-	expect(ctx.db.select().from(users).where(eq(users.id, target.id)).get()).toBeUndefined();
+	expect(ctx.db.select().from(users).where(eq(users.id, BigInt(target.id))).get()).toBeUndefined();
 });
 
 test('adminDeleteUser refuses to delete the last admin', async () => {
@@ -172,7 +172,7 @@ test('adminSendPasswordReset sends a reset notification', async () => {
 	const target = ctx.db
 		.select()
 		.from(users)
-		.where(eq(users.id, Number(kitUser.id)))
+		.where(eq(users.id, BigInt(kitUser.id)))
 		.get()!;
 
 	await adminSendPasswordReset(target.id, 'https://roamarr.test');

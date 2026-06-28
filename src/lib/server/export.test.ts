@@ -8,7 +8,7 @@ vi.mock('./db', async () => {
 });
 
 import { exportTrips, exportTripsJson, exportTripsCsv } from './export';
-import { users, trips, segments } from './db/schema';
+import { users, trips, segments } from './db/mongrelSchema';
 import { users as kitUsers, trips as kitTrips, segments as kitSegments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';

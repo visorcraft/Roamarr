@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { loadTripFor } from './shared';
-import { users, trips, segments, tripShares } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, segments, tripShares } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 test('loadTripFor gives owner full segments and shared viewer projection', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -71,7 +71,7 @@ test('loadTripFor includes confirmation numbers and details when showDetails is 
 	expect(readerJson).toContain('CONF123');
 	expect(readerJson).toContain('12A');
 
-	db.update(tripShares).set({ showDetails: false }).where(eq(tripShares.id, share.id)).run();
+	db.update(tripShares).set({ showDetails: false }).where(eq(tripShares.id, BigInt(share.id))).run();
 	const hiddenView = loadTripFor(reader.id, t.id) as { owner: false; editor: false; trip: { segments: unknown[] } };
 	const hiddenJson = JSON.stringify(hiddenView.trip);
 	expect(hiddenJson).not.toContain('CONF123');

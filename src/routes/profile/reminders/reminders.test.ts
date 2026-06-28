@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load, actions } from './+page.server';
-import { users, reminders } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, reminders } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 test('load returns the users reminders', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -53,5 +53,5 @@ test('cancel action deletes the users own reminder', async () => {
 		} as any)
 	).rejects.toSatisfy((e: any) => e.status === 303 && e.location === '/profile/reminders');
 
-	expect(db.select().from(reminders).where(eq(reminders.id, r.id)).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.id, BigInt(r.id))).get()).toBeUndefined();
 });

@@ -12,8 +12,8 @@ import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
 
 
 import { _loadByToken as loadByToken, load } from './[token]/+page.server';
-import { eq } from 'drizzle-orm';
-import { users, trips, segments } from '$lib/server/db/schema';
+import { eq } from '@mongreldb/kit';
+import { users, trips, segments } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 

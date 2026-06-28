@@ -8,9 +8,9 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { canView, canEdit, canViewDetails, viewerProjection, listViewableTrips } from './sharing';
-import { users, segments, groups, groupMembers, tripShares } from './db/schema';
+import { users, segments, groups, groupMembers, tripShares } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 

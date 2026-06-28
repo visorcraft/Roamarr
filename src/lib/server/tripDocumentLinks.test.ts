@@ -15,8 +15,8 @@ import {
 	addDocumentLink,
 	deleteDocumentLink
 } from './tripDocumentLinks';
-import { tripDocumentLinks, auditLogs } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { tripDocumentLinks, auditLogs } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { makeFormEvent } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
@@ -57,7 +57,7 @@ test('createDocumentLink inserts a link and audits', () => {
 	expect(link.url).toBe('https://booking.example/123');
 	expect(link.notes).toBe('Confirmation ABC');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('document_link_create');
 	expect(logs[0].entityType).toBe('trip_document_link');
@@ -111,7 +111,7 @@ test('editDocumentLink updates a link and audits', () => {
 	expect(updated.url).toBe('https://new.example');
 	expect(updated.notes).toBe('Updated note');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_update')).toBe(true);
 });
 
@@ -145,12 +145,12 @@ test('removeDocumentLink deletes only the owned trip link', () => {
 	} catch (e: any) {
 		expect(e.status).toBe(404);
 	}
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, link.id)).get()).toBeDefined();
+	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeDefined();
 
 	removeDocumentLink(a.id, t.id, link.id);
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, link.id)).get()).toBeUndefined();
+	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeUndefined();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'document_link_delete')).toBe(true);
 });
 
@@ -204,5 +204,5 @@ test('deleteDocumentLink action removes a link and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, link.id)).get()).toBeUndefined();
+	expect(db.select().from(tripDocumentLinks).where(eq(tripDocumentLinks.id, BigInt(link.id))).get()).toBeUndefined();
 });

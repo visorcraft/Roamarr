@@ -16,8 +16,8 @@ import {
 	addExpense,
 	deleteExpense
 } from './tripExpenses';
-import { tripExpenses, auditLogs } from './db/schema';
-import { eq, and } from 'drizzle-orm';
+import { tripExpenses, auditLogs } from './db/mongrelSchema';
+import { eq, and } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 
@@ -80,7 +80,7 @@ test('addExpense action stores category', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).all();
+	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].category).toBe('transport');
 });
@@ -135,12 +135,12 @@ test('deleteTripExpense removes expense for trip editor and logs audit', async (
 	const e = addTripExpense(owner.id, t.id, { description: 'Taxi', amount: 2500, currency: 'USD' });
 
 	deleteTripExpense(owner.id, e.id);
-	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, e.id)).get()).toBeUndefined();
+	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get()).toBeUndefined();
 
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.entityType, 'trip_expense'), eq(auditLogs.entityId, e.id)))
+		.where(and(eq(auditLogs.entity_type, 'trip_expense'), eq(auditLogs.entity_id, BigInt(e.id))))
 		.all();
 	expect(audit).toHaveLength(2);
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
@@ -234,7 +234,7 @@ test('addExpense action creates an expense and redirects', async () => {
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).all();
+	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].amount).toBe(4500);
 });
@@ -261,7 +261,7 @@ test('deleteExpense action removes an expense and redirects', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, e.id)).get()).toBeUndefined();
+	expect(db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get()).toBeUndefined();
 });
 
 test('computeSettlement equal split between owner and companion', () => {
@@ -363,7 +363,7 @@ test('addTripExpense accepts owner as a split participant', () => {
 	});
 
 	expect(e.splitAmong).toEqual(['owner', a.id]);
-	const row = db.select().from(tripExpenses).where(eq(tripExpenses.id, e.id)).get();
+	const row = db.select().from(tripExpenses).where(eq(tripExpenses.id, BigInt(e.id))).get();
 	expect(JSON.parse(row!.splitAmong)).toEqual(['owner', a.id]);
 });
 
@@ -385,7 +385,7 @@ test('addExpense action accepts owner split participant and redirects', async ()
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).all();
+	const rows = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(JSON.parse(rows[0].splitAmong)).toEqual(['owner', a.id]);
 });
@@ -465,7 +465,7 @@ test('addExpense action accepts an exchange rate and stores base amount', async 
 		)
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const row = db.select().from(tripExpenses).where(eq(tripExpenses.tripId, t.id)).get()!;
+	const row = db.select().from(tripExpenses).where(eq(tripExpenses.trip_id, BigInt(t.id))).get()!;
 	expect(row.currency).toBe('GBP');
 	expect(row.exchangeRate).toBe(12700);
 	expect(row.baseAmount).toBe(6350);

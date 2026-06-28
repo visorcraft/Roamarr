@@ -95,7 +95,7 @@
 			<div class="settings-row">
 				<div>
 					<p class="label">Database path</p>
-					<p class="field-help">SQLite database path used by the server.</p>
+					<p class="field-help">MongrelDB Kit data path used by the server.</p>
 				</div>
 				<span class="code-chip">{data.databasePath}</span>
 			</div>

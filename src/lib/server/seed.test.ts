@@ -15,7 +15,7 @@ import {
 	cards,
 	insurancePolicies,
 	loyaltyPrograms
-} from './db/schema';
+} from './db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -24,7 +24,7 @@ import {
 	insurancePolicies as kitInsurancePolicies,
 	loyaltyPrograms as kitLoyaltyPrograms
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
 
 function makeAdmin(email: string) {
@@ -85,7 +85,7 @@ test('seedDemoData removes existing non-admin data', () => {
 	seedDemoData(Number(admin.id));
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(users).where(eq(users.id, Number(other.id))).get()).toBeUndefined();
-	expect(db.select().from(trips).where(eq(trips.ownerId, Number(other.id))).get()).toBeUndefined();
-	expect(db.select().from(users).where(eq(users.id, Number(admin.id))).get()).toBeDefined();
+	expect(db.select().from(users).where(eq(users.id, BigInt(other.id))).get()).toBeUndefined();
+	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(other.id))).get()).toBeUndefined();
+	expect(db.select().from(users).where(eq(users.id, BigInt(admin.id))).get()).toBeDefined();
 });

@@ -1,5 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('./db', async () => {
@@ -25,7 +25,7 @@ import {
 	cancelReminder,
 	runDueReminders
 } from './reminders';
-import { users, trips, segments, reminders, travelDocuments } from './db/schema';
+import { users, trips, segments, reminders, travelDocuments } from './db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -37,7 +37,7 @@ let owner: any;
 let trip: any;
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	(ctx as { sqlite: any }).sqlite.exec(
 		'delete from reminders; delete from segments; delete from trips; delete from users;'
 	);
 	kit.deleteFrom(kitReminders).executeSync();
@@ -141,7 +141,7 @@ test('changing a flight to a non-flight cancels its reminder', () => {
 
 test('arms a reminder using the owners configured flight check-in lead', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	db.update(users).set({ flightCheckinLeadHours: 48 }).where(eq(users.id, owner.id)).run();
+	db.update(users).set({ flightCheckinLeadHours: 48 }).where(eq(users.id, BigInt(owner.id))).run();
 	const seg = makeSegment(kit, trip.id, {
 			type: 'flight',
 			title: 'UA1',
@@ -157,7 +157,7 @@ test('arms a reminder using the owners configured document expiry lead', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	db.update(users)
 		.set({ timezone: 'America/New_York', documentExpiryLeadDays: 30 })
-		.where(eq(users.id, owner.id))
+		.where(eq(users.id, BigInt(owner.id)))
 		.run();
 	const doc = db
 		.insert(travelDocuments)
@@ -177,7 +177,7 @@ test('custom reminder arms before a trip start', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
 	const t = makeTrip(kit, owner.id, { name: 'Custom', startDate: '2099-06-01' });
 	upsertCustomReminder(owner.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 1440);
-	const rows = db.select().from(reminders).where(eq(reminders.refType, 'trip')).all();
+	const rows = db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].kind).toBe('custom');
 	expect(rows[0].fireAt).toBe('2099-05-31T09:00:00.000Z');
@@ -223,8 +223,8 @@ test('cancelReminder deletes only the users own reminder', () => {
 			fireAt: '2026-01-01T00:00:00Z'
 		});
 	cancelReminder(owner.id, r1.id);
-	expect(db.select().from(reminders).where(eq(reminders.id, r1.id)).get()).toBeUndefined();
-	expect(db.select().from(reminders).where(eq(reminders.id, r2.id)).get()).toBeDefined();
+	expect(db.select().from(reminders).where(eq(reminders.id, BigInt(r1.id))).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.id, BigInt(r2.id))).get()).toBeDefined();
 	try {
 		cancelReminder(owner.id, r2.id);
 		expect.fail('should have thrown');
@@ -236,7 +236,7 @@ test('cancelReminder deletes only the users own reminder', () => {
 
 test('delivered notification copy is generic and links to documents for expiry', async () => {
 	const db = (ctx as { db: import('./db').DB }).db;
-	db.update(users).set({ timezone: 'UTC', documentExpiryLeadDays: 90 }).where(eq(users.id, owner.id)).run();
+	db.update(users).set({ timezone: 'UTC', documentExpiryLeadDays: 90 }).where(eq(users.id, BigInt(owner.id))).run();
 	const doc = db
 		.insert(travelDocuments)
 		.values({ userId: owner.id, type: 'passport', expiresOn: '2000-01-01' })

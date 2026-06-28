@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { GET } from './+server';
-import { users, trips, segments, groups, groupMembers, tripShares } from '$lib/server/db/schema';
+import { users, trips, segments, groups, groupMembers, tripShares } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
 function event(token: string, ip: string) {

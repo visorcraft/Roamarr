@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
@@ -18,18 +18,18 @@ import {
 	trips,
 	tripCompanions,
 	auditLogs
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	travelDocuments as kitTravelDocuments,
 	tripCompanions as kitTripCompanions,
 	users as kitUsers
 } from '$lib/server/db/mongrelSchema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '@mongreldb/kit';
 import { makeFormData } from '../../../../tests/eventHelpers';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
-function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+function makeTestUser(over: any = {}) {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kitUser = makeKitUser({
 		email: over.email,
@@ -38,7 +38,7 @@ function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
 		role: (over.role as 'admin' | 'user') ?? 'user',
 		timezone: over.timezone ?? 'UTC'
 	});
-	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 }
 
 function makeCompanion(tripId: number, name: string) {
@@ -71,7 +71,7 @@ test('visa is accepted as a travel-document type', () => {
 		expiresOn: '2027-01-01'
 	});
 	expect(doc.type).toBe('visa');
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
 	expect(row.type).toBe('visa');
 });
 
@@ -94,14 +94,14 @@ test('add action creates a document linked to a companion', async () => {
 		location: '/profile/documents'
 	});
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).get()!;
 	expect(row.companionId).toBe(companion.id);
 	expect(row.number).not.toBe('P12345');
 
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.userId, u.id), eq(auditLogs.action, 'document_create')))
+		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_create')))
 		.get();
 	expect(audit).toBeTruthy();
 	expect(audit?.entityType).toBe('document');
@@ -146,7 +146,7 @@ test('add action rejects a companion from another user', async () => {
 		status: 404
 	});
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).all()).toHaveLength(0);
+	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
 });
 
 test('add action rejects an invalid document type', async () => {
@@ -156,7 +156,7 @@ test('add action rejects an invalid document type', async () => {
 
 	const result = await actions.add(makeEvent(form, u.id));
 	expect(result).toMatchObject({ status: 400, data: { error: expect.any(String) } });
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).all()).toHaveLength(0);
+	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
 });
 
 test('update action changes a document and its companion', async () => {
@@ -187,7 +187,7 @@ test('update action changes a document and its companion', async () => {
 		location: '/profile/documents'
 	});
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
 	expect(row.type).toBe('visa');
 	expect(row.number).not.toBe('V54321');
 	expect(row.issuingAuthority).toBe('Italian Consulate');
@@ -198,7 +198,7 @@ test('update action changes a document and its companion', async () => {
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.userId, u.id), eq(auditLogs.action, 'document_update')))
+		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_update')))
 		.get();
 	expect(audit).toBeTruthy();
 	expect(audit?.entityId).toBe(doc.id);
@@ -212,7 +212,7 @@ test('update action encrypts the document number', async () => {
 	const form = makeFormData({ id: String(doc.id), type: 'passport', number: 'NEWSECRET' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 303 });
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
 	expect(row.number).not.toBe('NEWSECRET');
 	expect(row.number).not.toBe('OLDNUM');
 	expect(typeof row.number).toBe('string');
@@ -229,12 +229,12 @@ test('delete action removes the document', async () => {
 		location: '/profile/documents'
 	});
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).all()).toHaveLength(0);
+	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).all()).toHaveLength(0);
 
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.userId, u.id), eq(auditLogs.action, 'document_delete')))
+		.where(and(eq(auditLogs.user_id, BigInt(u.id)), eq(auditLogs.action, 'document_delete')))
 		.get();
 	expect(audit).toBeTruthy();
 	expect(audit?.entityId).toBe(doc.id);
@@ -249,7 +249,7 @@ test('update action rejects access to another users document', async () => {
 	const form = makeFormData({ id: String(doc.id), type: 'visa' });
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
 	expect(row.type).toBe('passport');
 });
 
@@ -262,7 +262,7 @@ test('delete action rejects access to another users document', async () => {
 	const form = makeFormData({ id: String(doc.id) });
 	await expect(actions.delete(makeEvent(form, u.id))).rejects.toMatchObject({ status: 404 });
 
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).all()).toHaveLength(1);
+	expect(db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).all()).toHaveLength(1);
 });
 
 test('add action rejects an invalid companionId format', async () => {
@@ -271,7 +271,7 @@ test('add action rejects an invalid companionId format', async () => {
 	const form = makeFormData({ type: 'passport', companionId: 'not-a-number' });
 
 	await expect(actions.add(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
-	expect(db.select().from(travelDocuments).where(eq(travelDocuments.userId, u.id)).all()).toHaveLength(0);
+	expect(db.select().from(travelDocuments).where(eq(travelDocuments.user_id, BigInt(u.id))).all()).toHaveLength(0);
 });
 
 test('update action rejects an invalid companionId format', async () => {
@@ -281,6 +281,6 @@ test('update action rejects an invalid companionId format', async () => {
 	const form = makeFormData({ id: String(doc.id), type: 'passport', companionId: '-5' });
 
 	await expect(actions.update(makeEvent(form, u.id))).rejects.toMatchObject({ status: 400 });
-	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, doc.id)).get()!;
+	const row = db.select().from(travelDocuments).where(eq(travelDocuments.id, BigInt(doc.id))).get()!;
 	expect(row.companionId).toBeNull();
 });

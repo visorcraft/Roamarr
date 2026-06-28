@@ -8,8 +8,8 @@ vi.mock('./db', async () => {
 });
 
 import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem, setAllItemsPacked } from './tripChecklists';
-import { tripChecklists, tripChecklistItems } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { tripChecklists, tripChecklistItems } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { makeLocals } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 
@@ -35,7 +35,7 @@ test('loadChecklist creates checklist lazily and returns empty items', () => {
 	const checklist = loadChecklist(t.id);
 	expect(checklist.tripId).toBe(t.id);
 	expect(checklist.items).toEqual([]);
-	expect(db.select().from(tripChecklists).where(eq(tripChecklists.tripId, t.id)).get()).toBeDefined();
+	expect(db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get()).toBeDefined();
 });
 
 test('addItem creates item and loadChecklist returns assigned companion name', () => {
@@ -105,7 +105,7 @@ test('deleteItem removes item', () => {
 	const item = addItem(u.id, t.id, 'Hat');
 
 	deleteItem(u.id, t.id, item.id);
-	expect(db.select().from(tripChecklistItems).where(eq(tripChecklistItems.id, item.id)).get()).toBeUndefined();
+	expect(db.select().from(tripChecklistItems).where(eq(tripChecklistItems.id, BigInt(item.id))).get()).toBeUndefined();
 });
 
 test('addChecklistItem action parses form and redirects', async () => {

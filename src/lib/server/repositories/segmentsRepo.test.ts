@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
@@ -13,7 +13,7 @@ vi.mock('$lib/server/db', async () => {
 	return { db, sqlite, kit, getDb: () => kit };
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { eq as kitEq } from '@mongreldb/kit';
 import {
 	listSegmentsForTrip,
@@ -33,10 +33,10 @@ import { createTrip } from './tripsRepo';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import {
-	segments as drizzleSegments,
-	segmentAttendees as drizzleSegmentAttendees,
-	tripCompanions as drizzleTripCompanions
-} from '$lib/server/db/schema';
+	segments as legacySegments,
+	segmentAttendees as legacySegmentAttendees,
+	tripCompanions as legacyTripCompanions
+} from '$lib/server/db/mongrelSchema';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(segmentAttendees).executeSync();
@@ -72,7 +72,7 @@ function makeKitCompanion(tripId: number, name = 'C') {
 		} as any)
 		.executeSync();
 	ctx.db
-		.insert(drizzleTripCompanions)
+		.insert(legacyTripCompanions)
 		.values({
 			id: Number(row.id),
 			tripId,
@@ -206,7 +206,7 @@ test('manages attendees', () => {
 	expect(getAttendeeBySegmentAndCompanion(seg.id, Number(c.id))).toBeNull();
 });
 
-test('keeps Drizzle segments in sync', () => {
+test('keeps legacy segments in sync', () => {
 	const u = makeKitUser();
 	const t = makeKitTrip(Number(u.id));
 	const seg = createSegment({
@@ -216,19 +216,19 @@ test('keeps Drizzle segments in sync', () => {
 		start_at: '2026-08-01T10:00:00Z',
 		start_tz: 'UTC'
 	});
-	const row = ctx.db.select().from(drizzleSegments).where(eq(drizzleSegments.id, seg.id)).get();
+	const row = ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get();
 	expect(row?.title).toBe('T');
 
 	updateSegment(seg.id, { title: 'T Updated' });
-	expect(ctx.db.select().from(drizzleSegments).where(eq(drizzleSegments.id, seg.id)).get()?.title).toBe(
+	expect(ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get()?.title).toBe(
 		'T Updated'
 	);
 
 	deleteSegment(seg.id);
-	expect(ctx.db.select().from(drizzleSegments).where(eq(drizzleSegments.id, seg.id)).get()).toBeUndefined();
+	expect(ctx.db.select().from(legacySegments).where(eq(legacySegments.id, BigInt(seg.id))).get()).toBeUndefined();
 });
 
-test('keeps Drizzle attendees in sync', () => {
+test('keeps legacy attendees in sync', () => {
 	const u = makeKitUser();
 	const t = makeKitTrip(Number(u.id));
 	const seg = createSegment({
@@ -242,14 +242,14 @@ test('keeps Drizzle attendees in sync', () => {
 	const a = addAttendee({ segment_id: BigInt(seg.id), companion_id: BigInt(c.id), status: 'going' });
 	const row = ctx.db
 		.select()
-		.from(drizzleSegmentAttendees)
-		.where(eq(drizzleSegmentAttendees.id, a.id))
+		.from(legacySegmentAttendees)
+		.where(eq(legacySegmentAttendees.id, BigInt(a.id)))
 		.get();
 	expect(row?.status).toBe('going');
 
 	removeAttendee(a.id);
 	expect(
-		ctx.db.select().from(drizzleSegmentAttendees).where(eq(drizzleSegmentAttendees.id, a.id)).get()
+		ctx.db.select().from(legacySegmentAttendees).where(eq(legacySegmentAttendees.id, BigInt(a.id))).get()
 	).toBeUndefined();
 });
 

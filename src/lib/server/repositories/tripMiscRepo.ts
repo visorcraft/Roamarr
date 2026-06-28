@@ -55,13 +55,6 @@ function nullIntPredicate(column: typeof tripChecklistItems.assigned_to_companio
 	return or(isNull(column), eq(column, 0n));
 }
 
-// During the migration, referenced trips and companions may still live only in
-// the legacy Drizzle tables. Copy them into the kit tables on demand so that
-// kit foreign-key constraints are satisfied.
-
-
-
-
 // ============================================================================
 // Checklists
 // ============================================================================

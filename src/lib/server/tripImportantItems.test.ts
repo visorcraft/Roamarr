@@ -8,14 +8,14 @@ vi.mock('./db', async () => {
 });
 
 import { addImportantItem, deleteImportantItem, listImportantItems } from './tripImportantItems';
-import { tripImportantItems } from './db/schema';
+import { tripImportantItems } from './db/mongrelSchema';
 import {
 	tripImportantItems as kitTripImportantItems,
 	tripCompanions as kitTripCompanions,
 	trips as kitTrips,
 	users as kitUsers
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import {
 	makeSyncedUser,
 	makeSyncedTrip,
@@ -63,7 +63,7 @@ test('addImportantItem creates a tracked item with companion name', () => {
 	const rows = listImportantItems(t.id);
 	expect(rows).toHaveLength(1);
 	expect(rows[0].companionName).toBe('Alex');
-	expect(db.select().from(tripImportantItems).where(eq(tripImportantItems.id, item.id)).get()).toBeTruthy();
+	expect(db.select().from(tripImportantItems).where(eq(tripImportantItems.id, BigInt(item.id))).get()).toBeTruthy();
 });
 
 test('addImportantItem rejects unknown companion', () => {
@@ -84,7 +84,7 @@ test('deleteImportantItem removes the row', () => {
 	const { db, u, t } = seed();
 	const item = addImportantItem(u.id, t.id, { name: 'Keys' });
 	deleteImportantItem(u.id, t.id, item.id);
-	expect(db.select().from(tripImportantItems).where(eq(tripImportantItems.id, item.id)).get()).toBeUndefined();
+	expect(db.select().from(tripImportantItems).where(eq(tripImportantItems.id, BigInt(item.id))).get()).toBeUndefined();
 });
 
 test('non-editor cannot mutate important items', () => {

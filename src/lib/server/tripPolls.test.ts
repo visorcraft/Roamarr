@@ -24,9 +24,9 @@ import {
 	tripPollOptions,
 	tripPollVotes,
 	auditLogs
-} from './db/schema';
+} from './db/mongrelSchema';
 import { users as kitUsers, trips as kitTrips, tripCompanions as kitTripCompanions } from './db/mongrelSchema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '@mongreldb/kit';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
@@ -129,7 +129,7 @@ test('changing vote replaces previous vote and keeps one per companion', () => {
 	const rows = db
 		.select()
 		.from(tripPollVotes)
-		.where(eq(tripPollVotes.pollId, poll.id))
+		.where(eq(tripPollVotes.poll_id, BigInt(poll.id)))
 		.all();
 	expect(rows).toHaveLength(1);
 });
@@ -145,14 +145,14 @@ test('deletePoll removes poll, options, and votes and logs audit', () => {
 	removeTripPoll(Number(u.id), poll.id);
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, poll.id)).get()).toBeUndefined();
-	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.pollId, poll.id)).all()).toHaveLength(0);
-	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.pollId, poll.id)).all()).toHaveLength(0);
+	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
+	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
+	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
 
 	const logs = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.entityType, 'trip_poll'), eq(auditLogs.entityId, poll.id)))
+		.where(and(eq(auditLogs.entity_type, 'trip_poll'), eq(auditLogs.entity_id, BigInt(poll.id))))
 		.all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'create')).toBe(true);
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'vote')).toBe(true);
@@ -191,7 +191,7 @@ test('createPoll action validates input and redirects', async () => {
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const polls = db.select().from(tripPolls).where(eq(tripPolls.tripId, t.id)).all();
+	const polls = db.select().from(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).all();
 	expect(polls).toHaveLength(1);
 });
 
@@ -203,7 +203,7 @@ test('createPoll action returns fail for invalid input', async () => {
 	expect(result).toMatchObject({ status: 400, data: { error: expect.any(String) } });
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.tripId, t.id)).all()).toHaveLength(0);
+	expect(db.select().from(tripPolls).where(eq(tripPolls.trip_id, BigInt(t.id))).all()).toHaveLength(0);
 });
 
 test('votePoll action casts a vote and redirects', async () => {
@@ -224,7 +224,7 @@ test('votePoll action casts a vote and redirects', async () => {
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const votes = db.select().from(tripPollVotes).where(eq(tripPollVotes.pollId, poll.id)).all();
+	const votes = db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all();
 	expect(votes).toHaveLength(1);
 	expect(votes[0].optionId).toBe(option.id);
 });
@@ -240,5 +240,5 @@ test('deletePoll action removes a poll and redirects', async () => {
 	});
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, poll.id)).get()).toBeUndefined();
+	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
 });

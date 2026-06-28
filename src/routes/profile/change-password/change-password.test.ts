@@ -1,9 +1,9 @@
 import { test, expect, vi } from 'vitest';
-import { eq as drizzleEq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database
+	sqlite: null as unknown as any
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
@@ -12,7 +12,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load, actions } from './+page.server';
-import { users } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/mongrelSchema';
 import { hashPassword, createSession } from '$lib/server/auth';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../../tests/kitHelpers';
@@ -61,6 +61,6 @@ test('action completes a required password change', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = ctx.db.select().from(users).where(drizzleEq(users.id, Number(u.id))).get()!;
+	const updated = ctx.db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(updated.mustResetPassword).toBe(false);
 });

@@ -12,8 +12,8 @@ import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helper
 
 
 import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
-import { users, trips, segments, cards, auditLogs } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, segments, cards, auditLogs } from './db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 
 test('detects overlap with existing segment', () => {
 	const db = (ctx as { db: import('./db').DB }).db;
@@ -77,10 +77,10 @@ test('duplicateSegment copies a segment shifted 24 hours and clears confirmation
 	expect(copy.cardId).toBe(c.id);
 	expect(copy.detailsJson).toBe(s.detailsJson);
 
-	const rows = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const rows = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(2);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, copy.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(copy.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('duplicate');
 	expect(logs[0].entityType).toBe('segment');
@@ -188,7 +188,7 @@ test('moveSegmentToDate preserves local time, duration and rally offset', () => 
 	expect(moved.endAt).toBe('2026-09-15T04:30:00.000Z');
 	expect(moved.meetingAt).toBe('2026-09-15T03:15:00.000Z');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('move_date');
 });
@@ -252,7 +252,7 @@ test('updateSegmentStatus updates segment status', () => {
 
 	const updated = updateSegmentStatus(s.id, 'checked_in');
 	expect(updated.status).toBe('checked_in');
-	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
 	expect(row?.status).toBe('checked_in');
 });
 
@@ -283,7 +283,7 @@ test('setSegmentStatus updates status for an editor and logs audit', () => {
 
 	const updated = setSegmentStatus(u.id, t.id, s.id, 'boarded');
 	expect(updated.status).toBe('boarded');
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, s.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('update_status');
 });
@@ -347,7 +347,7 @@ test('updateSegment changes payment status and due date', () => {
 		paymentDueDate: '2026-06-20'
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, s.id)).get()!;
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get()!;
 	expect(row.paymentStatus).toBe('fully_paid');
 	expect(row.paymentDueDate).toBe('2026-06-20');
 });
@@ -370,7 +370,7 @@ test('updateSegment preserves existing payment status when omitted', () => {
 		startTz: 'UTC'
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, s.id)).get()!;
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get()!;
 	expect(row.paymentStatus).toBe('fully_paid');
 	expect(row.title).toBe('UA1 renamed');
 });
@@ -385,7 +385,7 @@ test('deleteSegments removes multiple segments and ignores invalid ids', () => {
 
 	deleteSegments(u.id, t.id, [s1.id, s2.id, 9999, -1]);
 
-	const remaining = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const remaining = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
 	expect(remaining.map((r: Record<string, unknown>) => r.id)).toEqual([s3.id]);
 });
 

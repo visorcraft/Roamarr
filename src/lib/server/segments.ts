@@ -12,7 +12,7 @@ import {
 	getSegmentById,
 	countOverlappingSegments
 } from '$lib/server/repositories/segmentsRepo';
-import { SEGMENT_STATUSES, SEGMENT_PAYMENT_STATUSES, type SegmentType, type SegmentStatus } from '$lib/server/db/schema';
+import { SEGMENT_STATUSES, SEGMENT_PAYMENT_STATUSES, type SegmentType, type SegmentStatus } from '$lib/server/db/mongrelSchema';
 
 function normalizeMeetingAt(i: {
 	meetingAt?: string;

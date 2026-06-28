@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as tripsRepo from './tripsRepo';
 import * as usersRepo from './usersRepo';
 import {
@@ -18,7 +18,7 @@ import {
 	tripComments as drizzleTripComments,
 	groups as drizzleGroups,
 	groupMembers as drizzleGroupMembers
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -68,16 +68,16 @@ test('CRUD trips and mirror to legacy', () => {
 	expect(tripsRepo.getTripById(t.id)?.name).toBe('Tokyo');
 	expect(tripsRepo.listTripsForUser(owner.id)).toHaveLength(1);
 
-	const legacy = db.select().from(drizzleTrips).where(eq(drizzleTrips.id, t.id)).get();
+	const legacy = db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get();
 	expect(legacy?.name).toBe('Tokyo');
 
 	const updated = tripsRepo.updateTrip(t.id, { name: 'Kyoto' });
 	expect(updated?.name).toBe('Kyoto');
-	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, t.id)).get()?.name).toBe('Kyoto');
+	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get()?.name).toBe('Kyoto');
 
 	tripsRepo.deleteTrip(t.id);
 	expect(tripsRepo.getTripById(t.id)).toBeNull();
-	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, t.id)).get()).toBeUndefined();
+	expect(db.select().from(drizzleTrips).where(eq(drizzleTrips.id, BigInt(t.id))).get()).toBeUndefined();
 });
 
 test('shares and permission helpers', () => {
@@ -117,14 +117,14 @@ test('groups and members are mirrored to legacy', () => {
 	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
 	expect(tripsRepo.getGroupById(g.id)?.name).toBe('team');
 	expect(tripsRepo.listGroupsForUser(owner.id)).toHaveLength(1);
-	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, g.id)).get()?.name).toBe('team');
+	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, BigInt(g.id))).get()?.name).toBe('team');
 
 	tripsRepo.addGroupMember(g.id, member.id);
 	expect(
 		db
 			.select()
 			.from(drizzleGroupMembers)
-			.where(eq(drizzleGroupMembers.groupId, g.id))
+			.where(eq(drizzleGroupMembers.group_id, BigInt(g.id)))
 			.all()
 	).toHaveLength(1);
 
@@ -136,13 +136,13 @@ test('groups and members are mirrored to legacy', () => {
 		db
 			.select()
 			.from(drizzleGroupMembers)
-			.where(eq(drizzleGroupMembers.groupId, g.id))
+			.where(eq(drizzleGroupMembers.group_id, BigInt(g.id)))
 			.all()
 	).toHaveLength(0);
 
 	tripsRepo.deleteGroup(g.id);
 	expect(tripsRepo.getGroupById(g.id)).toBeNull();
-	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, g.id)).get()).toBeUndefined();
+	expect(db.select().from(drizzleGroups).where(eq(drizzleGroups.id, BigInt(g.id))).get()).toBeUndefined();
 });
 
 test('comments and public/calendar tokens', () => {
@@ -156,7 +156,7 @@ test('comments and public/calendar tokens', () => {
 		db
 			.select()
 			.from(drizzleTripComments)
-			.where(eq(drizzleTripComments.tripId, t.id))
+			.where(eq(drizzleTripComments.trip_id, BigInt(t.id)))
 			.all()
 	).toHaveLength(1);
 

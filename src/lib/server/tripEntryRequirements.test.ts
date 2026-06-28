@@ -13,13 +13,13 @@ import {
 	listEntryRequirements,
 	updateEntryRequirementStatus
 } from './tripEntryRequirements';
-import { tripEntryRequirements } from './db/schema';
+import { tripEntryRequirements } from './db/mongrelSchema';
 import {
 	tripEntryRequirements as kitTripEntryRequirements,
 	trips as kitTrips,
 	users as kitUsers
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getDb() {
@@ -60,7 +60,7 @@ test('addEntryRequirement creates a visa requirement', () => {
 
 	const rows = listEntryRequirements(t.id);
 	expect(rows).toHaveLength(1);
-	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, req.id)).get()).toBeTruthy();
+	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).get()).toBeTruthy();
 });
 
 test('addEntryRequirement defaults status to needed', () => {
@@ -95,7 +95,7 @@ test('deleteEntryRequirement removes the row', () => {
 	const { db, u, t } = seed();
 	const req = addEntryRequirement(u.id, t.id, { country: 'Y', requirementType: 'other' });
 	deleteEntryRequirement(u.id, t.id, req.id);
-	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, req.id)).get()).toBeUndefined();
+	expect(db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.id, BigInt(req.id))).get()).toBeUndefined();
 });
 
 test('non-editor cannot mutate entry requirements', () => {

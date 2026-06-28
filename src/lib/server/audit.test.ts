@@ -8,9 +8,9 @@ vi.mock('./db', async () => {
 });
 
 import { logAudit, listAuditLogs, exportAuditLogsCsv } from './audit';
-import { users, auditLogs } from './db/schema';
+import { users, auditLogs } from './db/mongrelSchema';
 import { users as kitUsers, auditLogs as kitAuditLogs } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
 
 function makeUser(email: string, displayName: string) {
@@ -53,7 +53,7 @@ test('logAudit defaults meta to empty object', () => {
 
 	logAudit(Number(u.id), 'plain', 'settings', 1);
 
-	const row = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).get()!;
+	const row = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).get()!;
 	expect(JSON.parse(row.metaJson)).toEqual({});
 });
 

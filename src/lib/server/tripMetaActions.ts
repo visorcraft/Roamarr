@@ -1,4 +1,5 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
+import type { SegmentStatus } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { getSegmentById } from './repositories/segmentsRepo';
@@ -90,7 +91,7 @@ export async function setSegmentStatusAction(event: RequestEvent) {
 	if (!segmentIdResult.ok) throw error(400, segmentIdResult.error);
 	const status = String(formData.get('status') || '');
 	if (!status) throw error(400, 'Invalid status');
-	setSegmentStatus(user.id, tripId, segmentIdResult.value, status as import('./db/schema').SegmentStatus);
+	setSegmentStatus(user.id, tripId, segmentIdResult.value, status as SegmentStatus);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

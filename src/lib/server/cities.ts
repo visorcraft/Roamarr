@@ -39,7 +39,7 @@ export function searchCities(countryCode: string, query: string, limit = 20): Ci
 	}));
 }
 
-// SQLite sorts NULLs last under DESC, so nameless/popless rows fall to the bottom.
+// NULLs sort last under DESC, so nameless/popless rows fall to the bottom.
 export function citiesForGlobe(center?: { lat: number; lng: number } | null): GlobeCity[] {
 	const global = repo.listTopCitiesByPopulation(1000).map((c) => ({
 		id: c.geonameId,

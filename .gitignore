@@ -30,7 +30,7 @@ vite.config.ts.timestamp-*
 # Local dev container
 compose.local.yml
 
-# SQLite
+# Local database files (legacy SQLite + kit data directories)
 *.db
 *.db-wal
 *.db-shm
@@ -40,7 +40,13 @@ compose.local.yml
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
+*.kitdb
+*.kitdb-wal
+*.kitdb-shm
 /data
+roamarr.kitdb
+roamarr.kitdb-wal
+roamarr.kitdb-shm
 
 # Logs and local QA artifacts
 *.log

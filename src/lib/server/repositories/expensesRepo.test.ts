@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as expensesRepo from './expensesRepo';
 import * as usersRepo from './usersRepo';
 import * as tripsRepo from './tripsRepo';
@@ -18,7 +18,7 @@ import {
 	tripExpenses as drizzleTripExpenses,
 	tripExpenseAttachments as drizzleTripExpenseAttachments,
 	tripBudgetCategories as drizzleTripBudgetCategories
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -84,7 +84,7 @@ test('create/list/get/update/delete expense', () => {
 	const legacy = db
 		.select()
 		.from(drizzleTripExpenses)
-		.where(eq(drizzleTripExpenses.id, created.id))
+		.where(eq(drizzleTripExpenses.id, BigInt(created.id)))
 		.get();
 	expect(legacy?.description).toBe('Lunch');
 
@@ -104,7 +104,7 @@ test('create/list/get/update/delete expense', () => {
 	const legacyUpdated = db
 		.select()
 		.from(drizzleTripExpenses)
-		.where(eq(drizzleTripExpenses.id, created.id))
+		.where(eq(drizzleTripExpenses.id, BigInt(created.id)))
 		.get();
 	expect(legacyUpdated?.description).toBe('Dinner');
 
@@ -112,7 +112,7 @@ test('create/list/get/update/delete expense', () => {
 	expect(expensesRepo.getExpenseById(created.id)).toBeNull();
 	expect(expensesRepo.listExpensesForTrip(t.id)).toHaveLength(0);
 	expect(
-		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, created.id)).get()
+		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, BigInt(created.id))).get()
 	).toBeUndefined();
 });
 
@@ -147,7 +147,7 @@ test('attachment CRUD', () => {
 	const legacy = db
 		.select()
 		.from(drizzleTripExpenseAttachments)
-		.where(eq(drizzleTripExpenseAttachments.id, att.id))
+		.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
 		.get();
 	expect(legacy?.filename).toBe('receipt.pdf');
 
@@ -158,7 +158,7 @@ test('attachment CRUD', () => {
 		db
 			.select()
 			.from(drizzleTripExpenseAttachments)
-			.where(eq(drizzleTripExpenseAttachments.id, att.id))
+			.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
 			.get()
 	).toBeUndefined();
 });
@@ -184,7 +184,7 @@ test('budget category CRUD', () => {
 	const legacy = db
 		.select()
 		.from(drizzleTripBudgetCategories)
-		.where(eq(drizzleTripBudgetCategories.id, cat.id))
+		.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
 		.get();
 	expect(legacy?.amount).toBe(10000);
 
@@ -195,7 +195,7 @@ test('budget category CRUD', () => {
 	const legacyUpdated = db
 		.select()
 		.from(drizzleTripBudgetCategories)
-		.where(eq(drizzleTripBudgetCategories.id, cat.id))
+		.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
 		.get();
 	expect(legacyUpdated?.amount).toBe(20000);
 
@@ -206,7 +206,7 @@ test('budget category CRUD', () => {
 		db
 			.select()
 			.from(drizzleTripBudgetCategories)
-			.where(eq(drizzleTripBudgetCategories.id, cat.id))
+			.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
 			.get()
 	).toBeUndefined();
 });
@@ -249,20 +249,20 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 	expect(expensesRepo.getBudgetCategoryById(cat.id)).toBeNull();
 
 	expect(
-		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, e.id)).get()
+		db.select().from(drizzleTripExpenses).where(eq(drizzleTripExpenses.id, BigInt(e.id))).get()
 	).toBeUndefined();
 	expect(
 		db
 			.select()
 			.from(drizzleTripExpenseAttachments)
-			.where(eq(drizzleTripExpenseAttachments.id, att.id))
+			.where(eq(drizzleTripExpenseAttachments.id, BigInt(att.id)))
 			.get()
 	).toBeUndefined();
 	expect(
 		db
 			.select()
 			.from(drizzleTripBudgetCategories)
-			.where(eq(drizzleTripBudgetCategories.id, cat.id))
+			.where(eq(drizzleTripBudgetCategories.id, BigInt(cat.id)))
 			.get()
 	).toBeUndefined();
 });

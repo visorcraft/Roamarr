@@ -27,7 +27,7 @@ import {
 
 
 import { load } from './+page.server';
-import { users, trips, groups, groupMembers, tripShares, segments, travelDocuments, notifications, fareProviders, fareWatches } from '$lib/server/db/schema';
+import { users, trips, groups, groupMembers, tripShares, segments, travelDocuments, notifications, fareProviders, fareWatches } from '$lib/server/db/mongrelSchema';
 import { makeLocals } from '../../tests/eventHelpers';
 
 test('dashboard includes upcoming trips shared with the user and labels them shared', () => {

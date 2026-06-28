@@ -4,7 +4,7 @@ import { requireUser } from '$lib/server/auth';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
-import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/schema';
+import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/mongrelSchema';
 import { findCity } from '$lib/server/cities';
 
 export const load: PageServerLoad = ({ params }) => {

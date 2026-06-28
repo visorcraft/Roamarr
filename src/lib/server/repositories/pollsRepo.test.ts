@@ -17,7 +17,7 @@ import {
 	tripPolls,
 	tripPollOptions,
 	tripPollVotes
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import {
 	users as kitUsers,
 	trips as kitTrips,
@@ -26,7 +26,7 @@ import {
 	tripPollOptions as kitTripPollOptions,
 	tripPollVotes as kitTripPollVotes
 } from '$lib/server/db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 function makeUser(email: string) {
 	return usersRepo.createUser({
@@ -171,9 +171,9 @@ test('deletePoll removes poll, options, and votes', () => {
 	expect(pollsRepo.deletePoll(poll.id)).toBe(1);
 
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	expect(db.select().from(tripPolls).where(eq(tripPolls.id, poll.id)).get()).toBeUndefined();
-	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.pollId, poll.id)).all()).toHaveLength(0);
-	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.pollId, poll.id)).all()).toHaveLength(0);
+	expect(db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get()).toBeUndefined();
+	expect(db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
+	expect(db.select().from(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).all()).toHaveLength(0);
 });
 
 test('legacy tables stay in sync with kit writes', () => {
@@ -183,8 +183,8 @@ test('legacy tables stay in sync with kit writes', () => {
 
 	const poll = pollsRepo.createPoll(t.id, 'Legacy?', ['Yes', 'No']);
 
-	const legacyPoll = db.select().from(tripPolls).where(eq(tripPolls.id, poll.id)).get();
+	const legacyPoll = db.select().from(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).get();
 	expect(legacyPoll?.question).toBe('Legacy?');
-	const legacyOptions = db.select().from(tripPollOptions).where(eq(tripPollOptions.pollId, poll.id)).all();
+	const legacyOptions = db.select().from(tripPollOptions).where(eq(tripPollOptions.poll_id, BigInt(poll.id))).all();
 	expect(legacyOptions).toHaveLength(2);
 });

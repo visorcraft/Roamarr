@@ -65,6 +65,37 @@ const SEGMENT_ATTENDEE_STATUSES = ['going', 'maybe', 'not_going'] as const;
 const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
 
+export {
+	ROLES,
+	VISIBILITIES,
+	TRIP_STATUSES,
+	SHARE_PERMISSIONS,
+	CARD_NETWORKS,
+	BENEFIT_TYPES,
+	REMINDER_KINDS,
+	REMINDER_REF_TYPES,
+	REMINDER_STATUSES,
+	EXPENSE_CATEGORIES,
+	WATCH_STATUSES,
+	MAPS_TILE_PROVIDERS,
+	SEGMENT_TYPES,
+	SEGMENT_STATUSES,
+	SEGMENT_PAYMENT_STATUSES,
+	TRAVEL_DOCUMENT_TYPES,
+	COMPANION_CATEGORIES,
+	SEAT_PREFERENCES,
+	BED_PREFERENCES,
+	SEGMENT_ATTENDEE_STATUSES,
+	ENTRY_REQUIREMENT_TYPES,
+	ENTRY_REQUIREMENT_STATUSES
+};
+
+export type SegmentType = (typeof SEGMENT_TYPES)[number];
+export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
+export type SegmentAttendeeStatus = (typeof SEGMENT_ATTENDEE_STATUSES)[number];
+export type TravelDocumentType = (typeof TRAVEL_DOCUMENT_TYPES)[number];
+export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
+
 export const schedulerRuns = table('scheduler_runs', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('scheduler_runs_id_seq') }),

@@ -19,7 +19,7 @@
   <a href="https://github.com/visorcraft/Roamarr/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/Roamarr?sort=semver" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only" /></a>
   <img src="https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 2" />
-  <img src="https://img.shields.io/badge/SQLite-Drizzle-003b57?logo=sqlite&amp;logoColor=white" alt="SQLite with Drizzle ORM" />
+  <img src="https://img.shields.io/badge/storage-MongrelDB%20Kit-003b57" alt="MongrelDB Kit storage" />
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22.12-339933?logo=node.js&amp;logoColor=white" alt="Node.js 22.12 or newer" />
   <img src="https://img.shields.io/badge/container-Docker%20%2F%20Podman-892ca0?logo=podman&amp;logoColor=white" alt="Docker or Podman container" />
 </p>
@@ -72,7 +72,7 @@
 ## What is Roamarr?
 
 Roamarr is a TripIt-style travel organizer you run yourself. It is built as a
-single Node.js application with a SQLite database, server-rendered SvelteKit
+single Node.js application with a MongrelDB Kit database, server-rendered SvelteKit
 pages, and a practical app shell designed for repeated use rather than a
 marketing dashboard.
 
@@ -114,11 +114,10 @@ provider.
 
 ### One local database
 
-Roamarr stores application data in SQLite through Drizzle ORM and
-`better-sqlite3`. By default the database lives at `./roamarr.db`, and receipt
-attachments are stored beside it in an `attachments/` directory. Move the
-database path, back it up, snapshot it, or keep it on persistent storage that
-fits your own setup.
+Roamarr stores application data with MongrelDB Kit. By default the database
+lives at `./roamarr.kitdb`, and receipt attachments are stored beside it in an
+`attachments/` directory. Move the database path, back it up, snapshot it, or
+keep it on persistent storage that fits your own setup.
 
 ### Private by default
 
@@ -144,7 +143,7 @@ itinerary, and what should happen if plans change.
 
 - Node.js 22.12 or newer.
 - npm, using the checked-in `package-lock.json`.
-- SQLite support through the bundled `better-sqlite3` dependency.
+- A built MongrelDB Kit native package available at the path declared in `package.json`.
 - A persistent database path for local app data.
 - `ROAMARR_SECRET`, generated with `openssl rand -base64 32`.
 
@@ -166,7 +165,7 @@ Paste the generated secret into `.env`:
 
 ```env
 ROAMARR_SECRET=replace-with-output-from-openssl
-DATABASE_PATH=./roamarr.db
+MONGREL_DATABASE_PATH=./roamarr.kitdb
 PORT=3000
 ORIGIN=http://localhost:5173
 ```
@@ -202,7 +201,9 @@ source.
 | Variable | Required | Default | Notes |
 | -------- | -------- | ------- | ----- |
 | `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. The app refuses to boot if unset. |
-| `DATABASE_PATH` | no | `./roamarr.db` | SQLite file path. Attachments are stored in an `attachments/` directory beside this database. |
+| `MONGREL_DATABASE_PATH` | no | `./roamarr.kitdb` | MongrelDB Kit data directory or file path. Takes precedence over `DATABASE_PATH`. |
+| `DATABASE_PATH` | no | `./roamarr.kitdb` | Backwards-compatible path. If it looks like a directory (no `.db`/`.sqlite` extension) it is used as the kit data directory. |
+| `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
 
@@ -213,7 +214,7 @@ admin settings are configured inside the app after setup.
 
 | Data | Default path |
 | ---- | ------------ |
-| SQLite database | `./roamarr.db` |
+| MongrelDB Kit database | `./roamarr.kitdb` |
 | Receipt attachments | `./attachments/` |
 | Production build output | `./build/` |
 | SvelteKit build cache | `./.svelte-kit/` |
@@ -244,9 +245,6 @@ npm start
 
 # Regenerate bundled license and credits data
 npm run credits:generate
-
-# Generate a new Drizzle migration after schema changes
-npm run db:generate
 ```
 
 Migrations are applied automatically during application boot before the
@@ -273,7 +271,7 @@ Use Profile for:
 ## Architecture
 
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
-`@sveltejs/adapter-node`, Tailwind CSS v4, Drizzle ORM, SQLite, Luxon,
+`@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB Kit, Luxon,
 Nodemailer, MapLibre GL JS, and Vitest.
 
 Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies
@@ -289,7 +287,7 @@ share and calendar-feed routes expose only a reduced viewer projection.
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and
 formatting helpers live under `src/lib/`. Database schema and migrations live
-under `src/lib/server/db/` and `drizzle/`. Map rendering uses MapLibre GL JS
+under `src/lib/server/db/`. Map rendering uses MapLibre GL JS
 with configurable raster tile providers; city data is imported from GeoNames
 `cities1000.zip`.
 
@@ -322,7 +320,6 @@ update relevant docs, and regenerate license data after dependency changes.
 - [docs/SECURITY.md](docs/SECURITY.md) - security policy and disclosure process
 - [LICENSE](LICENSE) - GPL-3.0-only license text
 - [static/manifest.json](static/manifest.json) - PWA manifest
-- [drizzle/](drizzle/) - generated database migration baseline
 
 ## License
 

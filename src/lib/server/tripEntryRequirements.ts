@@ -9,7 +9,7 @@ import {
 import { requireEditableTrip } from './ownership';
 import { Validator, positiveIdFromForm } from './validation';
 import { withTripAction } from './actions';
-import { ENTRY_REQUIREMENT_STATUSES, ENTRY_REQUIREMENT_TYPES } from './db/schema';
+import { ENTRY_REQUIREMENT_STATUSES, ENTRY_REQUIREMENT_TYPES } from './db/mongrelSchema';
 import { logAudit } from './audit';
 
 export function listEntryRequirements(tripId: number) {

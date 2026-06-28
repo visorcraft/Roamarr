@@ -12,8 +12,8 @@ vi.mock('$lib/server/notify', () => ({
 }));
 
 import { load, actions } from './+page.server';
-import { users } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
@@ -79,7 +79,7 @@ test('update toggles role and disabled', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = db.select().from(users).where(eq(users.id, target.id)).get()!;
+	const updated = db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
 	expect(updated.role).toBe('admin');
 	expect(updated.disabled).toBe(true);
 	expect(updated.mustResetPassword).toBe(true);
@@ -106,7 +106,7 @@ test('update changes display name and email', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = db.select().from(users).where(eq(users.id, target.id)).get()!;
+	const updated = db.select().from(users).where(eq(users.id, BigInt(target.id))).get()!;
 	expect(updated.displayName).toBe('Target User');
 	expect(updated.email).toBe('new@x.c');
 	expect(updated.disabled).toBe(false);
@@ -164,7 +164,7 @@ test('sendReset delivers a reset link', async () => {
 	const db = (ctx as any).db;
 	const admin = makeAdminLocals((ctx as any).kit);
 	const kitUser = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' });
-	const target = db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	const target = db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 
 	const form = new FormData();
 	form.set('userId', String(target.id));
@@ -263,7 +263,7 @@ test('delete removes a user', async () => {
 		expect(e.status).toBe(303);
 	}
 
-	expect(db.select().from(users).where(eq(users.id, target.id)).get()).toBeUndefined();
+	expect(db.select().from(users).where(eq(users.id, BigInt(target.id))).get()).toBeUndefined();
 });
 
 test('delete prevents deleting the last admin', async () => {

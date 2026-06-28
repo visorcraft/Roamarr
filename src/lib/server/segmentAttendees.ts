@@ -10,7 +10,7 @@ import { getCompanionTripId } from './tripCompanions';
 import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
-import { SEGMENT_ATTENDEE_STATUSES, type SegmentAttendeeStatus } from './db/schema';
+import { SEGMENT_ATTENDEE_STATUSES, type SegmentAttendeeStatus } from './db/mongrelSchema';
 
 type AttendeeRow = {
 	id: number;

@@ -19,7 +19,7 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 });
 
 import { deliver } from './notify';
-import { notifications } from './db/schema';
+import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
 import { updateSettings } from './settings';

@@ -122,51 +122,6 @@ export function toBudgetCategoryRow(row: KitBudgetCategory): BudgetCategoryRow {
 	};
 }
 
-function kitExpenseToDrizzleInsert(row: KitExpense) {
-	return {
-		id: num(row.id),
-		tripId: num(row.trip_id),
-		description: row.description,
-		amount: Number(row.amount),
-		currency: row.currency,
-		category: row.category,
-		exchangeRate: Number(row.exchange_rate),
-		baseAmount: Number(row.base_amount),
-		paidByCompanionId: nullableIntToNumber(row.paid_by_companion_id),
-		splitAmong: serializeSplitAmong(row.split_among),
-		createdAt: row.created_at
-	};
-}
-
-function kitAttachmentToDrizzleInsert(row: KitAttachment) {
-	return {
-		id: num(row.id),
-		expenseId: num(row.expense_id),
-		filename: row.filename,
-		storageKey: row.storage_key,
-		contentType: row.content_type,
-		sizeBytes: Number(row.size_bytes),
-		createdAt: row.created_at
-	};
-}
-
-function kitBudgetCategoryToDrizzleInsert(row: KitBudgetCategory) {
-	return {
-		id: num(row.id),
-		tripId: num(row.trip_id),
-		category: row.category,
-		amount: Number(row.amount),
-		currency: row.currency,
-		createdAt: row.created_at
-	};
-}
-
-
-
-
-
-
-
 // Expenses
 
 export function listExpensesForTrip(tripId: number): ExpenseRow[] {

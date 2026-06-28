@@ -2,7 +2,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import { listSegmentsForTrip } from './repositories/segmentsRepo';
 import { utcToLocal } from './tz';
 import { tripTags } from './sharing';
-import type { SegmentType } from './db/schema';
+import type { SegmentType } from './db/mongrelSchema';
 
 interface ExportedSegment {
 	type: SegmentType;

@@ -23,8 +23,8 @@ import {
 	fareWatches,
 	fareProviders,
 	auditLogs
-} from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+} from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { beforeEach } from 'vitest';
 import { makeLocals, makeFormData } from '../../../../../tests/eventHelpers';
 
@@ -67,13 +67,13 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 
 	_deleteTrip(a.id, t.id);
 
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
-	expect(db.select().from(segments).where(eq(segments.tripId, t.id)).all()).toHaveLength(0);
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all()).toHaveLength(0);
-	expect(db.select().from(fareWatches).where(eq(fareWatches.tripId, t.id)).all()).toHaveLength(0);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
+	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all()).toHaveLength(0);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all()).toHaveLength(0);
+	expect(db.select().from(fareWatches).where(eq(fareWatches.trip_id, BigInt(t.id))).all()).toHaveLength(0);
 	expect(db.select().from(reminders).all()).toHaveLength(0);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_delete');
 	expect(logs[0].entityType).toBe('trip');
@@ -87,7 +87,7 @@ test('non-owner cannot delete a trip', () => {
 	const t = createTrip(a.id, { name: 'Trip' });
 
 	expect(() => _deleteTrip(b.id, t.id)).toThrow();
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeDefined();
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeDefined();
 	expect(db.select().from(auditLogs).all()).toHaveLength(0);
 });
 
@@ -105,7 +105,7 @@ test('edit action updates a trip with valid data', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBeNull();
 	expect(updated.destinationCountryCode).toBeNull();
@@ -131,7 +131,7 @@ test('edit action allows shared editors but not read-only viewers', async () => 
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
 	expect(updated.name).toBe('Editor Updated');
 
 	await expect(actions.save(makeEvent(form, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
@@ -152,10 +152,10 @@ test('edit action updates trip status', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const updated = db.select().from(trips).where(eq(trips.id, t.id)).get()!;
+	const updated = db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()!;
 	expect(updated.status).toBe('active');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_update');
 	expect(logs[0].entityType).toBe('trip');

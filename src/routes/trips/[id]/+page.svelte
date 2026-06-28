@@ -10,7 +10,7 @@
 	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
-	import type { trips } from '$lib/server/db/schema';
+	import type { Trip } from '$lib/server/repositories/tripsRepo';
 	import { renderMarkdown } from '$lib/markdown';
 	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
 	import { formatDestination } from '$lib/tripDestination';
@@ -226,8 +226,8 @@
 
 	const trip = $derived(data.trip);
 	const isEditor = $derived(data.editor === true);
-	const ownerTrip = $derived(data.owner === true ? (trip as typeof trips.$inferSelect) : undefined);
-	const baseCurrency = $derived(ownerTrip?.baseCurrency ?? (trip as typeof trips.$inferSelect).baseCurrency ?? 'USD');
+	const ownerTrip = $derived(data.owner === true ? (trip as Trip) : undefined);
+	const baseCurrency = $derived(ownerTrip?.baseCurrency ?? (trip as Trip).baseCurrency ?? 'USD');
 	const segmentList = $derived(
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);

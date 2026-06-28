@@ -12,7 +12,7 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 
 import { load } from './+page.server';
-import { users, trips } from '$lib/server/db/schema';
+import { users, trips } from '$lib/server/db/mongrelSchema';
 import { makeGetEvent } from '../../../tests/eventHelpers';
 
 function event(user: { id: number; email: string }, search = '') {

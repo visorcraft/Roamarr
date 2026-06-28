@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as expensesRepo from './repositories/expensesRepo';
+import type { AttachmentRow } from './repositories/expensesRepo';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
 import { getAttachmentsPath } from './paths';
@@ -35,7 +36,7 @@ export async function addAttachment(
 	userId: number,
 	expenseId: number,
 	file: File
-): Promise<typeof import('./db/schema').tripExpenseAttachments.$inferSelect> {
+): Promise<AttachmentRow> {
 	const expense = expensesRepo.getExpenseById(expenseId);
 	if (!expense) throw error(404, 'Expense not found');
 	requireEditableTrip(userId, expense.tripId);

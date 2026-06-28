@@ -3,7 +3,7 @@ import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
@@ -31,9 +31,9 @@ import {
 	actions
 } from './+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
-import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergencyContacts } from '$lib/server/db/schema';
+import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergencyContacts } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
 import {
 	travelDocuments as kitTravelDocuments,
@@ -45,7 +45,7 @@ import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../tests/kitHelpers';
 import * as profileRepo from '$lib/server/repositories/profileRepo';
 
-function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
+function makeTestUser(over: any = {}) {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const kitUser = makeKitUser({
 		email: over.email,
@@ -68,7 +68,7 @@ function makeTestUser(over: Partial<typeof users.$inferInsert> = {}) {
 		email_notifications: over.emailNotifications ?? undefined,
 		webhook_notifications: over.webhookNotifications ?? undefined
 	});
-	return db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	return db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 }
 
 beforeEach(() => {
@@ -112,7 +112,7 @@ test('updateProgram edits a loyalty program and is user-scoped', () => {
 		balance: 5000,
 		notes: 'new note'
 	});
-	const row = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, program.id)).get()!;
+	const row = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).get()!;
 	expect(row.programName).toBe('United MileagePlus');
 	expect(row.membershipNumber).toBe('UA999');
 	expect(row.balance).toBe(5000);
@@ -121,7 +121,7 @@ test('updateProgram edits a loyalty program and is user-scoped', () => {
 	expect(() => updateProgram(b.id, program.id, { programName: 'Hacked' })).toThrow(
 		expect.objectContaining({ status: 404, body: { message: 'Not found' } })
 	);
-	const unchanged = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, program.id)).get()!;
+	const unchanged = db.select().from(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).get()!;
 	expect(unchanged.programName).toBe('United MileagePlus');
 });
 
@@ -138,7 +138,7 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		themeId: 'vibes',
 		defaultCurrency: 'eur'
 	});
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(row.displayName).toBe('Ada');
 	expect(row.timezone).toBe('America/New_York');
 	expect(row.flightCheckinLeadHours).toBe(48);
@@ -241,11 +241,11 @@ test('update password requires old password and hashes new password', async () =
 		newPassword: 'newsecret1',
 		confirmPassword: 'newsecret1'
 	});
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(await verifyPassword(row.passwordHash, 'newsecret1')).toBe(true);
 	expect(await verifyPassword(row.passwordHash, 'oldsecret')).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('password_change');
 	expect(logs[0].entityType).toBe('user');
@@ -311,11 +311,11 @@ test('update password invalidates all other sessions for the user', async () => 
 		display_name: 'P7',
 		timezone: 'UTC'
 	});
-	const u = db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
+	const u = db.select().from(users).where(eq(users.id, BigInt(kitUser.id))).get()!;
 	const currentToken = createSession(u.id);
 	createSession(u.id);
 	createSession(u.id);
-	expect(db.select().from(sessions).where(eq(sessions.userId, u.id)).all()).toHaveLength(3);
+	expect(db.select().from(sessions).where(eq(sessions.user_id, BigInt(u.id))).all()).toHaveLength(3);
 
 	await _updatePassword(u.id, currentToken, {
 		oldPassword: 'oldsecret',
@@ -323,13 +323,13 @@ test('update password invalidates all other sessions for the user', async () => 
 		confirmPassword: 'newsecret1'
 	});
 
-	const remaining = db.select().from(sessions).where(eq(sessions.userId, u.id)).all();
+	const remaining = db.select().from(sessions).where(eq(sessions.user_id, BigInt(u.id))).all();
 	expect(remaining).toHaveLength(1);
 	expect(remaining[0].tokenHash).toBe(
 		createHash('sha256').update(currentToken).digest('hex')
 	);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('password_change');
 });
@@ -354,7 +354,7 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Profile updated.', expect.any(Object));
-	expect(db.select().from(users).where(eq(users.id, u.id)).get()!.themeId).toBe('red-velvet');
+	expect(db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!.themeId).toBe('red-velvet');
 });
 
 test('updatePassword action sets a flash cookie and redirects', async () => {
@@ -386,11 +386,11 @@ test('regenerate user calendar token mints a new token and audits', () => {
 	expect(token).not.toBe('old-token');
 	expect(token).toMatch(/^[A-Za-z0-9_-]+$/);
 
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(row.calendarToken).toBe(token);
 	expect(row.calendarTokenExpiresAt).toBeNull();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('calendar_token_regenerate');
 	expect(logs[0].entityType).toBe('user');
@@ -403,7 +403,7 @@ test('regenerate user calendar token can set an expiry', () => {
 	const expiresAt = '2030-01-01T00:00:00Z';
 	const token = _regenerateUserCalendarToken(u.id, expiresAt);
 
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(row.calendarToken).toBe(token);
 	expect(row.calendarTokenExpiresAt).toBe(expiresAt);
 });
@@ -422,7 +422,7 @@ test('regenerateCalendarToken action sets a flash cookie and redirects', async (
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Calendar feed URL regenerated.', expect.any(Object));
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(row.calendarToken).toBeTruthy();
 	expect(row.calendarTokenExpiresAt).toBe('2030-01-01T00:00:00Z');
 });
@@ -438,10 +438,10 @@ test('change email requires current password and updates the email', async () =>
 		confirmEmail: 'new@x.c'
 	});
 
-	const row = db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const row = db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!;
 	expect(row.email).toBe('new@x.c');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, u.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('email_change');
 	expect(logs[0].entityType).toBe('user');
@@ -500,7 +500,7 @@ test('changeEmail action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Email changed.', expect.any(Object));
-	expect(db.select().from(users).where(eq(users.id, u.id)).get()!.email).toBe('changed@x.c');
+	expect(db.select().from(users).where(eq(users.id, BigInt(u.id))).get()!.email).toBe('changed@x.c');
 });
 
 
@@ -550,7 +550,7 @@ test('updateEmergencyContact action edits a contact and redirects', async () => 
 		status: 303,
 		location: '/profile'
 	});
-	const row = db.select().from(emergencyContacts).where(eq(emergencyContacts.id, c.id)).get()!;
+	const row = db.select().from(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).get()!;
 	expect(row.name).toBe('New Name');
 	expect(row.phone).toBe('111');
 	expect(row.isPrimary).toBe(true);
@@ -570,7 +570,7 @@ test('deleteEmergencyContact action removes a contact and redirects', async () =
 		status: 303,
 		location: '/profile'
 	});
-	expect(db.select().from(emergencyContacts).where(eq(emergencyContacts.id, c.id)).get()).toBeUndefined();
+	expect(db.select().from(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).get()).toBeUndefined();
 });
 
 test('emergency contact actions reject invalid contact ids', async () => {

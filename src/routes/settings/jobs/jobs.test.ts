@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load, actions } from './+page.server';
-import { schedulerRuns, users } from '$lib/server/db/schema';
-import { sql } from 'drizzle-orm';
+import { schedulerRuns, users } from '$lib/server/db/mongrelSchema';
+
 import { beforeEach } from 'vitest';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 import { makeSchedulerRun } from '../../../../tests/helpers';
@@ -80,11 +80,11 @@ test('runNow action triggers a scheduler tick and redirects', async () => {
 	const db = (ctx as any).db;
 	const kit = (ctx as any).kit;
 	const admin = makeAdminLocals(kit);
-	const before = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
+	const before = kit.selectFrom(schedulerRuns).selectCount().executeSync();
 	await expect(actions.runNow({ locals: admin } as any)).rejects.toMatchObject({
 		status: 303,
 		location: '/settings/jobs'
 	});
-	const after = db.select({ count: sql`count(*)` }).from(schedulerRuns).get().count as number;
+	const after = kit.selectFrom(schedulerRuns).selectCount().executeSync();
 	expect(after).toBeGreaterThan(before);
 });

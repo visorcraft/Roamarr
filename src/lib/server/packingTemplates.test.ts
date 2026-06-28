@@ -16,9 +16,9 @@ import {
 	tripChecklists,
 	tripChecklistItems,
 	tripShares
-} from './db/schema';
+} from './db/mongrelSchema';
 import { trips as kitTrips, users as kitUsers, packingTemplates as kitPackingTemplates } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeFormData } from '../../../tests/eventHelpers';
 import * as usersRepo from './repositories/usersRepo';
@@ -70,11 +70,11 @@ test('saveTemplate creates a template from explicit items', () => {
 	]);
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, id)).get();
+	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).get();
 	expect(template?.name).toBe('Weekend');
 	expect(template?.userId).toBe(Number(u.id));
 
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.templateId, id)).all();
+	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
 	expect(items.map((i: Record<string, unknown>) => ({ label: i.label, category: i.category }))).toEqual([
 		{ label: 'Toothbrush', category: 'toiletries' },
 		{ label: 'Socks', category: 'clothing' }
@@ -87,9 +87,9 @@ test('saveTemplate trims names and defaults blank categories', () => {
 	const id = saveTemplate(Number(u.id), '  Beach  ', [{ label: '  Sunscreen  ', category: '  ' }]);
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, id)).get();
+	const template = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).get();
 	expect(template?.name).toBe('Beach');
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.templateId, id)).all();
+	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
 	expect(items[0]?.label).toBe('Sunscreen');
 	expect(items[0]?.category).toBe('general');
 });
@@ -115,7 +115,7 @@ test('saveTemplate populates from a trip checklist', () => {
 
 	const id = saveTemplate(Number(u.id), 'Flight', [], t.id);
 
-	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.templateId, id)).all();
+	const items = db.select().from(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).all();
 	expect(items.map((i: Record<string, unknown>) => i.label)).toEqual(['Boarding pass', 'Passport']);
 });
 
@@ -141,7 +141,7 @@ test('listTemplates returns templates scoped to user with items', () => {
 	expect(list[0]?.items[0]?.category).toBe('general');
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const reloaded = db.select().from(packingTemplates).where(eq(packingTemplates.id, idA)).get();
+	const reloaded = db.select().from(packingTemplates).where(eq(packingTemplates.id, BigInt(idA))).get();
 	expect(reloaded?.name).toBe('A-list');
 });
 
@@ -157,12 +157,12 @@ test('applyTemplate copies template items to trip checklist', () => {
 	const result = applyTemplate(templateId, t.id, Number(u.id));
 	expect(result.itemCount).toBe(2);
 
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, t.id)).get();
+	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
 	expect(checklist).toBeDefined();
 	const items = db
 		.select()
 		.from(tripChecklistItems)
-		.where(eq(tripChecklistItems.checklistId, checklist!.id))
+		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
 		.all();
 	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Tent', 'Stove']);
 });
@@ -197,11 +197,11 @@ test('applyTemplate allows editor shared with edit permission', () => {
 
 	applyTemplate(templateId, t.id, Number(b.id));
 
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, t.id)).get();
+	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
 	const items = db
 		.select()
 		.from(tripChecklistItems)
-		.where(eq(tripChecklistItems.checklistId, checklist!.id))
+		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
 		.all();
 	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['X']);
 });
@@ -234,11 +234,11 @@ test('applyChecklistTemplate action applies a template and redirects', async () 
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
 	const db = (ctx as { db: import('./db').DB }).db;
-	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.tripId, t.id)).get();
+	const checklist = db.select().from(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).get();
 	const items = db
 		.select()
 		.from(tripChecklistItems)
-		.where(eq(tripChecklistItems.checklistId, checklist!.id))
+		.where(eq(tripChecklistItems.checklist_id, BigInt(checklist!.id)))
 		.all();
 	expect(items.map((i: Record<string, unknown>) => i.text)).toEqual(['Map']);
 });

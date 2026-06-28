@@ -8,14 +8,14 @@ vi.mock('./db', async () => {
 });
 
 import { addMedication, deleteMedication, listMedications } from './tripMedications';
-import { tripMedications } from './db/schema';
+import { tripMedications } from './db/mongrelSchema';
 import {
 	tripMedications as kitTripMedications,
 	tripCompanions as kitTripCompanions,
 	trips as kitTrips,
 	users as kitUsers
 } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import {
 	makeSyncedUser,
 	makeSyncedTrip,
@@ -65,7 +65,7 @@ test('addMedication creates a schedule with companion name', () => {
 	const rows = listMedications(t.id);
 	expect(rows).toHaveLength(1);
 	expect(rows[0].companionName).toBe('Sam');
-	expect(db.select().from(tripMedications).where(eq(tripMedications.id, med.id)).get()).toBeTruthy();
+	expect(db.select().from(tripMedications).where(eq(tripMedications.id, BigInt(med.id))).get()).toBeTruthy();
 });
 
 test('addMedication rejects unknown companion', () => {
@@ -86,7 +86,7 @@ test('deleteMedication removes the schedule', () => {
 	const { db, u, t } = seed();
 	const med = addMedication(u.id, t.id, { name: 'Zyrtec' });
 	deleteMedication(u.id, t.id, med.id);
-	expect(db.select().from(tripMedications).where(eq(tripMedications.id, med.id)).get()).toBeUndefined();
+	expect(db.select().from(tripMedications).where(eq(tripMedications.id, BigInt(med.id))).get()).toBeUndefined();
 });
 
 test('non-editor cannot mutate medications', () => {

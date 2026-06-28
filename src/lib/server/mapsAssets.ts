@@ -15,7 +15,7 @@ export const MAP_TEXTURE_URL =
 const TEXTURE_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function getMapsAssetDir(): string {
-	// Lives beside the SQLite DB and attachments so it persists across container rebuilds.
+	// Lives beside the database and attachments so it persists across container rebuilds.
 	return path.join(path.dirname(getDatabasePath()), 'maps');
 }
 

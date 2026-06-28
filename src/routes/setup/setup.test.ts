@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _createAdmin as createAdmin, actions } from './+page.server';
-import { users } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/mongrelSchema';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
 test('creates exactly one admin; second attempt rejected', () => {

@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, auditLogs } from '$lib/server/db/schema';
+import { users, auditLogs } from '$lib/server/db/mongrelSchema';
 import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { logAudit } from '$lib/server/audit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';

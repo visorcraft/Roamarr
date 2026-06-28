@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq } from '@mongreldb/kit';
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
@@ -15,12 +15,12 @@ import { makeUser, makeTrip, makeCard, makeShare } from '../../../tests/helpers'
 import { actions } from './[id]/segments/+page.server';
 import { addSegment, updateSegment } from '$lib/server/segments';
 import { newSegmentPage } from '$lib/server/segmentNewPage';
-import { users, trips, cards, segments, reminders, tripShares, geonamesCities } from '$lib/server/db/schema';
+import { users, trips, cards, segments, reminders, tripShares, geonamesCities } from '$lib/server/db/mongrelSchema';
 import { actions as tripActions } from './[id]/+page.server';
 import { makeLocals, makeFormData } from '../../../tests/eventHelpers';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	(ctx as { sqlite: any }).sqlite.exec(
 		'delete from reminders; delete from trip_shares; delete from segments; delete from trips; delete from users; delete from cards; delete from geonames_cities;'
 	);
 });
@@ -62,7 +62,7 @@ test('update segment edits fields and re-arms reminders when flight time changes
 	const initialReminder = db
 		.select()
 		.from(reminders)
-		.where(and(eq(reminders.refType, 'segment'), eq(reminders.refId, seg.id)))
+		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id))))
 		.get();
 	expect(initialReminder).toBeTruthy();
 	expect(initialReminder!.fireAt).toBe('2026-06-30T19:00:00.000Z');
@@ -84,7 +84,7 @@ test('update segment edits fields and re-arms reminders when flight time changes
 	const rearmed = db
 		.select()
 		.from(reminders)
-		.where(and(eq(reminders.refType, 'segment'), eq(reminders.refId, seg.id)))
+		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id))))
 		.get();
 	expect(rearmed).toBeTruthy();
 	expect(rearmed!.fireAt).toBe('2026-07-01T14:00:00.000Z');
@@ -134,12 +134,12 @@ test('extra segment types can be added and do not arm flight reminders', () => {
 		expect(seg.type).toBe(type);
 	}
 
-	const reminderCount = db
-		.select({ count: sql`count(*)` })
-		.from(reminders)
-		.where(eq(reminders.refType, 'segment'))
-		.get()!.count;
-	expect(reminderCount).toBe(0);
+	const reminderCount = kit
+		.selectFrom(reminders)
+		.selectCount()
+		.where(eq(reminders.ref_type, 'segment'))
+		.executeSync();
+	expect(reminderCount).toBe(0n);
 });
 
 const addSegmentAction = newSegmentPage('flight').actions.default;
@@ -224,7 +224,7 @@ test('add action stores endTz and converts endAt to UTC', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
 	expect(seg.startAt).toBe('2026-07-01T12:00:00.000Z');
 	expect(seg.startTz).toBe('America/New_York');
 	expect(seg.endAt).toBe('2026-07-01T07:00:00.000Z');
@@ -300,7 +300,7 @@ test('update action stores country, city, and venue', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, seg.id)).get()!;
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!;
 	expect(row.countryCode).toBe('FR');
 	expect(row.cityName).toBe('Paris');
 	expect(row.cityLat).toBe(48.85);
@@ -325,7 +325,7 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
 	expect(seg.title).toBe('UA1');
 
 	await expect(addSegmentAction!(makeAddEvent(addForm, { id: String(t.id) }, reader.id))).rejects.toMatchObject({
@@ -342,14 +342,14 @@ test('shared editor can add, update and delete segments; read-only viewer cannot
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()!.title).toBe('UA1 Updated');
+	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!.title).toBe('UA1 Updated');
 
 	const deleteForm = makeFormData({ segmentId: String(seg.id) });
 	await expect(actions.delete(makeEvent(deleteForm, { id: String(t.id) }, editor.id))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()).toBeUndefined();
+	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()).toBeUndefined();
 });
 
 
@@ -370,7 +370,7 @@ test('add and update actions store meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	let seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	let seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
 	expect(seg.meetingPoint).toBe('Hotel lobby');
 	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
 
@@ -386,7 +386,7 @@ test('add and update actions store meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	seg = db.select().from(segments).where(eq(segments.id, seg.id)).get()!;
+	seg = db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!;
 	expect(seg.meetingPoint).toBe('Lobby entrance');
 	expect(seg.meetingAt).toBe('2026-07-01T13:45:00.000Z');
 });
@@ -407,7 +407,7 @@ test('flight add action stores meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
 	expect(seg.type).toBe('flight');
 	expect(seg.meetingPoint).toBe('Gate A12');
 	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
@@ -431,7 +431,7 @@ test('rental_car add action stores meeting point and rally time', async () => {
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	const seg = db.select().from(segments).where(eq(segments.tripId, t.id)).get()!;
+	const seg = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).get()!;
 	expect(seg.type).toBe('rental_car');
 	expect(seg.meetingPoint).toBe('Rental counter');
 	expect(seg.meetingAt).toBe('2026-07-01T13:30:00.000Z');
@@ -462,7 +462,7 @@ test('update action attaches an owned card and rejects a foreign card', async ()
 		status: 303,
 		location: `/trips/${t.id}`
 	});
-	expect(db.select().from(segments).where(eq(segments.id, seg.id)).get()!.cardId).toBe(aCard.id);
+	expect(db.select().from(segments).where(eq(segments.id, BigInt(seg.id))).get()!.cardId).toBe(aCard.id);
 
 	const badForm = makeFormData({
 		segmentId: String(seg.id),
@@ -501,7 +501,7 @@ test('segmentReminder action creates a custom reminder for a segment', async () 
 	const rem = db
 		.select()
 		.from(reminders)
-		.where(and(eq(reminders.refType, 'segment'), eq(reminders.refId, seg.id), eq(reminders.kind, 'custom')))
+		.where(and(eq(reminders.ref_type, 'segment'), eq(reminders.ref_id, BigInt(seg.id)), eq(reminders.kind, 'custom')))
 		.get();
 	expect(rem).toBeTruthy();
 	expect(rem!.fireAt).toBe('2026-07-01T14:00:00.000Z');

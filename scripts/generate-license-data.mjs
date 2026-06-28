@@ -15,12 +15,6 @@ const runtimeComponents = [
 		licenses: 'MIT',
 		url: 'https://nodejs.org/',
 		usage: 'Required JavaScript runtime for the SvelteKit adapter-node server.'
-	},
-	{
-		name: 'SQLite',
-		licenses: 'Public domain',
-		url: 'https://www.sqlite.org/',
-		usage: 'Embedded database engine used through better-sqlite3.'
 	}
 ];
 
@@ -40,16 +34,6 @@ Usage: Required JavaScript runtime for the SvelteKit adapter-node server.
 Node.js itself carries its own bundled third-party notices. For the complete
 notice set for the exact Node.js binary you distribute, include the LICENSE file
 shipped by that Node.js release.
-
-SQLite
-------
-License: Public domain
-Project: https://www.sqlite.org/
-Usage: Embedded database engine used through better-sqlite3.
-
-SQLite source code is dedicated to the public domain by its authors. The
-better-sqlite3 npm package used by Roamarr is listed in the third-party package
-sections.
 `;
 
 function readJson(file) {
@@ -249,7 +233,7 @@ function buildAcknowledgementsText(packages) {
 	return `Credits and attribution
 =======================
 
-Roamarr is built with SvelteKit, Svelte, SQLite, Drizzle ORM, Tailwind CSS,
+Roamarr is built with SvelteKit, Svelte, MongrelDB Kit, Tailwind CSS,
 Vitest, and the wider npm ecosystem.
 
 This attribution bundle was generated from package-lock.json and the installed

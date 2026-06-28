@@ -13,7 +13,7 @@ vi.mock('./auth', () => ({ purgeExpiredSessions: vi.fn() }));
 
 import { runDueReminders } from './reminders';
 import { startScheduler, runTick } from './scheduler';
-import { schedulerRuns } from './db/schema';
+import { schedulerRuns } from './db/mongrelSchema';
 import { schedulerRuns as kitSchedulerRuns } from './db/mongrelSchema';
 import { beforeEach } from 'vitest';
 
@@ -75,6 +75,6 @@ test('runTick prunes old runs keeping the most recent 100', async () => {
 	await runTick(new Date('2026-06-24T12:00:00.000Z'));
 
 	expect(db.select().from(schedulerRuns).all()).toHaveLength(100);
-	const oldest = db.select().from(schedulerRuns).orderBy(schedulerRuns.startedAt).get();
+	const oldest = db.select().from(schedulerRuns).orderBy(schedulerRuns.started_at).get();
 	expect(oldest!.startedAt).toBe('2026-06-01T00:00:11.000Z');
 });

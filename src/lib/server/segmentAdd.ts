@@ -2,7 +2,7 @@ import { fail, redirect, type RequestEvent } from '@sveltejs/kit';
 import { withTripAction } from '$lib/server/actions';
 import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
-import type { SegmentType } from '$lib/server/db/schema';
+import type { SegmentType } from '$lib/server/db/mongrelSchema';
 import { addSegment, hasOverlappingSegment } from '$lib/server/segments';
 import { findCity } from '$lib/server/cities';
 import { localToUtc } from '$lib/server/tz';

@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('../db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('../db', async () => {
@@ -17,7 +17,7 @@ vi.mock('../notify', () => ({
 }));
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
+	(ctx as { sqlite: any }).sqlite.exec(
 		'delete from fare_watches; delete from fare_providers; delete from trips; delete from users;'
 	);
 	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(fareWatches).executeSync();
@@ -44,7 +44,7 @@ import { createTrip } from '../repositories/tripsRepo';
 import { getFareWatchById } from '../repositories/travelDataRepo';
 import { users, trips, fareProviders, fareWatches } from '../db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 test('registry has the stub; key stored encrypted; checks active, skips paused', async () => {
 	expect(registry.stub).toBeTruthy();

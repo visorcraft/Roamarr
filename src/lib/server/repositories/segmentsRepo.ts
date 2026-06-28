@@ -2,7 +2,7 @@ import { eq as kitEq, and as kitAnd, ne as kitNe, lt as kitLt, gt as kitGt, inLi
 import { kit } from '$lib/server/db';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@mongreldb/kit';
-import type { SegmentType, SegmentStatus, SegmentAttendeeStatus } from '$lib/server/db/schema';
+import type { SegmentType, SegmentStatus, SegmentAttendeeStatus } from '$lib/server/db/mongrelSchema';
 
 export type KitSegment = Row<typeof segments>;
 export type KitSegmentAttendee = Row<typeof segmentAttendees>;

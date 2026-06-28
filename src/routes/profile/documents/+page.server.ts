@@ -3,7 +3,7 @@ import { eq as kitEq, inList, asc } from '@mongreldb/kit';
 import { requireUser } from '$lib/server/auth';
 import { kit } from '$lib/server/db';
 import { tripCompanions } from '$lib/server/db/mongrelSchema';
-import { TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/schema';
+import { TRAVEL_DOCUMENT_TYPES, type TravelDocumentType } from '$lib/server/db/mongrelSchema';
 import { upsertRemindersForDocument, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';

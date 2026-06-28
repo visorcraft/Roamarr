@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { actions } from './+page.server';
-import { users, trips, segments } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips, segments } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { makeLocals } from '../../../../tests/eventHelpers';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 
@@ -60,9 +60,9 @@ test('imports a valid JSON file', async () => {
 	expect(result.success).toBe(true);
 	expect(result.result.imported).toBe(1);
 	expect(result.result.segmentCount).toBe(1);
-	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
+	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
 	expect(t!.name).toBe('Imported Trip');
-	expect(db.select().from(segments).where(eq(segments.tripId, t!.id)).all()).toHaveLength(1);
+	expect(db.select().from(segments).where(eq(segments.trip_id, BigInt(t!.id))).all()).toHaveLength(1);
 });
 
 test('imports a valid CSV file', async () => {

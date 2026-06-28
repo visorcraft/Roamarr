@@ -12,7 +12,7 @@ import * as repo from './repositories/travelDataRepo';
 import { geonamesCities } from './db/mongrelSchema';
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec('delete from geonames_cities;');
+	(ctx as { sqlite: any }).sqlite.exec('delete from geonames_cities;');
 	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(geonamesCities).executeSync();
 });
 

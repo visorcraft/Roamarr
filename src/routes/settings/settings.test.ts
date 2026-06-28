@@ -9,11 +9,11 @@ vi.mock('$lib/server/db', async () => {
 
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
 import { getMapSettings, updateSettings, getSettings } from '$lib/server/settings';
-import { users, auditLogs } from '$lib/server/db/schema';
+import { users, auditLogs } from '$lib/server/db/mongrelSchema';
 import { users as kitUsers, auditLogs as kitAuditLogs } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 
 function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'user') {
@@ -61,7 +61,7 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 	expect(decrypt(s.smtpPass!)).toBe('pw');
 	expect(s.webhookUrl).toBe('https://hooks.example.com/roamarr');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('settings_update');
 	expect(logs[0].entityType).toBe('settings');
@@ -107,7 +107,7 @@ test('omitting smtpPass preserves the existing encrypted value', () => {
 	const after = getSettings().smtpPass;
 	expect(after).toBe(before);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, Number(u.id))).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(JSON.parse(logs[0].metaJson).smtpPassSet).toBe(false);
 });

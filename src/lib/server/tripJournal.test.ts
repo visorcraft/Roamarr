@@ -15,8 +15,8 @@ import {
 	addJournalEntry,
 	deleteJournalEntry
 } from './tripJournal';
-import { tripJournalEntries, tripShares, auditLogs } from './db/schema';
-import { and, eq } from 'drizzle-orm';
+import { tripJournalEntries, tripShares, auditLogs } from './db/mongrelSchema';
+import { and, eq } from '@mongreldb/kit';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
@@ -84,9 +84,9 @@ test('createJournalEntry inserts entry and logs audit', () => {
 	expect(entry.entryDate).toBe('2026-06-15');
 	expect(entry.title).toBe('Day one');
 	expect(entry.body).toBe('We arrived safely.');
-	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, entry.id)).get()).toBeDefined();
+	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).get()).toBeDefined();
 
-	const audit = db.select().from(auditLogs).where(eq(auditLogs.entityId, entry.id)).get();
+	const audit = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(entry.id))).get();
 	expect(audit).toBeDefined();
 	expect(audit?.action).toBe('create');
 	expect(audit?.entityType).toBe('journal_entry');
@@ -195,11 +195,11 @@ test('removeJournalEntry deletes entry and logs audit', () => {
 		body: 'Body'
 	});
 	removeJournalEntry(u.id, entry.id);
-	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, entry.id)).get()).toBeUndefined();
+	expect(db.select().from(tripJournalEntries).where(eq(tripJournalEntries.id, BigInt(entry.id))).get()).toBeUndefined();
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.entityId, entry.id), eq(auditLogs.action, 'delete')))
+		.where(and(eq(auditLogs.entity_id, BigInt(entry.id)), eq(auditLogs.action, 'delete')))
 		.get();
 	expect(audit).toBeDefined();
 	expect(audit?.entityType).toBe('journal_entry');

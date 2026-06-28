@@ -18,8 +18,8 @@ import {
 	_setPublicShowDetails as setPublicShowDetails
 } from './+page.server';
 import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
-import { users, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, groups, groupMembers, tripShares, auditLogs } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 
@@ -45,12 +45,12 @@ test('owner can revoke a user share', () => {
 	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'b@x.c');
 	expect(canView(b.id, t)).toBe(true);
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	unshareUser(a.id, t.id, share.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
 	expect(canView(b.id, t)).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
 	expect(logs).toHaveLength(2);
 	expect(logs[0].action).toBe('trip_share_user');
 	expect(JSON.parse(logs[0].metaJson).sharedWithUserId).toBe(b.id);
@@ -68,12 +68,12 @@ test('owner can revoke a group share', () => {
 	shareWithGroup(owner.id, t.id, g.id);
 	expect(canView(member.id, t)).toBe(true);
 
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	unshareGroup(owner.id, t.id, share.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
 	expect(canView(member.id, t)).toBe(false);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
 	expect(logs).toHaveLength(2);
 	expect(logs[0].action).toBe('trip_share_group');
 	expect(JSON.parse(logs[0].metaJson).sharedWithGroupId).toBe(g.id);
@@ -86,14 +86,14 @@ test('non-owner cannot revoke a share', () => {
 	const b = makeUser('no-b@x.c');
 	const t = makeTrip(a.id, 'T');
 	shareWithUserEmail(a.id, t.id, 'no-b@x.c');
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	expect(() => unshareUser(b.id, t.id, share.id)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(1);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(1);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, a.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(a.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_share_user');
-	expect(db.select().from(auditLogs).where(eq(auditLogs.userId, b.id)).all()).toHaveLength(0);
+	expect(db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(b.id))).all()).toHaveLength(0);
 });
 
 test('user unshare does not delete group shares and vice versa', () => {
@@ -108,7 +108,7 @@ test('user unshare does not delete group shares and vice versa', () => {
 	const allShares = db
 		.select()
 		.from(tripShares)
-		.where(eq(tripShares.tripId, t.id))
+		.where(eq(tripShares.trip_id, BigInt(t.id)))
 		.all();
 	const userShare = allShares.find((s: Record<string, unknown>) => s.sharedWithUserId === friend.id)!;
 	const groupShare = allShares.find((s: Record<string, unknown>) => s.sharedWithGroupId === g.id)!;
@@ -118,12 +118,12 @@ test('user unshare does not delete group shares and vice versa', () => {
 		db
 			.select()
 			.from(tripShares)
-			.where(eq(tripShares.tripId, t.id))
+			.where(eq(tripShares.trip_id, BigInt(t.id)))
 			.all()
 			.map((s: Record<string, unknown>) => s.id)
 	).toEqual([groupShare.id]);
 	unshareGroup(owner.id, t.id, groupShare.id);
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all().length).toBe(0);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all().length).toBe(0);
 });
 
 test('minting a public token is audited', () => {
@@ -131,7 +131,7 @@ test('minting a public token is audited', () => {
 	const owner = makeUser('pub-o@x.c');
 	const t = makeTrip(owner.id, 'T');
 	mintPublicToken(owner.id, t.id);
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('trip_public_token_mint');
 	expect(logs[0].entityType).toBe('trip');
@@ -148,7 +148,7 @@ test('share functions default to read and accept edit permission', () => {
 	shareWithUserEmail(owner.id, t.id, reader.email);
 	shareWithUserEmail(owner.id, t.id, editor.email, 'edit');
 
-	const shares = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all();
+	const shares = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all();
 	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === reader.id)?.permission).toBe('read');
 	expect(shares.find((s: Record<string, unknown>) => s.sharedWithUserId === editor.id)?.permission).toBe('edit');
 	expect(canEdit(reader.id, t)).toBe(false);
@@ -164,7 +164,7 @@ test('group share can be created with edit permission', () => {
 	tripsRepo.addGroupMember(g.id, member.id);
 
 	shareWithGroup(owner.id, t.id, g.id, 'edit');
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	expect(share.permission).toBe('edit');
 	expect(canEdit(member.id, t)).toBe(true);
 });
@@ -175,17 +175,17 @@ test('owner can toggle showDetails on a share; non-owner cannot', () => {
 	const friend = makeUser('details-f@x.c');
 	const t = makeTrip(owner.id, 'T');
 	shareWithUserEmail(owner.id, t.id, friend.email);
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	expect(share.showDetails).toBe(false);
 
 	setShowDetails(owner.id, t.id, share.id, true);
-	const updated = db.select().from(tripShares).where(eq(tripShares.id, share.id)).get()!;
+	const updated = db.select().from(tripShares).where(eq(tripShares.id, BigInt(share.id))).get()!;
 	expect(updated.showDetails).toBe(true);
 
 	expect(() => setShowDetails(friend.id, t.id, share.id, false)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.id, share.id)).get()!.showDetails).toBe(true);
+	expect(db.select().from(tripShares).where(eq(tripShares.id, BigInt(share.id))).get()!.showDetails).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_share_set_show_details')).toBe(true);
 });
 
@@ -201,7 +201,7 @@ test('member can share their own trip into a group they belong to', () => {
 	const t = makeTrip(member.id, 'Member Trip');
 
 	shareWithGroup(member.id, t.id, g.id);
-	const share = db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).get()!;
+	const share = db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).get()!;
 	expect(share.sharedWithGroupId).toBe(g.id);
 	expect(canView(other.id, t)).toBe(true);
 });
@@ -214,7 +214,7 @@ test('user cannot share into a group they do not belong to', () => {
 	const t = makeTrip(b.id, 'B Trip');
 
 	expect(() => shareWithGroup(b.id, t.id, g.id)).toThrow();
-	expect(db.select().from(tripShares).where(eq(tripShares.tripId, t.id)).all()).toHaveLength(0);
+	expect(db.select().from(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).all()).toHaveLength(0);
 });
 
 test('listGroupsForUser returns owned and member groups', () => {
@@ -239,7 +239,7 @@ test('public token can be minted with showDetails enabled', () => {
 	expect(updated.publicToken).toBeTruthy();
 	expect(updated.publicShowDetails).toBe(true);
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_token_mint' && JSON.parse(String(l.metaJson)).publicShowDetails === true)).toBe(true);
 });
 
@@ -255,6 +255,6 @@ test('owner can toggle publicShowDetails; non-owner cannot', () => {
 	expect(tripsRepo.getTripById(t.id)!.publicShowDetails).toBe(true);
 
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.userId, owner.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.user_id, BigInt(owner.id))).all();
 	expect(logs.some((l: Record<string, unknown>) => l.action === 'trip_public_set_show_details')).toBe(true);
 });

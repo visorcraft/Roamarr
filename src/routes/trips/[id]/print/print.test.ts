@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import { users, trips, segments, tripCompanions } from '$lib/server/db/schema';
+import { users, trips, segments, tripCompanions } from '$lib/server/db/mongrelSchema';
 
 function event(user: { id: number }, tripId: number) {
 	return {

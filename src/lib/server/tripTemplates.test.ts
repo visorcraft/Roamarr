@@ -8,9 +8,9 @@ vi.mock('./db', async () => {
 });
 
 import { createTripFromTemplate, listTripTemplates, saveTripTemplate } from './tripTemplates';
-import { auditLogs, segments, trips, users } from './db/schema';
+import { auditLogs, segments, trips, users } from './db/mongrelSchema';
 import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from './db/mongrelSchema';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 
@@ -62,7 +62,7 @@ test('saveTripTemplate snapshots trip segments and tags', () => {
 	expect(tpl.userId).toBe(Number(u.id));
 	expect(JSON.stringify(tpl.snapshot)).toContain('UA1');
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, tpl.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(tpl.id))).all();
 	expect(logs.map((l: Record<string, unknown>) => l.action)).toContain('create');
 });
 
@@ -91,7 +91,7 @@ test('createTripFromTemplate copies segments and metadata', () => {
 	expect(copy.destinationCountryCode).toBe('FR');
 	expect(copy.startDate).toBe('2027-01-01');
 
-	const segs = db.select().from(segments).where(eq(segments.tripId, copy.id)).all();
+	const segs = db.select().from(segments).where(eq(segments.trip_id, BigInt(copy.id))).all();
 	expect(segs).toHaveLength(1);
 	expect(segs[0].title).toBe('Hilton');
 });

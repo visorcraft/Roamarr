@@ -42,13 +42,13 @@ import {
 	tripImportantItems,
 	tripExpenseAttachments,
 	tripExpenses
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import { users as kitUsers, trips as kitTrips, tripTemplates as kitTripTemplates } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { upsertCustomReminder } from '$lib/server/reminders';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 function event(user: { id: number }, tripId: number) {
 	return {
@@ -132,7 +132,7 @@ test('attachPolicy action links an existing policy to the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, pol.id)).get();
+	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).get();
 	expect(row?.tripId).toBe(t.id);
 });
 
@@ -165,7 +165,7 @@ test('detachPolicy action unlinks a policy from the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, pol.id)).get();
+	const row = db.select().from(insurancePolicies).where(eq(insurancePolicies.id, BigInt(pol.id))).get();
 	expect(row?.tripId).toBeNull();
 });
 
@@ -183,7 +183,7 @@ test('addComment action creates a comment on the trip', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripComments).where(eq(tripComments.tripId, t.id)).all();
+	const rows = db.select().from(tripComments).where(eq(tripComments.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].body).toBe('Nice trip');
 });
@@ -203,7 +203,7 @@ test('deleteComment action removes the users own comment', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripComments).where(eq(tripComments.id, c.id)).get()).toBeUndefined();
+	expect(db.select().from(tripComments).where(eq(tripComments.id, BigInt(c.id))).get()).toBeUndefined();
 });
 
 test('delete action removes trip-level reminders', () => {
@@ -211,11 +211,11 @@ test('delete action removes trip-level reminders', () => {
 	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'Del', startDate: '2099-01-01' });
 	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
-	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(1);
+	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(1);
 
 	_deleteTrip(u.id, t.id);
-	expect(db.select().from(trips).where(eq(trips.id, t.id)).get()).toBeUndefined();
-	expect(db.select().from(reminders).where(eq(reminders.refType, 'trip')).all()).toHaveLength(0);
+	expect(db.select().from(trips).where(eq(trips.id, BigInt(t.id))).get()).toBeUndefined();
+	expect(db.select().from(reminders).where(eq(reminders.ref_type, 'trip')).all()).toHaveLength(0);
 });
 
 test('duplicateSegment action copies a segment and redirects', async () => {
@@ -240,7 +240,7 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(segments).where(eq(segments.tripId, t.id)).all();
+	const rows = db.select().from(segments).where(eq(segments.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(2);
 	const copy = rows.find((r: Record<string, unknown>) => r.id !== s.id)!;
 	expect(copy.title).toBe('City tour');
@@ -248,7 +248,7 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 	expect(copy.endAt).toBe('2026-09-02T16:00:00.000Z');
 	expect(copy.confirmationNumber).toBeNull();
 
-	const logs = db.select().from(auditLogs).where(eq(auditLogs.entityId, copy.id)).all();
+	const logs = db.select().from(auditLogs).where(eq(auditLogs.entity_id, BigInt(copy.id))).all();
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('duplicate');
 });
@@ -332,7 +332,7 @@ test('setSegmentStatus action updates segment status for an editor', async () =>
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
 	expect(row?.status).toBe('checked_in');
 });
 
@@ -394,7 +394,7 @@ test('moveSegmentDate action moves a segment to a new local date', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const row = db.select().from(segments).where(eq(segments.id, s.id)).get();
+	const row = db.select().from(segments).where(eq(segments.id, BigInt(s.id))).get();
 	expect(row?.startAt).toBe('2026-09-15T03:30:00.000Z');
 	expect(row?.endAt).toBe('2026-09-15T04:30:00.000Z');
 });
@@ -420,7 +420,7 @@ test('saveTripTemplate action saves a template and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripTemplates).where(eq(tripTemplates.userId, Number(u.id))).all()).toHaveLength(1);
+	expect(db.select().from(tripTemplates).where(eq(tripTemplates.user_id, BigInt(u.id))).all()).toHaveLength(1);
 	expect(kit.selectFrom(kitTripTemplates).where(kitEq(kitTripTemplates.user_id, u.id)).executeSync()).toHaveLength(1);
 });
 
@@ -437,7 +437,7 @@ test('addHomeTask action creates a task and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.tripId, t.id)).all()).toHaveLength(1);
+	expect(db.select().from(tripHomeTasks).where(eq(tripHomeTasks.trip_id, BigInt(t.id))).all()).toHaveLength(1);
 });
 
 test('addMedication action creates a schedule and redirects', async () => {
@@ -453,7 +453,7 @@ test('addMedication action creates a schedule and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripMedications).where(eq(tripMedications.tripId, t.id)).all()).toHaveLength(1);
+	expect(db.select().from(tripMedications).where(eq(tripMedications.trip_id, BigInt(t.id))).all()).toHaveLength(1);
 });
 
 test('addEntryRequirement action creates a requirement and redirects', async () => {
@@ -470,7 +470,7 @@ test('addEntryRequirement action creates a requirement and redirects', async () 
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.tripId, t.id)).all();
+	const rows = db.select().from(tripEntryRequirements).where(eq(tripEntryRequirements.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].status).toBe('in_progress');
 });
@@ -488,7 +488,7 @@ test('addImportantItem action creates an item and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	const rows = db.select().from(tripImportantItems).where(eq(tripImportantItems.tripId, t.id)).all();
+	const rows = db.select().from(tripImportantItems).where(eq(tripImportantItems.trip_id, BigInt(t.id))).all();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].serialNumber).toBe('ABC123');
 });
@@ -507,5 +507,5 @@ test('addAttachment action uploads a receipt and redirects', async () => {
 		location: `/trips/${t.id}`
 	});
 
-	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expenseId, e.id)).all()).toHaveLength(1);
+	expect(db.select().from(tripExpenseAttachments).where(eq(tripExpenseAttachments.expense_id, BigInt(e.id))).all()).toHaveLength(1);
 });

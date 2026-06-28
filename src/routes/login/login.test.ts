@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { _authenticate as authenticate, actions } from './+page.server';
-import { users } from '$lib/server/db/schema';
+import { users } from '$lib/server/db/mongrelSchema';
 import { hashPassword } from '$lib/server/auth';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 

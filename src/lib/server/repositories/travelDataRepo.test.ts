@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database,
+	sqlite: null as unknown as any,
 	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
 	close: null as unknown as () => void
 }));
@@ -26,9 +26,9 @@ import {
 	geonamesCities as drizzleGeonamesCities,
 	fareProviders as drizzleFareProviders,
 	fareWatches as drizzleFareWatches
-} from '$lib/server/db/schema';
+} from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@mongreldb/kit';
-import { eq } from 'drizzle-orm';
+import { eq } from '@mongreldb/kit';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(fareWatches).executeSync();
@@ -99,7 +99,7 @@ test('importCitiesBatch clears existing data and inserts rows', () => {
 	const legacy = ctx.db
 		.select()
 		.from(drizzleGeonamesCities)
-		.where(eq(drizzleGeonamesCities.geonameId, LYON.geonameId))
+		.where(eq(drizzleGeonamesCities.geoname_id, BigInt(LYON.geonameId)))
 		.get();
 	expect(legacy?.name).toBe('Lyon');
 });
@@ -165,7 +165,7 @@ test('createFareProvider encrypts the API key and mirrors to legacy', () => {
 	const legacy = ctx.db
 		.select()
 		.from(drizzleFareProviders)
-		.where(eq(drizzleFareProviders.id, p.id))
+		.where(eq(drizzleFareProviders.id, BigInt(p.id)))
 		.get()!;
 	expect(legacy.apiKey).not.toBe('SECRET');
 	expect(legacy.userId).toBe(Number(u.id));
@@ -200,7 +200,7 @@ test('deleteFareProvider removes the row from kit and legacy', () => {
 	expect(repo.deleteFareProvider(p.id)).toBe(true);
 	expect(repo.getFareProviderById(p.id)).toBeNull();
 	expect(
-		ctx.db.select().from(drizzleFareProviders).where(eq(drizzleFareProviders.id, p.id)).get()
+		ctx.db.select().from(drizzleFareProviders).where(eq(drizzleFareProviders.id, BigInt(p.id))).get()
 	).toBeUndefined();
 });
 
@@ -247,7 +247,7 @@ test('createFareWatch and updateFareWatch mirror to legacy', () => {
 	const legacy = ctx.db
 		.select()
 		.from(drizzleFareWatches)
-		.where(eq(drizzleFareWatches.id, watch.id))
+		.where(eq(drizzleFareWatches.id, BigInt(watch.id)))
 		.get()!;
 	expect(legacy.providerId).toBe(provider.id);
 	expect(legacy.status).toBe('active');
@@ -255,7 +255,7 @@ test('createFareWatch and updateFareWatch mirror to legacy', () => {
 	const updated = repo.updateFareWatch(watch.id, { status: 'paused' });
 	expect(updated?.status).toBe('paused');
 	expect(
-		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, watch.id)).get()!.status
+		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, BigInt(watch.id))).get()!.status
 	).toBe('paused');
 });
 
@@ -290,7 +290,7 @@ test('deleteFareWatch removes the row from kit and legacy', () => {
 	expect(repo.deleteFareWatch(watch.id)).toBe(true);
 	expect(repo.getFareWatchById(watch.id)).toBeNull();
 	expect(
-		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, watch.id)).get()
+		ctx.db.select().from(drizzleFareWatches).where(eq(drizzleFareWatches.id, BigInt(watch.id))).get()
 	).toBeUndefined();
 });
 

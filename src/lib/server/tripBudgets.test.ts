@@ -15,13 +15,13 @@ import {
 	setTripBudget,
 	deleteTripBudget
 } from './tripBudgets';
-import { tripBudgetCategories, auditLogs } from './db/schema';
+import { tripBudgetCategories, auditLogs } from './db/mongrelSchema';
 import { trips as kitTrips, users as kitUsers, tripBudgetCategories as kitTripBudgetCategories } from './db/mongrelSchema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and } from '@mongreldb/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 beforeEach(() => {
-	const sqlite = (ctx as { sqlite: import('better-sqlite3').Database }).sqlite;
+	const sqlite = (ctx as { sqlite: any }).sqlite;
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
 	sqlite.exec(
 		'delete from trip_budget_categories; delete from trips; delete from users; delete from audit_logs;'
@@ -133,7 +133,7 @@ test('deleteBudget removes a cap', () => {
 	const rows = db
 		.select()
 		.from(tripBudgetCategories)
-		.where(eq(tripBudgetCategories.tripId, t.id))
+		.where(eq(tripBudgetCategories.trip_id, BigInt(t.id)))
 		.all();
 	expect(rows).toHaveLength(0);
 });
@@ -150,7 +150,7 @@ test('setBudget updates existing cap', () => {
 	const row = db
 		.select()
 		.from(tripBudgetCategories)
-		.where(and(eq(tripBudgetCategories.tripId, t.id), eq(tripBudgetCategories.category, 'food')))
+		.where(and(eq(tripBudgetCategories.trip_id, BigInt(t.id)), eq(tripBudgetCategories.category, 'food')))
 		.get();
 	expect(row!.amount).toBe(15000);
 	expect(row!.currency).toBe('USD');
@@ -176,7 +176,7 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 	const row = db
 		.select()
 		.from(tripBudgetCategories)
-		.where(and(eq(tripBudgetCategories.tripId, t.id), eq(tripBudgetCategories.category, 'food')))
+		.where(and(eq(tripBudgetCategories.trip_id, BigInt(t.id)), eq(tripBudgetCategories.category, 'food')))
 		.get();
 	expect(row!.currency).toBe('GBP');
 
@@ -188,7 +188,7 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 	const audit = db
 		.select()
 		.from(auditLogs)
-		.where(and(eq(auditLogs.entityType, 'trip_budget_category'), eq(auditLogs.userId, owner.id)))
+		.where(and(eq(auditLogs.entity_type, 'trip_budget_category'), eq(auditLogs.user_id, BigInt(owner.id))))
 		.all();
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'set')).toBe(true);
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);

@@ -12,8 +12,8 @@ import { makeUser } from '../../../../tests/helpers';
 
 
 import { actions } from './+page.server';
-import { users, trips } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { users, trips } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import { makeLocals, makeFormData } from '../../../../tests/eventHelpers';
 
 function makeEvent(form: FormData, params: Record<string, string> = {}, userId = 1) {
@@ -39,7 +39,7 @@ test('creates a trip with valid data', async () => {
 		status: 303,
 		location: expect.stringMatching(/^\/trips\/\d+$/)
 	});
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
+	const t = db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).get();
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Summer Escape');
 	expect(t!.publicToken).toBeTruthy();
@@ -61,7 +61,7 @@ test('rejects missing name and invalid date range', async () => {
 	expect(result.status).toBe(400);
 	expect(result.data.errors.name).toBe('name is required');
 	expect(result.data.errors.startDate).toBe('startDate must be on or before endDate');
-	expect(db.select().from(trips).where(eq(trips.ownerId, u.id)).all()).toHaveLength(0);
+	expect(db.select().from(trips).where(eq(trips.owner_id, BigInt(u.id))).all()).toHaveLength(0);
 });
 
 test('rejects invalid visibility enum', async () => {

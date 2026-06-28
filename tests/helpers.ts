@@ -49,9 +49,9 @@ let tripCounter = 0;
 
 // Test-only shim that preserves the old `db.select(...).from(...)` typing
 // while the suite is migrated to kit queries. The runtime implementation
-// translates common Drizzle-style calls into equivalent kit queries so
+// translates common legacy query calls into equivalent kit queries so
 // existing tests continue to pass without rewriting every assertion.
-interface LegacySelectFrom {
+export interface LegacySelectFrom {
 	where(...conds: unknown[]): LegacySelectFrom;
 	orderBy(...cols: unknown[]): LegacySelectFrom;
 	limit(n: number): LegacySelectFrom;
@@ -59,21 +59,21 @@ interface LegacySelectFrom {
 	all(): Record<string, unknown>[];
 	get(): Record<string, unknown> | undefined;
 }
-interface LegacySelect {
+export interface LegacySelect {
 	from(table: unknown): LegacySelectFrom;
 }
-interface LegacyInsert {
+export interface LegacyInsert {
 	values(vals: unknown): { returning(): { get(): Record<string, unknown> } };
 }
-interface LegacyUpdate {
+export interface LegacyUpdate {
 	set(vals: unknown): {
 		where(...conds: unknown[]): { returning(): { get(): Record<string, unknown> | undefined }; run(): void };
 	};
 }
-interface LegacyDelete {
+export interface LegacyDelete {
 	where(...conds: unknown[]): { run(): void };
 }
-interface LegacyDb {
+export interface LegacyDb {
 	select(fields?: unknown): LegacySelect;
 	insert(table: unknown): LegacyInsert;
 	update(table: unknown): LegacyUpdate;
@@ -255,7 +255,7 @@ function parsePredicates(
 	return { predicates, combiner };
 }
 
-function convertDrizzleCondition(kitTable: TableSpec, cond: unknown): Predicate | undefined {
+function convertLegacyCondition(kitTable: TableSpec, cond: unknown): Predicate | undefined {
 	if (!cond) return undefined;
 	if ((cond as any).kind) return cond as Predicate;
 	const chunks = (cond as any).queryChunks;
@@ -267,6 +267,8 @@ function convertDrizzleCondition(kitTable: TableSpec, cond: unknown): Predicate 
 }
 
 function convertOrderBy(kitTable: TableSpec, order: unknown): unknown {
+	// Already a kit ordering expression (e.g., asc(col) / desc(col)).
+	if ((order as any)?.kind) return order;
 	const chunks = (order as any)?.queryChunks;
 	if (!chunks || chunks.length < 3) return undefined;
 	const colChunk = chunks[1];
@@ -307,7 +309,7 @@ function createLegacyDb(kit: KitDatabase, kitTables: Map<string, TableSpec>): Le
 		return {
 			where(...conds: unknown[]) {
 				for (const c of conds) {
-					const p = convertDrizzleCondition(kitTable, c);
+					const p = convertLegacyCondition(kitTable, c);
 					if (p) builder = builder.where(p);
 				}
 				return this;
@@ -386,7 +388,7 @@ function createLegacyDb(kit: KitDatabase, kitTables: Map<string, TableSpec>): Le
 					const self = {
 						where(...conds: unknown[]) {
 							for (const c of conds) {
-								const p = convertDrizzleCondition(kitTable, c);
+								const p = convertLegacyCondition(kitTable, c);
 								if (p) builder = builder.where(p as Predicate);
 							}
 							return self;
@@ -414,7 +416,7 @@ function createLegacyDb(kit: KitDatabase, kitTables: Map<string, TableSpec>): Le
 			const self = {
 				where(...conds: unknown[]) {
 					for (const c of conds) {
-						const p = convertDrizzleCondition(kitTable, c);
+						const p = convertLegacyCondition(kitTable, c);
 						if (p) builder = builder.where(p as Predicate);
 					}
 					return self;
@@ -428,10 +430,15 @@ function createLegacyDb(kit: KitDatabase, kitTables: Map<string, TableSpec>): Le
 	};
 }
 
+export interface LegacySqlite {
+	exec(sql: string): void;
+	pragma(name: string, opts?: { simple?: boolean }): unknown;
+}
+
 function createLegacySqlite(
 	kit: KitDatabase,
 	kitTables: Map<string, TableSpec>
-): { exec(sql: string): void; pragma(name: string, opts?: { simple?: boolean }): unknown } {
+): LegacySqlite {
 	return {
 		exec(sql: string) {
 			const stmts = sql

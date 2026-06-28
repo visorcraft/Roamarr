@@ -53,14 +53,14 @@ test('imports a valid JSON file', async () => {
 		]
 	});
 	const file = new File([json], 'trips.json', { type: 'application/json' });
-	const result = (await actions.default(makeEvent(file, 'json', u.id))) as {
+	const result = (await actions.default(makeEvent(file, 'json', Number(u.id)))) as {
 		success: boolean;
 		result: { imported: number; segmentCount: number; errors: unknown[] };
 	};
 	expect(result.success).toBe(true);
 	expect(result.result.imported).toBe(1);
 	expect(result.result.segmentCount).toBe(1);
-	const t = db.select().from(trips).where(eq(trips.ownerId, u.id)).get();
+	const t = db.select().from(trips).where(eq(trips.ownerId, Number(u.id))).get();
 	expect(t!.name).toBe('Imported Trip');
 	expect(db.select().from(segments).where(eq(segments.tripId, t!.id)).all()).toHaveLength(1);
 });
@@ -72,7 +72,7 @@ test('imports a valid CSV file', async () => {
 		'name,destinationCountryCode,destinationCityName,destinationCityLat,destinationCityLng,startDate,endDate,segmentType,segmentTitle,segmentLocalStart,segmentStartTz\n' +
 		'CSV Trip,IT,Rome,41.9028,12.4964,2026-10-01,2026-10-05,flight,Out,2026-10-01T09:00,UTC';
 	const file = new File([csv], 'trips.csv', { type: 'text/csv' });
-	const result = (await actions.default(makeEvent(file, 'csv', u.id))) as {
+	const result = (await actions.default(makeEvent(file, 'csv', Number(u.id)))) as {
 		success: boolean;
 		result: { imported: number; segmentCount: number };
 	};
@@ -98,7 +98,7 @@ test('rejects malformed JSON', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser('c@x.c');
 	const file = new File(['not json'], 'trips.json', { type: 'application/json' });
-	const result = (await actions.default(makeEvent(file, 'json', u.id))) as {
+	const result = (await actions.default(makeEvent(file, 'json', Number(u.id)))) as {
 		status: number;
 		data: { error: string };
 	};
@@ -110,7 +110,7 @@ test('rejects invalid format parameter', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const u = makeTestUser('d@x.c');
 	const file = new File(['{}'], 'trips.json', { type: 'application/json' });
-	const result = (await actions.default(makeEvent(file, 'xml', u.id))) as {
+	const result = (await actions.default(makeEvent(file, 'xml', Number(u.id)))) as {
 		status: number;
 		data: { error: string };
 	};

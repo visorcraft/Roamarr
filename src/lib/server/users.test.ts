@@ -2,7 +2,8 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
-	sqlite: null as unknown as import('better-sqlite3').Database
+	sqlite: null as unknown as import('better-sqlite3').Database,
+	kit: null as unknown as import('@mongreldb/kit').KitDatabase
 }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
@@ -20,6 +21,7 @@ import { hashPassword, verifyPassword } from './auth';
 import { users, sessions } from './db/schema';
 import { users as kitUsers } from './db/mongrelSchema';
 import { makeKitUser } from '../../../tests/kitHelpers';
+import { makeSyncedUser } from '../../../tests/helpers';
 import {
 	adminCreateUser,
 	adminDeleteUser,
@@ -43,11 +45,7 @@ test('normalizeEmail trims and lowercases', () => {
 });
 
 test('adminUpdateUser updates profile fields', async () => {
-	const u = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
+	const u = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
@@ -69,11 +67,7 @@ test('adminUpdateUser updates profile fields', async () => {
 });
 
 test('adminUpdateUser sets a new password and clears forced reset', async () => {
-	const admin = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
+	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({
@@ -104,16 +98,12 @@ test('adminUpdateUser sets a new password and clears forced reset', async () => 
 });
 
 test('completeRequiredPasswordChange clears mustResetPassword', async () => {
-	const u = ctx.db
-		.insert(users)
-		.values({
-			email: 'u@x.c',
-			passwordHash: await hashPassword('oldpassword'),
-			displayName: 'U',
-			mustResetPassword: true
-		})
-		.returning()
-		.get();
+	const u = makeSyncedUser(ctx.db, ctx.kit, {
+		email: 'u@x.c',
+		passwordHash: await hashPassword('oldpassword'),
+		displayName: 'U',
+		mustResetPassword: true
+	});
 	ctx.db.insert(sessions).values({ tokenHash: tokenHash('keep-token'), userId: u.id, expiresAt: '2099-01-01T00:00:00.000Z' }).run();
 	ctx.db.insert(sessions).values({ tokenHash: tokenHash('drop-token'), userId: u.id, expiresAt: '2099-01-01T00:00:00.000Z' }).run();
 
@@ -126,11 +116,7 @@ test('completeRequiredPasswordChange clears mustResetPassword', async () => {
 });
 
 test('adminCreateUser creates a user with a random password and forced reset', async () => {
-	const admin = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
+	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 
 	const { user: created, temporaryPassword } = await adminCreateUser(admin.id, {
 		displayName: 'New User',
@@ -159,11 +145,7 @@ test('adminCreateUser rejects duplicate email', async () => {
 });
 
 test('adminDeleteUser removes a user', async () => {
-	const admin = ctx.db
-		.insert(users)
-		.values({ email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' })
-		.returning()
-		.get();
+	const admin = makeSyncedUser(ctx.db, ctx.kit, { email: 'admin@x.c', passwordHash: 'x', displayName: 'Admin', role: 'admin' });
 	const target = ctx.db
 		.insert(users)
 		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })

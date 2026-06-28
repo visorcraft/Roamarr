@@ -410,23 +410,39 @@
 
 <div class="trip-detail">
 	<!-- Hero -->
-	<section class="trip-hero">
+	<section class="trip-hero {data.nextCity && data.tileConfig ? 'trip-hero--map' : ''}">
 		<div class="trip-hero-backdrop"></div>
+		{#if data.nextCity && data.tileConfig}
+			<div class="trip-hero-map-layer">
+				<TripMap
+					fill
+					lat={data.nextCity.lat}
+					lng={data.nextCity.lng}
+					cityName={data.nextCity.cityName}
+					tileUrls={data.tileConfig.tileUrls}
+					attribution={data.tileConfig.attribution}
+					onExpand={() => (globeOpen = true)}
+				/>
+			</div>
+			<div class="trip-hero-map-scrim"></div>
+		{/if}
 		<div class="trip-hero-scrim"></div>
 
-		<div class="relative px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
+		<div class="trip-hero-content relative px-4 py-8 sm:px-6 lg:px-10 lg:py-10">
 			<a href="/trips" class="back-link">
 				<Icon name="back" class="h-4 w-4" />
 				Back to trips
 			</a>
 
 			<div class="flex flex-col gap-6 sm:flex-row sm:items-end">
-				<div class="trip-poster grid place-items-center">
-					<div class="text-center">
-						<Icon name="location" class="trip-poster-icon mx-auto h-8 w-8" />
-						<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destinationCityName)}</p>
+				{#if !(data.nextCity && data.tileConfig)}
+					<div class="trip-poster grid place-items-center">
+						<div class="text-center">
+							<Icon name="location" class="trip-poster-icon mx-auto h-8 w-8" />
+							<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destinationCityName)}</p>
+						</div>
 					</div>
-				</div>
+				{/if}
 
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
@@ -530,16 +546,6 @@
 	{#if form?.error}<p class="notice notice-error trip-detail-body mt-6">{form.error}</p>{/if}
 
 	{#if data.nextCity && data.tileConfig}
-		<section class="trip-detail-body mt-6">
-			<TripMap
-				lat={data.nextCity.lat}
-				lng={data.nextCity.lng}
-				cityName={data.nextCity.cityName}
-				tileUrls={data.tileConfig.tileUrls}
-				attribution={data.tileConfig.attribution}
-				onExpand={() => (globeOpen = true)}
-			/>
-		</section>
 		<GlobeModal
 			bind:open={globeOpen}
 			lat={data.nextCity.lat}

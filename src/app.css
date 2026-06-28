@@ -1482,6 +1482,49 @@ button.card:hover,
 				color-mix(in oklab, var(--theme-brand) 8%, transparent)
 			);
 	}
+	/* When a trip has a map, it fills the hero as the background image. */
+	.trip-hero--map .trip-hero-backdrop {
+		display: none;
+	}
+	.trip-hero-map-layer {
+		@apply pointer-events-none absolute inset-0 overflow-hidden;
+	}
+	.trip-hero-map-layer :where(button) {
+		pointer-events: auto;
+	}
+	.trip-hero-map-scrim {
+		@apply pointer-events-none absolute inset-0;
+		background:
+			linear-gradient(
+				90deg,
+				rgba(3, 7, 18, 0.82) 0%,
+				rgba(3, 7, 18, 0.58) 40%,
+				rgba(3, 7, 18, 0.26) 72%,
+				rgba(3, 7, 18, 0.1) 100%
+			),
+			linear-gradient(0deg, rgba(3, 7, 18, 0.6), rgba(3, 7, 18, 0) 58%);
+	}
+	/* Content overlays the map. Clicks on empty/text areas fall through to the map
+	   (opening the globe); the real controls stay interactive. */
+	.trip-hero--map .trip-hero-content {
+		@apply pointer-events-none flex flex-col justify-between gap-6;
+		min-height: 17rem;
+	}
+	.trip-hero--map .trip-hero-content :where(.back-link, .app-user-menu) {
+		pointer-events: auto;
+	}
+	/* Force legible light text over the imagery in any theme. */
+	.trip-hero--map .trip-hero-title {
+		color: #fff;
+	}
+	.trip-hero--map .back-link {
+		color: rgba(255, 255, 255, 0.9);
+	}
+	.trip-hero--map .trip-meta-pill {
+		background: rgba(0, 0, 0, 0.42);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+		color: #fff;
+	}
 	.trip-hero-title {
 		color: var(--theme-strong);
 	}

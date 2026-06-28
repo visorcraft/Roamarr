@@ -9,7 +9,8 @@
 		cityName,
 		tileUrls,
 		attribution,
-		onExpand
+		onExpand,
+		fill = false
 	}: {
 		lat: number;
 		lng: number;
@@ -17,6 +18,7 @@
 		tileUrls: string[];
 		attribution: string;
 		onExpand?: () => void;
+		fill?: boolean;
 	} = $props();
 
 	let container = $state<HTMLDivElement | null>(null);
@@ -60,12 +62,16 @@
 	});
 </script>
 
-<div class="card relative overflow-hidden">
-	<div bind:this={container} class="h-[200px] w-full sm:h-[240px]" aria-label={`Map centered on ${cityName}`}></div>
+<div class={fill ? 'relative h-full w-full overflow-hidden' : 'card relative overflow-hidden'}>
+	<div
+		bind:this={container}
+		class={fill ? 'h-full w-full' : 'h-[200px] w-full sm:h-[240px]'}
+		aria-label={`Map centered on ${cityName}`}
+	></div>
 	{#if onExpand}
 		<button
 			type="button"
-			class="globe-open"
+			class="globe-open {fill ? 'globe-open--fill' : ''}"
 			onclick={onExpand}
 			aria-label={`Open 3D globe centered on ${cityName}`}
 		>
@@ -85,6 +91,12 @@
 		background: transparent;
 		border: 0;
 		cursor: pointer;
+	}
+	/* In the hero background, keep the hint clear of the top-right Actions button. */
+	.globe-open--fill {
+		align-items: flex-end;
+		justify-content: flex-start;
+		padding: 0.6rem 0.75rem;
 	}
 	.globe-open-chip {
 		border-radius: 0.375rem;

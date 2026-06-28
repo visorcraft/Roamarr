@@ -25,7 +25,11 @@ export const GET: RequestHandler = () => {
 		}
 	} catch (e) {
 		dbOk = false;
-		details = { error: e instanceof Error ? e.message : String(e) };
+		// Native addon / filesystem exceptions can include absolute paths or
+		// engine internals; /health/deep is unauthenticated, so do not surface
+		// raw error text. Return a stable opaque marker instead.
+		if (e instanceof Error) console.error('deep health check failed:', e.message);
+		details = { error: 'deep-health-check-failed' };
 	}
 
 	const schedulerOk = isSchedulerRunning();

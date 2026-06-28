@@ -1,6 +1,6 @@
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
@@ -147,10 +147,25 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 	const markerPath = getRestoreMarkerPath(targetDbDir);
 	expect(existsSync(markerPath)).toBe(true);
 
+	// The restore action must leave the extraction tree in place while a marker
+	// is pending: applyPendingRestore consumes it on the next boot.
+	const targetParent = dirname(targetDbDir);
+	const pendingWrappers = readdirSync(targetParent).filter((name) =>
+		name.startsWith('.roamarr-restore-')
+	);
+	expect(pendingWrappers.length).toBe(1);
+
 	applyPendingRestore(targetDbDir);
 
 	expect(existsSync(join(targetDbDir, 'CATALOG'))).toBe(true);
 	expect(existsSync(join(targetDbDir, 'tables'))).toBe(true);
 	expect(existsSync(join(targetDbDir, 'attachments', 'sample.txt'))).toBe(true);
 	expect(existsSync(markerPath)).toBe(false);
+
+	// applyPendingRestore must clean up the now-empty extraction wrapper left
+	// behind by the restore action.
+	const leftoverWrappers = readdirSync(targetParent).filter((name) =>
+		name.startsWith('.roamarr-restore-')
+	);
+	expect(leftoverWrappers.length).toBe(0);
 });

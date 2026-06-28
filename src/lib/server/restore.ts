@@ -8,7 +8,7 @@ import {
 	rmSync,
 	statSync
 } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, basename } from 'node:path';
 import mongreldb from 'mongreldb';
 import type { Database as NativeDatabase } from 'mongreldb/native.js';
 import { getDatabasePath } from './db/paths';
@@ -136,6 +136,23 @@ export function applyPendingRestore(dbPath: string = getDatabasePath()): void {
 	const marker = readRestoreMarker(dbPath);
 	if (!marker) return;
 
+	// Capture the wrapper directory (mkdtemp-created `.roamarr-restore-*` next
+	// to the live database) before swapDirectory consumes the inner subtree via
+	// rename. After the swaps, this wrapper is empty and must be removed.
+	const wrapperDirs = new Set<string>();
+	for (const p of [marker.databasePath, marker.attachmentsPath]) {
+		if (!p) continue;
+		let dir = p;
+		for (let i = 0; i < 3 && dir !== dirname(dir); i++) {
+			const base = basename(dir);
+			if (base.startsWith('.roamarr-restore-')) {
+				wrapperDirs.add(dir);
+				break;
+			}
+			dir = dirname(dir);
+		}
+	}
+
 	swapDirectory(dbPath, marker.databasePath);
 
 	if (marker.attachmentsPath) {
@@ -143,4 +160,12 @@ export function applyPendingRestore(dbPath: string = getDatabasePath()): void {
 	}
 
 	removeRestoreMarker(dbPath);
+
+	for (const wrapper of wrapperDirs) {
+		try {
+			rmSync(wrapper, { recursive: true, force: true });
+		} catch {
+			// ignore best-effort cleanup failures
+		}
+	}
 }

@@ -88,3 +88,26 @@ test('deep health returns 503 when scheduler is not running', async () => {
 	expect(body.db).toBe(true);
 	expect(body.scheduler).toBe(false);
 });
+
+test('deep health masks internal error messages on integrity failure', async () => {
+	(globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler = true;
+	// Point the database path at an empty directory so the native open succeeds
+	// but the integrity check fails. The error detail must NOT surface raw.
+	const bogusDir = join(tmpdir(), `roamarr-health-bogus-${Date.now()}.kitdb`);
+	mkdirSync(bogusDir, { recursive: true });
+	const original = process.env.MONGREL_DATABASE_PATH;
+	process.env.MONGREL_DATABASE_PATH = bogusDir;
+	try {
+		const res = await deepHealthGet(deepHealthEvent());
+		expect(res.status).toBe(503);
+		const body = await res.json();
+		expect(body.db).toBe(false);
+		// The masked marker is stable and does not leak filesystem paths or
+		// native engine internals.
+		expect(body.error).toBe('deep-health-check-failed');
+		expect(JSON.stringify(body)).not.toContain(bogusDir);
+	} finally {
+		process.env.MONGREL_DATABASE_PATH = original;
+		rmSync(bogusDir, { recursive: true, force: true });
+	}
+});

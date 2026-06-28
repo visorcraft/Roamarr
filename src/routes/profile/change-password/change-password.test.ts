@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { eq as drizzleEq } from 'drizzle-orm';
 
 const ctx = vi.hoisted(() => ({
 	db: null as unknown as import('$lib/server/db').DB,
@@ -12,22 +13,24 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { users } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
 import { hashPassword, createSession } from '$lib/server/auth';
 import { beforeEach } from 'vitest';
+import { makeKitUser } from '../../../../tests/kitHelpers';
+import { users as kitUsers, sessions as kitSessions } from '$lib/server/db/mongrelSchema';
+
+function kitDb() {
+	return (ctx as any).kit as import('@mongreldb/kit').KitDatabase;
+}
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from sessions; delete from users;');
+	kitDb().deleteFrom(kitUsers).executeSync();
 });
 
 test('load redirects when password change is not required', () => {
-	const u = ctx.db
-		.insert(users)
-		.values({ email: 'u@x.c', passwordHash: 'x', displayName: 'U' })
-		.returning()
-		.get();
+	const u = makeKitUser({ email: 'u@x.c', password_hash: 'x', display_name: 'U' });
 	try {
-		load({ locals: { user: u } } as any);
+		load({ locals: { user: ctx.db.select().from(users).get() } } as any);
 		expect.fail('should have thrown');
 	} catch (e: any) {
 		expect(e.status).toBe(303);
@@ -36,18 +39,14 @@ test('load redirects when password change is not required', () => {
 });
 
 test('action completes a required password change', async () => {
-	const u = ctx.db
-		.insert(users)
-		.values({
-			email: 'u@x.c',
-			passwordHash: await hashPassword('oldpassword'),
-			displayName: 'U',
-			mustResetPassword: true
-		})
-		.returning()
-		.get();
+	const u = makeKitUser({
+		email: 'u@x.c',
+		password_hash: await hashPassword('oldpassword'),
+		display_name: 'U',
+		must_reset_password: true
+	});
 
-	const token = createSession(u.id);
+	const token = createSession(Number(u.id));
 
 	const form = new FormData();
 	form.set('newPassword', 'newpassword');
@@ -55,13 +54,13 @@ test('action completes a required password change', async () => {
 	try {
 		await actions.default({
 			request: { formData: async () => form },
-			locals: { user: u },
+			locals: { user: ctx.db.select().from(users).get() },
 			cookies: { get: () => token, set: vi.fn() }
 		} as any);
 	} catch (e: any) {
 		expect(e.status).toBe(303);
 	}
 
-	const updated = ctx.db.select().from(users).where(eq(users.id, u.id)).get()!;
+	const updated = ctx.db.select().from(users).where(drizzleEq(users.id, Number(u.id))).get()!;
 	expect(updated.mustResetPassword).toBe(false);
 });

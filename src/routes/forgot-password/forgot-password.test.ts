@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
+import { eq } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -12,8 +13,10 @@ vi.mock('$lib/server/notify', () => ({
 }));
 
 import { _requestReset, actions } from './+page.server';
-import { users, passwordResetTokens } from '$lib/server/db/schema';
+import { users as kitUsers, passwordResetTokens } from '$lib/server/db/mongrelSchema';
+import { users } from '$lib/server/db/schema';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
+import { makeKitUser } from '../../../tests/kitHelpers';
 
 const origin = 'https://example.com';
 
@@ -21,32 +24,29 @@ beforeEach(() => {
 	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
 		'delete from password_reset_tokens; delete from users;'
 	);
+	// Cascading delete on kit users removes sessions and reset tokens too.
+	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
 	delivered.length = 0;
 });
 
 test('sends reset email for existing active user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
+	const u = makeKitUser({ email: 'a@b.c', password_hash: 'x', display_name: 'A' });
 	await _requestReset('A@B.c', origin);
-	const row = db.select().from(passwordResetTokens).get();
-	expect(row!.userId).toBe(u.id);
+	const row = (ctx as any).kit.selectFrom(passwordResetTokens).executeSync()[0];
+	expect(row.user_id).toBe(u.id);
 	expect(delivered).toHaveLength(1);
-	expect(delivered[0].uid).toBe(u.id);
+	expect(delivered[0].uid).toBe(Number(u.id));
 	expect(delivered[0].m.link).toMatch(new RegExp(`^${origin}/reset-password/`));
 });
 
 test('does not send email for unknown or disabled user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
-	db.insert(users)
-		.values({ email: 'd@b.c', passwordHash: 'x', displayName: 'D', disabled: true })
-		.run();
+	makeKitUser({ email: 'd@b.c', password_hash: 'x', display_name: 'D', disabled: true });
 	await _requestReset('unknown@b.c', origin);
 	await _requestReset('d@b.c', origin);
-	expect(db.select().from(passwordResetTokens).get()).toBeUndefined();
+	expect(db.select().from(users).get()).toBeDefined();
+	expect((ctx as any).kit.selectFrom(passwordResetTokens).executeSync()).toHaveLength(0);
 	expect(delivered).toHaveLength(0);
 });
 

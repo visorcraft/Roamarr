@@ -1,19 +1,44 @@
-import { test, expect, vi, beforeEach } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import type { Insert } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
-vi.mock('./db', async () => {
+const ctx = vi.hoisted(
+	() =>
+		({
+			kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+			close: null as unknown as () => void
+		} as {
+			kit: import('@mongreldb/kit').KitDatabase;
+			close: () => void;
+		})
+);
+vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { db, sqlite, kit, close } = freshDb();
+	Object.assign(ctx, { db, sqlite, kit, close });
+	return { db, sqlite, kit, getDb: () => kit };
 });
 
-import { hashPassword, verifyPassword, createSession, validateSession, invalidateSession } from './auth';
-import { users, sessions } from './db/schema';
+import {
+	hashPassword,
+	verifyPassword,
+	createSession,
+	validateSession,
+	invalidateSession
+} from './auth';
+import { users, sessions } from './db/mongrelSchema';
+import { makeKitUser } from '../../../tests/kitHelpers';
+
+function resetKitTables() {
+	ctx.kit.deleteFrom(sessions).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+}
 
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from sessions; delete from users;'
-	);
+	resetKitTables();
+});
+
+afterAll(() => {
+	ctx.close();
 });
 
 test('hash verifies, rejects wrong', async () => {
@@ -27,40 +52,25 @@ test('password length is bounded', async () => {
 });
 
 test('session: raw token never stored; validates then invalidates', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const token = createSession(u.id);
-	const row = db.select().from(sessions).get();
-	expect(row!.tokenHash).not.toBe(token);
-	expect((await validateSession(token))?.id).toBe(u.id);
+	const u = makeKitUser({ email: 'a@b.c' });
+	const token = createSession(Number(u.id));
+	const row = ctx.kit.selectFrom(sessions).executeSync()[0];
+	expect(row!.token_hash).not.toBe(token);
+	expect((await validateSession(token))?.id).toBe(Number(u.id));
 	invalidateSession(token);
 	expect(await validateSession(token)).toBeNull();
 });
 
 test('validateSession rejects disabled users', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'd@b.c', passwordHash: 'x', displayName: 'D', disabled: true })
-		.returning()
-		.get();
-	const token = createSession(u.id);
+	const u = makeKitUser({ email: 'd@b.c', disabled: true });
+	const token = createSession(Number(u.id));
 	expect(await validateSession(token)).toBeNull();
 });
 
 test('createSession stores IP and user agent metadata', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'm@b.c', passwordHash: 'x', displayName: 'M' })
-		.returning()
-		.get();
-	createSession(u.id, '127.0.0.1', 'TestAgent/1.0');
-	const row = db.select().from(sessions).get();
-	expect(row!.lastIp).toBe('127.0.0.1');
-	expect(row!.userAgent).toBe('TestAgent/1.0');
+	const u = makeKitUser({ email: 'm@b.c' });
+	createSession(Number(u.id), '127.0.0.1', 'TestAgent/1.0');
+	const row = ctx.kit.selectFrom(sessions).executeSync()[0];
+	expect(row!.last_ip).toBe('127.0.0.1');
+	expect(row!.user_agent).toBe('TestAgent/1.0');
 });

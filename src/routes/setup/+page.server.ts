@@ -5,6 +5,7 @@ import { users, settings } from '$lib/server/db/schema';
 import { eq, sql } from 'drizzle-orm';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 
 export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },
@@ -38,7 +39,27 @@ export function _createAdmin(
 			.run();
 		return u;
 	});
-	return tx.immediate();
+	const u = tx.immediate();
+	// Mirror the admin into the kit users table so kit auth/session resolution works.
+	usersRepo.createUser({
+		id: BigInt(u.id),
+		email: u.email,
+		password_hash: u.passwordHash,
+		display_name: u.displayName,
+		role: u.role,
+		disabled: u.disabled,
+		must_reset_password: u.mustResetPassword,
+		timezone: u.timezone,
+		flight_checkin_lead_hours: BigInt(u.flightCheckinLeadHours),
+		document_expiry_lead_days: BigInt(u.documentExpiryLeadDays),
+		email_notifications: u.emailNotifications,
+		webhook_notifications: u.webhookNotifications,
+		theme_id: u.themeId,
+		default_currency: u.defaultCurrency,
+		calendar_token: u.calendarToken,
+		calendar_token_expires_at: u.calendarTokenExpiresAt
+	} as any);
+	return u;
 }
 
 export const actions: Actions = {

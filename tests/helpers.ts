@@ -1,6 +1,12 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createDb } from '../src/lib/server/db/createDb';
 import { applyMigrations } from '../src/lib/server/db/migrate';
 import { settings, users, trips, segments, tripCompanions } from '../src/lib/server/db/schema';
+import { KitDatabase } from '@mongreldb/kit';
+import { schema as kitSchema } from '../src/lib/server/db/mongrelSchema';
+import { migrations as kitMigrations } from '../src/lib/server/db/mongrelMigrations/0001_initial';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { Database } from 'better-sqlite3';
 
@@ -11,7 +17,40 @@ export function freshDb() {
 	const { db, sqlite } = createDb(':memory:');
 	applyMigrations(db);
 	db.insert(settings).values({ id: 1 }).run();
-	return { db, sqlite };
+
+	// Also provide a fresh MongrelDB Kit instance for code that has migrated to
+	// the kit singleton. The temp directory is removed on process exit.
+	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
+	const kit = KitDatabase.openSync(dir, kitSchema);
+	kit.migrateSync(kitSchema, kitMigrations);
+
+	const close = () => {
+		kit.close();
+		rmSync(dir, { recursive: true, force: true });
+	};
+	const cleanup = () => {
+		try {
+			close();
+		} catch {
+			/* best-effort cleanup */
+		}
+	};
+	process.once('exit', cleanup);
+
+	return { db, sqlite, kit, getDb: () => kit, close };
+}
+
+export function freshKitDb() {
+	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
+	const kit = KitDatabase.openSync(dir, kitSchema);
+	kit.migrateSync(kitSchema, kitMigrations);
+	return {
+		kit,
+		close: () => {
+			kit.close();
+			rmSync(dir, { recursive: true, force: true });
+		}
+	};
 }
 
 export function resetTables(sqlite: Database, ...tables: string[]) {

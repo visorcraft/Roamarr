@@ -1,10 +1,21 @@
-import { test, expect, vi, beforeEach } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import type { Insert } from '@mongreldb/kit';
 
-const ctx = vi.hoisted(() => ({ db: null as never, sqlite: null as never }));
-vi.mock('./db', async () => {
+const ctx = vi.hoisted(
+	() =>
+		({
+			kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+			close: null as unknown as () => void
+		} as {
+			kit: import('@mongreldb/kit').KitDatabase;
+			close: () => void;
+		})
+);
+vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { db, sqlite, kit, close } = freshDb();
+	Object.assign(ctx, { db, sqlite, kit, close });
+	return { db, sqlite, kit, getDb: () => kit };
 });
 
 import {
@@ -12,55 +23,84 @@ import {
 	validatePasswordResetToken,
 	consumePasswordResetToken
 } from './passwordReset';
-import { eq } from 'drizzle-orm';
-import { users, passwordResetTokens } from './db/schema';
+import { users, passwordResetTokens } from './db/mongrelSchema';
 import { verifyPassword } from './auth';
 
+type UserInsert = {
+	email?: string;
+	password_hash?: string;
+	display_name?: string;
+	role?: 'admin' | 'user';
+	disabled?: boolean;
+	timezone?: string;
+	flight_checkin_lead_hours?: bigint;
+	document_expiry_lead_days?: bigint;
+	email_notifications?: boolean;
+	webhook_notifications?: boolean;
+	theme_id?: string;
+	default_currency?: string;
+	calendar_token?: string | null;
+	calendar_token_expires_at?: string | null;
+};
+
+function makeKitUser(over: UserInsert = {}) {
+	const n = Math.random().toString(36).slice(2);
+	const row = {
+		email: over.email ?? `u${n}@x.c`,
+		password_hash: over.password_hash ?? 'x',
+		display_name: over.display_name ?? `U${n}`,
+		role: over.role ?? 'user',
+		disabled: over.disabled ?? false,
+		timezone: over.timezone ?? 'UTC',
+		flight_checkin_lead_hours: over.flight_checkin_lead_hours ?? 24n,
+		document_expiry_lead_days: over.document_expiry_lead_days ?? 90n,
+		email_notifications: over.email_notifications ?? true,
+		webhook_notifications: over.webhook_notifications ?? true,
+		theme_id: over.theme_id ?? 'midnight-travels',
+		default_currency: over.default_currency ?? 'USD',
+		calendar_token: over.calendar_token ?? null,
+		calendar_token_expires_at: over.calendar_token_expires_at ?? null
+	};
+	return ctx.kit.insertInto(users).values(row as Insert<typeof users>).executeSync();
+}
+
+function resetKitTables() {
+	ctx.kit.deleteFrom(passwordResetTokens).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+}
+
 beforeEach(() => {
-	(ctx as { sqlite: import('better-sqlite3').Database }).sqlite.exec(
-		'delete from password_reset_tokens; delete from users;'
-	);
+	resetKitTables();
+});
+
+afterAll(() => {
+	ctx.close();
 });
 
 test('raw token is not stored; validate returns row', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const token = createPasswordResetToken(u.id);
-	const row = db.select().from(passwordResetTokens).get();
-	expect(row!.tokenHash).not.toBe(token);
-	expect(validatePasswordResetToken(token)?.userId).toBe(u.id);
+	const u = makeKitUser({ email: 'a@b.c' });
+	const token = createPasswordResetToken(Number(u.id));
+	const row = ctx.kit.selectFrom(passwordResetTokens).executeSync()[0];
+	expect(row!.token_hash).not.toBe(token);
+	expect(validatePasswordResetToken(token)?.user_id).toBe(u.id);
 });
 
 test('expired token is rejected and removed', () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const token = createPasswordResetToken(u.id);
-	db.update(passwordResetTokens).set({ expiresAt: '2000-01-01T00:00:00.000Z' }).run();
+	const u = makeKitUser({ email: 'a@b.c' });
+	const token = createPasswordResetToken(Number(u.id));
+	ctx.kit.updateTable(passwordResetTokens).set({ expires_at: '2000-01-01T00:00:00.000Z' }).executeSync();
 	expect(validatePasswordResetToken(token)).toBeNull();
-	expect(db.select().from(passwordResetTokens).get()).toBeUndefined();
+	expect(ctx.kit.selectFrom(passwordResetTokens).executeSync()).toHaveLength(0);
 });
 
 test('consume updates password and deletes tokens', async () => {
-	const db = (ctx as { db: import('./db').DB }).db;
-	const u = db
-		.insert(users)
-		.values({ email: 'a@b.c', passwordHash: 'x', displayName: 'A' })
-		.returning()
-		.get();
-	const token = createPasswordResetToken(u.id);
+	const u = makeKitUser({ email: 'a@b.c' });
+	const token = createPasswordResetToken(Number(u.id));
 	const ok = await consumePasswordResetToken(token, 'newpassword');
 	expect(ok).toBe(true);
-	const updated = db.select().from(users).where(eq(users.id, u.id)).get();
-	expect(await verifyPassword(updated!.passwordHash, 'newpassword')).toBe(true);
-	expect(db.select().from(passwordResetTokens).get()).toBeUndefined();
+	const updated = ctx.kit.selectFrom(users).executeSync()[0];
+	expect(await verifyPassword(updated!.password_hash, 'newpassword')).toBe(true);
+	expect(ctx.kit.selectFrom(passwordResetTokens).executeSync()).toHaveLength(0);
 });
 
 test('consume rejects invalid token', async () => {

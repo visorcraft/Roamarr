@@ -25,12 +25,12 @@ const DEFAULT_BENEFIT_TEMPLATES = [
 const initialMigration: Migration = {
 	version: 1,
 	name: 'initial',
-	up: async (ctx) => {
+	up: (ctx) => {
 		for (const table of schema.tablesList()) {
-			await ctx.ensureTable(table);
+			ctx.ensureTable(table);
 		}
 
-		await ctx.kit
+		ctx.kit
 			.insertInto(settings)
 			.values({
 				id: 1n,
@@ -45,12 +45,12 @@ const initialMigration: Migration = {
 				maps_tile_attribution: null,
 				maps_tile_api_key: null
 			})
-			.execute();
+			.executeSync();
 
-		const count = await ctx.kit.selectFrom(benefitTemplates).selectCount().execute();
+		const count = ctx.kit.selectFrom(benefitTemplates).selectCount().executeSync();
 		if (count === 0n) {
 			for (const template of DEFAULT_BENEFIT_TEMPLATES) {
-				await ctx.kit.insertInto(benefitTemplates).values(template).execute();
+				ctx.kit.insertInto(benefitTemplates).values(template).executeSync();
 			}
 		}
 	}

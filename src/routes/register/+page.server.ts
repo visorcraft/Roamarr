@@ -6,6 +6,7 @@ import { getSettings } from '$lib/server/settings';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 
 function gate() {
 	const s = getSettings();
@@ -19,7 +20,7 @@ export const load: PageServerLoad = () => {
 
 export async function _registerUser(email: string, password: string, displayName: string) {
 	const defaults = getSettings();
-	return db
+	const u = db
 		.insert(users)
 		.values({
 			email: normalizeEmail(email),
@@ -32,6 +33,27 @@ export async function _registerUser(email: string, password: string, displayName
 		})
 		.returning()
 		.get();
+	// Mirror the new user into the kit users table so the kit auth/session flow
+	// can resolve the session.
+	usersRepo.createUser({
+		id: BigInt(u.id),
+		email: u.email,
+		password_hash: u.passwordHash,
+		display_name: u.displayName,
+		role: u.role,
+		disabled: u.disabled,
+		must_reset_password: u.mustResetPassword,
+		timezone: u.timezone,
+		flight_checkin_lead_hours: BigInt(u.flightCheckinLeadHours),
+		document_expiry_lead_days: BigInt(u.documentExpiryLeadDays),
+		email_notifications: u.emailNotifications,
+		webhook_notifications: u.webhookNotifications,
+		theme_id: u.themeId,
+		default_currency: u.defaultCurrency,
+		calendar_token: u.calendarToken,
+		calendar_token_expires_at: u.calendarTokenExpiresAt
+	} as any);
+	return u;
 }
 
 export const actions: Actions = {

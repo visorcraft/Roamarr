@@ -8,9 +8,10 @@ vi.mock('./lib/server/db', async () => {
 });
 
 import { handle } from './hooks.server';
-import { createSession } from './lib/server/auth';
-import { settings, users } from './lib/server/db/schema';
+import { createSession, validateSession } from './lib/server/auth';
+import { settings } from './lib/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { makeKitUser } from '../tests/kitHelpers';
 
 const ev = (path: string) => ({
 	url: new URL('http://x' + path),
@@ -142,12 +143,15 @@ test('parses a JSON flash cookie with a variant', async () => {
 test('redirects users who must reset password', async () => {
 	const db = (ctx as any).db;
 	db.update(settings).set({ setupComplete: true }).where(eq(settings.id, 1)).run();
-	const u = db
-		.insert(users)
-		.values({ email: 'reset@x.c', passwordHash: 'x', displayName: 'Reset', mustResetPassword: true })
-		.returning()
-		.get();
-	const token = createSession(u.id);
+	const u = makeKitUser({
+		email: 'reset@x.c',
+		password_hash: 'x',
+		display_name: 'Reset',
+		must_reset_password: true
+	});
+	expect(u.must_reset_password).toBe(true);
+	const token = createSession(Number(u.id));
+	expect(await validateSession(token)).toBeTruthy();
 	const res: any = await Promise.resolve(
 		handle({
 			event: {

@@ -17,9 +17,12 @@ import { eq } from 'drizzle-orm';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
+import { users as kitUsers } from '$lib/server/db/mongrelSchema';
+import { makeKitUser } from '../../../../tests/kitHelpers';
 
 beforeEach(() => {
 	(ctx as any).sqlite.exec('delete from users;');
+	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
 	vi.mocked(deliver).mockClear();
 });
 
@@ -160,11 +163,8 @@ test('update rejects invalid role', async () => {
 test('sendReset delivers a reset link', async () => {
 	const db = (ctx as any).db;
 	const admin = makeAdminLocals((ctx as any).db);
-	const target = db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T', role: 'user' })
-		.returning()
-		.get();
+	const kitUser = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' });
+	const target = db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
 
 	const form = new FormData();
 	form.set('userId', String(target.id));

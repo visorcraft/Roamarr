@@ -27,6 +27,16 @@ import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergency
 import { decrypt } from '$lib/server/crypto';
 import { eq } from 'drizzle-orm';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
+import { users as kitUsers } from '$lib/server/db/mongrelSchema';
+import { beforeEach } from 'vitest';
+import { makeKitUser } from '../../../tests/kitHelpers';
+
+beforeEach(() => {
+	(ctx as any).sqlite.exec(
+		'delete from audit_logs; delete from emergency_contacts; delete from loyalty_programs; delete from travel_documents; delete from sessions; delete from users;'
+	);
+	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
+});
 
 test('document number is encrypted at rest and arms a reminder', () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
@@ -305,16 +315,13 @@ test('update password enforces password policy', async () => {
 test('update password invalidates all other sessions for the user', async () => {
 	const db = (ctx as { db: import('$lib/server/db').DB }).db;
 	const initialHash = await hashPassword('oldsecret');
-	const u = db
-		.insert(users)
-		.values({
-			email: 'p7@x.c',
-			passwordHash: initialHash,
-			displayName: 'P7',
-			timezone: 'UTC'
-		})
-		.returning()
-		.get();
+	const kitUser = makeKitUser({
+		email: 'p7@x.c',
+		password_hash: initialHash,
+		display_name: 'P7',
+		timezone: 'UTC'
+	});
+	const u = db.select().from(users).where(eq(users.id, Number(kitUser.id))).get()!;
 	const currentToken = createSession(u.id);
 	createSession(u.id);
 	createSession(u.id);

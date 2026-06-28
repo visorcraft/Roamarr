@@ -18,6 +18,8 @@ import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { hashPassword, verifyPassword } from './auth';
 import { users, sessions } from './db/schema';
+import { users as kitUsers } from './db/mongrelSchema';
+import { makeKitUser } from '../../../tests/kitHelpers';
 import {
 	adminCreateUser,
 	adminDeleteUser,
@@ -32,6 +34,7 @@ const tokenHash = (token: string) => createHash('sha256').update(token).digest('
 
 beforeEach(() => {
 	ctx.sqlite.exec('delete from sessions; delete from users;');
+	(ctx as any).kit.deleteFrom(kitUsers).executeSync();
 	vi.mocked(deliver).mockClear();
 });
 
@@ -183,11 +186,12 @@ test('adminDeleteUser refuses to delete the last admin', async () => {
 });
 
 test('adminSendPasswordReset sends a reset notification', async () => {
+	const kitUser = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T' });
 	const target = ctx.db
-		.insert(users)
-		.values({ email: 'target@x.c', passwordHash: 'x', displayName: 'T' })
-		.returning()
-		.get();
+		.select()
+		.from(users)
+		.where(eq(users.id, Number(kitUser.id)))
+		.get()!;
 
 	await adminSendPasswordReset(target.id, 'https://roamarr.test');
 	expect(vi.mocked(deliver)).toHaveBeenCalledOnce();

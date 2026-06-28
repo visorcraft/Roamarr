@@ -20,7 +20,7 @@ import { listHomeTasks } from './tripHomeTasks';
 import { listMedications } from './tripMedications';
 import { listEntryRequirements } from './tripEntryRequirements';
 import { listImportantItems } from './tripImportantItems';
-import { selectNextSegmentCity } from './tripMap';
+import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
 import { getMapSettings } from './settings';
 
@@ -146,7 +146,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		const tripTemplates = listTripTemplates(u.id);
 		const emergencyContacts = listEmergencyContacts(u.id);
 		const mapEnabled = getMapSettings().mapsEnabled;
-		const nextCity = mapEnabled ? selectNextSegmentCity(view.trip.id) : null;
+		const nextCity = mapEnabled ? tripMapCity(view.trip.id) : null;
 		const tileConfig = mapEnabled ? resolveTileConfig() : null;
 		return {
 			...view,
@@ -199,7 +199,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		entryRequirements,
 		importantItems,
 		stats,
-		nextCity: mapEnabled ? selectNextSegmentCity(view.trip.id) : null,
+		nextCity: mapEnabled ? tripMapCity(view.trip.id) : null,
 		tileConfig: mapEnabled ? resolveTileConfig() : null
 	};
 }

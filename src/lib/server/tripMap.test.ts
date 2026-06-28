@@ -7,8 +7,9 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { selectNextSegmentCity } from './tripMap';
+import { selectNextSegmentCity, tripMapCity } from './tripMap';
 import { users, trips, segments } from './db/schema';
+import { eq } from 'drizzle-orm';
 
 let fixtureCounter = 0;
 
@@ -48,4 +49,36 @@ test('returns null when no upcoming segment has coordinates', () => {
 		{ tripId: t.id, type: 'note', title: 'No coords', startAt: '2099-01-01T10:00:00Z', startTz: 'UTC' }
 	]).run();
 	expect(selectNextSegmentCity(t.id)).toBeNull();
+});
+
+test('tripMapCity prefers the next segment city', () => {
+	const { db, t } = insertFixtures();
+	db.update(trips)
+		.set({ destinationCityName: 'Tokyo', destinationCountryCode: 'JP', destinationCityLat: 35.68, destinationCityLng: 139.76 })
+		.where(eq(trips.id, t.id))
+		.run();
+	db.insert(segments).values([
+		{ tripId: t.id, type: 'hotel', title: 'Next', startAt: '2099-01-01T10:00:00Z', startTz: 'UTC', countryCode: 'FR', cityName: 'Paris', cityLat: 48.85, cityLng: 2.35 }
+	]).run();
+	const city = tripMapCity(t.id);
+	expect(city?.cityName).toBe('Paris');
+	expect(city?.segmentId).not.toBeNull();
+});
+
+test('tripMapCity falls back to the destination city when no segment has one', () => {
+	const { db, t } = insertFixtures();
+	db.update(trips)
+		.set({ destinationCityName: 'Tokyo', destinationCountryCode: 'JP', destinationCityLat: 35.68, destinationCityLng: 139.76 })
+		.where(eq(trips.id, t.id))
+		.run();
+	db.insert(segments).values([
+		{ tripId: t.id, type: 'note', title: 'No coords', startAt: '2099-01-01T10:00:00Z', startTz: 'UTC' }
+	]).run();
+	const city = tripMapCity(t.id);
+	expect(city).toMatchObject({ cityName: 'Tokyo', countryCode: 'JP', lat: 35.68, lng: 139.76, segmentId: null });
+});
+
+test('tripMapCity returns null when neither a segment nor a destination has coordinates', () => {
+	const { t } = insertFixtures();
+	expect(tripMapCity(t.id)).toBeNull();
 });

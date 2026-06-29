@@ -61,10 +61,36 @@ automation bundle is all write scopes plus the reads.
 | `roamarr_day_plan` | `trips:write` | Create a segment (flight, hotel, event) for a trip. |
 | `roamarr_upcoming_summary` | `trips:read` | Get a summary of upcoming trips. |
 | `roamarr_packing_item_add` | `packing:write` | Add an item to a trip's packing checklist. |
+| `roamarr_packing_list_build` | `packing:write` | Apply a packing template or list current checklist. |
 | `roamarr_budget_set` | `budgets:write` | Set or update a budget category for a trip. |
+| `roamarr_budget_update` | `budgets:write` | View budget categories and spent amounts. |
 | `roamarr_places_list` | `places:write` | List visited countries and states. |
 | `roamarr_places_mark` | `places:write` | Mark a country or state as visited. |
+| `roamarr_places_unmark` | `places:write` | Remove a country or state from visited. |
 | `roamarr_reminder_add` | `reminders:write` | Add a reminder to a trip. |
+
+### Prompts
+
+Server-defined prompts return privacy-safe, structured summaries an AI
+assistant can use as context:
+
+| Prompt | Description |
+| --- | --- |
+| `trip-details` | Detailed trip overview (requires `tripId`). |
+| `trip-summary` | Brief summary of upcoming trips. |
+| `itinerary` | Day-by-day itinerary (requires `tripId`). |
+| `flight-info` | Flight segments for a trip (requires `tripId`). |
+| `hotel-info` | Lodging segments for a trip (requires `tripId`). |
+| `packing-check` | Packing checklist status (requires `tripId`). |
+| `budget-overview` | Budget categories and spending (requires `tripId`). |
+| `documents-checklist` | Travel documents and expiry summaries. |
+| `weather-overview` | Weather forecast for a trip destination (requires `tripId`). |
+| `places-visited` | Countries and U.S. states you have visited. |
+
+### Resources
+
+Read-only `trip://<id>` URIs return structured trip data (trip + owner) via
+the same authorization checks as tools. Access requires `trips:read`.
 
 ## Privacy and security
 

@@ -1,15 +1,19 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
 	ListToolsRequestSchema,
-	CallToolRequestSchema
+	CallToolRequestSchema,
+	ListPromptsRequestSchema,
+	GetPromptRequestSchema,
+	ListResourcesRequestSchema,
+	ReadResourceRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
-import { listVisited, markVisited } from './visitedPlaces';
+import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { buildTripDetail } from './tripDetail';
-import { addItem as addChecklistItem } from './tripChecklists';
-import { setBudget } from './tripBudgets';
+import { addItem as addChecklistItem, loadChecklist } from './tripChecklists';
+import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
@@ -32,7 +36,7 @@ function textResult(obj: unknown) {
 export function createMcpServer(userId: number, scopes: Scope[]): Server {
 	const server = new Server(
 		{ name: 'roamarr', version: '1.0.0' },
-		{ capabilities: { tools: {} } }
+		{ capabilities: { tools: {}, prompts: {}, resources: {} } }
 	);
 
 	server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -113,6 +117,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				}
 			},
 			{
+				name: 'roamarr_packing_list_build',
+				description: 'Apply a saved packing template to a trip, or list the current checklist.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						templateId: { type: 'number', description: 'Optional template ID to apply. Omit to just list current items.' }
+					},
+					required: ['tripId']
+				}
+			},
+			{
 				name: 'roamarr_budget_set',
 				description: 'Set or update a budget category amount for a trip.',
 				inputSchema: {
@@ -124,6 +140,17 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						currency: { type: 'string', description: 'ISO currency code, default USD' }
 					},
 					required: ['tripId', 'category', 'amount']
+				}
+			},
+			{
+				name: 'roamarr_budget_update',
+				description: 'View the current budget categories and spent amounts for a trip.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' }
+					},
+					required: ['tripId']
 				}
 			},
 			{
@@ -139,6 +166,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			{
 				name: 'roamarr_places_mark',
 				description: 'Mark a country or U.S. state as visited.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						kind: { type: 'string', enum: ['country', 'state'] },
+						code: { type: 'string', description: 'ISO country code or US state code' }
+					},
+					required: ['kind', 'code']
+				}
+			},
+			{
+				name: 'roamarr_places_unmark',
+				description: 'Remove a country or U.S. state from visited.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -238,6 +277,20 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				logAudit(userId, 'mcp_packing_add', 'trip_checklist_item', Number(item.id), { tripId });
 				return textResult({ id: Number(item.id), tripId, text: item.text });
 			}
+			case 'roamarr_packing_list_build': {
+				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
+				const tripId = Number(args.tripId);
+				if (args.templateId) {
+					const { applyTemplate } = await import('./packingTemplates');
+					applyTemplate(Number(args.templateId), tripId, userId);
+					logAudit(userId, 'mcp_packing_build', 'trip', tripId, { templateId: args.templateId });
+				}
+				const checklist = loadChecklist(tripId);
+				return textResult({
+					tripId,
+					items: checklist.items.map((i) => ({ id: Number(i.id), text: i.text, packed: i.packed }))
+				});
+			}
 			case 'roamarr_budget_set': {
 				if (!hasScope(scopes, 'budgets:write')) return scopeError('budgets:write');
 				const tripId = Number(args.tripId);
@@ -247,6 +300,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					category: args.category, amount: args.amount
 				});
 				return textResult({ ok: true, tripId, category: args.category, amount: args.amount });
+			}
+			case 'roamarr_budget_update': {
+				if (!hasScope(scopes, 'budgets:write')) return scopeError('budgets:write');
+				const tripId = Number(args.tripId);
+				requireOwnedTrip(userId, tripId);
+				const { listExpensesForTrip } = await import('./repositories/expensesRepo');
+				const expenses = listExpensesForTrip(tripId);
+				const budgets = listBudgetsWithSpent(tripId, expenses);
+				return textResult({ tripId, budgets });
 			}
 			case 'roamarr_upcoming_summary': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
@@ -274,6 +336,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				});
 				return textResult(result);
 			}
+			case 'roamarr_places_unmark': {
+				if (!hasScope(scopes, 'places:write')) return scopeError('places:write');
+				const kind = args.kind === 'state' ? 'state' : 'country';
+				const result = unmarkVisited(userId, kind as any, String(args.code ?? ''));
+				logAudit(userId, 'mcp_places_unmark', 'visited_' + kind, userId, { code: args.code });
+				return textResult(result);
+			}
 			case 'roamarr_reminder_add': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
 				const { upsertCustomReminder } = await import('./reminders');
@@ -291,6 +360,130 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					isError: true
 				};
 		}
+	});
+
+	const PROMPTS = [
+		{ name: 'trip-details', description: 'Detailed overview of a specific trip including segments.' },
+		{ name: 'trip-summary', description: 'Brief summary of all upcoming trips.' },
+		{ name: 'itinerary', description: 'Day-by-day itinerary for a trip.' },
+		{ name: 'flight-info', description: 'Flight segments for a trip.' },
+		{ name: 'hotel-info', description: 'Hotel/lodging segments for a trip.' },
+		{ name: 'packing-check', description: 'Packing checklist status for a trip.' },
+		{ name: 'budget-overview', description: 'Budget categories and spending for a trip.' },
+		{ name: 'documents-checklist', description: 'Travel documents and expiry summaries.' },
+		{ name: 'weather-overview', description: 'Weather forecast for a trip destination.' },
+		{ name: 'places-visited', description: 'Countries and U.S. states you have visited.' }
+	];
+
+	server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+		prompts: PROMPTS
+	}));
+
+	server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+		const promptName = request.params.name;
+		const tripIdArg = (request.params.arguments as Record<string, string> | undefined)?.tripId;
+		const tripId = tripIdArg ? Number(tripIdArg) : 0;
+
+		function tripContext(tid: number) {
+			if (!tid || !hasScope(scopes, 'trips:read')) return null;
+			try {
+				requireOwnedTrip(userId, tid);
+				return buildTripDetail({ id: userId }, tid, new URL('http://localhost'));
+			} catch {
+				return null;
+			}
+		}
+
+		function makePrompt(title: string, body: string) {
+			return { description: title, messages: [{ role: 'user' as const, content: { type: 'text' as const, text: body } }] };
+		}
+
+		switch (promptName) {
+			case 'trip-summary': {
+				if (!hasScope(scopes, 'trips:read')) return makePrompt('Error', 'Missing scope: trips:read');
+				const all = tripsRepo.listTripsForUser(userId);
+				const today = new Date().toISOString().slice(0, 10);
+				const upcoming = all.filter((t) => t.startDate && t.startDate >= today && !t.archived).slice(0, 5);
+				return makePrompt('Trip summary', JSON.stringify(upcoming.map((t) => ({
+					name: t.name, destination: t.destination, startDate: t.startDate, endDate: t.endDate
+				})), null, 2));
+			}
+			case 'places-visited': {
+				if (!hasScope(scopes, 'places:write')) return makePrompt('Error', 'Missing scope: places:write');
+				return makePrompt('Places visited', JSON.stringify(listVisited(userId)));
+			}
+			case 'weather-overview': {
+				if (!hasScope(scopes, 'trips:read')) return makePrompt('Error', 'Missing scope: trips:read');
+				if (!tripId) return makePrompt('Error', 'tripId argument required');
+				const { tripWeatherOverview } = await import('./weather');
+				const weather = await tripWeatherOverview(tripId);
+				return makePrompt('Weather overview', JSON.stringify(weather));
+			}
+			case 'documents-checklist': {
+				if (!hasScope(scopes, 'profile:read')) return makePrompt('Error', 'Missing scope: profile:read');
+				const { listTravelDocuments } = await import('./repositories/profileRepo');
+				const docs = listTravelDocuments(userId);
+				return makePrompt('Documents checklist', JSON.stringify(docs.map((d) => ({
+					type: d.type, expiresOn: d.expiresOn
+				}))));
+			}
+			default: {
+				const detail = tripContext(tripId) as any;
+				if (!detail) return makePrompt('Error', 'Trip not found or inaccessible.');
+				const t = detail.trip as Record<string, unknown>;
+				const allSegs: any[] = Array.isArray(detail.segments) ? detail.segments : [];
+				switch (promptName) {
+					case 'trip-details':
+						return makePrompt('Trip details', JSON.stringify({ trip: t, owner: detail.owner }));
+					case 'itinerary':
+						return makePrompt('Itinerary', JSON.stringify(t));
+					case 'flight-info': {
+						const segs = allSegs.filter((s: any) => s.type === 'flight');
+						return makePrompt('Flight info', JSON.stringify(segs));
+					}
+					case 'hotel-info': {
+						const segs = allSegs.filter((s: any) => s.type === 'hotel');
+						return makePrompt('Hotel info', JSON.stringify(segs));
+					}
+					case 'packing-check': {
+						const { loadChecklist } = await import('./tripChecklists');
+						const checklist = loadChecklist(tripId);
+						return makePrompt('Packing check', JSON.stringify(checklist.items.map((i) => ({ text: i.text, packed: i.packed }))));
+					}
+					case 'budget-overview': {
+						const { listExpensesForTrip } = await import('./repositories/expensesRepo');
+						const budgets = listBudgetsWithSpent(tripId, listExpensesForTrip(tripId));
+						return makePrompt('Budget overview', JSON.stringify(budgets));
+					}
+					default:
+						return makePrompt('Error', `Unknown prompt: ${promptName}`);
+				}
+			}
+		}
+	});
+
+	server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+		resources: []
+	}));
+
+	server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+		const uri = request.params.uri;
+		const match = /^trip:\/\/(\d+)$/.exec(uri);
+		if (!match) throw new Error(`Unknown resource URI: ${uri}`);
+		const tid = Number(match[1]);
+		if (!hasScope(scopes, 'trips:read')) throw new Error('Missing scope: trips:read');
+		requireOwnedTrip(userId, tid);
+		const detail = buildTripDetail({ id: userId }, tid, new URL('http://localhost'));
+		return {
+			contents: [{
+				uri,
+				mimeType: 'application/json',
+				text: JSON.stringify({
+					trip: detail.trip,
+					owner: detail.owner
+				})
+			}]
+		};
 	});
 
 	return server;

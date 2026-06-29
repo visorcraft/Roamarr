@@ -52,10 +52,14 @@
 			<details class="rounded-md border border-red-500/30">
 				<summary class="cursor-pointer px-4 py-2 text-sm font-medium text-red-400">Disable 2FA</summary>
 				<form method="POST" action="?/disable" class="space-y-3 p-4">
-					<p class="field-help">Requires your account password.</p>
+					<p class="field-help">Requires your account password and a valid TOTP code or backup code.</p>
 					<div class="field">
 						<label class="label" for="disablePass">Password</label>
 						<input id="disablePass" name="password" type="password" bind:value={disablePassword} class="input" required />
+					</div>
+					<div class="field">
+						<label class="label" for="disableTotp">TOTP code or backup code</label>
+						<input id="disableTotp" name="totpCode" type="text" class="input" inputmode="numeric" placeholder="123456" autocomplete="one-time-code" required />
 					</div>
 					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Disable two-factor authentication?">Disable 2FA</ConfirmButton>
 				</form>

@@ -253,13 +253,21 @@
 									</div>
 								</form>
 
-								<form method="POST" action="?/sendReset" class="mt-4 border-t border-white/5 pt-4">
+							<form method="POST" action="?/sendReset" class="mt-4 border-t border-white/5 pt-4">
+								<input type="hidden" name="userId" value={user.id} />
+								<p class="field-help">
+									Send a one-hour password reset link to {user.email}.
+								</p>
+								<button class="btn btn-ghost btn-ghost-indigo mt-3">Send password reset email</button>
+							</form>
+
+							{#if user.twoFactorEnabled}
+								<form method="POST" action="?/disableTwoFactor" class="mt-3">
 									<input type="hidden" name="userId" value={user.id} />
-									<p class="field-help">
-										Send a one-hour password reset link to {user.email}.
-									</p>
-									<button class="btn btn-ghost btn-ghost-indigo mt-3">Send password reset email</button>
+									<p class="field-help">Two-factor authentication is enabled for this user.</p>
+									<button class="btn btn-ghost btn-ghost-danger mt-2">Disable user 2FA (admin reset)</button>
 								</form>
+							{/if}
 							</td>
 						</tr>
 					{/if}

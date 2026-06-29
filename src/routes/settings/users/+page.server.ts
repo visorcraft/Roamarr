@@ -4,6 +4,7 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { adminCreateUser, adminDeleteUser, adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
+import { adminDisableTwoFactor, isTwoFactorEnabled } from '$lib/server/twoFactor';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -15,7 +16,8 @@ export const load: PageServerLoad = ({ locals }) => {
 		role: u.role,
 		disabled: u.disabled,
 		mustResetPassword: u.must_reset_password,
-		createdAt: u.created_at
+		createdAt: u.created_at,
+		twoFactorEnabled: isTwoFactorEnabled(Number(u.id))
 	}));
 	return { users: rows };
 };
@@ -105,6 +107,21 @@ export const actions: Actions = {
 
 		logAudit(admin.id, 'user_password_reset_sent', 'user', userId);
 		setFlash(cookies, 'Password reset link sent.');
+		throw redirect(303, '/settings/users');
+	},
+
+	disableTwoFactor: async ({ request, locals, cookies }) => {
+		const admin = requireAdmin(locals);
+		const userId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(userId) || userId <= 0) return fail(400, { error: 'Invalid user.' });
+
+		try {
+			adminDisableTwoFactor(admin.id, userId);
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Could not disable 2FA.' });
+		}
+
+		setFlash(cookies, 'Two-factor authentication disabled for user.');
 		throw redirect(303, '/settings/users');
 	}
 };

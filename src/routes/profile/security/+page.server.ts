@@ -8,7 +8,8 @@ import {
 	getTwoFactorState,
 	enableTwoFactor,
 	disableTwoFactor,
-	regenerateBackupCodes
+	regenerateBackupCodes,
+	verifyTwoFactor
 } from '$lib/server/twoFactor';
 import { verifyPassword } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
@@ -43,8 +44,12 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		const password = String(f.get('password') ?? '');
+		const totpCode = String(f.get('totpCode') ?? '').trim();
 		if (!(await verifyPassword(u.passwordHash, password))) {
 			return fail(401, { error: 'Incorrect password.' });
+		}
+		if (!verifyTwoFactor(u.id, totpCode)) {
+			return fail(401, { error: 'Invalid TOTP code or backup code.' });
 		}
 		disableTwoFactor(u.id);
 		setFlash(cookies, 'Two-factor authentication disabled.');

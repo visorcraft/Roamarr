@@ -14,6 +14,7 @@ export type Settings = {
 	defaultDocumentExpiryLeadDays: number;
 	smtpHost: string | null;
 	smtpPort: number | null;
+	smtpSecurity: string | null;
 	smtpUser: string | null;
 	smtpPass: string | null;
 	smtpFrom: string | null;
@@ -50,6 +51,7 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	defaultDocumentExpiryLeadDays: 'default_document_expiry_lead_days',
 	smtpHost: 'smtp_host',
 	smtpPort: 'smtp_port',
+	smtpSecurity: 'smtp_security',
 	smtpUser: 'smtp_user',
 	smtpPass: 'smtp_pass',
 	smtpFrom: 'smtp_from',
@@ -84,6 +86,7 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		defaultDocumentExpiryLeadDays: Number(row.default_document_expiry_lead_days),
 		smtpHost: nullableText(row.smtp_host),
 		smtpPort: row.smtp_port == null || row.smtp_port === 0n ? null : Number(row.smtp_port),
+		smtpSecurity: nullableText(row.smtp_security),
 		smtpUser: nullableText(row.smtp_user),
 		smtpPass: nullableText(row.smtp_pass),
 		smtpFrom: nullableText(row.smtp_from),

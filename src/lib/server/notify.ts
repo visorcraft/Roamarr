@@ -1,11 +1,10 @@
-import nodemailer from 'nodemailer';
 import { createHmac } from 'node:crypto';
 import { eq as kitEq } from '@mongreldb/kit';
 import { kit } from './db';
 import { users } from './db/mongrelSchema';
 import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
-import { decrypt } from './crypto';
+import { resolveSmtpTransport } from './smtpConfig';
 
 type NotificationMessage = { title: string; body: string; link?: string };
 
@@ -31,19 +30,12 @@ const smtpChannel: Channel = {
 	async send(userId, msg) {
 		const prefs = getUserPreferences(userId);
 		if (!prefs.email) return;
-		const s = getSettings();
-		if (!s.smtpHost || !s.smtpFrom) return;
 		const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
 		if (!u) return;
-		const transport = nodemailer.createTransport({
-			host: s.smtpHost,
-			port: s.smtpPort ?? 587,
-			auth: s.smtpUser
-				? { user: s.smtpUser, pass: s.smtpPass ? decrypt(s.smtpPass) : '' }
-				: undefined
-		});
-		await transport.sendMail({
-			from: s.smtpFrom,
+		const resolved = resolveSmtpTransport(userId);
+		if (!resolved) return;
+		await resolved.transport.sendMail({
+			from: resolved.from,
 			to: u.email,
 			subject: msg.title,
 			text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
@@ -87,18 +79,15 @@ export async function deliver(userId: number, msg: NotificationMessage) {
 	await Promise.all(externalChannels.map((c) => c.send(userId, msg)));
 }
 
-export async function sendMail(to: string, msg: NotificationMessage) {
-	const s = getSettings();
-	if (!s.smtpHost || !s.smtpFrom) return false;
-	const transport = nodemailer.createTransport({
-		host: s.smtpHost,
-		port: s.smtpPort ?? 587,
-		auth: s.smtpUser
-			? { user: s.smtpUser, pass: s.smtpPass ? decrypt(s.smtpPass) : '' }
-			: undefined
-	});
-	await transport.sendMail({
-		from: s.smtpFrom,
+export async function sendMail(
+	to: string,
+	msg: NotificationMessage,
+	userId?: number
+): Promise<boolean> {
+	const resolved = resolveSmtpTransport(userId);
+	if (!resolved) return false;
+	await resolved.transport.sendMail({
+		from: resolved.from,
 		to,
 		subject: msg.title,
 		text: msg.body + (msg.link ? `\n\n${msg.link}` : '')

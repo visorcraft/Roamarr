@@ -298,13 +298,25 @@
 					<input id="smtpHost" name="smtpHost" value={s.smtpHost ?? ''} placeholder="smtp.example.com" class="input" />
 				</div>
 
-				<div class="settings-row">
-					<div>
-						<label class="label" for="smtpPort">Port</label>
-						<p class="field-help">Typically 587 (STARTTLS) or 465 (TLS).</p>
-					</div>
-					<input id="smtpPort" name="smtpPort" type="number" value={s.smtpPort ?? ''} placeholder="587" class="input" />
+			<div class="settings-row">
+				<div>
+					<label class="label" for="smtpPort">Port</label>
+					<p class="field-help">Typically 587 (STARTTLS) or 465 (TLS).</p>
 				</div>
+				<input id="smtpPort" name="smtpPort" type="number" value={s.smtpPort ?? ''} placeholder="587" class="input" />
+			</div>
+
+			<div class="settings-row">
+				<div>
+					<label class="label" for="smtpSecurity">Transport security</label>
+					<p class="field-help">Explicitly select STARTTLS (587) or implicit TLS (465) to match your server.</p>
+				</div>
+				<select id="smtpSecurity" name="smtpSecurity" class="input">
+					<option value="starttls" selected={s.smtpSecurity === 'starttls' || !s.smtpSecurity}>STARTTLS (recommended)</option>
+					<option value="ssl/tls" selected={s.smtpSecurity === 'ssl/tls'}>SSL/TLS (implicit, port 465)</option>
+					<option value="none" selected={s.smtpSecurity === 'none'}>None (plaintext)</option>
+				</select>
+			</div>
 
 				<div class="settings-row">
 					<div>
@@ -362,6 +374,8 @@
 			<h2 class="subsection-title mb-3">Notification channels</h2>
 			<p class="text-sm text-slate-400">Send a test notification to yourself to verify SMTP/webhook configuration.</p>
 			<button class="btn btn-primary mt-4" type="submit" formaction="?/testNotification">Send test notification</button>
+			<p class="text-sm text-slate-400 mt-4">Send only a test email to verify SMTP delivery (bypasses webhooks and in-app).</p>
+			<button class="btn btn-ghost mt-2" type="submit" formaction="?/testEmail">Send test email</button>
 		</div>
 
 		<div class="trip-sidebar-card">

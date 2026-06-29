@@ -23,6 +23,7 @@ export function _saveAdminSettings(
 		defaultDocumentExpiryLeadDays: number;
 		smtpHost?: string;
 		smtpPort?: number;
+		smtpSecurity?: string;
 		smtpUser?: string;
 		smtpPass?: string;
 		smtpFrom?: string;
@@ -48,6 +49,7 @@ export function _saveAdminSettings(
 		defaultDocumentExpiryLeadDays: i.defaultDocumentExpiryLeadDays,
 		smtpHost: i.smtpHost || null,
 		smtpPort: i.smtpPort ?? null,
+		smtpSecurity: i.smtpSecurity || null,
 		smtpUser: i.smtpUser || null,
 		smtpFrom: i.smtpFrom || null,
 		webhookUrl: i.webhookUrl || null,
@@ -90,6 +92,21 @@ export const actions: Actions = {
 		}
 		throw redirect(303, '/settings');
 	},
+	testEmail: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		try {
+			const { sendMail } = await import('$lib/server/notify');
+			const ok = await sendMail(
+				u.email,
+				{ title: 'Roamarr SMTP test', body: 'This is a test email from Roamarr to verify SMTP delivery.' },
+				u.id
+			);
+			setFlash(cookies, ok ? 'Test email sent.' : 'SMTP is not configured.');
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test email' });
+		}
+		throw redirect(303, '/settings');
+	},
 	save: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
@@ -108,6 +125,7 @@ export const actions: Actions = {
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
+			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
 			smtpPass: pass && pass !== '********' ? pass : undefined,
 			smtpFrom: String(f.get('smtpFrom') || '') || undefined,

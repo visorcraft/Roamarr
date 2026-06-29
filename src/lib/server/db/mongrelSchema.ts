@@ -191,6 +191,7 @@ export const settings = table('settings', {
 		int('default_document_expiry_lead_days', { default: staticDefault(90n) }),
 		text('smtp_host', { nullable: true }),
 		int('smtp_port', { nullable: true }),
+		text('smtp_security', { nullable: true }),
 		text('smtp_user', { nullable: true }),
 		text('smtp_pass', { nullable: true }),
 		text('smtp_from', { nullable: true }),
@@ -206,6 +207,28 @@ export const settings = table('settings', {
 		text('maps_tile_api_key', { nullable: true })
 	],
 	primaryKey: 'id'
+});
+
+export const userSmtpOverrides = table('user_smtp_overrides', {
+	columns: [
+		int('user_id', { primaryKey: true }),
+		bool('enabled'),
+		text('host', { nullable: true }),
+		int('port', { nullable: true }),
+		text('security', { nullable: true }),
+		text('username', { nullable: true }),
+		text('password', { nullable: true }),
+		text('from_address', { nullable: true }),
+		timestamp('updated_at', { default: nowDefault() })
+	],
+	primaryKey: 'user_id',
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_user_smtp_overrides_user_id_users', onDelete: 'cascade' }
+		)
+	]
 });
 
 export const geonamesCities = table('geonames_cities', {
@@ -1118,5 +1141,6 @@ export const schema = new Schema([
 	tripEntryRequirements,
 	tripImportantItems,
 	visitedCountries,
-	visitedUsStates
+	visitedUsStates,
+	userSmtpOverrides
 ]);

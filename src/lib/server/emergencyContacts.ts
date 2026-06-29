@@ -106,11 +106,15 @@ export async function shareItineraryWithContact(
 	}
 
 	const link = `${origin}/share/${encodeURIComponent(token)}`;
-	const sent = await sendMail(contact.email.trim(), {
-		title: `Itinerary shared: ${trip.name}`,
-		body: `You have been sent an itinerary for "${trip.name}". Open the link below to view the trip details.`,
-		link
-	});
+	const sent = await sendMail(
+		contact.email.trim(),
+		{
+			title: `Itinerary shared: ${trip.name}`,
+			body: `You have been sent an itinerary for "${trip.name}". Open the link below to view the trip details.`,
+			link
+		},
+		userId
+	);
 
 	logAudit(userId, 'emergency_share', 'trip', tripId, {
 		contactId,

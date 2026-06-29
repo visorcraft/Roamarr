@@ -6,8 +6,8 @@ import { schema } from './mongrelSchema';
 import { openKitDatabase } from './mongrel';
 
 describe('mongrelSchema', () => {
-	test('has 43 tables', () => {
-		expect(schema.tablesList()).toHaveLength(43);
+	test('has 45 tables', () => {
+		expect(schema.tablesList()).toHaveLength(45);
 	});
 
 	test.each([
@@ -53,7 +53,9 @@ describe('mongrelSchema', () => {
 		['trip_home_tasks', ['id']],
 		['trip_medications', ['id']],
 		['trip_entry_requirements', ['id']],
-		['trip_important_items', ['id']]
+		['trip_important_items', ['id']],
+		['visited_countries', ['id']],
+		['visited_us_states', ['id']]
 	] as const)('table %s has primary key %j', (tableName, expectedPk) => {
 		const table = schema.table(tableName);
 		expect(table.primaryKey).toEqual(expectedPk);

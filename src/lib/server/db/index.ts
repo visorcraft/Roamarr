@@ -1,6 +1,6 @@
 import { KitDatabase, migrateSync } from '@mongreldb/kit';
 import { schema } from './mongrelSchema';
-import { migrations } from './mongrelMigrations/0001_initial';
+import { migrations } from './mongrelMigrations';
 import { getDatabasePath } from './paths';
 
 // Backwards-compatible type alias for tests and transitional code that still

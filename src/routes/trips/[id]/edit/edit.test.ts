@@ -111,9 +111,9 @@ test('edit action updates a trip with valid data', async () => {
 	});
 	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.name).toBe('Updated');
-	expect(updated.destination).toBe('');
-	expect(updated.destination_country_code).toBe('');
-	expect(updated.destination_city_name).toBe('');
+	expect(updated.destination).toBeNull();
+	expect(updated.destination_country_code).toBeNull();
+	expect(updated.destination_city_name).toBeNull();
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {

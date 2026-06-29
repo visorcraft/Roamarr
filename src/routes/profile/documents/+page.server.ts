@@ -93,7 +93,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			: kit
 					.selectFrom(tripCompanions)
 					.where(inList(tripCompanions.trip_id, tripIds))
-					.orderBy(asc(tripCompanions.name as any))
+					.orderBy(asc(tripCompanions.column('name')))
 					.executeSync()
 					.map((c) => ({
 						id: Number(c.id),

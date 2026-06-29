@@ -254,7 +254,7 @@ export const trips = table('trips', {
 		text('base_currency', { default: staticDefault('USD') }),
 		text('status', { enumValues: [...TRIP_STATUSES], default: staticDefault('booked') }),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	unique: [],
@@ -311,7 +311,7 @@ export const segments = table('segments', {
 		date('payment_due_date', { nullable: true }),
 		int('card_id', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	indexes: [
@@ -746,7 +746,7 @@ export const tripJournalEntries = table('trip_journal_entries', {
 		text('title'),
 		text('body'),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	indexes: [index(['trip_id'], { name: 'journal_trip_idx' })],
@@ -960,7 +960,7 @@ export const tripMedications = table('trip_medications', {
 		timestamp('ends_at', { nullable: true }),
 		text('notes', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	indexes: [
@@ -987,7 +987,7 @@ export const tripEntryRequirements = table('trip_entry_requirements', {
 		date('due_date', { nullable: true }),
 		text('notes', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	indexes: [index(['trip_id'], { name: 'entry_req_trip_idx' })],
@@ -1010,7 +1010,7 @@ export const tripImportantItems = table('trip_important_items', {
 		text('tracker_id', { nullable: true }),
 		text('notes', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
-		timestamp('updated_at', { default: nowDefault() })
+		timestamp('updated_at', { generated: 'now' })
 	],
 	primaryKey: 'id',
 	indexes: [
@@ -1027,6 +1027,48 @@ export const tripImportantItems = table('trip_important_items', {
 			['companion_id'],
 			{ table: 'trip_companions', columns: ['id'] },
 			{ name: 'fk_trip_important_items_companion_id_trip_companions', onDelete: 'set null' }
+		)
+	]
+});
+
+export const visitedCountries = table('visited_countries', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('visited_countries_id_seq') }),
+		int('user_id'),
+		text('country_code'),
+		date('visited_on', { nullable: true }),
+		text('source', { default: staticDefault('manual') }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['user_id', 'country_code'], { name: 'visited_countries_user_country_uq' })],
+	indexes: [index(['user_id'], { name: 'visited_countries_user_idx' })],
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_visited_countries_user_id_users', onDelete: 'cascade' }
+		)
+	]
+});
+
+export const visitedUsStates = table('visited_us_states', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('visited_us_states_id_seq') }),
+		int('user_id'),
+		text('state_code'),
+		date('visited_on', { nullable: true }),
+		text('source', { default: staticDefault('manual') }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['user_id', 'state_code'], { name: 'visited_us_states_user_state_uq' })],
+	indexes: [index(['user_id'], { name: 'visited_us_states_user_idx' })],
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_visited_us_states_user_id_users', onDelete: 'cascade' }
 		)
 	]
 });
@@ -1074,5 +1116,7 @@ export const schema = new Schema([
 	tripHomeTasks,
 	tripMedications,
 	tripEntryRequirements,
-	tripImportantItems
+	tripImportantItems,
+	visitedCountries,
+	visitedUsStates
 ]);

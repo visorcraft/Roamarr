@@ -1,4 +1,3 @@
-import type { Insert } from '@mongreldb/kit';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,10 +20,9 @@ import {
 	tripExpenses,
 	tripExpenseAttachments,
 	schedulerRuns,
-	settings,
 	schema
 } from '../src/lib/server/db/mongrelSchema';
-import { migrations } from '../src/lib/server/db/mongrelMigrations/0001_initial';
+import { migrations } from '../src/lib/server/db/mongrelMigrations';
 
 let userCounter = 0;
 let tripCounter = 0;
@@ -33,13 +31,9 @@ let tripCounter = 0;
 export function freshDb() {
 	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
 	const kitInstance = KitDatabase.openSync(dir, schema);
+	// The 0001_initial migration seeds the singleton settings row, so there is
+	// no need to insert it here (doing so would now be a duplicate primary key).
 	kitInstance.migrateSync(schema, migrations);
-
-	// Ensure the singleton settings row exists.
-	kitInstance
-		.insertInto(settings)
-		.values({ id: 1n } as Insert<typeof settings>)
-		.executeSync();
 
 	const close = () => {
 		kitInstance.close();

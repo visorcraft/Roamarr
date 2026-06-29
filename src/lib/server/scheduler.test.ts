@@ -43,7 +43,7 @@ test('runTick records a successful run', async () => {
 	const run = kit.selectFrom(schedulerRuns).executeSync()[0];
 	expect(run).not.toBeUndefined();
 	expect(run!.success).toBe(true);
-	expect(run!.error_message).toBe('');
+	expect(run!.error_message).toBeNull();
 	expect(run!.finished_at).not.toBeNull();
 });
 

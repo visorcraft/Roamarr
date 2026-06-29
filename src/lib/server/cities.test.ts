@@ -61,4 +61,5 @@ test('citiesForGlobe adds cities near the focus point even when not top-populati
 	]);
 	const ids = new Set(citiesForGlobe({ lat: 35.7, lng: 139.7 }).map((c) => c.id));
 	expect(ids.has(5)).toBe(true);
-});
+	// 1100 single inserts is a large stress-test setup; allow extra time.
+}, 30000);

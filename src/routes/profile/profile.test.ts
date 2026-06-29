@@ -361,7 +361,7 @@ test('regenerate user calendar token mints a new token and audits', () => {
 
 	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
 	expect(row.calendar_token).toBe(token);
-	expect(row.calendar_token_expires_at).toBe('');
+	expect(row.calendar_token_expires_at).toBeNull();
 
 	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
 	expect(logs).toHaveLength(1);

@@ -3,6 +3,7 @@ import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { verifyPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
+import { isTwoFactorEnabled, createPendingCookie } from '$lib/server/twoFactor';
 
 export async function _authenticate(email: string, password: string) {
 	const u = usersRepo.getUserByEmail(normalizeEmail(email));
@@ -31,6 +32,18 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const u = await _authenticate(String(f.get('email') ?? ''), String(f.get('password') ?? ''));
 		if (!u) return fail(401, { error: 'Invalid email or password.' });
+
+		if (isTwoFactorEnabled(u.id)) {
+			const pending = createPendingCookie(u.id);
+			cookies.set('tfa_pending', pending.value, {
+				path: '/',
+				httpOnly: true,
+				sameSite: 'lax',
+				maxAge: pending.maxAge
+			});
+			throw redirect(303, '/login/verify');
+		}
+
 		const ip = getClientAddress();
 		const ua = request.headers.get('user-agent') ?? undefined;
 		cookies.set('session', createSession(u.id, ip, ua), sessionCookieOptions());

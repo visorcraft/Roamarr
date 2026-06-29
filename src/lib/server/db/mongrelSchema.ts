@@ -209,6 +209,43 @@ export const settings = table('settings', {
 	primaryKey: 'id'
 });
 
+export const userTwoFactor = table('user_two_factor', {
+	columns: [
+		int('user_id', { primaryKey: true }),
+		text('secret_encrypted'),
+		bool('enabled', { default: staticDefault(false) }),
+		timestamp('enabled_at', { nullable: true }),
+		int('backup_codes_count', { default: staticDefault(0n) })
+	],
+	primaryKey: 'user_id',
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_user_two_factor_user_id_users', onDelete: 'cascade' }
+		)
+	]
+});
+
+export const twoFactorBackupCodes = table('two_factor_backup_codes', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('two_factor_backup_codes_id_seq') }),
+		int('user_id'),
+		text('code_hash'),
+		timestamp('used_at', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['user_id', 'code_hash'], { name: 'two_factor_backup_codes_user_hash_uq' })],
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_two_factor_backup_codes_user_id_users', onDelete: 'cascade' }
+		)
+	]
+});
+
 export const userSmtpOverrides = table('user_smtp_overrides', {
 	columns: [
 		int('user_id', { primaryKey: true }),
@@ -1156,5 +1193,7 @@ export const schema = new Schema([
 	visitedCountries,
 	visitedUsStates,
 	userSmtpOverrides,
-	weatherCache
+	weatherCache,
+	userTwoFactor,
+	twoFactorBackupCodes
 ]);

@@ -1,0 +1,37 @@
+import { fail, redirect, type Actions } from '@sveltejs/kit';
+import { createSession, sessionCookieOptions } from '$lib/server/auth';
+import { checkRateLimit } from '$lib/server/rateLimit';
+import { verifyPendingCookie, verifyTwoFactor } from '$lib/server/twoFactor';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = ({ cookies }) => {
+	const pending = verifyPendingCookie(cookies.get('tfa_pending'));
+	if (!pending) throw redirect(303, '/login');
+	return {};
+};
+
+export const actions: Actions = {
+	default: async ({ request, cookies, getClientAddress }) => {
+		const limit = checkRateLimit(getClientAddress(), 'tfa');
+		if (!limit.allowed)
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+
+		const pending = verifyPendingCookie(cookies.get('tfa_pending'));
+		if (!pending) throw redirect(303, '/login');
+
+		const f = await request.formData();
+		const code = String(f.get('code') ?? '').trim();
+
+		if (!code) return fail(400, { error: 'Enter your 6-digit code or a backup code.' });
+
+		if (!verifyTwoFactor(pending.userId, code)) {
+			return fail(401, { error: 'Invalid code. Try again.' });
+		}
+
+		cookies.delete('tfa_pending', { path: '/' });
+		const ip = getClientAddress();
+		const ua = request.headers.get('user-agent') ?? undefined;
+		cookies.set('session', createSession(pending.userId, ip, ua), sessionCookieOptions());
+		throw redirect(303, '/');
+	}
+};

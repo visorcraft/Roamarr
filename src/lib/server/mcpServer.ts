@@ -5,9 +5,11 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
-import { requireOwnedTrip } from './ownership';
+import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { listVisited, markVisited } from './visitedPlaces';
 import { buildTripDetail } from './tripDetail';
+import { addItem as addChecklistItem } from './tripChecklists';
+import { setBudget } from './tripBudgets';
 import { logAudit } from './audit';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
@@ -62,6 +64,66 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' }
 					},
 					required: ['name']
+				}
+			},
+			{
+				name: 'roamarr_trip_update',
+				description: 'Update an existing trip (name, destination, dates, etc.).',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						name: { type: 'string' },
+						destination: { type: 'string' },
+						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
+						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
+						status: { type: 'string', enum: ['booked', 'active', 'completed', 'cancelled'] }
+					},
+					required: ['tripId']
+				}
+			},
+			{
+				name: 'roamarr_day_plan',
+				description: 'Plan a day: create a segment (event, lodging, transport, etc.) for a specific trip on a given date.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						type: { type: 'string', description: 'Segment type: flight, hotel, event, restaurant, etc.' },
+						title: { type: 'string' },
+						startAt: { type: 'string', description: 'ISO timestamp' },
+						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
+						cityName: { type: 'string' },
+						countryCode: { type: 'string' },
+						notes: { type: 'string' }
+					},
+					required: ['tripId', 'type', 'title', 'startAt']
+				}
+			},
+			{
+				name: 'roamarr_packing_item_add',
+				description: 'Add an item to a trip\u2019s packing checklist.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						text: { type: 'string', description: 'Item description, e.g. "Passport" or "Sunscreen"' }
+					},
+					required: ['tripId', 'text']
+				}
+			},
+			{
+				name: 'roamarr_budget_set',
+				description: 'Set or update a budget category amount for a trip.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						category: { type: 'string', description: 'Budget category (e.g. lodging, transport, food, activities, other)' },
+						amount: { type: 'number', description: 'Budget amount' },
+						currency: { type: 'string', description: 'ISO currency code, default USD' }
+					},
+					required: ['tripId', 'category', 'amount']
 				}
 			},
 			{
@@ -135,6 +197,56 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				});
 				logAudit(userId, 'mcp_trip_create', 'trip', trip.id, { name: trip.name });
 				return textResult({ id: trip.id, name: trip.name });
+			}
+			case 'roamarr_trip_update': {
+				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const tripId = Number(args.tripId);
+				requireOwnedTrip(userId, tripId);
+				const updated = tripsRepo.updateTrip(tripId, {
+					name: args.name as string | undefined,
+					destination: args.destination as string | undefined,
+					startDate: args.startDate as string | undefined,
+					endDate: args.endDate as string | undefined,
+					status: args.status as any | undefined
+				});
+				if (!updated) return textResult({ error: 'Trip not found' });
+				logAudit(userId, 'mcp_trip_update', 'trip', tripId, {});
+				return textResult({ id: updated.id, name: updated.name, status: updated.status });
+			}
+			case 'roamarr_day_plan': {
+				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const tripId = Number(args.tripId);
+				requireEditableTrip(userId, tripId);
+				const { createSegment } = await import('./repositories/segmentsRepo');
+				const seg = createSegment({
+					trip_id: BigInt(tripId),
+					type: String(args.type ?? 'event'),
+					title: String(args.title ?? ''),
+					start_at: String(args.startAt ?? ''),
+					end_at: (args.endAt as string) || null,
+					city_name: (args.cityName as string) || null,
+					country_code: (args.countryCode as string) || null,
+					notes: (args.notes as string) || null
+				} as any);
+				logAudit(userId, 'mcp_day_plan', 'segment', Number(seg.id), { tripId });
+				return textResult({ id: Number(seg.id), tripId, type: args.type, title: args.title });
+			}
+			case 'roamarr_packing_item_add': {
+				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
+				const tripId = Number(args.tripId);
+				const item = addChecklistItem(userId, tripId, String(args.text ?? ''));
+				logAudit(userId, 'mcp_packing_add', 'trip_checklist_item', Number(item.id), { tripId });
+				return textResult({ id: Number(item.id), tripId, text: item.text });
+			}
+			case 'roamarr_budget_set': {
+				if (!hasScope(scopes, 'budgets:write')) return scopeError('budgets:write');
+				const tripId = Number(args.tripId);
+				requireEditableTrip(userId, tripId);
+				setBudget(tripId, args.category as any, Number(args.amount), (args.currency as string) || 'USD');
+				logAudit(userId, 'mcp_budget_set', 'trip_budget_category', tripId, {
+					category: args.category, amount: args.amount
+				});
+				return textResult({ ok: true, tripId, category: args.category, amount: args.amount });
 			}
 			case 'roamarr_upcoming_summary': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');

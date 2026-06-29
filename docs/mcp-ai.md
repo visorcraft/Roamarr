@@ -57,7 +57,11 @@ automation bundle is all write scopes plus the reads.
 | `roamarr_trip_list` | `trips:read` | List all trips. |
 | `roamarr_trip_get` | `trips:read` | Get details of a specific trip. |
 | `roamarr_trip_create` | `trips:write` | Create a new trip. |
+| `roamarr_trip_update` | `trips:write` | Update an existing trip. |
+| `roamarr_day_plan` | `trips:write` | Create a segment (flight, hotel, event) for a trip. |
 | `roamarr_upcoming_summary` | `trips:read` | Get a summary of upcoming trips. |
+| `roamarr_packing_item_add` | `packing:write` | Add an item to a trip's packing checklist. |
+| `roamarr_budget_set` | `budgets:write` | Set or update a budget category for a trip. |
 | `roamarr_places_list` | `places:write` | List visited countries and states. |
 | `roamarr_places_mark` | `places:write` | Mark a country or state as visited. |
 | `roamarr_reminder_add` | `reminders:write` | Add a reminder to a trip. |

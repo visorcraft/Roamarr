@@ -30,9 +30,16 @@
 			&middot; {visitedStateCodes.size} of {US_STATES.length} U.S. states
 		</p>
 	</div>
-	<form method="POST" action="?/autoMark" class="ml-auto">
-		<button class="btn btn-ghost">Mark from past trips</button>
-	</form>
+	<div class="ml-auto flex items-center gap-4">
+		<form method="POST" action="?/toggleAutoMark">
+			<button class="btn btn-ghost btn-sm {data.autoMarkVisited ? 'text-indigo-400' : ''}">
+				Auto-mark: {data.autoMarkVisited ? 'ON' : 'OFF'}
+			</button>
+		</form>
+		<form method="POST" action="?/autoMark">
+			<button class="btn btn-ghost">Mark from past trips</button>
+		</form>
+	</div>
 </header>
 
 <div class="mt-4 inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-600">

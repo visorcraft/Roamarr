@@ -9,11 +9,15 @@ import {
 	autoMarkCountriesFromAllTrips
 } from '$lib/server/visitedPlaces';
 import type { PlaceKind } from '$lib/server/visitedPlaces';
+import * as usersRepo from '$lib/server/repositories/usersRepo';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	return listVisited(u.id);
+	if (u.autoMarkVisited) {
+		autoMarkCountriesFromAllTrips(u.id);
+	}
+	return { ...listVisited(u.id), autoMarkVisited: u.autoMarkVisited };
 };
 
 function parseKind(value: string | null): PlaceKind {
@@ -64,6 +68,13 @@ export const actions: Actions = {
 			cookies,
 			`Cleared ${n} ${kind === 'state' ? 'state' : 'countr'}${n === 1 ? 'y' : 'ies'}.`
 		);
+		throw redirect(303, '/profile/visited');
+	},
+	toggleAutoMark: async ({ locals, cookies }) => {
+		const u = requireUser(locals);
+		const newValue = !u.autoMarkVisited;
+		usersRepo.updateUser(u.id, { auto_mark_visited: newValue } as any);
+		setFlash(cookies, newValue ? 'Auto-mark enabled.' : 'Auto-mark disabled.');
 		throw redirect(303, '/profile/visited');
 	}
 };

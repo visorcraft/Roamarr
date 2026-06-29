@@ -122,6 +122,7 @@ export const users = table('users', {
 		int('document_expiry_lead_days', { default: staticDefault(90n) }),
 		bool('email_notifications', { default: staticDefault(true) }),
 		bool('webhook_notifications', { default: staticDefault(true) }),
+		bool('auto_mark_visited', { default: staticDefault(false) }),
 		text('theme_id', { default: staticDefault('midnight-travels') }),
 		text('default_currency', { default: staticDefault('USD') }),
 		text('calendar_token', { nullable: true }),

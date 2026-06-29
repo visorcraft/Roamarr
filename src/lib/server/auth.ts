@@ -23,6 +23,7 @@ export interface AppUser {
 	documentExpiryLeadDays: number;
 	emailNotifications: boolean;
 	webhookNotifications: boolean;
+	autoMarkVisited: boolean;
 	themeId: string | null;
 	defaultCurrency: string | null;
 	calendarToken: string | null;
@@ -44,6 +45,7 @@ function toAppUser(u: KitUser): AppUser {
 		documentExpiryLeadDays: Number(u.document_expiry_lead_days),
 		emailNotifications: u.email_notifications,
 		webhookNotifications: u.webhook_notifications,
+		autoMarkVisited: u.auto_mark_visited,
 		themeId: u.theme_id,
 		defaultCurrency: u.default_currency,
 		calendarToken: u.calendar_token,

@@ -139,6 +139,12 @@ itinerary, and what should happen if plans change.
 
 ## Setup
 
+### Documentation
+
+Comprehensive user docs live in [`docs/`](./docs/README.md) — covering trips,
+sharing, expenses, 2FA, passkeys, weather, per-user SMTP, and MCP/AI
+integration.
+
 ### Requirements
 
 - Node.js 22.12 or newer.

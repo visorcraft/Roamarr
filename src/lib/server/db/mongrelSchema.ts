@@ -271,19 +271,6 @@ export const passkeys = table('passkeys', {
 	]
 });
 
-export const webauthnChallenges = table('webauthn_challenges', {
-	columns: [
-		int('id', { primaryKey: true, default: sequenceDefault('webauthn_challenges_id_seq') }),
-		text('challenge_hash'),
-		int('user_id', { nullable: true }),
-		text('purpose'),
-		timestamp('expires_at')
-	],
-	primaryKey: 'id',
-	unique: [unique(['challenge_hash'], { name: 'webauthn_challenges_hash_uq' })],
-	indexes: [index(['expires_at'], { name: 'webauthn_challenges_expires_idx' })]
-});
-
 export const userSmtpOverrides = table('user_smtp_overrides', {
 	columns: [
 		int('user_id', { primaryKey: true }),
@@ -303,6 +290,72 @@ export const userSmtpOverrides = table('user_smtp_overrides', {
 			{ table: 'users', columns: ['id'] },
 			{ name: 'fk_user_smtp_overrides_user_id_users', onDelete: 'cascade' }
 		)
+	]
+});
+
+export const webauthnChallenges = table('webauthn_challenges', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('webauthn_challenges_id_seq') }),
+		text('challenge_hash'),
+		int('user_id', { nullable: true }),
+		text('purpose'),
+		timestamp('expires_at')
+	],
+	primaryKey: 'id',
+	unique: [unique(['challenge_hash'], { name: 'webauthn_challenges_hash_uq' })],
+	indexes: [index(['expires_at'], { name: 'webauthn_challenges_expires_idx' })]
+});
+
+export const oauthClients = table('oauth_clients', {
+	columns: [
+		text('client_id', { primaryKey: true }),
+		text('client_name'),
+		text('client_secret_hash', { nullable: true }),
+		text('redirect_uris'),
+		text('scopes'),
+		timestamp('created_at', { default: nowDefault() }),
+		int('created_by_user_id', { nullable: true })
+	],
+	primaryKey: 'client_id'
+});
+
+export const oauthCodes = table('oauth_codes', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('oauth_codes_id_seq') }),
+		text('code_hash'),
+		text('client_id'),
+		int('user_id'),
+		text('scopes'),
+		text('code_challenge'),
+		text('code_challenge_method'),
+		text('redirect_uri'),
+		timestamp('expires_at'),
+		timestamp('used_at', { nullable: true })
+	],
+	primaryKey: 'id',
+	unique: [unique(['code_hash'], { name: 'oauth_codes_hash_uq' })],
+	indexes: [index(['expires_at'], { name: 'oauth_codes_expires_idx' })]
+});
+
+export const oauthTokens = table('oauth_tokens', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('oauth_tokens_id_seq') }),
+		text('access_token_hash'),
+		text('refresh_token_hash', { nullable: true }),
+		text('client_id'),
+		int('user_id'),
+		text('scopes'),
+		timestamp('expires_at'),
+		timestamp('refresh_expires_at', { nullable: true }),
+		timestamp('revoked_at', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('last_used_at', { nullable: true })
+	],
+	primaryKey: 'id',
+	unique: [unique(['access_token_hash'], { name: 'oauth_tokens_access_hash_uq' })],
+	indexes: [
+		index(['refresh_token_hash'], { name: 'oauth_tokens_refresh_hash_idx' }),
+		index(['user_id'], { name: 'oauth_tokens_user_idx' })
 	]
 });
 
@@ -1235,5 +1288,8 @@ export const schema = new Schema([
 	userTwoFactor,
 	twoFactorBackupCodes,
 	passkeys,
-	webauthnChallenges
+	webauthnChallenges,
+	oauthClients,
+	oauthCodes,
+	oauthTokens
 ]);

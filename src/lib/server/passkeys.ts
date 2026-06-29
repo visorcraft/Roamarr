@@ -5,7 +5,7 @@ import {
 	verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq, lt as kitLt } from '@mongreldb/kit';
 import { kit } from './db';
 import { passkeys, webauthnChallenges } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
@@ -101,7 +101,7 @@ export function purgeExpiredChallenges(): number {
 	const now = new Date().toISOString();
 	const n = kit
 		.deleteFrom(webauthnChallenges)
-		.where(kitEq(webauthnChallenges.expires_at, now))
+		.where(kitLt(webauthnChallenges.expires_at, now))
 		.executeSync();
 	return Number(n);
 }

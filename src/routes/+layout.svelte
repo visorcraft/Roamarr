@@ -135,6 +135,7 @@
 		{ href: '/profile/documents', label: 'Documents', icon: 'document' },
 		{ href: '/profile/reminders', label: 'Reminders', icon: 'reminder' },
 		{ href: '/profile/loyalty', label: 'Loyalty', icon: 'loyalty' },
+		{ href: '/profile/visited', label: 'Visited', icon: 'location' },
 		{ href: '/cards', label: 'Cards', icon: 'card' },
 		{ href: '/insurance', label: 'Insurance', icon: 'insurance' },
 		{ href: '/groups', label: 'Groups', icon: 'group' },

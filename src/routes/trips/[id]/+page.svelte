@@ -515,12 +515,20 @@
 												<span>{trip.favorite ? 'Favorited' : 'Favorite'}</span>
 											</button>
 										</form>
-										<form method="POST" action="?/toggleArchive">
+									<form method="POST" action="?/toggleArchive">
+										<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+											<Icon name="archive" class="h-4.5 w-4.5" />
+											<span>{trip.archived ? 'Unarchive' : 'Archive'}</span>
+										</button>
+									</form>
+									{#if data.owner === true}
+										<form method="POST" action="?/markVisitedPlaces">
 											<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
-												<Icon name="archive" class="h-4.5 w-4.5" />
-												<span>{trip.archived ? 'Unarchive' : 'Archive'}</span>
+												<Icon name="location" class="h-4.5 w-4.5" />
+												<span>Mark places visited</span>
 											</button>
 										</form>
+									{/if}
 										<a href={`/trips/${trip.id}/share`} class="app-user-menu-item">
 											<Icon name="share" class="h-4.5 w-4.5" />
 											<span>Share</span>

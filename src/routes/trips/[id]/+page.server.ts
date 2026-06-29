@@ -50,7 +50,8 @@ import {
 	deleteCommentAction,
 	shareItineraryWithContactAction,
 	addAttachmentAction,
-	saveTripTemplateAction
+	saveTripTemplateAction,
+	markVisitedPlacesAction
 } from '$lib/server/tripMetaActions';
 import type { Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -99,6 +100,7 @@ export const actions: Actions = {
 	shareItineraryWithContact: shareItineraryWithContactAction,
 	addAttachment: addAttachmentAction,
 	saveTripTemplate: saveTripTemplateAction,
+	markVisitedPlaces: markVisitedPlacesAction,
 	addHomeTask: addHomeTaskAction,
 	toggleHomeTask: toggleHomeTaskAction,
 	deleteHomeTask: deleteHomeTaskAction,

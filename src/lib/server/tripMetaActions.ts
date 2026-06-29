@@ -14,6 +14,8 @@ import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
 import { saveTripTemplate } from './tripTemplates';
+import { autoMarkCountriesFromTrip } from './visitedPlaces';
+import { setFlash } from './flash';
 import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
 
@@ -164,5 +166,17 @@ export async function saveTripTemplateAction(event: RequestEvent) {
 	const name = String(formData.get('name') || '').trim();
 	if (!name) throw error(400, 'Template name is required');
 	saveTripTemplate(user.id, tripId, name);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function markVisitedPlacesAction(event: RequestEvent) {
+	const { user, tripId } = await withTripAction(event);
+	const added = autoMarkCountriesFromTrip(user.id, tripId);
+	setFlash(
+		event.cookies,
+		added.length > 0
+			? `Marked ${added.length} countr${added.length === 1 ? 'y' : 'ies'} visited from this trip.`
+			: 'No new countries to mark from this trip.'
+	);
 	throw redirect(303, `/trips/${tripId}`);
 }

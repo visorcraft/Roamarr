@@ -4,6 +4,7 @@ import { migrations as migrations0002 } from './0002_visited_places';
 import { migrations as migrations0003 } from './0003_smtp_security_and_override';
 import { migrations as migrations0004 } from './0004_weather';
 import { migrations as migrations0005 } from './0005_two_factor';
+import { migrations as migrations0006 } from './0006_passkeys';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -13,5 +14,6 @@ export const migrations: Migration[] = [
 	...migrations0002,
 	...migrations0003,
 	...migrations0004,
-	...migrations0005
+	...migrations0005,
+	...migrations0006
 ];

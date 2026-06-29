@@ -7,7 +7,7 @@ import { openKitDatabase } from './mongrel';
 
 describe('mongrelSchema', () => {
 	test('has 45 tables', () => {
-		expect(schema.tablesList()).toHaveLength(49);
+		expect(schema.tablesList()).toHaveLength(51);
 	});
 
 	test.each([

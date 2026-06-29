@@ -246,6 +246,44 @@ export const twoFactorBackupCodes = table('two_factor_backup_codes', {
 	]
 });
 
+export const passkeys = table('passkeys', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('passkeys_id_seq') }),
+		int('user_id'),
+		text('credential_id'),
+		text('public_key'),
+		int('counter', { default: staticDefault(0n) }),
+		text('transports', { nullable: true }),
+		text('device_type', { nullable: true }),
+		text('name', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('last_used_at', { nullable: true })
+	],
+	primaryKey: 'id',
+	unique: [unique(['credential_id'], { name: 'passkeys_credential_id_uq' })],
+	indexes: [index(['user_id'], { name: 'passkeys_user_idx' })],
+	foreignKeys: [
+		foreignKey(
+			['user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_passkeys_user_id_users', onDelete: 'cascade' }
+		)
+	]
+});
+
+export const webauthnChallenges = table('webauthn_challenges', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('webauthn_challenges_id_seq') }),
+		text('challenge_hash'),
+		int('user_id', { nullable: true }),
+		text('purpose'),
+		timestamp('expires_at')
+	],
+	primaryKey: 'id',
+	unique: [unique(['challenge_hash'], { name: 'webauthn_challenges_hash_uq' })],
+	indexes: [index(['expires_at'], { name: 'webauthn_challenges_expires_idx' })]
+});
+
 export const userSmtpOverrides = table('user_smtp_overrides', {
 	columns: [
 		int('user_id', { primaryKey: true }),
@@ -1195,5 +1233,7 @@ export const schema = new Schema([
 	userSmtpOverrides,
 	weatherCache,
 	userTwoFactor,
-	twoFactorBackupCodes
+	twoFactorBackupCodes,
+	passkeys,
+	webauthnChallenges
 ]);

@@ -82,3 +82,9 @@
 		<a href="/profile/security?setup=1" class="btn btn-primary mt-3 inline-block">Set up 2FA</a>
 	{/if}
 </section>
+
+<section class="card mt-6 p-5">
+	<h2 class="section-title mb-3">Passkeys</h2>
+	<p class="meta">Sign in passwordlessly with a passkey (Face ID, Touch ID, security key).</p>
+	<a href="/profile/security/passkeys" class="btn btn-ghost mt-3 inline-block">Manage passkeys</a>
+</section>

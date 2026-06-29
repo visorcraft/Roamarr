@@ -13,7 +13,7 @@ import type { ToastVariant } from '$lib/toast';
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
 
-const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/health$/];
+const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/health$/];
 
 function contentSecurityPolicy() {
 	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,

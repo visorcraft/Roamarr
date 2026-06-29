@@ -4,6 +4,32 @@
 
 	let { data, form } = $props();
 	let submitting = $state(false);
+	let passkeyBusy = $state(false);
+	let passkeyError = $state('');
+
+	async function signInWithPasskey() {
+		passkeyError = '';
+		try {
+			passkeyBusy = true;
+			const opts = await fetch('/api/webauthn/auth/options', { method: 'POST' }).then((r) => r.json());
+			const credential = await navigator.credentials.get({ publicKey: opts });
+			const res = await fetch('/api/webauthn/auth/verify', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(credential)
+			});
+			if (res.ok) {
+				window.location.href = '/';
+			} else {
+				const body = await res.json();
+				passkeyError = body.message || 'Passkey sign-in failed';
+			}
+		} catch (e) {
+			passkeyError = '';
+		} finally {
+			passkeyBusy = false;
+		}
+	}
 </script>
 
 <div class="card w-full max-w-md p-7 sm:p-8">
@@ -20,6 +46,14 @@
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Sign in</button>
 		</div>
 	</form>
+
+	{#if passkeyError}<p class="notice notice-error mt-3">{passkeyError}</p>{/if}
+
+	<div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+		<button class="btn btn-ghost w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
+			{passkeyBusy ? 'Waiting…' : 'Sign in with a passkey'}
+		</button>
+	</div>
 
 	{#if data.allowRegistration}
 		<p class="mt-5 text-center text-sm text-muted">

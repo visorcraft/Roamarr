@@ -62,9 +62,12 @@ function toKitGeonamesCityInput(row: GeonamesCityRow): Insert<typeof geonamesCit
 
 export function importCitiesBatch(cities: GeonamesCityRow[]): number {
 	kit.deleteFrom(geonamesCities).executeSync();
-	for (const city of cities) {
-		kit.insertInto(geonamesCities).values(toKitGeonamesCityInput(city) as Insert<typeof geonamesCities>).executeSync();
-	}
+	if (cities.length === 0) return 0;
+	// One transaction for the whole batch — far faster than a row-at-a-time loop.
+	kit
+		.insertInto(geonamesCities)
+		.valuesMany(cities.map((city) => toKitGeonamesCityInput(city) as Insert<typeof geonamesCities>))
+		.executeSync();
 	return cities.length;
 }
 

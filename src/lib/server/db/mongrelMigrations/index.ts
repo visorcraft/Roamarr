@@ -2,6 +2,7 @@ import type { Migration } from '@mongreldb/kit';
 import { migrations as migrations0001 } from './0001_initial';
 import { migrations as migrations0002 } from './0002_visited_places';
 import { migrations as migrations0003 } from './0003_smtp_security_and_override';
+import { migrations as migrations0004 } from './0004_weather';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -9,5 +10,6 @@ import { migrations as migrations0003 } from './0003_smtp_security_and_override'
 export const migrations: Migration[] = [
 	...migrations0001,
 	...migrations0002,
-	...migrations0003
+	...migrations0003,
+	...migrations0004
 ];

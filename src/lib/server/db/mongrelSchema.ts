@@ -231,6 +231,19 @@ export const userSmtpOverrides = table('user_smtp_overrides', {
 	]
 });
 
+export const weatherCache = table('weather_cache', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('weather_cache_id_seq') }),
+		text('location_key'),
+		date('for_date'),
+		timestamp('fetched_at'),
+		text('payload_json')
+	],
+	primaryKey: 'id',
+	unique: [unique(['location_key', 'for_date'], { name: 'weather_cache_key_date_uq' })],
+	indexes: [index(['fetched_at'], { name: 'weather_cache_fetched_idx' })]
+});
+
 export const geonamesCities = table('geonames_cities', {
 	columns: [
 		int('geoname_id', { primaryKey: true }),
@@ -1142,5 +1155,6 @@ export const schema = new Schema([
 	tripImportantItems,
 	visitedCountries,
 	visitedUsStates,
-	userSmtpOverrides
+	userSmtpOverrides,
+	weatherCache
 ]);

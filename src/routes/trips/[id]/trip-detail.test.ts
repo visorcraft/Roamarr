@@ -59,18 +59,18 @@ function formEvent(user: { id: number }, tripId: number, body: FormData) {
 	} as any;
 }
 
-test('load includes fare watches with segment titles', () => {
+test('load includes fare watches with segment titles', async () => {
 	const u = makeUser(kit, { email: 'td-fw@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	makeFareProvider(kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
 	kit.insertInto(insurancePolicies).values({ user_id: BigInt(u.id), provider: 'X', trip_id: BigInt(t.id) }).executeSync();
 
-	const result = load(event(u, t.id)) as { watches: unknown[] };
+	const result = await load(event(u, t.id)) as { watches: unknown[] };
 	expect(Array.isArray(result.watches)).toBe(true);
 });
 
 
-test('load includes attached insurance policies and user cards for the owner', () => {
+test('load includes attached insurance policies and user cards for the owner', async () => {
 	const u = makeUser(kit, { email: 'td@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	makeFareProvider(kit, u.id, { providerKey: 'stub', label: 'Stub', enabled: true });
@@ -81,7 +81,7 @@ test('load includes attached insurance policies and user cards for the owner', (
 		tripId: t.id
 	});
 
-	const result = load(event(u, t.id)) as {
+	const result = await load(event(u, t.id)) as {
 		policies: { provider: string; policyNumber: string }[];
 		availablePolicies: { provider: string }[];
 		cards: unknown[];
@@ -92,14 +92,14 @@ test('load includes attached insurance policies and user cards for the owner', (
 	expect(Array.isArray(result.cards)).toBe(true);
 });
 
-test('load separates available unattached policies from attached policies', () => {
+test('load separates available unattached policies from attached policies', async () => {
 	const u = makeUser(kit, { email: 'td2@x.c', passwordHash: 'x', displayName: 'U' });
 	const t1 = makeTrip(kit, u.id, { name: 'T1' });
 	const t2 = makeTrip(kit, u.id, { name: 'T2' });
 	makeInsurancePolicy(kit, u.id, { provider: 'Attached', tripId: t1.id });
 	makeInsurancePolicy(kit, u.id, { provider: 'Free', tripId: t2.id });
 
-	const result = load(event(u, t1.id)) as {
+	const result = await load(event(u, t1.id)) as {
 		policies: { provider: string }[];
 		availablePolicies: { provider: string }[];
 	};
@@ -269,7 +269,7 @@ test('duplicateSegment action rejects a non-editor', async () => {
 	});
 });
 
-test('load strips companion notes from shared viewers', () => {
+test('load strips companion notes from shared viewers', async () => {
 	const owner = makeUser(kit, { email: 'co@x.c', passwordHash: 'x', displayName: 'O' });
 	const reader = makeUser(kit, { email: 'cr@x.c', passwordHash: 'x', displayName: 'R' });
 	const t = makeTrip(kit, owner.id, { name: 'T' });
@@ -283,7 +283,7 @@ test('load strips companion notes from shared viewers', () => {
 	});
 	makeShare(kit, { tripId: t.id, sharedWithUserId: reader.id });
 
-	const result = load(event(reader, t.id)) as { companions: { name: string; dietary: string | null; allergies: string | null; medicalNotes: string | null; notes: string | null }[] };
+	const result = await load(event(reader, t.id)) as { companions: { name: string; dietary: string | null; allergies: string | null; medicalNotes: string | null; notes: string | null }[] };
 	expect(result.companions).toHaveLength(1);
 	expect(result.companions[0].name).toBe('Sam');
 	expect(result.companions[0].dietary).toBeNull();

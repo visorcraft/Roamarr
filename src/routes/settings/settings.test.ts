@@ -6,14 +6,19 @@ vi.mock('$lib/server/db', async () => {
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+vi.mock('$lib/server/notify', () => ({
+	sendMail: vi.fn(async () => true),
+	deliver: vi.fn(async () => undefined)
+}));
 
 import { _saveAdminSettings as saveAdminSettings, actions, load } from './+page.server';
 import { getMapSettings, updateSettings, getSettings } from '$lib/server/settings';
-import { users, auditLogs } from '$lib/server/db/mongrelSchema';
+import { users, auditLogs, settings } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
 import { eq } from '@mongreldb/kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
 function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'user') {
 	return usersRepo.createUser({
@@ -27,7 +32,9 @@ function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'us
 }
 
 beforeEach(() => {
+	resetRateLimit();
 	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	kit.deleteFrom(settings).executeSync();
 	kit.deleteFrom(auditLogs).executeSync();
 	kit.deleteFrom(users).executeSync();
 });
@@ -190,4 +197,32 @@ test('map tile API key is encrypted at rest and decrypts for tile config', () =>
 	const config = resolveTileConfig();
 	expect(config?.apiKey).toBe('secret-tile-key');
 	expect(getMapSettings().mapsTileApiKey).toBe('********');
+});
+
+test('smtpSecurity round-trips', () => {
+	const u = makeUser('smtpsec@x.c');
+	saveAdminSettings(Number(u.id), {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90,
+		smtpSecurity: 'ssl/tls'
+	});
+	expect(getSettings().smtpSecurity).toBe('ssl/tls');
+});
+
+test('testEmail action returns 429 when rate limited', async () => {
+	const ip = '9.9.9.9';
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit(ip, 'settings_test_email');
+	const u = makeUser('rl@x.c', 'Admin', 'admin');
+	const result = (await actions.testEmail({
+		locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+		cookies: { set: vi.fn() },
+		getClientAddress: () => ip
+	} as any)) as { status: number; data: { error: string; retryAfter?: number } };
+	expect(result.status).toBe(429);
+	expect(result.data.error).toMatch(/too many/i);
+	expect(result.data.retryAfter).toBeGreaterThan(0);
 });

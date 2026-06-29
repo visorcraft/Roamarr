@@ -64,6 +64,9 @@ const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as con
 const SEGMENT_ATTENDEE_STATUSES = ['going', 'maybe', 'not_going'] as const;
 const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
+const SMTP_SECURITY_MODES = ['none', 'starttls', 'ssl/tls'] as const;
+const WEBAUTHN_CHALLENGE_PURPOSES = ['register', 'auth'] as const;
+const OAUTH_CODE_CHALLENGE_METHODS = ['S256'] as const;
 
 export {
 	ROLES,
@@ -192,7 +195,7 @@ export const settings = table('settings', {
 		int('default_document_expiry_lead_days', { default: staticDefault(90n) }),
 		text('smtp_host', { nullable: true }),
 		int('smtp_port', { nullable: true }),
-		text('smtp_security', { nullable: true }),
+		text('smtp_security', { enumValues: [...SMTP_SECURITY_MODES], nullable: true }),
 		text('smtp_user', { nullable: true }),
 		text('smtp_pass', { nullable: true }),
 		text('smtp_from', { nullable: true }),
@@ -278,7 +281,7 @@ export const userSmtpOverrides = table('user_smtp_overrides', {
 		bool('enabled'),
 		text('host', { nullable: true }),
 		int('port', { nullable: true }),
-		text('security', { nullable: true }),
+		text('security', { enumValues: [...SMTP_SECURITY_MODES], nullable: true }),
 		text('username', { nullable: true }),
 		text('password', { nullable: true }),
 		text('from_address', { nullable: true }),
@@ -299,7 +302,7 @@ export const webauthnChallenges = table('webauthn_challenges', {
 		int('id', { primaryKey: true, default: sequenceDefault('webauthn_challenges_id_seq') }),
 		text('challenge_hash'),
 		int('user_id', { nullable: true }),
-		text('purpose'),
+		text('purpose', { enumValues: [...WEBAUTHN_CHALLENGE_PURPOSES] }),
 		timestamp('expires_at')
 	],
 	primaryKey: 'id',
@@ -317,7 +320,14 @@ export const oauthClients = table('oauth_clients', {
 		timestamp('created_at', { default: nowDefault() }),
 		int('created_by_user_id', { nullable: true })
 	],
-	primaryKey: 'client_id'
+	primaryKey: 'client_id',
+	foreignKeys: [
+		foreignKey(
+			['created_by_user_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_oauth_clients_created_by_user_id_users', onDelete: 'cascade' }
+		)
+	]
 });
 
 export const oauthCodes = table('oauth_codes', {
@@ -328,7 +338,7 @@ export const oauthCodes = table('oauth_codes', {
 		int('user_id'),
 		text('scopes'),
 		text('code_challenge'),
-		text('code_challenge_method'),
+		text('code_challenge_method', { enumValues: [...OAUTH_CODE_CHALLENGE_METHODS] }),
 		text('redirect_uri'),
 		timestamp('expires_at'),
 		timestamp('used_at', { nullable: true })
@@ -353,7 +363,10 @@ export const oauthTokens = table('oauth_tokens', {
 		timestamp('last_used_at', { nullable: true })
 	],
 	primaryKey: 'id',
-	unique: [unique(['access_token_hash'], { name: 'oauth_tokens_access_hash_uq' })],
+	unique: [
+		unique(['access_token_hash'], { name: 'oauth_tokens_access_hash_uq' }),
+		unique(['refresh_token_hash'], { name: 'oauth_tokens_refresh_hash_uq' })
+	],
 	indexes: [
 		index(['refresh_token_hash'], { name: 'oauth_tokens_refresh_hash_idx' }),
 		index(['user_id'], { name: 'oauth_tokens_user_idx' })
@@ -366,7 +379,7 @@ export const weatherCache = table('weather_cache', {
 		text('location_key'),
 		date('for_date'),
 		timestamp('fetched_at'),
-		text('payload_json')
+		json('payload_json')
 	],
 	primaryKey: 'id',
 	unique: [unique(['location_key', 'for_date'], { name: 'weather_cache_key_date_uq' })],
@@ -1196,6 +1209,8 @@ export const tripImportantItems = table('trip_important_items', {
 	]
 });
 
+const PLACE_SOURCES = ['manual', 'trip', 'import'] as const;
+
 export const visitedCountries = table('visited_countries', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('visited_countries_id_seq') }),
@@ -1213,6 +1228,13 @@ export const visitedCountries = table('visited_countries', {
 			['user_id'],
 			{ table: 'users', columns: ['id'] },
 			{ name: 'fk_visited_countries_user_id_users', onDelete: 'cascade' }
+		)
+	],
+	checks: [
+		check('visited_countries_source_ck', (r) =>
+			PLACE_SOURCES.includes(r.source as (typeof PLACE_SOURCES)[number])
+				? true
+				: 'source must be manual, trip, or import'
 		)
 	]
 });
@@ -1234,6 +1256,13 @@ export const visitedUsStates = table('visited_us_states', {
 			['user_id'],
 			{ table: 'users', columns: ['id'] },
 			{ name: 'fk_visited_us_states_user_id_users', onDelete: 'cascade' }
+		)
+	],
+	checks: [
+		check('visited_us_states_source_ck', (r) =>
+			PLACE_SOURCES.includes(r.source as (typeof PLACE_SOURCES)[number])
+				? true
+				: 'source must be manual, trip, or import'
 		)
 	]
 });

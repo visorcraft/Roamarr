@@ -25,7 +25,7 @@ same program is available everywhere once added.
 
 Because membership numbers are sensitive, they are **not** exposed in public
 share links or calendar feeds. Reference them when booking or checking in by
-opening your profile. For per-segment payment tracking, link a [card](./cards)
+opening your profile. For per-segment payment tracking, link a [card](./cards.md)
 instead — segments have a `card_id` field for the card used to pay.
 
 ## Privacy
@@ -37,7 +37,7 @@ instead — segments have a `card_id` field for the card used to pay.
 ## Notes
 
 - Loyalty programs are distinct from [insurance](./insurances.md) policies
-  (which can be attached to a trip) and from [travel documents](./companions.md)
+  (which can be attached to a trip) and from [travel documents](./travel-documents.md)
   (passports/visas, which drive expiry reminders).
 - Keep balances current by editing the number after each redemption; Roamarr
   does not sync with provider APIs.

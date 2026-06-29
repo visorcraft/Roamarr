@@ -10,6 +10,7 @@ import {
 	type SmtpSecurity
 } from '$lib/server/smtpConfig';
 import { sendMail } from '$lib/server/notify';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -60,8 +61,12 @@ export const actions: Actions = {
 		setFlash(cookies, override.enabled ? 'SMTP override saved and enabled.' : 'SMTP override saved (disabled).');
 		throw redirect(303, '/profile/notifications');
 	},
-	testEmail: async ({ locals, cookies }) => {
+	testEmail: async ({ locals, cookies, getClientAddress }) => {
 		const u = requireUser(locals);
+		const limit = checkRateLimit(getClientAddress(), 'profile_notifications_test_email');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		try {
 			const ok = await sendMail(
 				u.email,

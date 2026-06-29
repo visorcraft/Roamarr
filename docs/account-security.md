@@ -27,7 +27,8 @@ TOTP is an extra layer that requires a 6-digit code from an authenticator app
 2. Scan the QR code with your authenticator app, or enter the secret manually.
 3. Enter the 6-digit code shown by your app to confirm.
 4. **Save your backup codes** — you receive 10 single-use codes. Each is
-   formatted as `xxxx-xxxx`. Store them securely; they are shown only once.
+   formatted as five groups of four hex digits (for example,
+   `abcd-ef12-3456-7890-abcd`). Store them securely; they are shown only once.
 
 ### Logging in with 2FA
 
@@ -43,7 +44,13 @@ generate a fresh set. All previous backup codes are invalidated.
 
 ### Disabling 2FA
 
-At **Security → Disable 2FA**, enter your account password to confirm.
+At **Security → Disable 2FA**, you must provide:
+
+1. Your account password.
+2. A valid 6-digit TOTP code **or** a single-use backup code.
+
+This prevents someone who knows only your password from removing your second
+factor.
 
 ## Passkeys (WebAuthn)
 

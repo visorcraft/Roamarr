@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 import * as OTPAuth from 'otpauth';
+import { eq } from '@mongreldb/kit';
 import type { KitDatabase } from '@mongreldb/kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as unknown as KitDatabase }));
@@ -63,8 +64,21 @@ describe('twoFactor', () => {
 	test('generateBackupCodes produces 10 formatted codes', () => {
 		const codes = generateBackupCodes();
 		expect(codes).toHaveLength(10);
-		expect(codes.every((c) => /^\w{4}-\w{4}$/.test(c))).toBe(true);
+		expect(codes.every((c) => /^[0-9a-f]{4}(-[0-9a-f]{4}){4}$/.test(c))).toBe(true);
 		expect(new Set(codes).size).toBe(10);
+	});
+
+	test('backup codes are stored as slow salted scrypt hashes', () => {
+		const setup = generateSecret('u@e.com');
+		const result = enableTwoFactor(userId, setup.secret, validToken(setup.secret));
+		expect(result.ok).toBe(true);
+
+		const hashes = ctx.kit
+			.selectFrom(twoFactorBackupCodes)
+			.where(eq(twoFactorBackupCodes.user_id, BigInt(userId)))
+			.executeSync();
+		expect(hashes.length).toBe(10);
+		expect(hashes.every((h) => String(h.code_hash).startsWith('scrypt$'))).toBe(true);
 	});
 
 	test('enableTwoFactor requires a valid token and stores encrypted secret', () => {
@@ -140,17 +154,30 @@ describe('twoFactor', () => {
 	});
 
 	test('createPendingCookie / verifyPendingCookie round-trip', () => {
-		const cookie = createPendingCookie(userId);
-		const pending = verifyPendingCookie(cookie.value);
+		const cookie = createPendingCookie(userId, '1.1.1.1', 'Mozilla/5.0');
+		const pending = verifyPendingCookie(cookie.value, '1.1.1.1', 'Mozilla/5.0');
 		expect(pending).not.toBeNull();
 		expect(pending!.userId).toBe(userId);
 	});
 
+	test('verifyPendingCookie rejects fingerprint mismatch', () => {
+		const cookie = createPendingCookie(userId, '1.1.1.1', 'Mozilla/5.0');
+		expect(verifyPendingCookie(cookie.value, '9.9.9.9', 'Mozilla/5.0')).toBeNull();
+		expect(verifyPendingCookie(cookie.value, '1.1.1.1', 'Evil/1.0')).toBeNull();
+		expect(verifyPendingCookie(cookie.value, '1.1.1.1', undefined)).toBeNull();
+	});
+
 	test('verifyPendingCookie rejects tampered values', () => {
-		expect(verifyPendingCookie(undefined)).toBeNull();
-		expect(verifyPendingCookie('garbage')).toBeNull();
-		const cookie = createPendingCookie(userId);
+		expect(verifyPendingCookie(undefined, '1.1.1.1', 'Mozilla/5.0')).toBeNull();
+		expect(verifyPendingCookie('garbage', '1.1.1.1', 'Mozilla/5.0')).toBeNull();
+		const cookie = createPendingCookie(userId, '1.1.1.1', 'Mozilla/5.0');
 		const tampered = cookie.value.slice(0, -1) + (cookie.value.endsWith('a') ? 'b' : 'a');
-		expect(verifyPendingCookie(tampered)).toBeNull();
+		expect(verifyPendingCookie(tampered, '1.1.1.1', 'Mozilla/5.0')).toBeNull();
+	});
+
+	test('verifyPendingCookie rejects legacy four-part cookies', () => {
+		const cookie = createPendingCookie(userId, '1.1.1.1', 'Mozilla/5.0');
+		const legacy = cookie.value.split('.').slice(0, 4).join('.');
+		expect(verifyPendingCookie(legacy, '1.1.1.1', 'Mozilla/5.0')).toBeNull();
 	});
 });

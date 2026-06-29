@@ -11,6 +11,7 @@ export type Scope =
 	| 'trips:write'
 	| 'packing:write'
 	| 'budgets:write'
+	| 'places:read'
 	| 'places:write'
 	| 'reminders:write'
 	| 'profile:read';
@@ -20,6 +21,7 @@ export const ALL_SCOPES: Scope[] = [
 	'trips:write',
 	'packing:write',
 	'budgets:write',
+	'places:read',
 	'places:write',
 	'reminders:write',
 	'profile:read'
@@ -343,6 +345,36 @@ export function revokeToken(token: string): boolean {
 		.where(kitEq(oauthTokens.access_token_hash, sha256(token)))
 		.executeSync()[0];
 	if (!row) return false;
+	kit
+		.updateTable(oauthTokens)
+		.set({ revoked_at: new Date().toISOString() })
+		.where(kitEq(oauthTokens.id, row.id))
+		.executeSync();
+	return true;
+}
+
+export function revokeTokenForUser(userId: number, token: string): boolean {
+	const row = kit
+		.selectFrom(oauthTokens)
+		.where(kitEq(oauthTokens.access_token_hash, sha256(token)))
+		.executeSync()[0];
+	if (!row) return false;
+	if (Number(row.user_id) !== userId) return false;
+	kit
+		.updateTable(oauthTokens)
+		.set({ revoked_at: new Date().toISOString() })
+		.where(kitEq(oauthTokens.id, row.id))
+		.executeSync();
+	return true;
+}
+
+export function revokeTokenByIdForUser(userId: number, tokenId: number): boolean {
+	const row = kit
+		.selectFrom(oauthTokens)
+		.where(kitEq(oauthTokens.id, BigInt(tokenId)))
+		.executeSync()[0];
+	if (!row) return false;
+	if (Number(row.user_id) !== userId) return false;
 	kit
 		.updateTable(oauthTokens)
 		.set({ revoked_at: new Date().toISOString() })

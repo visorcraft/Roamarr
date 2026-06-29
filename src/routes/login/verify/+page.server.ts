@@ -2,10 +2,15 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { verifyPendingCookie, verifyTwoFactor } from '$lib/server/twoFactor';
+import { getUserById } from '$lib/server/repositories/usersRepo';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ cookies }) => {
-	const pending = verifyPendingCookie(cookies.get('tfa_pending'));
+export const load: PageServerLoad = ({ request, cookies, getClientAddress }) => {
+	const pending = verifyPendingCookie(
+		cookies.get('tfa_pending'),
+		getClientAddress(),
+		request.headers.get('user-agent') ?? undefined
+	);
 	if (!pending) throw redirect(303, '/login');
 	return {};
 };
@@ -16,7 +21,11 @@ export const actions: Actions = {
 		if (!limit.allowed)
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
 
-		const pending = verifyPendingCookie(cookies.get('tfa_pending'));
+		const pending = verifyPendingCookie(
+			cookies.get('tfa_pending'),
+			getClientAddress(),
+			request.headers.get('user-agent') ?? undefined
+		);
 		if (!pending) throw redirect(303, '/login');
 
 		const f = await request.formData();
@@ -26,6 +35,11 @@ export const actions: Actions = {
 
 		if (!verifyTwoFactor(pending.userId, code)) {
 			return fail(401, { error: 'Invalid code. Try again.' });
+		}
+
+		const user = getUserById(pending.userId);
+		if (!user || user.disabled) {
+			return fail(401, { error: 'Account disabled.' });
 		}
 
 		cookies.delete('tfa_pending', { path: '/' });

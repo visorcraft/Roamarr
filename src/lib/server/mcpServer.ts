@@ -11,10 +11,13 @@ import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
-import { buildTripDetail } from './tripDetail';
+import { loadTripFor } from '../../routes/trips/shared';
+import { viewerProjection } from './sharing';
 import { addItem as addChecklistItem, loadChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
+import { Validator } from './validation';
+import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES } from './db/mongrelSchema';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
 	return scopes.includes(required);
@@ -31,6 +34,24 @@ function textResult(obj: unknown) {
 	return {
 		content: [{ type: 'text' as const, text: JSON.stringify(obj, null, 2) }]
 	};
+}
+
+function safeTripProjection(tripId: number, userId: number) {
+	const view = loadTripFor(userId, tripId);
+	if (view.editor) {
+		return viewerProjection(view.trip, view.segments, false);
+	}
+	return view.trip;
+}
+
+function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
+	const v = new Validator();
+	if (args.status != null) v.enumValue(args.status, TRIP_STATUSES, 'status');
+	if (args.type != null) v.enumValue(args.type, SEGMENT_TYPES, 'type');
+	if (args.category != null) v.enumValue(args.category, EXPENSE_CATEGORIES, 'category');
+	if (v.ok()) return { ok: true };
+	const messages = Object.values(v.errors);
+	return { ok: false, error: messages.join('; ') };
 }
 
 export function createMcpServer(userId: number, scopes: Scope[]): Server {
@@ -212,18 +233,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const trips = tripsRepo.listTripsForUser(userId);
 				return textResult(trips.map((t) => ({
 					id: t.id, name: t.name, destination: t.destination,
+					destinationCountryCode: t.destinationCountryCode,
+					destinationCityName: t.destinationCityName,
 					startDate: t.startDate, endDate: t.endDate, status: t.status
 				})));
 			}
 			case 'roamarr_trip_get': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
-				const detail = buildTripDetail({ id: userId }, tripId, new URL('http://localhost'));
-				return textResult({
-					trip: detail.trip,
-					owner: detail.owner
-				});
+				const projected = safeTripProjection(tripId, userId);
+				return textResult({ trip: projected });
 			}
 			case 'roamarr_trip_create': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
@@ -239,6 +258,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_update': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const validation = validateToolInput(args as Record<string, unknown>);
+				if (!validation.ok) return textResult({ error: validation.error });
 				const tripId = Number(args.tripId);
 				requireOwnedTrip(userId, tripId);
 				const updated = tripsRepo.updateTrip(tripId, {
@@ -254,6 +275,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_day_plan': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const validation = validateToolInput(args as Record<string, unknown>);
+				if (!validation.ok) return textResult({ error: validation.error });
 				const tripId = Number(args.tripId);
 				requireEditableTrip(userId, tripId);
 				const { createSegment } = await import('./repositories/segmentsRepo');
@@ -294,6 +317,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_budget_set': {
 				if (!hasScope(scopes, 'budgets:write')) return scopeError('budgets:write');
+				const validation = validateToolInput(args as Record<string, unknown>);
+				if (!validation.ok) return textResult({ error: validation.error });
 				const tripId = Number(args.tripId);
 				requireEditableTrip(userId, tripId);
 				setBudget(tripId, args.category as any, Number(args.amount), (args.currency as string) || 'USD');
@@ -323,7 +348,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				})));
 			}
 			case 'roamarr_places_list': {
-				if (!hasScope(scopes, 'places:write')) return scopeError('places:write');
+				if (!hasScope(scopes, 'places:read')) return scopeError('places:read');
 				return textResult(listVisited(userId));
 			}
 			case 'roamarr_places_mark': {
@@ -353,6 +378,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!t.startDate) return textResult({ error: 'Trip has no start date' });
 				const startAt = `${t.startDate}T09:00:00Z`;
 				upsertCustomReminder(userId, 'trip', tripId, startAt, offset);
+				logAudit(userId, 'mcp_reminder_add', 'trip', tripId, { offsetMinutes: offset });
 				return textResult({ ok: true, tripId, offsetMinutes: offset });
 			}
 			default:
@@ -388,8 +414,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		function tripContext(tid: number) {
 			if (!tid || !hasScope(scopes, 'trips:read')) return null;
 			try {
-				requireOwnedTrip(userId, tid);
-				return buildTripDetail({ id: userId }, tid, new URL('http://localhost'));
+				return safeTripProjection(tid, userId);
 			} catch {
 				return null;
 			}
@@ -410,7 +435,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				})), null, 2));
 			}
 			case 'places-visited': {
-				if (!hasScope(scopes, 'places:write')) return makePrompt('Error', 'Missing scope: places:write');
+				if (!hasScope(scopes, 'places:read')) return makePrompt('Error', 'Missing scope: places:read');
 				return makePrompt('Places visited', JSON.stringify(listVisited(userId)));
 			}
 			case 'weather-overview': {
@@ -431,13 +456,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				}))));
 			}
 			default: {
-				const detail = tripContext(tripId) as any;
-				if (!detail) return makePrompt('Error', 'Trip not found or inaccessible.');
-				const t = detail.trip as Record<string, unknown>;
-				const allSegs: any[] = Array.isArray(detail.segments) ? detail.segments : [];
+				const projected = tripContext(tripId);
+				if (!projected) return makePrompt('Error', 'Trip not found or inaccessible.');
+				const t = projected as Record<string, unknown>;
+				const allSegs: any[] = Array.isArray(t.segments) ? t.segments : [];
 				switch (promptName) {
 					case 'trip-details':
-						return makePrompt('Trip details', JSON.stringify({ trip: t, owner: detail.owner }));
+						return makePrompt('Trip details', JSON.stringify({ trip: t }));
 					case 'itinerary':
 						return makePrompt('Itinerary', JSON.stringify(t));
 					case 'flight-info': {
@@ -475,16 +500,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		if (!match) throw new Error(`Unknown resource URI: ${uri}`);
 		const tid = Number(match[1]);
 		if (!hasScope(scopes, 'trips:read')) throw new Error('Missing scope: trips:read');
-		requireOwnedTrip(userId, tid);
-		const detail = buildTripDetail({ id: userId }, tid, new URL('http://localhost'));
+		const projected = safeTripProjection(tid, userId);
 		return {
 			contents: [{
 				uri,
 				mimeType: 'application/json',
-				text: JSON.stringify({
-					trip: detail.trip,
-					owner: detail.owner
-				})
+				text: JSON.stringify({ trip: projected })
 			}]
 		};
 	});

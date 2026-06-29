@@ -6,6 +6,7 @@
 		'trips:write': 'Create and update trips and segments',
 		'packing:write': 'Manage packing templates and trip checklists',
 		'budgets:write': 'Manage trip budgets and expenses',
+		'places:read': 'View visited countries and U.S. states',
 		'places:write': 'Mark and unmark visited countries and U.S. states',
 		'reminders:write': 'Create and update reminders',
 		'profile:read': 'Read your profile and document expiry summaries'

@@ -1,5 +1,5 @@
 import { json, error } from '@sveltejs/kit';
-import { verifyAuth } from '$lib/server/passkeys';
+import { verifyAuth, isPasskeyAvailable } from '$lib/server/passkeys';
 import { createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from './$types';
@@ -8,6 +8,7 @@ import type { RequestHandler } from './$types';
 // session directly. A passkey is a primary credential and satisfies auth on its
 // own — no TOTP step-up (PLAN resolved decision).
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
+	if (!isPasskeyAvailable()) throw error(400, 'ORIGIN must be set to use passkeys');
 	const limit = checkRateLimit(getClientAddress(), 'webauthn_auth');
 	if (!limit.allowed) throw error(429, 'Too many requests');
 

@@ -16,6 +16,7 @@ import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
 import { getMapSettings } from './settings';
 import { listFareProvidersForUser, listFareWatchesForUser } from './repositories/travelDataRepo';
+import { tripWeatherOverview } from './weather';
 import {
 	listJournalEntriesForTrip,
 	listDocumentLinksForTrip,
@@ -50,8 +51,13 @@ function computeTripStats(
 	};
 }
 
-export function buildTripDetail(u: { id: number; defaultCurrency?: string | null }, tripId: number, url: URL) {
+export async function buildTripDetail(
+	u: { id: number; defaultCurrency?: string | null },
+	tripId: number,
+	url: URL
+) {
 	const view = loadTripFor(u.id, tripId);
+	const weather = await tripWeatherOverview(view.trip.id, u.id);
 	const baseCurrency = ((view.trip as Trip).baseCurrency as string | undefined) ?? 'USD';
 	const companions = listTripCompanions(view.trip.id).map((c) =>
 		view.editor
@@ -169,7 +175,8 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 			importantItems,
 			stats,
 			nextCity,
-			tileConfig
+			tileConfig,
+			weather
 		};
 	}
 	const mapEnabled = getMapSettings().mapsEnabled;
@@ -192,6 +199,7 @@ export function buildTripDetail(u: { id: number; defaultCurrency?: string | null
 		importantItems,
 		stats,
 		nextCity: mapEnabled ? tripMapCity(view.trip.id) : null,
-		tileConfig: mapEnabled ? resolveTileConfig() : null
+		tileConfig: mapEnabled ? resolveTileConfig() : null,
+		weather
 	};
 }

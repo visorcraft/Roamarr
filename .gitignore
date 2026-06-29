@@ -63,3 +63,6 @@ roamarr-*.png
 attachments/
 roamarr.kitdb/
 roamarr.db
+
+# Local migration/alter notes (do not commit)
+ALTER_DB.md

@@ -116,7 +116,7 @@
 		<h2 class="section-title mb-3">Active tokens</h2>
 		<ul class="list-stack">
 			{#each data.tokens.filter((t) => !t.revoked) as t (t.id)}
-				<li class="list-item flex items-center gap-3">
+				<li class="list-item flex items-start gap-3">
 					<div class="min-w-0 flex-1">
 						<div class="list-title font-mono text-sm">{t.clientId}</div>
 						<div class="meta mt-0.5">Scopes: {t.scopes.join(', ')}</div>
@@ -125,8 +125,29 @@
 							{#if t.lastUsedAt}· Last used {new Date(t.lastUsedAt).toLocaleDateString()}{/if}
 						</div>
 					</div>
+					<form method="POST" action="?/revoke">
+						<input type="hidden" name="tokenId" value={t.id} />
+						<ConfirmButton class="btn btn-ghost btn-ghost-danger btn-sm" message="Revoke this token?">Revoke</ConfirmButton>
+					</form>
 				</li>
 			{/each}
 		</ul>
 	</section>
 {/if}
+
+<section class="card mt-6 p-5">
+	<h2 class="section-title mb-3">Setup instructions</h2>
+	<p class="text-sm text-muted">
+		Use the discovery URL below to configure an MCP client such as Claude Desktop. The client
+		must support OAuth 2.1 with PKCE.
+	</p>
+	<div class="mt-3">
+		<dt class="label">Discovery URL</dt>
+		<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{data.discoveryUrl}</dd>
+	</div>
+	<div class="mt-4 space-y-1 text-sm text-muted">
+		<p>1. Create a client above and save the client ID (and secret for confidential clients).</p>
+		<p>2. Use this redirect URI in your client: <code>http://localhost:3000/oauth/callback</code> (or another localhost port).</p>
+		<p>3. Authorize the client when prompted; access tokens are valid for one hour.</p>
+	</div>
+</section>

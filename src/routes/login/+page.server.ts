@@ -1,9 +1,11 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { verifyPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 import { isTwoFactorEnabled, createPendingCookie } from '$lib/server/twoFactor';
+import { isPasskeyAvailable } from '$lib/server/passkeys';
 
 export async function _authenticate(email: string, password: string) {
 	const u = usersRepo.getUserByEmail(normalizeEmail(email));
@@ -21,6 +23,10 @@ export async function _authenticate(email: string, password: string) {
 	};
 }
 
+export const load: PageServerLoad = () => {
+	return { passkeyAvailable: isPasskeyAvailable() };
+};
+
 export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress }) => {
 		const limit = checkRateLimit(getClientAddress(), 'login');
@@ -33,19 +39,18 @@ export const actions: Actions = {
 		const u = await _authenticate(String(f.get('email') ?? ''), String(f.get('password') ?? ''));
 		if (!u) return fail(401, { error: 'Invalid email or password.' });
 
+		const ip = getClientAddress();
+		const ua = request.headers.get('user-agent') ?? undefined;
+
 		if (isTwoFactorEnabled(u.id)) {
-			const pending = createPendingCookie(u.id);
+			const pending = createPendingCookie(u.id, ip, ua);
 			cookies.set('tfa_pending', pending.value, {
-				path: '/',
-				httpOnly: true,
-				sameSite: 'lax',
+				...sessionCookieOptions(),
 				maxAge: pending.maxAge
 			});
 			throw redirect(303, '/login/verify');
 		}
 
-		const ip = getClientAddress();
-		const ua = request.headers.get('user-agent') ?? undefined;
 		cookies.set('session', createSession(u.id, ip, ua), sessionCookieOptions());
 		throw redirect(303, '/');
 	}

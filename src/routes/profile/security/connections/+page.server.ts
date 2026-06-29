@@ -6,6 +6,7 @@ import {
 	createClient,
 	deleteClient,
 	listUserTokens,
+	revokeTokenByIdForUser,
 	ALL_SCOPES,
 	type Scope
 } from '$lib/server/oauth';
@@ -16,18 +17,20 @@ const SCOPE_DESCRIPTIONS: Record<string, string> = {
 	'trips:write': 'Create and update trips',
 	'packing:write': 'Manage packing lists',
 	'budgets:write': 'Manage budgets and expenses',
+	'places:read': 'View visited places',
 	'places:write': 'Mark visited places',
 	'reminders:write': 'Create reminders',
 	'profile:read': 'Read profile info'
 };
 
-export const load: PageServerLoad = ({ locals }) => {
+export const load: PageServerLoad = ({ locals, url }) => {
 	const u = requireUser(locals);
 	return {
 		clients: listClients(u.id),
 		tokens: listUserTokens(u.id),
 		allScopes: ALL_SCOPES,
-		scopeDescriptions: SCOPE_DESCRIPTIONS
+		scopeDescriptions: SCOPE_DESCRIPTIONS,
+		discoveryUrl: `${url.origin}/.well-known/oauth-authorization-server`
 	};
 };
 
@@ -56,6 +59,16 @@ export const actions: Actions = {
 		const clientId = String(f.get('clientId') ?? '');
 		deleteClient(u.id, clientId);
 		setFlash(cookies, 'Client and all its tokens deleted.');
+		throw redirect(303, '/profile/security/connections');
+	},
+	revoke: async ({ request, locals, cookies }) => {
+		const u = requireUser(locals);
+		const f = await request.formData();
+		const tokenId = Number(f.get('tokenId') ?? '');
+		if (!Number.isFinite(tokenId) || tokenId <= 0) return fail(400, { error: 'Token ID is required' });
+		const revoked = revokeTokenByIdForUser(u.id, tokenId);
+		if (!revoked) return fail(400, { error: 'Token not found or not owned by you' });
+		setFlash(cookies, 'Token revoked.');
 		throw redirect(303, '/profile/security/connections');
 	}
 };

@@ -9,6 +9,7 @@
 	import { COUNTRIES } from '$lib/countries';
 	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
+	import { weatherIconForCode } from '$lib/weatherCodes';
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
 	import { renderMarkdown } from '$lib/markdown';
@@ -594,14 +595,26 @@
 
 			{#if activeTab === 'itinerary' && data.weather?.days?.length}
 				<section class="mb-6">
-					<h2 class="section-title mb-3">Weather forecast <span class="text-xs font-normal text-muted">({data.weather.tempUnit})</span></h2>
+					<h2 class="section-title mb-3">
+						Weather forecast
+						<span class="text-xs font-normal text-muted">({data.weather.tempUnit})</span>
+					</h2>
+					{#if data.weather.degraded}
+						<p class="notice notice-info mb-2">Using last-known forecast — Open-Meteo is unavailable.</p>
+					{/if}
 					{#if data.weather.advisory}
 						<p class="notice notice-warning mb-2">{data.weather.advisory}</p>
 					{/if}
 					<div class="flex gap-2 overflow-x-auto pb-2">
 						{#each data.weather.days as d (d.date)}
+							{@const icon = weatherIconForCode(d.code)}
 							<div class="min-w-[110px] shrink-0 rounded-lg bg-surface2 p-3 text-center ring-1 ring-inset ring-white/5">
 								<div class="text-xs font-medium text-muted">{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+								{#if icon}
+									<div class="mx-auto my-1 flex h-7 items-center justify-center text-ink">
+										<Icon name={icon} class="h-6 w-6" />
+									</div>
+								{/if}
 								{#if d.code != null}
 									<div class="my-1 text-2xl font-light text-ink">
 										{d.tempMax != null ? `${Math.round(d.tempMax)}°` : '—'}

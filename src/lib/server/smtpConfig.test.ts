@@ -9,6 +9,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { userSmtpOverrides, settings } from './db/mongrelSchema';
+import { kit } from './db';
 import {
 	parseSmtpSecurity,
 	buildTransport,
@@ -103,6 +104,10 @@ describe('smtpConfig', () => {
 			expect(opts.secure).toBe(false);
 			expect(opts.requireTLS).toBe(false);
 		});
+	});
+
+	test('mocked kit is the same as ctx.kit', () => {
+		expect(kit).toBe(ctx.kit);
 	});
 
 	describe('user override CRUD', () => {

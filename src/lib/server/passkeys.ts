@@ -14,6 +14,13 @@ import { logAudit } from './audit';
 import type { Row } from '@mongreldb/kit';
 
 const CHALLENGE_TTL_MIN = 5;
+export const MAX_PASSKEY_NAME_LENGTH = 100;
+
+export function sanitizePasskeyName(name: string): string | null {
+	const trimmed = name.trim();
+	if (!trimmed) return null;
+	return trimmed.slice(0, MAX_PASSKEY_NAME_LENGTH);
+}
 
 export interface RpConfig {
 	rpID: string;
@@ -83,11 +90,12 @@ function storeChallenge(challenge: string, userId: number | null, purpose: 'regi
 	} as any).executeSync();
 }
 
-// Single-use: deletes the row when found, regardless of validity. Returns `ok`
-// to distinguish a valid challenge from an invalid/expired one — `userId` is
-// null for auth challenges (discoverable login), so it must not double as the
-// validity signal.
-function consumeChallenge(
+// Challenge consumption is atomic: the row is deleted only after WebAuthn
+// verification succeeds. A failed verification therefore leaves the challenge
+// reusable for a legitimate retry, while a successful verification deletes it
+// and prevents replay. `userId` is null for auth challenges (discoverable
+// login), so it must not double as the validity signal.
+function findChallenge(
 	challenge: string,
 	purpose: string
 ): { ok: boolean; userId: number | null } {
@@ -98,10 +106,14 @@ function consumeChallenge(
 		.executeSync();
 	if (rows.length === 0) return { ok: false, userId: null };
 	const row = rows[0];
-	kit.deleteFrom(webauthnChallenges).where(kitEq(webauthnChallenges.id, row.id)).executeSync();
 	if (row.purpose !== purpose) return { ok: false, userId: null };
 	if (Date.now() > new Date(row.expires_at as string).getTime()) return { ok: false, userId: null };
 	return { ok: true, userId: row.user_id != null ? Number(row.user_id) : null };
+}
+
+function deleteChallenge(challenge: string): void {
+	const hash = hashChallenge(challenge);
+	kit.deleteFrom(webauthnChallenges).where(kitEq(webauthnChallenges.challenge_hash, hash)).executeSync();
 }
 
 export function purgeExpiredChallenges(): number {
@@ -126,7 +138,7 @@ export async function createRegistrationOptions(userId: number, email: string) {
 		rpID: rp.rpID,
 		userName: email,
 		excludeCredentials: existing.map((id) => ({ id: id, type: 'public-key' as const })),
-		authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' }
+		authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' }
 	});
 
 	storeChallenge(options.challenge, userId, 'register');
@@ -138,14 +150,20 @@ export async function verifyRegistration(
 	response: unknown,
 	name: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+	const safeName = sanitizePasskeyName(name);
 	const rp = getRpConfig();
+	let matchedChallenge: string | null = null;
 	let verification: Awaited<ReturnType<typeof verifyRegistrationResponse>>;
 	try {
 		verification = await verifyRegistrationResponse({
 			response: response as any,
 			expectedChallenge: (challenge) => {
-				const r = consumeChallenge(challenge, 'register');
-				return r.ok && r.userId === userId;
+				const r = findChallenge(challenge, 'register');
+				if (r.ok && r.userId === userId) {
+					matchedChallenge = challenge;
+					return true;
+				}
+				return false;
 			},
 			expectedOrigin: rp.origins,
 			expectedRPID: rp.rpID
@@ -158,6 +176,8 @@ export async function verifyRegistration(
 		return { ok: false, error: 'Registration verification failed' };
 	}
 
+	if (matchedChallenge) deleteChallenge(matchedChallenge);
+
 	const info = verification.registrationInfo;
 	const cred = info.credential;
 	kit.insertInto(passkeys).values({
@@ -167,12 +187,12 @@ export async function verifyRegistration(
 		counter: BigInt(cred.counter),
 		transports: JSON.stringify(cred.transports ?? []),
 		device_type: info.credentialDeviceType,
-		name: name || null,
+		name: safeName,
 		created_at: new Date().toISOString(),
 		last_used_at: null
 	} as any).executeSync();
 
-	logAudit(userId, 'passkey_register', 'user', userId, { name: name || null });
+	logAudit(userId, 'passkey_register', 'user', userId, { name: safeName });
 	return { ok: true };
 }
 
@@ -201,11 +221,19 @@ export async function verifyAuth(
 	if (rows.length === 0) return { ok: false, error: 'Unknown credential' };
 	const passkey = rows[0];
 
+	let matchedChallenge: string | null = null;
 	let verification: Awaited<ReturnType<typeof verifyAuthenticationResponse>>;
 	try {
 		verification = await verifyAuthenticationResponse({
 			response: response as any,
-			expectedChallenge: (challenge) => consumeChallenge(challenge, 'auth').ok,
+			expectedChallenge: (challenge) => {
+				const r = findChallenge(challenge, 'auth');
+				if (r.ok) {
+					matchedChallenge = challenge;
+					return true;
+				}
+				return false;
+			},
 			expectedOrigin: rp.origins,
 			expectedRPID: rp.rpID,
 			credential: {
@@ -220,11 +248,14 @@ export async function verifyAuth(
 
 	if (!verification.verified) return { ok: false, error: 'Authentication failed' };
 
+	if (matchedChallenge) deleteChallenge(matchedChallenge);
+
 	const userId = Number(passkey.user_id);
 	// Passkey login is a primary credential; a disabled user must not slip past the
 	// "disabled users cannot authenticate" invariant via this path.
 	const user = getUserById(userId);
 	if (!user || user.disabled) return { ok: false, error: 'Account is disabled' };
+
 	kit
 		.updateTable(passkeys)
 		.set({
@@ -234,15 +265,24 @@ export async function verifyAuth(
 		.where(kitEq(passkeys.id, passkey.id))
 		.executeSync();
 
+	logAudit(userId, 'passkey_auth', 'user', userId, {
+		passkeyId: Number(passkey.id),
+		credentialId: passkey.credential_id
+	});
 	return { ok: true, userId };
 }
 
 export function renamePasskey(userId: number, id: number, name: string): boolean {
+	const safeName = sanitizePasskeyName(name);
+	if (safeName === null) return false;
 	const rows = kit
 		.updateTable(passkeys)
-		.set({ name })
+		.set({ name: safeName })
 		.where(kitAnd(kitEq(passkeys.id, BigInt(id)), kitEq(passkeys.user_id, BigInt(userId))))
 		.executeSync();
+	if (rows.length > 0) {
+		logAudit(userId, 'passkey_rename', 'user', userId, { passkeyId: id, name: safeName });
+	}
 	return rows.length > 0;
 }
 
@@ -250,7 +290,9 @@ export function deletePasskey(userId: number, id: number): boolean {
 	const where = kitAnd(kitEq(passkeys.id, BigInt(id)), kitEq(passkeys.user_id, BigInt(userId)));
 	const rows = kit.selectFrom(passkeys).where(where).executeSync();
 	if (rows.length === 0) return false;
+	const credentialId = rows[0].credential_id as string;
+	const name = rows[0].name as string | null;
 	const n = kit.deleteFrom(passkeys).where(where).executeSync();
-	if (n > 0n) logAudit(userId, 'passkey_delete', 'user', userId, {});
+	if (n > 0n) logAudit(userId, 'passkey_delete', 'user', userId, { passkeyId: id, credentialId, name });
 	return n > 0n;
 }

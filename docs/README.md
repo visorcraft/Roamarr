@@ -27,6 +27,19 @@ segments, sharing, reminders, documents, and more.
 - [Insurances](./insurances.md) — insurance policies and benefit templates.
 - [Loyalty](./loyalty.md) — loyalty program tracking.
 - [Import/Export](./import-export.md) — trip backup and restore.
+- [Printable itinerary](./printable-itinerary.md) — print-friendly trip view.
+- [Fare providers](./fare-providers.md) — price watches on flight segments.
+- [Groups](./groups.md) — reusable sharing groups.
+
+## Traveler details
+
+- [Travel documents](./travel-documents.md) — passports, visas, and expiry reminders.
+- [Cards](./cards.md) — payment cards and travel benefits.
+- [Medications](./medications.md) — trip medications on the Prep tab.
+- [Entry requirements](./entry-requirements.md) — visa and vaccination tracking.
+- [Important items](./important-items.md) — valuables, serial numbers, and trackers.
+- [Home tasks](./home-tasks.md) — pre-departure to-dos.
+- [Journal](./journal.md) — daily trip notes.
 
 ## Identity & security
 

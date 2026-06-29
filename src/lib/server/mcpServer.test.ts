@@ -67,4 +67,31 @@ describe('mcpServer', () => {
 			client.callTool({ name: 'roamarr_packing_list_build', arguments: { tripId: otherTrip.id } })
 		).rejects.toThrow();
 	});
+
+	test('places_list requires places:read', async () => {
+		const { client } = await connect(userId, ['places:write']);
+		const res: any = await client.callTool({ name: 'roamarr_places_list', arguments: {} });
+		expect(res.isError).toBe(true);
+		expect(res.content[0].text).toContain('places:read');
+	});
+
+	test('trip_get does not include segment confirmation numbers', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Secret' });
+		const { createSegment } = await import('./repositories/segmentsRepo');
+		createSegment({
+			trip_id: BigInt(trip.id),
+			type: 'flight',
+			title: 'Flight',
+			start_at: '2026-07-01T10:00:00Z',
+			confirmation_number: 'ABC123',
+			details_json: JSON.stringify({ recordLocator: 'XYZ' })
+		} as any);
+
+		const { client } = await connect(userId, ['trips:read']);
+		const res: any = await client.callTool({ name: 'roamarr_trip_get', arguments: { tripId: trip.id } });
+		const text = res.content[0].text;
+		expect(text).toContain('Secret');
+		expect(text).not.toContain('ABC123');
+		expect(text).not.toContain('recordLocator');
+	});
 });

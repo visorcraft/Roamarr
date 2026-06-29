@@ -322,6 +322,7 @@ update relevant docs, and regenerate license data after dependency changes.
 
 ## Documentation
 
+- [docs/README.md](docs/README.md) - user documentation index
 - [CONTRIBUTING.md](CONTRIBUTING.md) - contribution guidelines
 - [docs/SECURITY.md](docs/SECURITY.md) - security policy and disclosure process
 - [LICENSE](LICENSE) - GPL-3.0-only license text

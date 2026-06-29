@@ -1,39 +1,39 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { randomBytes } from 'node:crypto';
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { verifyAccessToken } from '$lib/server/oauth';
 import { createMcpServer } from '$lib/server/mcpServer';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from '@sveltejs/kit';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
-async function handleJsonRpc(userId: number, scopes: any[], body: unknown): Promise<unknown> {
-	const server = createMcpServer(userId, scopes);
-	const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-	await server.connect(serverTransport);
+const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
 
-	await clientTransport.send(body as any);
+function randomSessionId(): string {
+	return randomBytes(16).toString('base64url');
+}
 
-	let response: unknown = null;
-	const originalSend = clientTransport.send.bind(clientTransport);
-	clientTransport.send = async (msg: any) => {
-		response = msg;
-	};
+function extractBearer(request: Request): string | null {
+	const auth = request.headers.get('authorization') ?? '';
+	if (!auth.startsWith('Bearer ')) return null;
+	return auth.slice(7);
+}
 
-	const close = () => {
-		try { server.close(); } catch { /* noop */ }
-	};
-
-	await new Promise((resolve) => {
-		const timer = setTimeout(() => { resolve(undefined); }, 5000);
-		clientTransport.onclose = () => { clearTimeout(timer); resolve(undefined); };
+function unauthorizedJson(body: unknown, status = 401): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { 'Content-Type': 'application/json' }
 	});
+}
 
-	close();
-	return response;
+function jsonRpcError(message: string, status: number, code = -32000): Response {
+	return new Response(
+		JSON.stringify({ jsonrpc: '2.0', error: { code, message }, id: null }),
+		{ status, headers: { 'Content-Type': 'application/json' } }
+	);
 }
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
-	// Token-authenticated, but still bound request volume per client. MCP sessions
-	// are chatty, so the window is generous compared to the login limiter.
 	const limit = checkRateLimit(getClientAddress(), 'mcp', { maxAttempts: 120 });
 	if (!limit.allowed) {
 		return new Response(JSON.stringify({ error: 'Too many requests' }), {
@@ -42,41 +42,117 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		});
 	}
 
-	const auth = request.headers.get('authorization') ?? '';
-	if (!auth.startsWith('Bearer ')) {
-		return new Response(JSON.stringify({ error: 'Bearer token required' }), {
-			status: 401,
-			headers: { 'Content-Type': 'application/json' }
-		});
-	}
-	const token = auth.slice(7);
-	const authInfo = verifyAccessToken(token);
-	if (!authInfo) {
-		return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
-			status: 401,
-			headers: { 'Content-Type': 'application/json' }
-		});
+	const bearer = extractBearer(request);
+	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
+	const token = verifyAccessToken(bearer);
+	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+
+	const authInfo: AuthInfo = {
+		token: bearer,
+		clientId: token.clientId,
+		scopes: token.scopes
+	};
+
+	const sessionId = request.headers.get('mcp-session-id');
+	if (sessionId) {
+		const transport = transports.get(sessionId);
+		if (!transport) {
+			return jsonRpcError('Session not found', 404);
+		}
+		return transport.handleRequest(request, { authInfo });
 	}
 
 	let body: unknown;
 	try {
 		body = await request.json();
 	} catch {
-		return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-			status: 400,
+		return jsonRpcError('Invalid JSON', 400, -32700);
+	}
+
+	if (!isInitializeRequest(body)) {
+		return jsonRpcError('Bad Request: initialize request required', 400);
+	}
+
+	const transport = new WebStandardStreamableHTTPServerTransport({
+		sessionIdGenerator: randomSessionId,
+		// Return direct JSON responses for POST requests; GET remains available
+		// for clients that prefer an SSE stream.
+		enableJsonResponse: true,
+		// Store the transport by session ID once initialization completes so
+		// subsequent POST/GET/DELETE requests can reuse it.
+		onsessioninitialized: (sid) => {
+			transports.set(sid, transport);
+		}
+	});
+
+	transport.onclose = () => {
+		const sid = transport.sessionId;
+		if (sid) transports.delete(sid);
+	};
+
+	const server = createMcpServer(token.userId, token.scopes);
+	await server.connect(transport);
+	return transport.handleRequest(request, { authInfo, parsedBody: body });
+};
+
+export const GET: RequestHandler = async ({ request, getClientAddress }) => {
+	const limit = checkRateLimit(getClientAddress(), 'mcp', { maxAttempts: 120 });
+	if (!limit.allowed) {
+		return new Response(JSON.stringify({ error: 'Too many requests' }), {
+			status: 429,
 			headers: { 'Content-Type': 'application/json' }
 		});
 	}
 
-	const result = await handleJsonRpc(authInfo.userId, authInfo.scopes, body);
-	return new Response(JSON.stringify(result), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	});
+	const bearer = extractBearer(request);
+	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
+	const token = verifyAccessToken(bearer);
+	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+
+	const authInfo: AuthInfo = {
+		token: bearer,
+		clientId: token.clientId,
+		scopes: token.scopes
+	};
+
+	const sessionId = request.headers.get('mcp-session-id');
+	if (!sessionId) {
+		return jsonRpcError('Bad Request: mcp-session-id header required', 400);
+	}
+	const transport = transports.get(sessionId);
+	if (!transport) {
+		return jsonRpcError('Session not found', 404);
+	}
+	return transport.handleRequest(request, { authInfo });
 };
 
-export const GET: RequestHandler = () =>
-	new Response(JSON.stringify({ error: 'Use POST' }), {
-		status: 405,
-		headers: { 'Content-Type': 'application/json' }
-	});
+export const DELETE: RequestHandler = async ({ request, getClientAddress }) => {
+	const limit = checkRateLimit(getClientAddress(), 'mcp', { maxAttempts: 120 });
+	if (!limit.allowed) {
+		return new Response(JSON.stringify({ error: 'Too many requests' }), {
+			status: 429,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
+	const bearer = extractBearer(request);
+	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
+	const token = verifyAccessToken(bearer);
+	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+
+	const authInfo: AuthInfo = {
+		token: bearer,
+		clientId: token.clientId,
+		scopes: token.scopes
+	};
+
+	const sessionId = request.headers.get('mcp-session-id');
+	if (!sessionId) {
+		return jsonRpcError('Bad Request: mcp-session-id header required', 400);
+	}
+	const transport = transports.get(sessionId);
+	if (!transport) {
+		return jsonRpcError('Session not found', 404);
+	}
+	return transport.handleRequest(request, { authInfo });
+};

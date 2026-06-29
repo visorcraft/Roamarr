@@ -7,7 +7,8 @@ import {
 	markVisited,
 	unmarkVisited,
 	clearVisited,
-	autoMarkCountriesFromAllTrips
+	autoMarkFromAllTrips,
+	countryVisitSummaries
 } from '$lib/server/visitedPlaces';
 import type { PlaceKind } from '$lib/server/visitedPlaces';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
@@ -15,14 +16,19 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	const u = requireUser(locals);
-	if (u.autoMarkVisited) {
-		autoMarkCountriesFromAllTrips(u.id);
-	}
-	return { ...listVisited(u.id), autoMarkVisited: u.autoMarkVisited };
+	return {
+		...listVisited(u.id),
+		summaries: countryVisitSummaries(u.id),
+		autoMarkVisited: u.autoMarkVisited
+	};
 };
 
 function parseKind(value: string | null): PlaceKind {
 	return value === 'state' ? 'state' : 'country';
+}
+
+function todayIso(): string {
+	return new Date().toISOString().slice(0, 10);
 }
 
 export const actions: Actions = {
@@ -31,7 +37,10 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const kind = parseKind(String(f.get('kind') ?? 'country'));
 		const code = String(f.get('code') ?? '');
-		const { created } = markVisited(u.id, kind, code);
+		const visitedOnInput = String(f.get('visited_on') ?? '').trim();
+		const { created } = markVisited(u.id, kind, code, {
+			visitedOn: visitedOnInput || todayIso()
+		});
 		setFlash(
 			cookies,
 			created
@@ -51,12 +60,19 @@ export const actions: Actions = {
 	},
 	autoMark: async ({ locals, cookies }) => {
 		const u = requireUser(locals);
-		const added = autoMarkCountriesFromAllTrips(u.id);
+		const added = autoMarkFromAllTrips(u.id);
+		const parts: string[] = [];
+		if (added.countries.length > 0) {
+			parts.push(
+				`${added.countries.length} countr${added.countries.length === 1 ? 'y' : 'ies'}`
+			);
+		}
+		if (added.states.length > 0) {
+			parts.push(`${added.states.length} U.S. state${added.states.length === 1 ? '' : 's'}`);
+		}
 		setFlash(
 			cookies,
-			added.length > 0
-				? `Marked ${added.length} countr${added.length === 1 ? 'y' : 'ies'} from past trips.`
-				: 'No new countries found from past trips.'
+			parts.length > 0 ? `Marked ${parts.join(' and ')} from past trips.` : 'No new places found from past trips.'
 		);
 		throw redirect(303, '/profile/visited');
 	},
@@ -65,16 +81,14 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const kind = parseKind(String(f.get('kind') ?? 'country'));
 		const n = clearVisited(u.id, kind);
-		setFlash(
-			cookies,
-			`Cleared ${n} ${kind === 'state' ? 'state' : 'countr'}${n === 1 ? 'y' : 'ies'}.`
-		);
+		const label = kind === 'state' ? (n === 1 ? 'state' : 'states') : n === 1 ? 'country' : 'countries';
+		setFlash(cookies, `Cleared ${n} ${label}.`);
 		throw redirect(303, '/profile/visited');
 	},
 	toggleAutoMark: async ({ locals, cookies }) => {
 		const u = requireUser(locals);
 		const newValue = !u.autoMarkVisited;
-		usersRepo.updateUser(u.id, { auto_mark_visited: newValue } as any);
+		usersRepo.updateUser(u.id, { auto_mark_visited: newValue });
 		logAudit(u.id, 'places_auto_mark_toggle', 'user', u.id, { enabled: newValue });
 		setFlash(cookies, newValue ? 'Auto-mark enabled.' : 'Auto-mark disabled.');
 		throw redirect(303, '/profile/visited');

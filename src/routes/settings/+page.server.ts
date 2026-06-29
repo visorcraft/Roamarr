@@ -7,6 +7,7 @@ import { encrypt } from '$lib/server/crypto';
 import { listAuditLogs, logAudit, getAdminStats } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
@@ -82,8 +83,12 @@ function parseLead(value: FormDataEntryValue | null, fallback: number): number {
 }
 
 export const actions: Actions = {
-	testNotification: async ({ locals, cookies }) => {
+	testNotification: async ({ locals, cookies, getClientAddress }) => {
 		const u = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'settings_test_notification');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		try {
 			await deliver(u.id, { title: 'Test notification', body: 'This is a test notification from Roamarr.', link: '/' });
 			setFlash(cookies, 'Test notification sent.');
@@ -92,8 +97,12 @@ export const actions: Actions = {
 		}
 		throw redirect(303, '/settings');
 	},
-	testEmail: async ({ locals, cookies }) => {
+	testEmail: async ({ locals, cookies, getClientAddress }) => {
 		const u = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'settings_test_email');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		try {
 			const { sendMail } = await import('$lib/server/notify');
 			const ok = await sendMail(

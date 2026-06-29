@@ -10,6 +10,7 @@
 	const visitedStateCodes = $derived(new Set(data.usStates.map((s) => s.code)));
 	let tab = $state<'country' | 'state'>('country');
 	let query = $state('');
+	const today = new Date().toISOString().slice(0, 10);
 
 	const filteredCountries = $derived(
 		query.trim()
@@ -49,6 +50,24 @@
 
 {#if tab === 'country'}
 	<section class="card mt-4 p-5">
+		<form method="POST" action="?/mark" class="mb-5 flex flex-wrap items-end gap-3">
+			<input type="hidden" name="kind" value="country" />
+			<label class="flex flex-col gap-1">
+				<span class="text-sm text-muted">Country</span>
+				<select name="code" class="input w-56" required>
+					<option value="" disabled selected>Choose a country…</option>
+					{#each COUNTRIES.filter((c) => !visitedCountryCodes.has(c.code)) as c (c.code)}
+						<option value={c.code}>{c.name} ({c.code})</option>
+					{/each}
+				</select>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="text-sm text-muted">Visited on</span>
+				<input type="date" name="visited_on" value={today} class="input" required />
+			</label>
+			<button type="submit" class="btn btn-primary">Add visit</button>
+		</form>
+
 		<div class="mb-4 flex items-center gap-3">
 			<input
 				bind:value={query}
@@ -96,9 +115,54 @@
 				{/if}
 			{/each}
 		</div>
+
+		{#if data.summaries.length > 0}
+			<div class="mt-6">
+				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-muted">Country summary</h2>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="text-left text-muted">
+								<th class="pb-2">Country</th>
+								<th class="pb-2">First visit</th>
+								<th class="pb-2">Last visit</th>
+								<th class="pb-2">Trips</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.summaries as s (s.code)}
+								<tr class="border-t">
+									<td class="py-2 font-medium">{s.code}</td>
+									<td class="py-2">{s.firstAt ?? '—'}</td>
+									<td class="py-2">{s.lastAt ?? '—'}</td>
+									<td class="py-2">{s.tripCount}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		{/if}
 	</section>
 {:else}
 	<section class="card mt-4 p-5">
+		<form method="POST" action="?/mark" class="mb-5 flex flex-wrap items-end gap-3">
+			<input type="hidden" name="kind" value="state" />
+			<label class="flex flex-col gap-1">
+				<span class="text-sm text-muted">U.S. state</span>
+				<select name="code" class="input w-56" required>
+					<option value="" disabled selected>Choose a state…</option>
+					{#each US_STATES.filter((s) => !visitedStateCodes.has(s.code)) as s (s.code)}
+						<option value={s.code}>{s.name} ({s.code})</option>
+					{/each}
+				</select>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span class="text-sm text-muted">Visited on</span>
+				<input type="date" name="visited_on" value={today} class="input" required />
+			</label>
+			<button type="submit" class="btn btn-primary">Add visit</button>
+		</form>
 		<div class="mb-4 flex items-center gap-3">
 			<span class="text-sm text-muted">Toggle states you have visited</span>
 			{#if visitedStateCodes.size > 0}

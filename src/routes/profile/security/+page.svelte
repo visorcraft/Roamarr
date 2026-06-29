@@ -22,8 +22,8 @@
 	<h2 class="section-title mb-3">Two-factor authentication (2FA)</h2>
 
 	{#if tfa.enabled}
-		<div class="flex items-center gap-2 text-sm text-green-400">
-			<span class="inline-block h-2 w-2 rounded-full bg-green-400"></span>
+		<div class="flex items-center gap-2 text-sm text-brand">
+			<span class="inline-block h-2 w-2 rounded-full bg-brand"></span>
 			Enabled{#if tfa.enabledAt}since {new Date(tfa.enabledAt).toLocaleDateString()}{/if}
 		</div>
 		<p class="meta mt-1">{tfa.backupCodesRemaining} backup code{tfa.backupCodesRemaining === 1 ? '' : 's'} remaining.</p>
@@ -39,7 +39,7 @@
 		{/if}
 
 		<div class="mt-4 space-y-4">
-			<details class="rounded-md border border-slate-200 dark:border-slate-700">
+			<details class="rounded-md border border-line">
 				<summary class="cursor-pointer px-4 py-2 text-sm font-medium">Regenerate backup codes</summary>
 				<form method="POST" action="?/regenerate" class="space-y-3 p-4">
 					<p class="field-help">Requires your current 6-digit code. Old codes are invalidated.</p>
@@ -51,8 +51,8 @@
 				</form>
 			</details>
 
-			<details class="rounded-md border border-red-500/30">
-				<summary class="cursor-pointer px-4 py-2 text-sm font-medium text-red-400">Disable 2FA</summary>
+			<details class="rounded-md border border-line">
+				<summary class="cursor-pointer px-4 py-2 text-sm font-medium text-ink">Disable 2FA</summary>
 				<form method="POST" action="?/disable" class="space-y-3 p-4">
 					<p class="field-help">Requires your account password and a valid TOTP code or backup code.</p>
 					<div class="field">
@@ -61,7 +61,7 @@
 					</div>
 					<div class="field">
 						<label class="label" for="disableTotp">TOTP code or backup code</label>
-						<input id="disableTotp" name="totpCode" type="text" class="input" inputmode="numeric" placeholder="123456" autocomplete="one-time-code" required />
+						<input id="disableTotp" name="totpCode" type="text" class="input" placeholder="123456 or abcd-ef12-3456" autocomplete="one-time-code" required />
 					</div>
 					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Disable two-factor authentication?">Disable 2FA</ConfirmButton>
 				</form>
@@ -70,8 +70,8 @@
 	{:else if showSetup}
 		<div class="space-y-4">
 			<p class="text-sm">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.), or enter the secret manually.</p>
-			<img src={data.setup!.qr} alt="QR code" class="mx-auto rounded-lg border border-slate-200 dark:border-slate-700" />
-			<div class="rounded-md bg-slate-100 px-3 py-2 text-center font-mono text-sm dark:bg-slate-800">
+			<img src={data.setup!.qr} alt="QR code" class="mx-auto rounded-lg border border-line" />
+			<div class="rounded-md bg-surface2 px-3 py-2 text-center font-mono text-sm">
 				{data.setup!.secret}
 			</div>
 			<form method="POST" action="?/enable" class="space-y-3">

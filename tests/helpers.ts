@@ -1,6 +1,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+function openTestDb(path: string, schema: any) {
+	const passphrase = process.env.ROAMARR_SECRET;
+	if (!passphrase) {
+		throw new Error('ROAMARR_SECRET must be set to create encrypted test databases.');
+	}
+	return KitDatabase.createEncryptedSync(path, schema, passphrase);
+}
 import { KitDatabase } from '@mongreldb/kit';
 import {
 	users,
@@ -30,7 +38,7 @@ let tripCounter = 0;
 
 export function freshDb() {
 	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
-	const kitInstance = KitDatabase.openSync(dir, schema);
+	const kitInstance = openTestDb(dir, schema);
 	// The 0001_initial migration seeds the singleton settings row, so there is
 	// no need to insert it here (doing so would now be a duplicate primary key).
 	kitInstance.migrateSync(schema, migrations);

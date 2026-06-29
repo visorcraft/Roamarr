@@ -53,21 +53,13 @@ import {
 	saveTripTemplateAction,
 	markVisitedPlacesAction
 } from '$lib/server/tripMetaActions';
-import { tripWeatherOverview } from '$lib/server/weather';
 import type { Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const tripId = parseTripId(params);
-	const detail = buildTripDetail(u, tripId, url);
-	let weather = null;
-	try {
-		weather = await tripWeatherOverview(tripId, u.id);
-	} catch {
-		weather = null;
-	}
-	return { ...detail, weather };
+	return await buildTripDetail(u, tripId, url);
 };
 
 export const actions: Actions = {

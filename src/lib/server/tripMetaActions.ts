@@ -14,7 +14,7 @@ import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
 import { saveTripTemplate } from './tripTemplates';
-import { autoMarkCountriesFromTrip } from './visitedPlaces';
+import { autoMarkFromTrip } from './visitedPlaces';
 import { setFlash } from './flash';
 import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
@@ -171,12 +171,19 @@ export async function saveTripTemplateAction(event: RequestEvent) {
 
 export async function markVisitedPlacesAction(event: RequestEvent) {
 	const { user, tripId } = await withTripAction(event);
-	const added = autoMarkCountriesFromTrip(user.id, tripId);
+	const added = autoMarkFromTrip(user.id, tripId);
+	const parts: string[] = [];
+	if (added.countries.length > 0) {
+		parts.push(`${added.countries.length} countr${added.countries.length === 1 ? 'y' : 'ies'}`);
+	}
+	if (added.states.length > 0) {
+		parts.push(`${added.states.length} U.S. state${added.states.length === 1 ? '' : 's'}`);
+	}
 	setFlash(
 		event.cookies,
-		added.length > 0
-			? `Marked ${added.length} countr${added.length === 1 ? 'y' : 'ies'} visited from this trip.`
-			: 'No new countries to mark from this trip.'
+		parts.length > 0
+			? `Marked ${parts.join(' and ')} visited from this trip.`
+			: 'No new places to mark from this trip.'
 	);
 	throw redirect(303, `/trips/${tripId}`);
 }

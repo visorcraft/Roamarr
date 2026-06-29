@@ -18,6 +18,18 @@ import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
 import { makeKitUser } from '../../../../tests/kitHelpers';
+import * as OTPAuth from 'otpauth';
+import { generateSecret, enableTwoFactor, isTwoFactorEnabled } from '$lib/server/twoFactor';
+
+function validToken(secret: string): string {
+	return new OTPAuth.TOTP({
+		issuer: 'Roamarr',
+		algorithm: 'SHA1',
+		digits: 6,
+		period: 30,
+		secret: OTPAuth.Secret.fromBase32(secret)
+	}).generate();
+}
 
 beforeEach(() => {
 	(ctx as any).kit.deleteFrom(users).executeSync();
@@ -271,4 +283,47 @@ test('delete prevents deleting the last admin', async () => {
 
 	expect(result.status).toBe(400);
 	expect(result.data.error).toMatch(/last admin/i);
+});
+
+test('disableTwoFactor removes 2FA for another user', async () => {
+	const kit = (ctx as any).kit;
+	const admin = makeAdminLocals(kit);
+	const target = makeKitUser({ email: 'target@x.c', password_hash: 'x', display_name: 'T', role: 'user' });
+	const setup = generateSecret(target.email);
+	const enabled = enableTwoFactor(Number(target.id), setup.secret, validToken(setup.secret));
+	expect(enabled.ok).toBe(true);
+	expect(isTwoFactorEnabled(Number(target.id))).toBe(true);
+
+	const form = new FormData();
+	form.set('userId', String(target.id));
+	try {
+		await actions.disableTwoFactor({
+			request: { formData: async () => form },
+			locals: admin,
+			cookies: { set: vi.fn() }
+		} as any);
+		expect.fail('should have redirected');
+	} catch (e: any) {
+		expect(e.status).toBe(303);
+		expect(e.location).toBe('/settings/users');
+	}
+
+	expect(isTwoFactorEnabled(Number(target.id))).toBe(false);
+});
+
+test('disableTwoFactor rejects non-admins', async () => {
+	const kit = (ctx as any).kit;
+	const user = makeUserLocals(kit);
+	const form = new FormData();
+	form.set('userId', String(user.user.id));
+
+	try {
+		await actions.disableTwoFactor({
+			request: { formData: async () => form },
+			locals: user
+		} as any);
+		expect.fail('should have thrown');
+	} catch (e: any) {
+		expect(e.status).toBe(403);
+	}
 });

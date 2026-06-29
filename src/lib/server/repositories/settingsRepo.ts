@@ -1,6 +1,6 @@
-import { eq } from '@mongreldb/kit';
 import { kit } from '$lib/server/db';
 import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
+import { eq } from '@mongreldb/kit';
 import type { Row, Update } from '@mongreldb/kit';
 
 export type Settings = {
@@ -172,7 +172,7 @@ const DEFAULT_BENEFIT_TEMPLATES: BenefitTemplateInput[] = [
 ];
 
 export function getSettings(): Settings {
-	const rows = kit.selectFrom(settings).where(eq(settings.id, 1n)).executeSync();
+	const rows = kit.selectFrom(settings).executeSync();
 	if (rows.length === 0) {
 		kit
 			.insertInto(settings)
@@ -180,6 +180,7 @@ export function getSettings(): Settings {
 				id: 1n,
 				smtp_host: null,
 				smtp_port: null,
+				smtp_security: null,
 				smtp_user: null,
 				smtp_pass: null,
 				smtp_from: null,
@@ -196,7 +197,8 @@ export function getSettings(): Settings {
 }
 
 export function updateSettings(patch: SettingsPatch): void {
-	kit.updateTable(settings).set(toKitSettingsPatch(patch)).where(eq(settings.id, 1n)).executeSync();
+	getSettings(); // ensure the singleton settings row exists before patching
+	kit.updateTable(settings).set(toKitSettingsPatch(patch)).executeSync();
 }
 
 export function ensureDefaultBenefitTemplates(): void {

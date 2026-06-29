@@ -4,7 +4,10 @@ import { getClient, validateScopes, createAuthorizationCode, ALL_SCOPES } from '
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ locals, url }) => {
+export const load: PageServerLoad = ({ locals, url, getClientAddress }) => {
+	const limit = checkRateLimit(getClientAddress(), 'oauth_authorize');
+	if (!limit.allowed) throw error(429, 'Too many requests');
+
 	const u = requireUser(locals);
 
 	const responseType = url.searchParams.get('response_type');
@@ -70,7 +73,10 @@ export const actions: Actions = {
 		throw redirect(302, location);
 	},
 
-	deny: async ({ request }) => {
+	deny: async ({ request, getClientAddress }) => {
+		const limit = checkRateLimit(getClientAddress(), 'oauth_authorize');
+		if (!limit.allowed) return fail(429, { error: 'Too many requests' });
+
 		const f = await request.formData();
 		const clientId = String(f.get('client_id') ?? '');
 		const redirectUri = String(f.get('redirect_uri') ?? '');

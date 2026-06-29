@@ -37,7 +37,7 @@ An amber advisory chip appears at the top of the card when any forecasted day
 has:
 - Wind speed ≥ 50 km/h
 - Heavy precipitation (≥ 80% probability + a heavy-rain weather code)
-- Freezing temperatures (high ≤ 0 °C)
+- Freezing temperatures (low ≤ 0 °C)
 
 ## Limitations
 

@@ -3,10 +3,12 @@ import { eq as kitEq, and as kitAnd } from '@mongreldb/kit';
 import { kit } from './db';
 import { weatherCache, trips, segments } from './db/mongrelSchema';
 import { getUserById } from './repositories/usersRepo';
+import { loadTripFor } from '../../routes/trips/shared';
+import { weatherCodeSummary } from '$lib/weatherCodes';
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 14;
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+export const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 export type WeatherUnits = 'metric' | 'imperial';
 
@@ -42,6 +44,7 @@ export interface DayForecast {
 	windMax: number | null;
 	code: number | null;
 	summary: string;
+	degraded?: boolean;
 }
 
 export interface TripWeatherOverview {
@@ -50,6 +53,7 @@ export interface TripWeatherOverview {
 	advisory: string | null;
 	tempUnit: '°C' | '°F';
 	windUnit: 'km/h' | 'mph';
+	degraded: boolean;
 }
 
 interface OpenMeteoDaily {
@@ -64,41 +68,6 @@ interface OpenMeteoDaily {
 interface OpenMeteoResponse {
 	daily?: OpenMeteoDaily;
 	error?: string;
-}
-
-const WMO_CODES: Record<number, string> = {
-	0: 'Clear sky',
-	1: 'Mainly clear',
-	2: 'Partly cloudy',
-	3: 'Overcast',
-	45: 'Fog',
-	48: 'Depositing rime fog',
-	51: 'Light drizzle',
-	53: 'Moderate drizzle',
-	55: 'Dense drizzle',
-	56: 'Light freezing drizzle',
-	57: 'Dense freezing drizzle',
-	61: 'Slight rain',
-	63: 'Moderate rain',
-	65: 'Heavy rain',
-	66: 'Light freezing rain',
-	67: 'Heavy freezing rain',
-	71: 'Slight snow',
-	73: 'Moderate snow',
-	75: 'Heavy snow',
-	77: 'Snow grains',
-	80: 'Slight rain showers',
-	81: 'Moderate rain showers',
-	82: 'Violent rain showers',
-	85: 'Slight snow showers',
-	86: 'Heavy snow showers',
-	95: 'Thunderstorm',
-	96: 'Thunderstorm with slight hail',
-	99: 'Thunderstorm with heavy hail'
-};
-
-export function weatherCodeSummary(code: number): string {
-	return WMO_CODES[code] ?? 'Unknown';
 }
 
 export function locationKey(lat: number, lng: number): string {
@@ -116,6 +85,8 @@ export async function fetchForecast(lat: number, lng: number): Promise<OpenMeteo
 			'wind_speed_10m_max',
 			'weather_code'
 		].join(','),
+		hourly: 'temperature_2m,weather_code',
+		temperature_unit: 'celsius',
 		forecast_days: String(FORECAST_DAYS),
 		timezone: 'auto'
 	});
@@ -124,8 +95,8 @@ export async function fetchForecast(lat: number, lng: number): Promise<OpenMeteo
 	return (await res.json()) as OpenMeteoResponse;
 }
 
-function getCachedPayload(locationKeyStr: string, forDate: string): string | null {
-	const rows = kit
+function getCachedRow(locationKeyStr: string, forDate: string) {
+	return kit
 		.selectFrom(weatherCache)
 		.where(
 			kitAnd(
@@ -133,11 +104,37 @@ function getCachedPayload(locationKeyStr: string, forDate: string): string | nul
 				kitEq(weatherCache.for_date, forDate)
 			)
 		)
-		.executeSync();
-	if (rows.length === 0) return null;
-	const fetchedAt = rows[0].fetched_at as string;
+		.executeSync()[0];
+}
+
+function parsePayload(value: unknown): OpenMeteoResponse | null {
+	// `payload_json` is a `json()` column (migration 0010 converted any legacy
+	// text rows in place). MongrelDB Kit stores json columns as UTF-8 bytes and
+	// reads them back as strings, so the value is parsed here. The object branch
+	// is kept so a future Kit that returns parsed json values needs no change.
+	if (value == null) return null;
+	if (typeof value === 'string') {
+		try {
+			return JSON.parse(value) as OpenMeteoResponse;
+		} catch {
+			return null;
+		}
+	}
+	if (typeof value === 'object') return value as OpenMeteoResponse;
+	return null;
+}
+
+function getFreshPayload(locationKeyStr: string, forDate: string): OpenMeteoResponse | null {
+	const row = getCachedRow(locationKeyStr, forDate);
+	if (!row) return null;
+	const fetchedAt = row.fetched_at as string;
 	if (Date.now() - new Date(fetchedAt).getTime() > CACHE_TTL_MS) return null;
-	return rows[0].payload_json as string;
+	return parsePayload(row.payload_json);
+}
+
+function getStalePayload(locationKeyStr: string, forDate: string): OpenMeteoResponse | null {
+	const row = getCachedRow(locationKeyStr, forDate);
+	return parsePayload(row?.payload_json);
 }
 
 function upsertCache(locationKeyStr: string, forDate: string, payload: string): void {
@@ -173,12 +170,13 @@ export async function getCachedForecast(
 	date: string
 ): Promise<DayForecast | null> {
 	const key = locationKey(lat, lng);
-	const cached = getCachedPayload(key, date);
+	const fresh = getFreshPayload(key, date);
 	let daily: OpenMeteoDaily | undefined;
-	if (cached) {
-		const parsed = JSON.parse(cached) as OpenMeteoResponse;
-		daily = parsed.daily;
+	let degraded = false;
+	if (fresh) {
+		daily = fresh.daily;
 	} else {
+		const stale = getStalePayload(key, date);
 		try {
 			const response = await fetchForecast(lat, lng);
 			if (!response.daily) return null;
@@ -197,7 +195,9 @@ export async function getCachedForecast(
 				upsertCache(key, daily.time[i], dayPayload);
 			}
 		} catch {
-			return null;
+			if (!stale) return null;
+			daily = stale.daily;
+			degraded = true;
 		}
 	}
 	if (!daily) return null;
@@ -211,7 +211,8 @@ export async function getCachedForecast(
 		precipProb: daily.precipitation_probability_max[idx],
 		windMax: daily.wind_speed_10m_max[idx],
 		code: daily.weather_code[idx],
-		summary: weatherCodeSummary(daily.weather_code[idx])
+		summary: weatherCodeSummary(daily.weather_code[idx]),
+		degraded
 	};
 }
 
@@ -280,20 +281,23 @@ function buildAdvisory(days: DayForecast[], units: WeatherUnits): string | null 
 		}
 		if (d.precipProb != null && d.precipProb >= 80 && [65, 67, 82, 95, 96, 99].includes(d.code ?? -1))
 			warnings.push(`Heavy precipitation on ${d.date}`);
-		if (d.tempMax != null && d.tempMax <= 0) warnings.push(`Freezing temperatures on ${d.date}`);
+		if (d.tempMin != null && d.tempMin <= 0) warnings.push(`Freezing temperatures on ${d.date}`);
 	}
 	return warnings.length > 0 ? warnings.join('; ') : null;
 }
 
 export async function tripWeatherOverview(
 	tripId: number,
-	userId?: number
+	userId: number
 ): Promise<TripWeatherOverview | null> {
+	// Authorize before touching destination coordinates/dates for an arbitrary id.
+	loadTripFor(userId, tripId);
+
 	const trip = loadTripRow(tripId);
 	if (!trip || trip.destinationCityLat == null || trip.destinationCityLng == null) return null;
 	if (!trip.startDate) return null;
 
-	const units = unitsForTimezone(userId != null ? getUserById(userId)?.timezone : null);
+	const units = unitsForTimezone(getUserById(userId)?.timezone);
 	const tempUnit = units === 'imperial' ? '°F' : '°C';
 	const windUnit = units === 'imperial' ? 'mph' : 'km/h';
 
@@ -305,9 +309,18 @@ export async function tripWeatherOverview(
 
 	let cursor = DateTime.fromISO(trip.startDate).startOf('day');
 	if (cursor < today) cursor = today;
-	if (cursor > lastDay) return { headline: 'No forecastable dates in range.', days: [], advisory: null, tempUnit, windUnit };
+	if (cursor > lastDay)
+		return {
+			headline: 'No forecastable dates in range.',
+			days: [],
+			advisory: null,
+			tempUnit,
+			windUnit,
+			degraded: false
+		};
 
 	const days: DayForecast[] = [];
+	let anyDegraded = false;
 	while (cursor <= lastDay) {
 		const dateStr = cursor.toISODate()!;
 		const seg = findSegmentForDate(segs, dateStr);
@@ -319,6 +332,7 @@ export async function tripWeatherOverview(
 		// day in range is within the forecast horizon. Days past it are surfaced as
 		// "unavailable" by the trip page, not fabricated here.
 		const forecast = await getCachedForecast(lat, lng, dateStr);
+		if (forecast?.degraded) anyDegraded = true;
 		days.push({
 			date: dateStr,
 			locationLabel: label,
@@ -327,14 +341,22 @@ export async function tripWeatherOverview(
 			precipProb: forecast?.precipProb ?? null,
 			windMax: forecast?.windMax ?? null,
 			code: forecast?.code ?? null,
-			summary: forecast?.summary ?? 'Unavailable'
+			summary: forecast?.summary ?? 'Unavailable',
+			degraded: forecast?.degraded
 		});
 		cursor = cursor.plus({ days: 1 });
 	}
 
 	const available = days.filter((d) => d.code != null);
 	if (available.length === 0) {
-		return { headline: 'Forecast unavailable for this destination.', days, advisory: null, tempUnit, windUnit };
+		return {
+			headline: 'Forecast unavailable for this destination.',
+			days,
+			advisory: null,
+			tempUnit,
+			windUnit,
+			degraded: anyDegraded
+		};
 	}
 
 	// Advisory is computed on the metric values (thresholds are metric); the cards
@@ -355,6 +377,7 @@ export async function tripWeatherOverview(
 		days: displayDays,
 		advisory,
 		tempUnit,
-		windUnit
+		windUnit,
+		degraded: anyDegraded
 	};
 }

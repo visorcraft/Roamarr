@@ -10,6 +10,7 @@
 
 	async function signInWithPasskey() {
 		passkeyError = '';
+		if (!data.passkeyAvailable) return;
 		try {
 			passkeyBusy = true;
 			const opts = await fetch('/api/webauthn/auth/options', { method: 'POST' }).then((r) => r.json());
@@ -51,11 +52,13 @@
 
 	{#if passkeyError}<p class="notice notice-error mt-3">{passkeyError}</p>{/if}
 
-	<div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
-		<button class="btn btn-ghost w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
-			{passkeyBusy ? 'Waiting…' : 'Sign in with a passkey'}
-		</button>
-	</div>
+	{#if data.passkeyAvailable}
+		<div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+			<button class="btn btn-ghost w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
+				{passkeyBusy ? 'Waiting…' : 'Sign in with a passkey'}
+			</button>
+		</div>
+	{/if}
 
 	{#if data.allowRegistration}
 		<p class="mt-5 text-center text-sm text-muted">

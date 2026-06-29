@@ -107,6 +107,31 @@ describe('passkeys', () => {
 		expect(passkeyCount(userId)).toBe(0);
 	});
 
+	test('rename/delete cannot touch another user’s passkey (IDOR)', () => {
+		const inserted = ctx.kit.insertInto(passkeys).values({
+			user_id: BigInt(userId),
+			credential_id: 'owned-cred',
+			public_key: 'dGVzdA==',
+			counter: 0n,
+			transports: '[]',
+			device_type: 'singleDevice',
+			name: 'Owned',
+			created_at: new Date().toISOString(),
+			last_used_at: null
+		} as any).executeSync();
+		const pkId = Number(inserted.id);
+		const attacker = makeUser(ctx.kit).id;
+
+		expect(deletePasskey(attacker, pkId)).toBe(false);
+		expect(renamePasskey(attacker, pkId, 'Hacked')).toBe(false);
+		expect(passkeyCount(userId)).toBe(1);
+		expect(listPasskeys(userId)[0].name).toBe('Owned');
+
+		// the real owner still can
+		expect(deletePasskey(userId, pkId)).toBe(true);
+		expect(passkeyCount(userId)).toBe(0);
+	});
+
 	afterEach(() => {
 		process.env.ORIGIN = ORIGINAL_ORIGIN;
 	});

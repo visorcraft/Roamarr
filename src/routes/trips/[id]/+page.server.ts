@@ -63,7 +63,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const detail = buildTripDetail(u, tripId, url);
 	let weather = null;
 	try {
-		weather = await tripWeatherOverview(tripId);
+		weather = await tripWeatherOverview(tripId, u.id);
 	} catch {
 		weather = null;
 	}

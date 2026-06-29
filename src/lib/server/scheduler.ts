@@ -2,6 +2,7 @@ import { runDueReminders } from './reminders';
 import { runFareChecks } from './fareproviders';
 import { purgeExpiredSessions } from './auth';
 import { purgeExpiredChallenges } from './passkeys';
+import { purgeExpiredOauth } from './oauth';
 import {
 	startSchedulerRun,
 	finishSchedulerRun,
@@ -23,6 +24,7 @@ export async function runTick(now: Date) {
 		await runFareChecks(now);
 		purgeExpiredSessions();
 		purgeExpiredChallenges();
+		purgeExpiredOauth();
 		finishSchedulerRun(run.id, { success: true });
 	} catch (e) {
 		console.error('[scheduler]', e);

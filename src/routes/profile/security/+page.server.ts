@@ -38,7 +38,9 @@ export const actions: Actions = {
 		const result = enableTwoFactor(u.id, secret, token);
 		if (!result.ok) return fail(400, { error: result.error });
 		setFlash(cookies, 'Two-factor authentication enabled. Save your backup codes.');
-		throw redirect(303, '/profile/security?codes=1');
+		// Return the codes (shown once); they are never persisted in plaintext, so a
+		// redirect here would lose them forever.
+		return { backupCodes: result.backupCodes };
 	},
 	disable: async ({ request, locals, cookies }) => {
 		const u = requireUser(locals);
@@ -65,7 +67,7 @@ export const actions: Actions = {
 		const result = regenerateBackupCodes(u.id, token);
 		if (!result.ok) return fail(400, { error: result.error });
 		setFlash(cookies, 'Backup codes regenerated. Save the new codes.');
-		throw redirect(303, '/profile/security?codes=1');
+		return { backupCodes: result.backupCodes };
 	}
 };
 

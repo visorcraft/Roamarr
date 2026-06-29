@@ -128,6 +128,17 @@ describe('twoFactor', () => {
 		expect(verifyTwoFactor(userId, '123456')).toBe(false);
 	});
 
+	test('consuming a backup code decrements the remaining count', () => {
+		const setup = generateSecret('u@e.com');
+		const result = enableTwoFactor(userId, setup.secret, validToken(setup.secret));
+		if (!result.ok) throw new Error('enable failed');
+		expect(getTwoFactorState(userId).backupCodesRemaining).toBe(10);
+
+		expect(verifyTwoFactor(userId, result.backupCodes[0])).toBe(true);
+		// Regression: the remaining count must reflect the 9 unused codes, not 0.
+		expect(getTwoFactorState(userId).backupCodesRemaining).toBe(9);
+	});
+
 	test('createPendingCookie / verifyPendingCookie round-trip', () => {
 		const cookie = createPendingCookie(userId);
 		const pending = verifyPendingCookie(cookie.value);

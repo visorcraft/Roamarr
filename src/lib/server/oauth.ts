@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, lt as kitLt } from '@mongreldb/kit';
 import { kit } from './db';
 import { oauthClients, oauthCodes, oauthTokens } from './db/mongrelSchema';
 import { logAudit } from './audit';
+import { getUserById } from './repositories/usersRepo';
 import type { Row } from '@mongreldb/kit';
 
 export type Scope =
@@ -72,11 +73,13 @@ export interface CreateClientInput {
 	clientName: string;
 	redirectUris: string[];
 	scopes: Scope[];
+	/** Public clients (e.g. desktop apps that can't keep a secret) use PKCE only. */
+	isPublic?: boolean;
 }
 
 export function createClient(userId: number, input: CreateClientInput): { client: OAuthClient; plaintextSecret: string | null } {
 	const clientId = randomToken(16);
-	const isConfidential = true;
+	const isConfidential = !input.isPublic;
 	const plaintextSecret = isConfidential ? randomToken(32) : null;
 
 	kit.insertInto(oauthClients).values({
@@ -94,7 +97,15 @@ export function createClient(userId: number, input: CreateClientInput): { client
 }
 
 export function deleteClient(userId: number, clientId: string): boolean {
-	const n = kit.deleteFrom(oauthClients).where(kitEq(oauthClients.client_id, clientId)).executeSync();
+	const n = kit
+		.deleteFrom(oauthClients)
+		.where(
+			kitAnd(
+				kitEq(oauthClients.client_id, clientId),
+				kitEq(oauthClients.created_by_user_id, BigInt(userId))
+			)
+		)
+		.executeSync();
 	if (n > 0n) {
 		kit.deleteFrom(oauthTokens).where(kitEq(oauthTokens.client_id, clientId)).executeSync();
 		logAudit(userId, 'oauth_client_delete', 'oauth_client', 0, { clientId });
@@ -144,6 +155,22 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
 	return hash === challenge;
 }
 
+// Confidential clients must present their secret at the token endpoint; public
+// (PKCE-only) clients authenticate via the code_verifier alone.
+function authenticateClient(clientId: string, clientSecret: string | null): { ok: true } | { error: string } {
+	const client = getClient(clientId);
+	if (!client) return { error: 'invalid_client' };
+	if (client.isConfidential) {
+		if (!clientSecret) return { error: 'invalid_client' };
+		const stored = kit
+			.selectFrom(oauthClients)
+			.where(kitEq(oauthClients.client_id, clientId))
+			.executeSync()[0];
+		if (stored?.client_secret_hash !== sha256(clientSecret)) return { error: 'invalid_client' };
+	}
+	return { ok: true };
+}
+
 export interface TokenResult {
 	accessToken: string;
 	refreshToken: string;
@@ -157,6 +184,7 @@ export function exchangeAuthorizationCode(params: {
 	clientId: string;
 	clientSecret: string | null;
 	codeVerifier: string;
+	redirectUri?: string;
 }): TokenResult | { error: string } {
 	const row = kit
 		.selectFrom(oauthCodes)
@@ -166,17 +194,11 @@ export function exchangeAuthorizationCode(params: {
 	if (row.used_at) return { error: 'invalid_grant' };
 	if (Date.now() > new Date(row.expires_at as string).getTime()) return { error: 'invalid_grant' };
 	if (row.client_id !== params.clientId) return { error: 'invalid_grant' };
+	// RFC 6749 §4.1.3: redirect_uri must match the one bound to the code.
+	if (params.redirectUri != null && row.redirect_uri !== params.redirectUri) return { error: 'invalid_grant' };
 
-	const client = getClient(params.clientId);
-	if (!client) return { error: 'invalid_client' };
-	if (client.isConfidential) {
-		if (!params.clientSecret) return { error: 'invalid_client' };
-		const stored = kit
-			.selectFrom(oauthClients)
-			.where(kitEq(oauthClients.client_id, params.clientId))
-			.executeSync()[0];
-		if (stored?.client_secret_hash !== sha256(params.clientSecret)) return { error: 'invalid_client' };
-	}
+	const clientAuth = authenticateClient(params.clientId, params.clientSecret);
+	if ('error' in clientAuth) return clientAuth;
 
 	if (!verifyPkce(params.codeVerifier, row.code_challenge as string)) return { error: 'invalid_grant' };
 
@@ -197,6 +219,7 @@ export function exchangeAuthorizationCode(params: {
 export function refreshAccessToken(params: {
 	refreshToken: string;
 	clientId: string;
+	clientSecret?: string | null;
 }): TokenResult | { error: string } {
 	const row = kit
 		.selectFrom(oauthTokens)
@@ -207,6 +230,9 @@ export function refreshAccessToken(params: {
 	if (row.client_id !== params.clientId) return { error: 'invalid_grant' };
 	if (row.refresh_expires_at && Date.now() > new Date(row.refresh_expires_at as string).getTime())
 		return { error: 'invalid_grant' };
+
+	const clientAuth = authenticateClient(params.clientId, params.clientSecret ?? null);
+	if ('error' in clientAuth) return clientAuth;
 
 	kit
 		.updateTable(oauthTokens)
@@ -267,6 +293,12 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 	if (row.revoked_at) return null;
 	if (Date.now() > new Date(row.expires_at as string).getTime()) return null;
 
+	// Enforce the "disabled users cannot authenticate" invariant: oauth_tokens has
+	// no FK to users, so a disabled/deleted user's token would otherwise live until
+	// natural expiry.
+	const user = getUserById(Number(row.user_id));
+	if (!user || user.disabled) return null;
+
 	kit
 		.updateTable(oauthTokens)
 		.set({ last_used_at: new Date().toISOString() })
@@ -281,12 +313,28 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 }
 
 export function revokeTokensForUser(userId: number): number {
-	const n = kit
+	// updateTable returns the affected rows (Row[]), not a count.
+	const rows = kit
 		.updateTable(oauthTokens)
 		.set({ revoked_at: new Date().toISOString() })
 		.where(kitEq(oauthTokens.user_id, BigInt(userId)))
 		.executeSync();
-	return Number(n);
+	return rows.length;
+}
+
+/**
+ * Delete expired authorization codes and fully-expired tokens. oauth_* rows are
+ * filtered at read time, but without a sweep they grow unbounded. Run from the
+ * scheduler alongside the session/challenge purges.
+ */
+export function purgeExpiredOauth(): { codes: number; tokens: number } {
+	const now = new Date().toISOString();
+	const codes = kit.deleteFrom(oauthCodes).where(kitLt(oauthCodes.expires_at, now)).executeSync();
+	const tokens = kit
+		.deleteFrom(oauthTokens)
+		.where(kitLt(oauthTokens.refresh_expires_at, now))
+		.executeSync();
+	return { codes: Number(codes), tokens: Number(tokens) };
 }
 
 export function revokeToken(token: string): boolean {

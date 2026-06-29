@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { page } from '$app/state';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	const tfa = $derived(data.state);
 	const showSetup = $derived(Boolean(data.setup));
-	const showCodes = $derived(page.url.searchParams.get('codes') === '1');
+	const backupCodes = $derived(form?.backupCodes as string[] | undefined);
 
 	let setupToken = $state('');
 	let disablePassword = $state('');
@@ -29,10 +28,13 @@
 		</div>
 		<p class="meta mt-1">{tfa.backupCodesRemaining} backup code{tfa.backupCodesRemaining === 1 ? '' : 's'} remaining.</p>
 
-		{#if showCodes}
-			<div class="mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-4">
-				<p class="text-sm font-medium text-amber-300">Save these backup codes</p>
-				<p class="field-help mt-1 text-amber-200/70">Each can be used once if you lose access to your authenticator.</p>
+		{#if backupCodes}
+			<div class="notice notice-warning mt-4 p-4">
+				<p class="text-sm font-medium">Save these backup codes</p>
+				<p class="field-help mt-1">Each can be used once if you lose access to your authenticator. They won't be shown again.</p>
+				<div class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
+					{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center">{code}</span>{/each}
+				</div>
 			</div>
 		{/if}
 

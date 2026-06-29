@@ -15,7 +15,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			code: String(body.get('code') ?? ''),
 			clientId: String(body.get('client_id') ?? ''),
 			clientSecret: body.get('client_secret') ? String(body.get('client_secret')) : null,
-			codeVerifier: String(body.get('code_verifier') ?? '')
+			codeVerifier: String(body.get('code_verifier') ?? ''),
+			redirectUri: body.get('redirect_uri') ? String(body.get('redirect_uri')) : undefined
 		});
 		if ('error' in result) return json({ error: result.error }, { status: 400 });
 		return json(result);
@@ -24,7 +25,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (grantType === 'refresh_token') {
 		const result = refreshAccessToken({
 			refreshToken: String(body.get('refresh_token') ?? ''),
-			clientId: String(body.get('client_id') ?? '')
+			clientId: String(body.get('client_id') ?? ''),
+			clientSecret: body.get('client_secret') ? String(body.get('client_secret')) : null
 		});
 		if ('error' in result) return json({ error: result.error }, { status: 400 });
 		return json(result);

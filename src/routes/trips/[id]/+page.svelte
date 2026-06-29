@@ -594,28 +594,28 @@
 
 			{#if activeTab === 'itinerary' && data.weather?.days?.length}
 				<section class="mb-6">
-					<h2 class="section-title mb-3">Weather forecast</h2>
+					<h2 class="section-title mb-3">Weather forecast <span class="text-xs font-normal text-muted">({data.weather.tempUnit})</span></h2>
 					{#if data.weather.advisory}
-						<p class="mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">{data.weather.advisory}</p>
+						<p class="notice notice-warning mb-2">{data.weather.advisory}</p>
 					{/if}
 					<div class="flex gap-2 overflow-x-auto pb-2">
 						{#each data.weather.days as d (d.date)}
-							<div class="min-w-[110px] shrink-0 rounded-lg border border-slate-200 bg-white p-3 text-center dark:border-slate-700 dark:bg-slate-800">
-								<div class="text-xs font-medium text-slate-500 dark:text-slate-400">{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+							<div class="min-w-[110px] shrink-0 rounded-lg bg-surface2 p-3 text-center ring-1 ring-inset ring-white/5">
+								<div class="text-xs font-medium text-muted">{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
 								{#if d.code != null}
-									<div class="my-1 text-2xl font-light text-slate-700 dark:text-slate-200">
+									<div class="my-1 text-2xl font-light text-ink">
 										{d.tempMax != null ? `${Math.round(d.tempMax)}°` : '—'}
-										{#if d.tempMin != null}<span class="text-sm text-slate-400">/{Math.round(d.tempMin)}°</span>{/if}
+										{#if d.tempMin != null}<span class="text-sm text-muted">/{Math.round(d.tempMin)}°</span>{/if}
 									</div>
-									<div class="text-xs text-slate-500 dark:text-slate-400">{d.summary}</div>
+									<div class="text-xs text-muted">{d.summary}</div>
 									{#if d.precipProb != null && d.precipProb > 0}
-										<div class="mt-0.5 text-[11px] text-blue-500">{d.precipProb}% precip</div>
+										<div class="mt-0.5 text-[11px] text-brand">{d.precipProb}% precip</div>
 									{/if}
 								{:else}
-									<div class="my-2 text-xs text-slate-400">{d.summary}</div>
+									<div class="my-2 text-xs text-muted">{d.summary}</div>
 								{/if}
 								{#if d.locationLabel}
-									<div class="mt-1 truncate text-[10px] text-slate-400">{d.locationLabel}</div>
+									<div class="mt-1 truncate text-[10px] text-muted">{d.locationLabel}</div>
 								{/if}
 							</div>
 						{/each}

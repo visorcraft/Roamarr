@@ -2,10 +2,36 @@ import { DateTime } from 'luxon';
 import { eq as kitEq, and as kitAnd } from '@mongreldb/kit';
 import { kit } from './db';
 import { weatherCache, trips, segments } from './db/mongrelSchema';
+import { getUserById } from './repositories/usersRepo';
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 14;
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+export type WeatherUnits = 'metric' | 'imperial';
+
+// IANA zones that default to imperial. The forecast is always fetched + cached in
+// metric (so the cache and the advisory thresholds stay uniform across users) and
+// converted for display only.
+// ponytail: timezone heuristic, not a real locale — swap in an explicit per-user
+// units setting if users outside these zones want imperial.
+const IMPERIAL_TZONES = new Set<string>([
+	'America/New_York', 'America/Detroit', 'America/Kentucky/Louisville', 'America/Kentucky/Monticello',
+	'America/Indiana/Indianapolis', 'America/Indiana/Vincennes', 'America/Indiana/Winamac',
+	'America/Indiana/Marengo', 'America/Indiana/Petersburg', 'America/Indiana/Vevay',
+	'America/Chicago', 'America/Indiana/Tell_City', 'America/Indiana/Knox', 'America/Menominee',
+	'America/North_Dakota/Center', 'America/North_Dakota/New_Salem', 'America/North_Dakota/Beulah',
+	'America/Denver', 'America/Boise', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage',
+	'America/Juneau', 'America/Sitka', 'America/Metlakatla', 'America/Yakutat', 'America/Nome', 'America/Adak',
+	'Pacific/Honolulu', 'Pacific/Guam', 'Pacific/Saipan', 'America/Puerto_Rico'
+]);
+
+export function unitsForTimezone(tz: string | null | undefined): WeatherUnits {
+	return tz && IMPERIAL_TZONES.has(tz) ? 'imperial' : 'metric';
+}
+
+const cToF = (c: number) => (c * 9) / 5 + 32;
+const kmhToMph = (k: number) => k * 0.621371;
 
 export interface DayForecast {
 	date: string;
@@ -22,6 +48,8 @@ export interface TripWeatherOverview {
 	headline: string;
 	days: DayForecast[];
 	advisory: string | null;
+	tempUnit: '°C' | '°F';
+	windUnit: 'km/h' | 'mph';
 }
 
 interface OpenMeteoDaily {
@@ -241,10 +269,15 @@ function findSegmentForDate(segments: SegmentLocation[], dateStr: string): Segme
 	return best;
 }
 
-function buildAdvisory(days: DayForecast[]): string | null {
+// `days` are metric here; thresholds stay metric and the wind value is formatted
+// in the display unit so the text matches the converted forecast cards.
+function buildAdvisory(days: DayForecast[], units: WeatherUnits): string | null {
 	const warnings: string[] = [];
 	for (const d of days) {
-		if (d.windMax != null && d.windMax >= 50) warnings.push(`High wind (${d.windMax.toFixed(0)} km/h) on ${d.date}`);
+		if (d.windMax != null && d.windMax >= 50) {
+			const w = units === 'imperial' ? `${kmhToMph(d.windMax).toFixed(0)} mph` : `${d.windMax.toFixed(0)} km/h`;
+			warnings.push(`High wind (${w}) on ${d.date}`);
+		}
 		if (d.precipProb != null && d.precipProb >= 80 && [65, 67, 82, 95, 96, 99].includes(d.code ?? -1))
 			warnings.push(`Heavy precipitation on ${d.date}`);
 		if (d.tempMax != null && d.tempMax <= 0) warnings.push(`Freezing temperatures on ${d.date}`);
@@ -252,10 +285,17 @@ function buildAdvisory(days: DayForecast[]): string | null {
 	return warnings.length > 0 ? warnings.join('; ') : null;
 }
 
-export async function tripWeatherOverview(tripId: number): Promise<TripWeatherOverview | null> {
+export async function tripWeatherOverview(
+	tripId: number,
+	userId?: number
+): Promise<TripWeatherOverview | null> {
 	const trip = loadTripRow(tripId);
 	if (!trip || trip.destinationCityLat == null || trip.destinationCityLng == null) return null;
 	if (!trip.startDate) return null;
+
+	const units = unitsForTimezone(userId != null ? getUserById(userId)?.timezone : null);
+	const tempUnit = units === 'imperial' ? '°F' : '°C';
+	const windUnit = units === 'imperial' ? 'mph' : 'km/h';
 
 	const segs = loadSegmentLocations(tripId);
 	const today = DateTime.now().startOf('day');
@@ -265,7 +305,7 @@ export async function tripWeatherOverview(tripId: number): Promise<TripWeatherOv
 
 	let cursor = DateTime.fromISO(trip.startDate).startOf('day');
 	if (cursor < today) cursor = today;
-	if (cursor > lastDay) return { headline: 'No forecastable dates in range.', days: [], advisory: null };
+	if (cursor > lastDay) return { headline: 'No forecastable dates in range.', days: [], advisory: null, tempUnit, windUnit };
 
 	const days: DayForecast[] = [];
 	while (cursor <= lastDay) {
@@ -275,42 +315,46 @@ export async function tripWeatherOverview(tripId: number): Promise<TripWeatherOv
 		const lng = seg?.lng ?? trip.destinationCityLng;
 		const label = seg?.cityName ?? trip.destinationCityName ?? '';
 
-		if (cursor > maxDate) {
-			days.push({
-				date: dateStr,
-				locationLabel: label,
-				tempMin: null,
-				tempMax: null,
-				precipProb: null,
-				windMax: null,
-				code: null,
-				summary: 'Forecast unavailable'
-			});
-		} else {
-			const forecast = await getCachedForecast(lat, lng, dateStr);
-			days.push({
-				date: dateStr,
-				locationLabel: label,
-				tempMin: forecast?.tempMin ?? null,
-				tempMax: forecast?.tempMax ?? null,
-				precipProb: forecast?.precipProb ?? null,
-				windMax: forecast?.windMax ?? null,
-				code: forecast?.code ?? null,
-				summary: forecast?.summary ?? 'Unavailable'
-			});
-		}
+		// cursor never exceeds maxDate (lastDay = min(tripEnd, maxDate)), so every
+		// day in range is within the forecast horizon. Days past it are surfaced as
+		// "unavailable" by the trip page, not fabricated here.
+		const forecast = await getCachedForecast(lat, lng, dateStr);
+		days.push({
+			date: dateStr,
+			locationLabel: label,
+			tempMin: forecast?.tempMin ?? null,
+			tempMax: forecast?.tempMax ?? null,
+			precipProb: forecast?.precipProb ?? null,
+			windMax: forecast?.windMax ?? null,
+			code: forecast?.code ?? null,
+			summary: forecast?.summary ?? 'Unavailable'
+		});
 		cursor = cursor.plus({ days: 1 });
 	}
 
 	const available = days.filter((d) => d.code != null);
 	if (available.length === 0) {
-		return { headline: 'Forecast unavailable for this destination.', days, advisory: null };
+		return { headline: 'Forecast unavailable for this destination.', days, advisory: null, tempUnit, windUnit };
 	}
 
-	const headline = `${available.length}-day forecast available`;
+	// Advisory is computed on the metric values (thresholds are metric); the cards
+	// are then converted to the user's display units.
+	const advisory = buildAdvisory(days, units);
+	const displayDays =
+		units === 'imperial'
+			? days.map((d) => ({
+					...d,
+					tempMin: d.tempMin == null ? null : cToF(d.tempMin),
+					tempMax: d.tempMax == null ? null : cToF(d.tempMax),
+					windMax: d.windMax == null ? null : kmhToMph(d.windMax)
+				}))
+			: days;
+
 	return {
-		headline,
-		days,
-		advisory: buildAdvisory(days)
+		headline: `${available.length}-day forecast available`,
+		days: displayDays,
+		advisory,
+		tempUnit,
+		windUnit
 	};
 }

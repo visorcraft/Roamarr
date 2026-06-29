@@ -2,6 +2,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { verifyAccessToken } from '$lib/server/oauth';
 import { createMcpServer } from '$lib/server/mcpServer';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from '@sveltejs/kit';
 
 async function handleJsonRpc(userId: number, scopes: any[], body: unknown): Promise<unknown> {
@@ -30,7 +31,17 @@ async function handleJsonRpc(userId: number, scopes: any[], body: unknown): Prom
 	return response;
 }
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, getClientAddress }) => {
+	// Token-authenticated, but still bound request volume per client. MCP sessions
+	// are chatty, so the window is generous compared to the login limiter.
+	const limit = checkRateLimit(getClientAddress(), 'mcp', { maxAttempts: 120 });
+	if (!limit.allowed) {
+		return new Response(JSON.stringify({ error: 'Too many requests' }), {
+			status: 429,
+			headers: { 'Content-Type': 'application/json' }
+		});
+	}
+
 	const auth = request.headers.get('authorization') ?? '';
 	if (!auth.startsWith('Bearer ')) {
 		return new Response(JSON.stringify({ error: 'Bearer token required' }), {

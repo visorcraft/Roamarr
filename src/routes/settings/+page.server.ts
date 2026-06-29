@@ -25,7 +25,7 @@ export function _saveAdminSettings(
 		smtpPort?: number;
 		smtpSecurity?: string;
 		smtpUser?: string;
-		smtpPass?: string;
+		smtpPass?: string | null;
 		smtpFrom?: string;
 		webhookUrl?: string;
 		mapsTileProvider?: MapTileProvider;
@@ -101,6 +101,7 @@ export const actions: Actions = {
 				{ title: 'Roamarr SMTP test', body: 'This is a test email from Roamarr to verify SMTP delivery.' },
 				u.id
 			);
+			logAudit(u.id, 'smtp_test', 'settings', 1, { delivered: ok });
 			setFlash(cookies, ok ? 'Test email sent.' : 'SMTP is not configured.');
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test email' });
@@ -115,6 +116,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid tile provider' });
 		}
 		const pass = String(f.get('smtpPass') || '');
+		const clearSmtpPass = f.get('clearSmtpPass') === 'on';
 		const tileApiKey = String(f.get('mapsTileApiKey') || '');
 		_saveAdminSettings(u.id, {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
@@ -127,7 +129,7 @@ export const actions: Actions = {
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
 			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
-			smtpPass: pass && pass !== '********' ? pass : undefined,
+			smtpPass: clearSmtpPass ? null : pass && pass !== '********' ? pass : undefined,
 			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
 			webhookUrl: String(f.get('webhookUrl') || '') || undefined,
 			mapsTileProvider: mapsTileProvider as MapTileProvider,

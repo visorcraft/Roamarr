@@ -1348,6 +1348,9 @@ button.card:hover,
 	.notice-success {
 		@apply bg-emerald-500/10 text-emerald-300 ring-emerald-400/30;
 	}
+	.notice-warning {
+		@apply bg-amber-500/10 text-amber-300 ring-amber-400/30;
+	}
 	.notice-info {
 		@apply bg-indigo-500/10 text-indigo-300 ring-indigo-400/30;
 		background: var(--theme-active);

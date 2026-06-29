@@ -7,6 +7,7 @@ import { users } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { createPasswordResetToken } from './passwordReset';
 import { deliver } from './notify';
+import { revokeTokensForUser } from './oauth';
 
 export function normalizeEmail(raw: string): string {
 	return raw.trim().toLowerCase();
@@ -73,6 +74,9 @@ export async function adminDeleteUser(actorId: number, userId: number) {
 	}
 
 	usersRepo.deleteUser(userId);
+	// oauth_tokens has no FK cascade, so revoke MCP tokens explicitly to avoid
+	// leaving orphaned (otherwise-valid-looking) rows behind.
+	revokeTokensForUser(userId);
 	logAudit(actorId, 'user_delete', 'user', userId, { email: target.email, role: target.role });
 }
 

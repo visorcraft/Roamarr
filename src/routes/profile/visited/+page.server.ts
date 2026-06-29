@@ -1,6 +1,7 @@
 import { redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { setFlash } from '$lib/server/flash';
+import { logAudit } from '$lib/server/audit';
 import {
 	listVisited,
 	markVisited,
@@ -74,6 +75,7 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const newValue = !u.autoMarkVisited;
 		usersRepo.updateUser(u.id, { auto_mark_visited: newValue } as any);
+		logAudit(u.id, 'places_auto_mark_toggle', 'user', u.id, { enabled: newValue });
 		setFlash(cookies, newValue ? 'Auto-mark enabled.' : 'Auto-mark disabled.');
 		throw redirect(303, '/profile/visited');
 	}

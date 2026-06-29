@@ -331,7 +331,15 @@
 						<label class="label" for="smtpPass">Password</label>
 						<p class="field-help">Leave the masked value to keep the stored secret.</p>
 					</div>
-					<input id="smtpPass" name="smtpPass" type="password" value={s.smtpPass} placeholder="Password" class="input" />
+					<div>
+						<input id="smtpPass" name="smtpPass" type="password" value={s.smtpPass} placeholder="Password" class="input" />
+						{#if s.smtpPass}
+							<label class="checkbox-label mt-2 text-xs">
+								<input type="checkbox" name="clearSmtpPass" class="checkbox" />
+								Clear the stored password
+							</label>
+						{/if}
+					</div>
 				</div>
 
 				<div class="settings-row">

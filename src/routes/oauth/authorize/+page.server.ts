@@ -51,12 +51,16 @@ export const actions: Actions = {
 
 		const client = getClient(clientId);
 		if (!client) throw error(400, 'Unknown client');
+		// Never trust the posted redirect_uri/scopes: an attacker could tamper the
+		// form to exfiltrate the code to an unregistered URL or escalate scopes.
+		if (!client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 
-		const scopes = scopeStr.split(/\s+/).filter(Boolean);
+		const requested = scopeStr.split(/\s+/).filter(Boolean);
+		const scopes = validateScopes(requested, client.scopes.length > 0 ? client.scopes : ALL_SCOPES);
 		const { code, redirectUri: ru } = createAuthorizationCode({
 			userId: u.id,
 			clientId,
-			scopes: scopes as any,
+			scopes,
 			codeChallenge,
 			redirectUri
 		});
@@ -68,8 +72,12 @@ export const actions: Actions = {
 
 	deny: async ({ request }) => {
 		const f = await request.formData();
+		const clientId = String(f.get('client_id') ?? '');
 		const redirectUri = String(f.get('redirect_uri') ?? '');
 		const state = String(f.get('state') ?? '');
+		// Only redirect back to a URI the client actually registered.
+		const client = getClient(clientId);
+		if (!client || !client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 		const sep = redirectUri.includes('?') ? '&' : '?';
 		throw redirect(302, `${redirectUri}${sep}error=access_denied${state ? `&state=${encodeURIComponent(state)}` : ''}`);
 	}

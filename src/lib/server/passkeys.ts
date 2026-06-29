@@ -5,10 +5,11 @@ import {
 	verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq, lt as kitLt } from '@mongreldb/kit';
+import { eq as kitEq, lt as kitLt, and as kitAnd } from '@mongreldb/kit';
 import { kit } from './db';
 import { passkeys, webauthnChallenges } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
+import { getUserById } from './repositories/usersRepo';
 import { logAudit } from './audit';
 import type { Row } from '@mongreldb/kit';
 
@@ -82,19 +83,25 @@ function storeChallenge(challenge: string, userId: number | null, purpose: 'regi
 	} as any).executeSync();
 }
 
-function consumeChallenge(challenge: string, purpose: string): number | null {
+// Single-use: deletes the row when found, regardless of validity. Returns `ok`
+// to distinguish a valid challenge from an invalid/expired one — `userId` is
+// null for auth challenges (discoverable login), so it must not double as the
+// validity signal.
+function consumeChallenge(
+	challenge: string,
+	purpose: string
+): { ok: boolean; userId: number | null } {
 	const hash = hashChallenge(challenge);
 	const rows = kit
 		.selectFrom(webauthnChallenges)
 		.where(kitEq(webauthnChallenges.challenge_hash, hash))
 		.executeSync();
-	if (rows.length === 0) return null;
+	if (rows.length === 0) return { ok: false, userId: null };
 	const row = rows[0];
 	kit.deleteFrom(webauthnChallenges).where(kitEq(webauthnChallenges.id, row.id)).executeSync();
-	if (row.purpose !== purpose) return null;
-	const expires = row.expires_at as string;
-	if (Date.now() > new Date(expires).getTime()) return null;
-	return row.user_id != null ? Number(row.user_id) : null;
+	if (row.purpose !== purpose) return { ok: false, userId: null };
+	if (Date.now() > new Date(row.expires_at as string).getTime()) return { ok: false, userId: null };
+	return { ok: true, userId: row.user_id != null ? Number(row.user_id) : null };
 }
 
 export function purgeExpiredChallenges(): number {
@@ -137,7 +144,8 @@ export async function verifyRegistration(
 		verification = await verifyRegistrationResponse({
 			response: response as any,
 			expectedChallenge: (challenge) => {
-				return consumeChallenge(challenge, 'register') === userId;
+				const r = consumeChallenge(challenge, 'register');
+				return r.ok && r.userId === userId;
 			},
 			expectedOrigin: rp.origins,
 			expectedRPID: rp.rpID
@@ -197,7 +205,7 @@ export async function verifyAuth(
 	try {
 		verification = await verifyAuthenticationResponse({
 			response: response as any,
-			expectedChallenge: (challenge) => consumeChallenge(challenge, 'auth') !== null,
+			expectedChallenge: (challenge) => consumeChallenge(challenge, 'auth').ok,
 			expectedOrigin: rp.origins,
 			expectedRPID: rp.rpID,
 			credential: {
@@ -213,6 +221,10 @@ export async function verifyAuth(
 	if (!verification.verified) return { ok: false, error: 'Authentication failed' };
 
 	const userId = Number(passkey.user_id);
+	// Passkey login is a primary credential; a disabled user must not slip past the
+	// "disabled users cannot authenticate" invariant via this path.
+	const user = getUserById(userId);
+	if (!user || user.disabled) return { ok: false, error: 'Account is disabled' };
 	kit
 		.updateTable(passkeys)
 		.set({
@@ -226,21 +238,19 @@ export async function verifyAuth(
 }
 
 export function renamePasskey(userId: number, id: number, name: string): boolean {
-	const result = kit
+	const rows = kit
 		.updateTable(passkeys)
 		.set({ name })
-		.where(kitEq(passkeys.id, BigInt(id)))
+		.where(kitAnd(kitEq(passkeys.id, BigInt(id)), kitEq(passkeys.user_id, BigInt(userId))))
 		.executeSync();
-	return result.length > 0;
+	return rows.length > 0;
 }
 
 export function deletePasskey(userId: number, id: number): boolean {
-	const rows = kit
-		.selectFrom(passkeys)
-		.where(kitEq(passkeys.id, BigInt(id)))
-		.executeSync();
+	const where = kitAnd(kitEq(passkeys.id, BigInt(id)), kitEq(passkeys.user_id, BigInt(userId)));
+	const rows = kit.selectFrom(passkeys).where(where).executeSync();
 	if (rows.length === 0) return false;
-	const n = kit.deleteFrom(passkeys).where(kitEq(passkeys.id, BigInt(id))).executeSync();
+	const n = kit.deleteFrom(passkeys).where(where).executeSync();
 	if (n > 0n) logAudit(userId, 'passkey_delete', 'user', userId, {});
 	return n > 0n;
 }

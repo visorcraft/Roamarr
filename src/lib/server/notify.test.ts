@@ -23,6 +23,7 @@ import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
 import { updateSettings } from './settings';
+import { upsertUserSmtpOverride } from './smtpConfig';
 
 type MakeUserOver = Partial<import('./repositories/usersRepo').CreateUserInput> & {
 	email_notifications?: boolean;
@@ -107,4 +108,30 @@ test('skips webhook when webhookUrl is not set', async () => {
 	updateSettings({ webhookUrl: null });
 	await deliver(Number(u.id), { title: 'T', body: 'B' });
 	expect(fetches.length).toBe(before);
+});
+
+test('a complete enabled override sends from the user’s own address', async () => {
+	const u = makeUser({ email: 'owner@x.c' });
+	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw') });
+	upsertUserSmtpOverride(Number(u.id), {
+		enabled: true, host: 'user.smtp', port: 587, security: 'starttls',
+		username: 'me', password: 'secret', fromAddress: 'me@mine.c'
+	});
+	sent.length = 0;
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
+	expect(sent.length).toBe(1);
+	expect(sent[0].from).toBe('me@mine.c');
+});
+
+test('a disabled override falls back to admin SMTP', async () => {
+	const u = makeUser({ email: 'owner2@x.c' });
+	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw') });
+	upsertUserSmtpOverride(Number(u.id), {
+		enabled: false, host: 'user.smtp', port: 587, security: 'starttls',
+		username: 'me', password: 'secret', fromAddress: 'me@mine.c'
+	});
+	sent.length = 0;
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
+	expect(sent.length).toBe(1);
+	expect(sent[0].from).toBe('admin@x.c');
 });

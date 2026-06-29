@@ -34,17 +34,29 @@ export const actions: Actions = {
 			return fail(400, { error: 'Port must be between 1 and 65535' });
 		}
 		const pass = String(f.get('password') || '');
-		const password = pass && pass !== '********' ? pass : undefined;
+		const clearPassword = f.get('clearPassword') === 'on';
+		const password = clearPassword ? null : pass && pass !== '********' ? pass : undefined;
+		const enabled = f.get('enabled') === 'on';
+		const host = String(f.get('host') || '') || null;
+		const fromAddress = String(f.get('fromAddress') || '') || null;
+		// An enabled-but-incomplete override silently falls back to admin SMTP, so
+		// don't let the user "enable" one without the fields that make it usable.
+		if (enabled && (!host || !fromAddress)) {
+			return fail(400, { error: 'Host and From address are required to enable an SMTP override.' });
+		}
 		const override = upsertUserSmtpOverride(u.id, {
-			enabled: f.get('enabled') === 'on',
-			host: String(f.get('host') || '') || null,
+			enabled,
+			host,
 			port,
 			security: security as SmtpSecurity,
 			username: String(f.get('username') || '') || null,
 			password,
-			fromAddress: String(f.get('fromAddress') || '') || null
+			fromAddress
 		});
-		logAudit(u.id, 'user_smtp_update', 'user', u.id, { passwordSet: password != null });
+		logAudit(u.id, 'user_smtp_update', 'user', u.id, {
+			passwordSet: typeof password === 'string',
+			passwordCleared: password === null
+		});
 		setFlash(cookies, override.enabled ? 'SMTP override saved and enabled.' : 'SMTP override saved (disabled).');
 		throw redirect(303, '/profile/notifications');
 	},
@@ -56,6 +68,7 @@ export const actions: Actions = {
 				{ title: 'Roamarr SMTP test (per-user)', body: 'This confirms your personal SMTP override is working.' },
 				u.id
 			);
+			logAudit(u.id, 'user_smtp_test', 'user', u.id, { delivered: ok });
 			setFlash(cookies, ok ? 'Test email sent.' : 'SMTP is not configured.');
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test email' });

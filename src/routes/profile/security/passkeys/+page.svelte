@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import { startRegistration as webauthnRegister } from '@simplewebauthn/browser';
 	import { page } from '$app/state';
 
 	let { data } = $props();
@@ -17,7 +18,7 @@
 		try {
 			registering = true;
 			const opts = await fetch('/api/webauthn/register/options', { method: 'POST' }).then((r) => r.json());
-			const credential = await navigator.credentials.create({ publicKey: opts });
+			const credential = await webauthnRegister({ optionsJSON: opts });
 			const name = newName.trim() || 'Passkey';
 			const res = await fetch('/api/webauthn/register/verify', {
 				method: 'POST',
@@ -25,7 +26,7 @@
 				body: JSON.stringify({ response: credential, name })
 			});
 			if (!res.ok) {
-				const body = await res.json();
+				const body = await res.json().catch(() => ({}));
 				regError = body.message || 'Registration failed';
 			} else {
 				registering = false;

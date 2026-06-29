@@ -280,6 +280,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_packing_list_build': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
 				const tripId = Number(args.tripId);
+				requireEditableTrip(userId, tripId);
 				if (args.templateId) {
 					const { applyTemplate } = await import('./packingTemplates');
 					applyTemplate(Number(args.templateId), tripId, userId);
@@ -415,8 +416,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'weather-overview': {
 				if (!hasScope(scopes, 'trips:read')) return makePrompt('Error', 'Missing scope: trips:read');
 				if (!tripId) return makePrompt('Error', 'tripId argument required');
+				// Authorize before leaking destination/lat-lng/dates for an arbitrary trip id.
+				if (!tripContext(tripId)) return makePrompt('Error', 'Trip not found or inaccessible.');
 				const { tripWeatherOverview } = await import('./weather');
-				const weather = await tripWeatherOverview(tripId);
+				const weather = await tripWeatherOverview(tripId, userId);
 				return makePrompt('Weather overview', JSON.stringify(weather));
 			}
 			case 'documents-checklist': {

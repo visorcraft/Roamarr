@@ -32,7 +32,7 @@
 	</div>
 	<div class="ml-auto flex items-center gap-4">
 		<form method="POST" action="?/toggleAutoMark">
-			<button class="btn btn-ghost btn-sm {data.autoMarkVisited ? 'text-indigo-400' : ''}">
+			<button class="btn btn-ghost btn-sm {data.autoMarkVisited ? 'text-brand' : ''}">
 				Auto-mark: {data.autoMarkVisited ? 'ON' : 'OFF'}
 			</button>
 		</form>
@@ -42,19 +42,9 @@
 	</div>
 </header>
 
-<div class="mt-4 inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-600">
-	<button
-		class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors {tab === 'country'
-			? 'bg-indigo-600 text-white'
-			: 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}"
-		onclick={() => (tab = 'country')}>Countries</button
-	>
-	<button
-		class="rounded-md px-4 py-1.5 text-sm font-medium transition-colors {tab === 'state'
-			? 'bg-indigo-600 text-white'
-			: 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}"
-		onclick={() => (tab = 'state')}>U.S. States</button
-	>
+<div class="tab-list mt-4">
+	<button class="tab-link {tab === 'country' ? 'tab-link-active' : ''}" onclick={() => (tab = 'country')}>Countries</button>
+	<button class="tab-link {tab === 'state' ? 'tab-link-active' : ''}" onclick={() => (tab = 'state')}>U.S. States</button>
 </div>
 
 {#if tab === 'country'}
@@ -83,10 +73,10 @@
 						<input type="hidden" name="code" value={c.code} />
 						<button
 							type="submit"
-							class="flex w-full items-center gap-1.5 rounded-md border border-indigo-500 bg-indigo-50 px-2.5 py-1.5 text-left text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-500 dark:bg-indigo-950 dark:text-indigo-200 dark:hover:bg-indigo-900"
+							class="badge badge-brand badge-compact w-full justify-start rounded-md text-left transition hover:opacity-80"
 							aria-pressed="true"
 						>
-							<span class="font-mono text-[10px] text-indigo-400 dark:text-indigo-500">{c.code}</span>
+							<span class="font-mono text-[10px] opacity-70">{c.code}</span>
 							<span class="truncate">{c.name}</span>
 						</button>
 					</form>
@@ -96,10 +86,10 @@
 						<input type="hidden" name="code" value={c.code} />
 						<button
 							type="submit"
-							class="flex w-full items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-left text-xs text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+							class="badge badge-slate badge-compact w-full justify-start rounded-md text-left font-normal transition hover:opacity-80"
 							aria-pressed="false"
 						>
-							<span class="font-mono text-[10px] text-slate-400 dark:text-slate-500">{c.code}</span>
+							<span class="font-mono text-[10px] opacity-70">{c.code}</span>
 							<span class="truncate">{c.name}</span>
 						</button>
 					</form>
@@ -110,7 +100,7 @@
 {:else}
 	<section class="card mt-4 p-5">
 		<div class="mb-4 flex items-center gap-3">
-			<span class="text-sm text-slate-500 dark:text-slate-400">Toggle states you have visited</span>
+			<span class="text-sm text-muted">Toggle states you have visited</span>
 			{#if visitedStateCodes.size > 0}
 				<form method="POST" action="?/clear" class="ml-auto">
 					<input type="hidden" name="kind" value="state" />
@@ -128,7 +118,7 @@
 						<input type="hidden" name="code" value={s.code} />
 						<button
 							type="submit"
-							class="rounded-md border border-indigo-500 bg-indigo-50 px-2 py-1.5 text-xs font-medium text-indigo-700 transition-colors hover:bg-indigo-100 dark:border-indigo-500 dark:bg-indigo-950 dark:text-indigo-200 dark:hover:bg-indigo-900"
+							class="badge badge-brand badge-compact w-full justify-center rounded-md transition hover:opacity-80"
 							aria-pressed="true"
 							title={s.name}
 						>
@@ -141,7 +131,7 @@
 						<input type="hidden" name="code" value={s.code} />
 						<button
 							type="submit"
-							class="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+							class="badge badge-slate badge-compact w-full justify-center rounded-md font-normal transition hover:opacity-80"
 							aria-pressed="false"
 							title={s.name}
 						>

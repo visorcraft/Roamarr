@@ -45,6 +45,9 @@ export function buildTransport(config: SmtpTransportConfig): Transporter {
 		port: config.port,
 		secure: security === 'ssl/tls',
 		requireTLS: security === 'starttls',
+		// `none` must mean plaintext: without ignoreTLS, Nodemailer still attempts
+		// opportunistic STARTTLS, which fails against servers with broken certs.
+		ignoreTLS: security === 'none',
 		auth: config.user ? { user: config.user, pass: config.pass ?? '' } : undefined
 	});
 }
@@ -99,7 +102,9 @@ export function upsertUserSmtpOverride(userId: number, patch: UserSmtpPatch): Us
 		.where(kitEq(userSmtpOverrides.user_id, BigInt(userId)))
 		.executeSync()[0];
 
-	const encryptedPass = patch.password ? encrypt(patch.password) : undefined;
+	// undefined = leave unchanged; null/'' = clear; non-empty string = (re)encrypt.
+	const encryptedPass =
+		patch.password === undefined ? undefined : patch.password ? encrypt(patch.password) : null;
 
 	if (existing) {
 		const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };

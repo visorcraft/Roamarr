@@ -78,7 +78,15 @@
 						{/if}
 					</p>
 				</div>
-				<input id="password" name="password" type="password" value={o?.passwordSet ? '********' : ''} placeholder="Password" class="input" />
+				<div>
+					<input id="password" name="password" type="password" value={o?.passwordSet ? '********' : ''} placeholder="Password" class="input" />
+					{#if o?.passwordSet}
+						<label class="checkbox-label mt-2 text-xs">
+							<input type="checkbox" name="clearPassword" class="checkbox" />
+							Clear the stored password
+						</label>
+					{/if}
+				</div>
 			</div>
 
 			<div class="settings-row">

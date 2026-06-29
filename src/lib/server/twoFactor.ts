@@ -1,6 +1,6 @@
 import * as OTPAuth from 'otpauth';
 import { createHash, randomBytes, createHmac } from 'node:crypto';
-import { eq as kitEq, and as kitAnd } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, isNull as kitIsNull } from '@mongreldb/kit';
 import { kit } from './db';
 import { userTwoFactor, twoFactorBackupCodes } from './db/mongrelSchema';
 import { encrypt, decrypt } from './crypto';
@@ -225,7 +225,7 @@ export function verifyTwoFactor(userId: number, code: string): boolean {
 		.where(
 			kitAnd(
 				kitEq(twoFactorBackupCodes.user_id, BigInt(userId)),
-				kitEq(twoFactorBackupCodes.used_at, '')
+				kitIsNull(twoFactorBackupCodes.used_at)
 			)
 		)
 		.executeSync();

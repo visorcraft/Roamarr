@@ -1,11 +1,19 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
 	let clientName = $state('');
 	let redirectUris = $state('');
+	let isPublic = $state(false);
 	let selectedScopes = $state<string[]>(['trips:read', 'profile:read']);
-	let createdSecret = $state<{ clientId: string; clientSecret: string } | null>(null);
+	let dismissed = $state(false);
+	// The create action returns the freshly-minted credentials once; surface them
+	// (a confidential client's secret is never recoverable afterwards).
+	const created = $derived(
+		form && 'clientId' in form && !dismissed
+			? { clientId: form.clientId as string, clientSecret: (form.clientSecret as string | null) ?? null }
+			: null
+	);
 </script>
 
 <header class="page-header">
@@ -16,21 +24,25 @@
 	<a href="/profile/security" class="btn btn-ghost ml-auto">Back to security</a>
 </header>
 
-{#if createdSecret}
-	<section class="card mt-6 border border-amber-500/40 p-5">
-		<h2 class="section-title mb-2 text-amber-300">Save your credentials</h2>
-		<p class="field-help text-amber-200/70">Copy these now — the client secret won't be shown again.</p>
+{#if created}
+	<section class="notice notice-warning mt-6 p-5">
+		<h2 class="section-title mb-2">Save your credentials</h2>
+		<p class="field-help">Copy these now — the client secret won't be shown again.</p>
 		<dl class="mt-3 space-y-2">
 			<div>
-				<dt class="text-sm font-medium text-slate-300">Client ID</dt>
-				<dd class="mt-0.5 break-all rounded-md bg-slate-100 px-3 py-1.5 font-mono text-sm dark:bg-slate-800">{createdSecret.clientId}</dd>
+				<dt class="label">Client ID</dt>
+				<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{created.clientId}</dd>
 			</div>
 			<div>
-				<dt class="text-sm font-medium text-slate-300">Client Secret</dt>
-				<dd class="mt-0.5 break-all rounded-md bg-slate-100 px-3 py-1.5 font-mono text-sm dark:bg-slate-800">{createdSecret.clientSecret}</dd>
+				<dt class="label">Client Secret</dt>
+				{#if created.clientSecret}
+					<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{created.clientSecret}</dd>
+				{:else}
+					<dd class="mt-0.5 text-sm text-muted">Public client — authenticates with PKCE, no secret.</dd>
+				{/if}
 			</div>
 		</dl>
-		<button class="btn btn-primary mt-3" onclick={() => (createdSecret = null)}>I saved them</button>
+		<button class="btn btn-primary mt-3" onclick={() => (dismissed = true)}>I saved them</button>
 	</section>
 {:else}
 	<section class="card mt-6 p-5">
@@ -61,11 +73,16 @@
 								}}
 							/>
 							<span class="font-medium">{scope}</span>
-							<span class="text-slate-400"> — {data.scopeDescriptions[scope]}</span>
+							<span class="text-muted"> — {data.scopeDescriptions[scope]}</span>
 						</label>
 					{/each}
 				</div>
 			</div>
+			<label class="checkbox-label text-sm">
+				<input type="checkbox" name="isPublic" class="checkbox" bind:checked={isPublic} />
+				<span class="font-medium">Public client</span>
+				<span class="text-muted"> — uses PKCE only, no secret (for apps that can't store one)</span>
+			</label>
 			<button class="btn btn-primary">Create client</button>
 		</form>
 	</section>

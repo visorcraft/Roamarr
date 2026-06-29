@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { startAuthentication } from '@simplewebauthn/browser';
 	import FormField from '$lib/components/FormField.svelte';
 
 	let { data, form } = $props();
@@ -12,7 +13,7 @@
 		try {
 			passkeyBusy = true;
 			const opts = await fetch('/api/webauthn/auth/options', { method: 'POST' }).then((r) => r.json());
-			const credential = await navigator.credentials.get({ publicKey: opts });
+			const credential = await startAuthentication({ optionsJSON: opts });
 			const res = await fetch('/api/webauthn/auth/verify', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -21,11 +22,12 @@
 			if (res.ok) {
 				window.location.href = '/';
 			} else {
-				const body = await res.json();
+				const body = await res.json().catch(() => ({}));
 				passkeyError = body.message || 'Passkey sign-in failed';
 			}
 		} catch (e) {
-			passkeyError = '';
+			// Swallow user-cancelled prompts; surface real failures.
+			passkeyError = e instanceof Error && e.name === 'NotAllowedError' ? '' : 'Passkey sign-in failed';
 		} finally {
 			passkeyBusy = false;
 		}

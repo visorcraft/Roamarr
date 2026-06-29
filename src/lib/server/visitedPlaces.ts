@@ -90,7 +90,7 @@ export function markCountryVisited(
 		.where(kitAnd(kitEq(visitedCountries.user_id, uid(userId)), kitEq(visitedCountries.country_code, normalized)))
 		.executeSync();
 	if (exists.length > 0) return { created: false };
-	kit.insertInto(visitedCountries)
+	const inserted = kit.insertInto(visitedCountries)
 		.values({
 			user_id: uid(userId),
 			country_code: normalized,
@@ -98,7 +98,7 @@ export function markCountryVisited(
 			source: opts.source ?? 'manual'
 		})
 		.executeSync();
-	logAudit(userId, 'places_visit_add', 'visited_country', userId, {
+	logAudit(userId, 'places_visit_add', 'visited_country', Number(inserted.id), {
 		kind: 'country',
 		code: normalized,
 		source: opts.source ?? 'manual'
@@ -117,7 +117,7 @@ export function markStateVisited(
 		.where(kitAnd(kitEq(visitedUsStates.user_id, uid(userId)), kitEq(visitedUsStates.state_code, normalized)))
 		.executeSync();
 	if (exists.length > 0) return { created: false };
-	kit.insertInto(visitedUsStates)
+	const inserted = kit.insertInto(visitedUsStates)
 		.values({
 			user_id: uid(userId),
 			state_code: normalized,
@@ -125,7 +125,7 @@ export function markStateVisited(
 			source: opts.source ?? 'manual'
 		})
 		.executeSync();
-	logAudit(userId, 'places_visit_add', 'visited_state', userId, {
+	logAudit(userId, 'places_visit_add', 'visited_state', Number(inserted.id), {
 		kind: 'state',
 		code: normalized,
 		source: opts.source ?? 'manual'
@@ -154,7 +154,7 @@ export function unmarkCountryVisited(userId: number, code: string): { removed: b
 	kit.deleteFrom(visitedCountries)
 		.where(kitAnd(kitEq(visitedCountries.user_id, uid(userId)), kitEq(visitedCountries.country_code, normalized)))
 		.executeSync();
-	logAudit(userId, 'places_visit_remove', 'visited_country', userId, { kind: 'country', code: normalized });
+	logAudit(userId, 'places_visit_remove', 'visited_country', Number(exists[0].id), { kind: 'country', code: normalized });
 	return { removed: true };
 }
 
@@ -168,7 +168,7 @@ export function unmarkStateVisited(userId: number, code: string): { removed: boo
 	kit.deleteFrom(visitedUsStates)
 		.where(kitAnd(kitEq(visitedUsStates.user_id, uid(userId)), kitEq(visitedUsStates.state_code, normalized)))
 		.executeSync();
-	logAudit(userId, 'places_visit_remove', 'visited_state', userId, { kind: 'state', code: normalized });
+	logAudit(userId, 'places_visit_remove', 'visited_state', Number(exists[0].id), { kind: 'state', code: normalized });
 	return { removed: true };
 }
 
@@ -206,8 +206,8 @@ export function autoMarkCountriesFromTrip(userId: number, tripId: number): strin
 	const trip = kit.selectFrom(trips).where(kitEq(trips.id, uid(tripId))).executeSync()[0];
 	if (!trip) return [];
 	const tripStatus = trip.status as string;
-	// Nullable date columns read back as "" (not null) from MongrelDB Kit when
-	// unset — coerce empties to null so the absence checks below behave.
+	// Unset nullable dates are real NULL under kit semantics; `|| null` also folds
+	// any legacy empty string so the absence checks below behave either way.
 	const tripStart = (trip.start_date as string) || null;
 	const tripEnd = (trip.end_date as string) || null;
 	const today = new Date().toISOString().slice(0, 10);

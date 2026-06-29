@@ -41,11 +41,12 @@ export const actions: Actions = {
 			.map((s) => s.trim())
 			.filter(Boolean);
 		const scopes = f.getAll('scopes').map(String) as Scope[];
+		const isPublic = f.get('isPublic') === 'on';
 
 		if (!clientName) return fail(400, { error: 'Client name is required' });
 		if (redirectUris.length === 0) return fail(400, { error: 'At least one redirect URI is required' });
 
-		const result = createClient(u.id, { clientName, redirectUris, scopes });
+		const result = createClient(u.id, { clientName, redirectUris, scopes, isPublic });
 		setFlash(cookies, `Client created. Save the secret — it won't be shown again.`);
 		return { clientSecret: result.plaintextSecret, clientId: result.client.clientId };
 	},

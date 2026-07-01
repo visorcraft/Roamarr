@@ -72,5 +72,3 @@ export const actions: Actions = {
 		throw redirect(303, '/profile/security/connections');
 	}
 };
-
-export { ALL_SCOPES };

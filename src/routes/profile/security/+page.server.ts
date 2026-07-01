@@ -4,7 +4,6 @@ import { requireUser } from '$lib/server/auth';
 import { setFlash } from '$lib/server/flash';
 import {
 	generateSecret,
-	verifyTotp,
 	getTwoFactorState,
 	enableTwoFactor,
 	disableTwoFactor,
@@ -70,5 +69,3 @@ export const actions: Actions = {
 		return { backupCodes: result.backupCodes };
 	}
 };
-
-export { verifyTotp };

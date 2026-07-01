@@ -6,7 +6,6 @@ import {
 	getUserSmtpOverride,
 	upsertUserSmtpOverride,
 	deleteUserSmtpOverride,
-	parseSmtpSecurity,
 	type SmtpSecurity
 } from '$lib/server/smtpConfig';
 import { sendMail } from '$lib/server/notify';
@@ -90,5 +89,3 @@ export const actions: Actions = {
 		throw redirect(303, '/profile/notifications');
 	}
 };
-
-export { parseSmtpSecurity };

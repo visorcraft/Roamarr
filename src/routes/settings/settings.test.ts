@@ -16,7 +16,7 @@ import { getMapSettings, updateSettings, getSettings } from '$lib/server/setting
 import { users, auditLogs, settings } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
 import { resolveTileConfig } from '$lib/server/mapTiles';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
@@ -33,14 +33,14 @@ function makeUser(email: string, displayName = 'U', role: 'admin' | 'user' = 'us
 
 beforeEach(() => {
 	resetRateLimit();
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(settings).executeSync();
 	kit.deleteFrom(auditLogs).executeSync();
 	kit.deleteFrom(users).executeSync();
 });
 
 test('saves settings, default leads and encrypts smtp pass', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('u@x.c');
 	saveAdminSettings(Number(u.id), {
 		instanceName: 'R',
@@ -96,7 +96,7 @@ test('rejects invalid default reminder leads', () => {
 });
 
 test('omitting smtpPass preserves the existing encrypted value', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('preserve@x.c');
 	const before = getSettings().smtpPass;
 	saveAdminSettings(Number(u.id), {

@@ -8,8 +8,8 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-function kitDb(): import('@mongreldb/kit').KitDatabase {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function kitDb(): import('@visorcraft/mongreldb-kit').KitDatabase {
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 import {
@@ -24,7 +24,7 @@ import {
 } from './+page.server';
 import { canView } from '$lib/server/sharing';
 import { groups, groupMembers } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 

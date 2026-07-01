@@ -17,7 +17,7 @@ import {
 	tripChecklistItems,
 	tripShares
 } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeFormData } from '../../../tests/eventHelpers';
 import { makeShare } from '../../../tests/helpers';
@@ -47,7 +47,7 @@ function makeTrip(ownerId: number, name: string) {
 }
 
 beforeEach(() => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(tripChecklistItems).executeSync();
 	kit.deleteFrom(tripChecklists).executeSync();
 	kit.deleteFrom(packingTemplateItems).executeSync();
@@ -65,7 +65,7 @@ test('saveTemplate creates a template from explicit items', () => {
 		{ label: 'Socks', category: 'clothing' }
 	]);
 
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const template = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).executeSync()[0];
 	expect(template?.name).toBe('Weekend');
 	expect(Number(template?.user_id)).toBe(Number(u.id));
@@ -82,7 +82,7 @@ test('saveTemplate trims names and defaults blank categories', () => {
 
 	const id = saveTemplate(Number(u.id), '  Beach  ', [{ label: '  Sunscreen  ', category: '  ' }]);
 
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const template = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(id))).executeSync()[0];
 	expect(template?.name).toBe('Beach');
 	const items = kit.selectFrom(packingTemplateItems).where(eq(packingTemplateItems.template_id, BigInt(id))).executeSync();
@@ -98,7 +98,7 @@ test('saveTemplate rejects missing name or empty items', () => {
 });
 
 test('saveTemplate populates from a trip checklist', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('pt4@x.c');
 	const t = makeTrip(Number(u.id), 'T');
 	const checklist = kit.insertInto(tripChecklists).values({ trip_id: BigInt(t.id) }).executeSync();
@@ -132,13 +132,13 @@ test('listTemplates returns templates scoped to user with items', () => {
 	expect(list[0]?.items[0]?.label).toBe('A1');
 	expect(list[0]?.items[0]?.category).toBe('general');
 
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const reloaded = kit.selectFrom(packingTemplates).where(eq(packingTemplates.id, BigInt(idA))).executeSync()[0];
 	expect(reloaded?.name).toBe('A-list');
 });
 
 test('applyTemplate copies template items to trip checklist', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('pt7@x.c');
 	const t = makeTrip(Number(u.id), 'T');
 	const templateId = saveTemplate(Number(u.id), 'Camping', [
@@ -177,7 +177,7 @@ test('applyTemplate guards templates owned by another user', () => {
 });
 
 test('applyTemplate allows editor shared with edit permission', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const a = makeUser('pt10-a@x.c');
 	const b = makeUser('pt10-b@x.c');
 	const t = makeTrip(Number(a.id), 'T');
@@ -195,7 +195,7 @@ test('applyTemplate allows editor shared with edit permission', () => {
 });
 
 test('saveChecklistTemplate action saves current checklist as template and redirects', async () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('pt11@x.c');
 	const t = makeTrip(Number(u.id), 'T');
 	const checklist = kit.insertInto(tripChecklists).values({ trip_id: BigInt(t.id) }).executeSync();
@@ -221,7 +221,7 @@ test('applyChecklistTemplate action applies a template and redirects', async () 
 		applyChecklistTemplate(makeEvent({ id: Number(u.id) }, t.id, makeFormData({ templateId: String(templateId) })))
 	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const checklist = kit.selectFrom(tripChecklists).where(eq(tripChecklists.trip_id, BigInt(t.id))).executeSync()[0];
 	const items = kit
 		.selectFrom(tripChecklistItems)

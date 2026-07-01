@@ -1,4 +1,4 @@
-import { ne as kitNe } from '@mongreldb/kit';
+import { ne as kitNe } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import {
 	users as kitUsers,

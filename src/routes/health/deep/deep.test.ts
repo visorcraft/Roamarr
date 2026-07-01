@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { KitDatabase } from '@mongreldb/kit';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
 import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 

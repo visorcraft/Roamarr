@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
-import { eq as kitEq, and as kitAnd, asc as kitAsc, inList as kitInList } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, asc as kitAsc, inList as kitInList } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { visitedCountries, visitedUsStates, trips, segments } from '$lib/server/db/mongrelSchema';
-import type { Row } from '@mongreldb/kit';
+import type { Row } from '@visorcraft/mongreldb-kit';
 import { COUNTRIES } from '$lib/countries';
 import { isUsStateCode } from '$lib/usStates';
 import { logAudit } from '$lib/server/audit';

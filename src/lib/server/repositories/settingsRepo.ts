@@ -1,7 +1,7 @@
 import { kit } from '$lib/server/db';
 import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
-import type { Row, Update } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
+import type { Row, Update } from '@visorcraft/mongreldb-kit';
 
 export type Settings = {
 	id: number;

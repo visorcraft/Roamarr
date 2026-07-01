@@ -9,11 +9,11 @@ vi.mock('./db', async () => {
 
 import { addHomeTask, deleteHomeTask, listHomeTasks, toggleHomeTask } from './tripHomeTasks';
 import { tripHomeTasks, trips, users } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 beforeEach(() => {

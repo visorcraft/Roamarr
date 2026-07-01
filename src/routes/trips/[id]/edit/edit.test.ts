@@ -24,7 +24,7 @@ import {
 	fareProviders,
 	auditLogs
 } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { beforeEach } from 'vitest';
 import { makeLocals, makeFormData } from '../../../../../tests/eventHelpers';
 

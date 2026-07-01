@@ -5,7 +5,7 @@ import { getSettings, updateSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
-import type { Insert } from '@mongreldb/kit';
+import type { Insert } from '@visorcraft/mongreldb-kit';
 
 export function _createAdmin(
 	i: { email: string; password: string; displayName: string; instanceName: string; timezone: string },

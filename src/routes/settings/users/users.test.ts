@@ -13,7 +13,7 @@ vi.mock('$lib/server/notify', () => ({
 
 import { load, actions } from './+page.server';
 import { users } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';

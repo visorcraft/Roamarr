@@ -11,7 +11,7 @@ import { kit } from './db';
 import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../tests/helpers';
 
 
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import {
 	listAttendeesForSegment,
 	listAttendeesForSegments,

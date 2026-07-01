@@ -1,5 +1,5 @@
 import { error, fail, redirect, type Actions } from '@sveltejs/kit';
-import { eq as kitEq, inList, asc } from '@mongreldb/kit';
+import { eq as kitEq, inList, asc } from '@visorcraft/mongreldb-kit';
 import { requireUser } from '$lib/server/auth';
 import { kit } from '$lib/server/db';
 import { tripCompanions } from '$lib/server/db/mongrelSchema';

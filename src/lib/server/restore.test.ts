@@ -2,9 +2,9 @@ import { test, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { KitDatabase } from '@mongreldb/kit';
-import mongreldb from 'mongreldb';
-import type { Database as NativeDatabase } from 'mongreldb/native.js';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
+import mongreldb from '@visorcraft/mongreldb';
+import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
 import { schema as kitSchema } from './db/mongrelSchema';
 import { migrations as kitMigrations } from './db/mongrelMigrations/0001_initial';
 

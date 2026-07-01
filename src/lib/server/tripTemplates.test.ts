@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { createTripFromTemplate, listTripTemplates, saveTripTemplate } from './tripTemplates';
 import { auditLogs, segments, trips, users, tripTemplates } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 

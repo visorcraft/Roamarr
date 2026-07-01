@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as unknown as KitDatabase }));
 vi.mock('$lib/server/db', async () => {
@@ -32,7 +32,7 @@ import {
 	MAX_PASSKEY_NAME_LENGTH
 } from './passkeys';
 import { makeUser } from '../../../tests/helpers';
-import { eq as kitEq, asc as kitAsc } from '@mongreldb/kit';
+import { eq as kitEq, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { createHash } from 'node:crypto';
 
 function hashChallenge(challenge: string): string {

@@ -11,8 +11,8 @@ import { GET } from './+server';
 import { users, trips, segments, groups, groupMembers, tripShares } from '$lib/server/db/mongrelSchema';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
-function kitDb(): import('@mongreldb/kit').KitDatabase {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function kitDb(): import('@visorcraft/mongreldb-kit').KitDatabase {
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 function event(token: string, ip: string) {

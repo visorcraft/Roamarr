@@ -14,7 +14,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 
 beforeEach(() => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(segments).executeSync();
 	kit.deleteFrom(trips).executeSync();
 	kit.deleteFrom(users).executeSync();

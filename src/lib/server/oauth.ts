@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq, and as kitAnd, lt as kitLt } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, lt as kitLt } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { oauthClients, oauthCodes, oauthTokens } from './db/mongrelSchema';
 import { logAudit } from './audit';
 import { getUserById } from './repositories/usersRepo';
-import type { Row } from '@mongreldb/kit';
+import type { Row } from '@visorcraft/mongreldb-kit';
 
 export type Scope =
 	| 'trips:read'

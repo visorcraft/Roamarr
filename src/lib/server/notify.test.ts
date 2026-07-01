@@ -45,7 +45,7 @@ function makeUser(over: MakeUserOver = {}) {
 }
 
 test('always writes in-app; emails only when SMTP configured', async () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser({ email: 'a@x.c', display_name: 'A' });
 	await deliver(Number(u.id), { title: 'Hi', body: 'There' });
 	expect(kit.selectFrom(notifications).executeSync().length).toBe(1);
@@ -80,7 +80,7 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 });
 
 test('respects user channel toggles', async () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser({
 		email: 't@x.c',
 		display_name: 'T',

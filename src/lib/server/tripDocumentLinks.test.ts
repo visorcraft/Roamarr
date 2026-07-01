@@ -16,7 +16,7 @@ import {
 	deleteDocumentLink
 } from './tripDocumentLinks';
 import { tripDocumentLinks, auditLogs } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeFormEvent } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 

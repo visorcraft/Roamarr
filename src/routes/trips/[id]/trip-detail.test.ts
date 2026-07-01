@@ -41,7 +41,7 @@ import {
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { upsertCustomReminder } from '$lib/server/reminders';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 function event(user: { id: number }, tripId: number) {
 	return {

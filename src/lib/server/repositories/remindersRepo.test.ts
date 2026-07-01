@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as repo from './remindersRepo';
 import * as usersRepo from './usersRepo';
 import {

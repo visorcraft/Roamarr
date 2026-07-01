@@ -18,9 +18,9 @@ import {
 	updateCompanion
 } from './tripCompanions';
 import { trips, tripCompanions, auditLogs } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;

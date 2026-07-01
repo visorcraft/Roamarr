@@ -14,7 +14,7 @@ import {
 	updateEntryRequirementStatus
 } from './tripEntryRequirements';
 import { tripEntryRequirements, trips, users } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getKit(): KitDatabase {

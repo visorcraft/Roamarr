@@ -1,6 +1,6 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import mongreldb from 'mongreldb';
-import type { Database as NativeDatabase } from 'mongreldb/native.js';
+import mongreldb from '@visorcraft/mongreldb';
+import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
 import { getDatabasePath } from '$lib/server/db/paths';
 import { isSchedulerRunning } from '$lib/server/scheduler';
 

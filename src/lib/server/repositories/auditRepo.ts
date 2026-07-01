@@ -5,7 +5,7 @@ import {
 	lte as kitLte,
 	desc as kitDesc,
 	inList as kitInList
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	auditLogs as kitAuditLogs,
@@ -15,7 +15,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { countNotifications } from './remindersRepo';
 import { countSegments } from './segmentsRepo';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
 export type KitAuditLog = Row<typeof kitAuditLogs>;
 

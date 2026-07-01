@@ -1,5 +1,5 @@
-import type { Migration, MigrationContext, TableSpec, UniqueSpec, ForeignKeySpec } from '@mongreldb/kit';
-import { eq as kitEq } from '@mongreldb/kit';
+import type { Migration, MigrationContext, TableSpec, UniqueSpec, ForeignKeySpec } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import {
 	kitUniqueKeys,
 	kitRowGuards,
@@ -8,7 +8,7 @@ import {
 	encodeUniqueKey,
 	encodeRowGuardKey,
 	parentExists
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 import { oauthClients, oauthTokens, users } from '../mongrelSchema';
 
 function isoNow(): string {
@@ -17,7 +17,7 @@ function isoNow(): string {
 
 /**
  * Synchronous backfill of a unique constraint for use inside Roamarr's sync
- * migration path. Mirrors the async `addUnique` helper in `@mongreldb/kit` but
+ * migration path. Mirrors the async `addUnique` helper in `@visorcraft/mongreldb-kit` but
  * uses only synchronous Kit query builders so it can run under `migrateSync`.
  */
 function addUniqueSync(
@@ -71,7 +71,7 @@ function addUniqueSync(
 
 /**
  * Synchronous backfill of a foreign key for use inside Roamarr's sync
- * migration path. Mirrors the async `addForeignKey` helper in `@mongreldb/kit`
+ * migration path. Mirrors the async `addForeignKey` helper in `@visorcraft/mongreldb-kit`
  * but uses only synchronous Kit query builders. Existing child rows that
  * reference missing parents are deleted so the constraint can be satisfied;
  * this matches the intended `onDelete: 'cascade'` semantics retroactively.

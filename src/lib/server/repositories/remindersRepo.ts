@@ -7,14 +7,14 @@ import {
 	lte as kitLte,
 	lt as kitLt,
 	isNull as kitIsNull,
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	reminders as kitReminders,
 	notifications as kitNotifications,
 	schedulerRuns as kitSchedulerRuns
 } from '$lib/server/db/mongrelSchema';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { nowIso } from '$lib/server/tz';
 
 export interface ReminderRow {

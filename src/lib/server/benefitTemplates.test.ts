@@ -16,7 +16,7 @@ import {
 	deleteBenefitTemplate
 } from './benefitTemplates';
 import { benefitTemplates } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 test('default templates are seeded by migrations', () => {
 	const templates = listBenefitTemplates();
@@ -62,7 +62,7 @@ test('create, update, and delete benefit templates', () => {
 });
 
 test('deleteBenefitTemplate returns the number of deleted rows', () => {
-	const rowsBefore = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const rowsBefore = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(benefitTemplates)
 		.selectCount()
 		.executeSync();
@@ -75,7 +75,7 @@ test('deleteBenefitTemplate returns the number of deleted rows', () => {
 	});
 	const deleted = deleteBenefitTemplate(created.id);
 	expect(deleted).toBe(1n);
-	const rowsAfter = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const rowsAfter = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(benefitTemplates)
 		.selectCount()
 		.executeSync();

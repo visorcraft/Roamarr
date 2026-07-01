@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { users } from './db/mongrelSchema';
 import { createNotification } from './repositories/remindersRepo';

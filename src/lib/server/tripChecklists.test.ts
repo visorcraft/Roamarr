@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { loadChecklist, addItem, toggleItem, deleteItem, addChecklistItem, toggleChecklistItem, deleteChecklistItem, setAllItemsPacked } from './tripChecklists';
 import { tripChecklists, tripChecklistItems } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeLocals } from '../../../tests/eventHelpers';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 

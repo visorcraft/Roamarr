@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, and, inList, asc, ne as kitNe } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, and, inList, asc, ne as kitNe } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	users as usersTable,
@@ -8,7 +8,7 @@ import {
 	groupMembers,
 	tripShares
 } from '$lib/server/db/mongrelSchema';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
 export type KitTrip = Row<typeof trips>;
 export type KitTripComment = Row<typeof tripComments>;

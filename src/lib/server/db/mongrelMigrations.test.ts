@@ -2,13 +2,13 @@ import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { KitDatabase, Schema, table, int, text, date, timestamp, unique, index, sequenceDefault } from '@mongreldb/kit';
+import { KitDatabase, Schema, table, int, text, date, timestamp, unique, index, sequenceDefault } from '@visorcraft/mongreldb-kit';
 import { openKitDatabase } from './mongrel';
 import { settings, benefitTemplates, weatherCache } from './mongrelSchema';
 import { schema } from './mongrelSchema';
 import { migrations } from './mongrelMigrations';
 import { migrations as migrations0010 } from './mongrelMigrations/0010_weather_payload_json_type';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 function openEncrypted(path: string, openSchema: Schema): KitDatabase {
 	const passphrase = process.env.ROAMARR_SECRET;

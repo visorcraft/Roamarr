@@ -1,11 +1,11 @@
 import nodemailer from 'nodemailer';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { userSmtpOverrides } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
 import { decrypt, encrypt } from './crypto';
 import type { Transporter } from 'nodemailer';
-import type { Row } from '@mongreldb/kit';
+import type { Row } from '@visorcraft/mongreldb-kit';
 
 export type SmtpSecurity = 'none' | 'starttls' | 'ssl/tls';
 

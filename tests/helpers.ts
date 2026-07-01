@@ -9,7 +9,7 @@ function openTestDb(path: string, schema: any) {
 	}
 	return KitDatabase.createEncryptedSync(path, schema, passphrase);
 }
-import { KitDatabase } from '@mongreldb/kit';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
 import {
 	users,
 	trips,

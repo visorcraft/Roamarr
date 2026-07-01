@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
@@ -40,7 +40,7 @@ test('parseCities1000Line rejects invalid numbers', () => {
 });
 
 test('bulkInsertCities replaces existing data and inserts rows', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit
 		.insertInto(geonamesCities)
 		.values({ geoname_id: BigInt(1), name: 'Old', ascii_name: 'Old', country_code: 'XX', lat: 0, lng: 0 })

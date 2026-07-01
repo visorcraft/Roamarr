@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
 }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
@@ -14,7 +14,7 @@ vi.mock('./notify', () => ({
 }));
 
 import { createHash } from 'node:crypto';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { hashPassword, verifyPassword } from './auth';
 import { users, sessions } from './db/mongrelSchema';
 import { makeKitUser } from '../../../tests/kitHelpers';

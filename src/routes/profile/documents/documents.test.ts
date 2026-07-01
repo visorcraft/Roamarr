@@ -15,14 +15,14 @@ import {
 	tripCompanions,
 	auditLogs
 } from '$lib/server/db/mongrelSchema';
-import { eq, and } from '@mongreldb/kit';
+import { eq, and } from '@visorcraft/mongreldb-kit';
 import { makeFormData } from '../../../../tests/eventHelpers';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { makeCompanion as insertCompanion } from '../../../../tests/helpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
-function kitDb(): import('@mongreldb/kit').KitDatabase {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function kitDb(): import('@visorcraft/mongreldb-kit').KitDatabase {
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 function makeTestUser(over: any = {}) {

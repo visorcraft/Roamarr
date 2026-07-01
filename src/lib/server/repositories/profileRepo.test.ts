@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
@@ -22,7 +22,7 @@ import {
 	insurancePolicies,
 	emergencyContacts
 } from '../db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 function resetKitTables() {
 	ctx.kit.deleteFrom(travelDocuments).executeSync();

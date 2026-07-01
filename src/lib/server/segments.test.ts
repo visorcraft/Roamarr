@@ -13,7 +13,7 @@ import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helper
 
 import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
 import { segments, auditLogs } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 test('detects overlap with existing segment', () => {
 	const u = makeUser(kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });

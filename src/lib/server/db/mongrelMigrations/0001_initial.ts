@@ -1,4 +1,4 @@
-import type { Migration } from '@mongreldb/kit';
+import type { Migration } from '@visorcraft/mongreldb-kit';
 import { schema, settings, benefitTemplates } from '../mongrelSchema';
 
 const DEFAULT_BENEFIT_TEMPLATES = [

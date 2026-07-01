@@ -18,7 +18,7 @@ import {
 	deleteBenefitTemplate
 } from './settingsRepo';
 import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 test('getSettings returns the singleton row with defaults', () => {
 	const s = getSettings();
@@ -49,7 +49,7 @@ test('updateSettings patches the singleton row', () => {
 	expect(s.smtpHost).toBe('smtp.example.com');
 	expect(s.smtpPort).toBe(587);
 
-	const raw = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const raw = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(settings)
 		.where(eq(settings.id, BigInt(1n)))
 		.executeSync()[0];

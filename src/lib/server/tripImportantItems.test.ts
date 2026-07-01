@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { addImportantItem, deleteImportantItem, listImportantItems } from './tripImportantItems';
 import { tripImportantItems, tripCompanions, trips, users } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import {
 	makeSyncedUser,
 	makeSyncedTrip,
@@ -17,7 +17,7 @@ import {
 } from '../../../tests/helpers';
 
 function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 beforeEach(() => {

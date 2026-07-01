@@ -17,12 +17,12 @@ import {
 	deleteExpense
 } from './tripExpenses';
 import { tripExpenses, auditLogs } from './db/mongrelSchema';
-import { eq, and } from '@mongreldb/kit';
+import { eq, and } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 
 const event = makeActionEvent;
-const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 
 test('listTripExpenses returns expenses with parsed splitAmong', () => {
 	const u = makeSyncedUser(kit, { email: 'le@x.c', passwordHash: 'x', displayName: 'U' });

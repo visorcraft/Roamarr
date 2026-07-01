@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { selectNextSegmentCity, tripMapCity } from './tripMap';
 import { users, trips, segments } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 
 let fixtureCounter = 0;
 

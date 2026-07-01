@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
 }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
@@ -31,7 +31,7 @@ import {
 import { upsertRemindersForDocument } from '$lib/server/reminders';
 import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergencyContacts } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { createSession, hashPassword, verifyPassword } from '$lib/server/auth';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../tests/kitHelpers';

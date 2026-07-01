@@ -1,5 +1,5 @@
 import type { RequestEvent } from '@sveltejs/kit';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeAdmin } from './helpers';
 
 // Email is optional because many tests only need a user id for authorization checks.

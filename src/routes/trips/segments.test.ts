@@ -1,4 +1,4 @@
-import { and, eq } from '@mongreldb/kit';
+import { and, eq } from '@visorcraft/mongreldb-kit';
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));

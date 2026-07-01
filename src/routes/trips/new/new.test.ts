@@ -13,7 +13,7 @@ import { makeUser } from '../../../../tests/helpers';
 
 import { actions } from './+page.server';
 import { trips } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { makeLocals, makeFormData } from '../../../../tests/eventHelpers';
 
 function makeEvent(form: FormData, params: Record<string, string> = {}, userId = 1) {

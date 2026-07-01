@@ -1,4 +1,4 @@
-import { inList } from '@mongreldb/kit';
+import { inList } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { segments } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';

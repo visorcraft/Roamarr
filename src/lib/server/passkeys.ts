@@ -5,13 +5,13 @@ import {
 	verifyAuthenticationResponse
 } from '@simplewebauthn/server';
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq, lt as kitLt, and as kitAnd } from '@mongreldb/kit';
+import { eq as kitEq, lt as kitLt, and as kitAnd } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { passkeys, webauthnChallenges } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
 import { getUserById } from './repositories/usersRepo';
 import { logAudit } from './audit';
-import type { Row } from '@mongreldb/kit';
+import type { Row } from '@visorcraft/mongreldb-kit';
 
 const CHALLENGE_TTL_MIN = 5;
 export const MAX_PASSKEY_NAME_LENGTH = 100;

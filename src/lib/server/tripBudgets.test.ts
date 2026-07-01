@@ -16,7 +16,7 @@ import {
 	deleteTripBudget
 } from './tripBudgets';
 import { tripBudgetCategories, auditLogs, trips, users } from './db/mongrelSchema';
-import { eq, and, type KitDatabase } from '@mongreldb/kit';
+import { eq, and, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getKit(): KitDatabase {

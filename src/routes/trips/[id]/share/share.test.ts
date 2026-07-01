@@ -19,7 +19,7 @@ import {
 } from './+page.server';
 import { canView, canEdit, listGroupsForUser } from '$lib/server/sharing';
 import { tripShares, auditLogs } from '$lib/server/db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 

@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { loadTripFor } from './shared';
 import { tripShares } from '$lib/server/db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare } from '../../../tests/helpers';
 
 function kitDb(): KitDatabase {

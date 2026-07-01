@@ -1,4 +1,4 @@
-import type { Migration } from '@mongreldb/kit';
+import type { Migration } from '@visorcraft/mongreldb-kit';
 import { migrations as migrations0001 } from './0001_initial';
 import { migrations as migrations0002 } from './0002_visited_places';
 import { migrations as migrations0003 } from './0003_smtp_security_and_override';

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as unknown as KitDatabase }));
 vi.mock('$lib/server/db', async () => {
@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { oauthClients, oauthTokens, users } from '../mongrelSchema';
 import { kit } from '$lib/server/db';
 import { makeUser } from '../../../../../tests/helpers';

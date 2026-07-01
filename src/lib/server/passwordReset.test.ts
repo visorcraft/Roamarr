@@ -1,13 +1,13 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
-import type { Insert } from '@mongreldb/kit';
+import type { Insert } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(
 	() =>
 		({
-			kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+			kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
 			close: null as unknown as () => void
 		} as {
-			kit: import('@mongreldb/kit').KitDatabase;
+			kit: import('@visorcraft/mongreldb-kit').KitDatabase;
 			close: () => void;
 		})
 );

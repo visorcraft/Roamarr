@@ -5,11 +5,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
 	ssr: {
-		external: ['mongreldb', '@mongreldb/kit']
+		external: ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit']
 	},
 	build: {
 		rollupOptions: {
-			external: ['mongreldb', '@mongreldb/kit']
+			external: ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit']
 		}
 	},
 	test: {

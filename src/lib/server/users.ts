@@ -1,4 +1,4 @@
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { randomBytes } from 'node:crypto';
 import { hashPassword, invalidateAllSessions, invalidateOtherSessions } from './auth';
 import { logAudit } from './audit';

@@ -1,6 +1,6 @@
 import * as OTPAuth from 'otpauth';
 import { randomBytes, createHmac, timingSafeEqual, scryptSync } from 'node:crypto';
-import type { Transaction } from 'mongreldb/native.js';
+import type { Transaction } from '@visorcraft/mongreldb/native.js';
 import {
 	eq as kitEq,
 	and as kitAnd,
@@ -14,7 +14,7 @@ import {
 	planDelete,
 	type TableSpec,
 	type ConstraintKit
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { userTwoFactor, twoFactorBackupCodes } from './db/mongrelSchema';
 import { encrypt, decrypt } from './crypto';

@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load } from './+page.server';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../../../tests/helpers';
 
 function kitDb(): KitDatabase {

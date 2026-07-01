@@ -9,8 +9,8 @@ import {
 	statSync
 } from 'node:fs';
 import { dirname, join, resolve, basename } from 'node:path';
-import mongreldb from 'mongreldb';
-import type { Database as NativeDatabase } from 'mongreldb/native.js';
+import mongreldb from '@visorcraft/mongreldb';
+import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
 import { getDatabasePath } from './db/paths';
 
 const NativeDatabaseClass = (mongreldb as unknown as { Database: typeof NativeDatabase }).Database;

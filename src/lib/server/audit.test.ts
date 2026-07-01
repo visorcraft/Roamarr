@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 
 import { logAudit, listAuditLogs, exportAuditLogsCsv } from './audit';
 import { users, auditLogs } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from './repositories/usersRepo';
 
 function kitDb(): KitDatabase {

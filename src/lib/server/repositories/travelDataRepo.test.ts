@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
@@ -11,7 +11,7 @@ vi.mock('$lib/server/db', async () => {
 	return { kit, getDb: () => kit };
 });
 
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import * as repo from './travelDataRepo';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from './tripsRepo';

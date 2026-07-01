@@ -16,7 +16,7 @@ import {
 	insurancePolicies,
 	loyaltyPrograms
 } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from './repositories/usersRepo';
 
 function kitDb(): KitDatabase {

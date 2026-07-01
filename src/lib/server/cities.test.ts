@@ -12,7 +12,7 @@ import * as repo from './repositories/travelDataRepo';
 import { geonamesCities } from './db/mongrelSchema';
 
 beforeEach(() => {
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit.deleteFrom(geonamesCities).executeSync();
+	(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit.deleteFrom(geonamesCities).executeSync();
 });
 
 test('findCity returns matching city', () => {

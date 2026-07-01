@@ -1,5 +1,5 @@
-import { eq as kitEq, and, inList } from '@mongreldb/kit';
-import type { TableSpec, Row } from '@mongreldb/kit';
+import { eq as kitEq, and, inList } from '@visorcraft/mongreldb-kit';
+import type { TableSpec, Row } from '@visorcraft/mongreldb-kit';
 import { error } from '@sveltejs/kit';
 import { kit } from './db';
 import {

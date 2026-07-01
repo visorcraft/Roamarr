@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
 }));
 vi.mock('./db', async () => {
 	const { freshDb } = await import('../../../tests/helpers');
@@ -11,7 +11,7 @@ vi.mock('./db', async () => {
 
 import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, requireOwnedTripRow } from './ownership';
 import { users, trips, tripHomeTasks, cards } from './db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
 import { makeKitUser } from '../../../tests/kitHelpers';
 import { createTrip } from './repositories/tripsRepo';

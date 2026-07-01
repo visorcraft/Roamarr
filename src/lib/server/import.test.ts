@@ -1,5 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
@@ -16,7 +16,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 
 beforeEach(() => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(reminders).executeSync();
 	kit.deleteFrom(segments).executeSync();
 	kit.deleteFrom(trips).executeSync();
@@ -86,7 +86,7 @@ test('parseCsv handles commas inside quoted values', () => {
 });
 
 test('importTrips creates trips and segments', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -124,7 +124,7 @@ test('importTrips creates trips and segments', () => {
 });
 
 test('importTrips mints public token for public visibility', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser();
 	importTrips(Number(u.id), {
 		trips: [{ name: 'Public Trip', defaultVisibility: 'public' }]
@@ -134,7 +134,7 @@ test('importTrips mints public token for public visibility', () => {
 });
 
 test('importTrips collects validation errors without creating invalid trips', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -148,7 +148,7 @@ test('importTrips collects validation errors without creating invalid trips', ()
 });
 
 test('importTrips skips invalid segments but keeps the trip', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser();
 	const result = importTrips(Number(u.id), {
 		trips: [
@@ -169,7 +169,7 @@ test('importTrips skips invalid segments but keeps the trip', () => {
 });
 
 test('importTrips dryRun validates and previews without writing', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('dry@x.c');
 	const beforeTrips = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync().length;
 	const result = importTrips(
@@ -207,7 +207,7 @@ test('parseCsv groups multi-segment rows into one trip', () => {
 });
 
 test('csv round-trip preserves multi-segment trips', () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('round@x.c');
 	const t = makeTrip(Number(u.id), 'RT');
 	makeSegment(t.id, 'flight', 'Out', '2026-08-01T10:00:00Z');

@@ -1,11 +1,11 @@
-import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripTemplates,
 	packingTemplates,
 	packingTemplateItems
 } from '$lib/server/db/mongrelSchema';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
 export type KitTripTemplate = Row<typeof tripTemplates>;
 export type KitPackingTemplate = Row<typeof packingTemplates>;

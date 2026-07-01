@@ -25,7 +25,7 @@ import {
 	tripPollVotes,
 	auditLogs
 } from './db/mongrelSchema';
-import { eq, and, type KitDatabase } from '@mongreldb/kit';
+import { eq, and, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeActionEvent } from '../../../tests/eventHelpers';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';

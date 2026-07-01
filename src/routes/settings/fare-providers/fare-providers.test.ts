@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase,
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
@@ -29,7 +29,7 @@ import {
 } from '$lib/server/repositories/travelDataRepo';
 import { fareProviders, users } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
 function event(user: { id: number }, body?: FormData) {
 	return {

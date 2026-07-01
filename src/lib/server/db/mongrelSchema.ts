@@ -15,7 +15,7 @@ import {
 	nowDefault,
 	staticDefault,
 	sequenceDefault
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 
 const ROLES = ['admin', 'user'] as const;
 const VISIBILITIES = ['private', 'groups', 'public'] as const;

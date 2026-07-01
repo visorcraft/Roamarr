@@ -1,7 +1,7 @@
-import { eq as kitEq, and, ne, lt, asc } from '@mongreldb/kit';
+import { eq as kitEq, and, ne, lt, asc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
 export type KitUser = Row<typeof users>;
 export type KitSession = Row<typeof sessions>;

@@ -11,7 +11,7 @@ import { kit } from '$lib/server/db';
 import { makeUser, makeTrip, makeGroup, makeGroupMember, makeShare } from '../../../tests/helpers';
 
 
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';

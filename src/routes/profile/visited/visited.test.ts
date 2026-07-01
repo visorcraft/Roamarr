@@ -10,8 +10,8 @@ vi.mock('$lib/server/db', async () => {
 import { actions, load } from './+page.server';
 import { users, visitedCountries, visitedUsStates, trips, segments } from '$lib/server/db/mongrelSchema';
 import { makeUser, makeTrip, makeSegment } from '../../../../tests/helpers';
-import { eq } from '@mongreldb/kit';
-import type { KitDatabase } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 function kitDb(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;

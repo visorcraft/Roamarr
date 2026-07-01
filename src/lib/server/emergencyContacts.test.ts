@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
 }));
 const sent = vi.hoisted(() => [] as Array<Record<string, unknown>>);
 vi.mock('./db', async () => {
@@ -24,7 +24,7 @@ import {
 	resetEmergencyShareRateLimit
 } from './emergencyContacts';
 import { emergencyContacts, trips, users, auditLogs, tripShares } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 import { updateSettings } from './settings';
 import { createTrip } from './repositories/tripsRepo';
 import { makeKitUser } from '../../../tests/kitHelpers';

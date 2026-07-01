@@ -9,7 +9,7 @@ import {
 	type Row,
 	type Insert,
 	type Update
-} from '@mongreldb/kit';
+} from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripChecklists,

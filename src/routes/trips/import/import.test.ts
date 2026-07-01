@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { actions } from './+page.server';
 import { trips, segments } from '$lib/server/db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeLocals } from '../../../../tests/eventHelpers';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 

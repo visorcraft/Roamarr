@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { type KitDatabase } from '@mongreldb/kit';
+import { type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { canView, canEdit, canViewDetails, viewerProjection, listViewableTrips } from './sharing';
 import { segments } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';

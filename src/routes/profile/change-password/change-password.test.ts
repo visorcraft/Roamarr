@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -14,8 +14,8 @@ import { hashPassword, createSession } from '$lib/server/auth';
 import { beforeEach } from 'vitest';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 
-function kitDb(): import('@mongreldb/kit').KitDatabase {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+function kitDb(): import('@visorcraft/mongreldb-kit').KitDatabase {
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 beforeEach(() => {

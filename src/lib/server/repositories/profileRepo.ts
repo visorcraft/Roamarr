@@ -1,4 +1,4 @@
-import { eq, and, ne, asc, desc, inList, lte } from '@mongreldb/kit';
+import { eq, and, ne, asc, desc, inList, lte } from '@visorcraft/mongreldb-kit';
 import { error } from '@sveltejs/kit';
 import { kit } from '$lib/server/db';
 import {
@@ -12,7 +12,7 @@ import {
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { sanitizeLast4 } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
-import type { Row, Insert, Update, ColumnSpec } from '@mongreldb/kit';
+import type { Row, Insert, Update, ColumnSpec } from '@visorcraft/mongreldb-kit';
 
 function toBigInt(id: number): bigint {
 	return BigInt(id);

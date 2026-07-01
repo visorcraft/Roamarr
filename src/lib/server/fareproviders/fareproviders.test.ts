@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
-	kit: null as unknown as import('@mongreldb/kit').KitDatabase
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
 }));
 vi.mock('../db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
@@ -37,7 +37,7 @@ import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from '../repositories/tripsRepo';
 import { getFareWatchById } from '../repositories/travelDataRepo';
 import { users, trips, fareProviders, fareWatches } from '../db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
 test('registry has the stub; key stored encrypted; checks active, skips paused', async () => {
 	expect(registry.stub).toBeTruthy();
@@ -46,7 +46,7 @@ test('registry has the stub; key stored encrypted; checks active, skips paused',
 	const p = createProvider(Number(u.id), 'stub', 'Work', 'SECRET-KEY', true);
 	expect(p.label).toBe('Work');
 
-	const kitRow = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const kitRow = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(fareProviders)
 		.where(kitEq(fareProviders.id, BigInt(p.id)))
 		.executeSync()[0];
@@ -54,7 +54,7 @@ test('registry has the stub; key stored encrypted; checks active, skips paused',
 
 	toggleWatch(Number(u.id), t.id, p.id);
 	await runFareChecks(new Date());
-	const w = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const w = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(fareWatches)
 		.executeSync()[0];
 	expect(w!.last_result_json).toBeTruthy();
@@ -66,7 +66,7 @@ test('user can save multiple accounts per provider', () => {
 	const a = createProvider(Number(u.id), 'stub', 'Personal', 'KEY-A', true);
 	const b = createProvider(Number(u.id), 'stub', 'Work', 'KEY-B', true);
 	expect(a.id).not.toBe(b.id);
-	const rows = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const rows = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(fareProviders)
 		.where(kitEq(fareProviders.user_id, u.id))
 		.executeSync();
@@ -78,7 +78,7 @@ test('updating with a blank apiKey preserves the stored key', () => {
 	const u = makeKitUser({ email: 'fare-k@x.c' });
 	const p = createProvider(Number(u.id), 'stub', 'Original', 'ORIGINAL-KEY', true);
 	updateProvider(Number(u.id), p.id, 'Renamed', '', false); // toggle enabled off without re-entering the key
-	const row = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	const row = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.selectFrom(fareProviders)
 		.where(kitEq(fareProviders.id, BigInt(p.id)))
 		.executeSync()[0];
@@ -97,7 +97,7 @@ test('provider mutations are owner-checked', () => {
 
 	deleteProvider(Number(a.id), p.id);
 	expect(
-		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 			.selectFrom(fareProviders)
 			.where(kitEq(fareProviders.id, BigInt(p.id)))
 			.executeSync()
@@ -112,7 +112,7 @@ test('toggleWatch is idempotent — no duplicate watches', () => {
 	const w2 = toggleWatch(Number(u.id), t.id, p.id);
 	expect(w2.id).toBe(w1.id);
 	expect(
-		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 			.selectFrom(fareWatches)
 			.where(kitEq(fareWatches.trip_id, BigInt(t.id)))
 			.executeSync()
@@ -135,7 +135,7 @@ test('pauseWatch, resumeWatch and deleteWatch are owner-checked', () => {
 
 	deleteWatch(Number(a.id), w.id);
 	expect(
-		(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+		(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 			.selectFrom(fareWatches)
 			.where(kitEq(fareWatches.id, BigInt(w.id)))
 			.executeSync()
@@ -176,7 +176,7 @@ test('runFareChecks notifies the provider owner when the summary changes', async
 	const t = createTrip(Number(u.id), { name: 'Change' });
 	const p = createProvider(Number(u.id), 'stub', 'A', 'K', true);
 	toggleWatch(Number(u.id), t.id, p.id);
-	(ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit
+	(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
 		.updateTable(fareWatches)
 		.set({ last_result_json: JSON.stringify({ ok: true, summary: 'old summary' }) })
 		.where(kitEq(fareWatches.trip_id, BigInt(t.id)))

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
@@ -14,7 +14,7 @@ import { createMcpServer } from './mcpServer';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
 import { trips } from './db/mongrelSchema';
-import { eq as kitEq } from '@mongreldb/kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../tests/helpers';
 
 async function connect(userId: number, scopes: Scope[]) {

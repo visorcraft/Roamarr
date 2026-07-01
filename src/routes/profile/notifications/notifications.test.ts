@@ -16,7 +16,7 @@ import { getUserSmtpOverride } from '$lib/server/smtpConfig';
 import { users, auditLogs } from '$lib/server/db/mongrelSchema';
 import { makeUser } from '../../../../tests/helpers';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
-import type { KitDatabase } from '@mongreldb/kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 function kitDb(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;

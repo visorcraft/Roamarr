@@ -1,4 +1,4 @@
-import type { Migration } from '@mongreldb/kit';
+import type { Migration } from '@visorcraft/mongreldb-kit';
 import { userTwoFactor, twoFactorBackupCodes } from '../mongrelSchema';
 
 const twoFactorMigration: Migration = {

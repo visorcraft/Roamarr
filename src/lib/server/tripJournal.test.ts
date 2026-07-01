@@ -16,13 +16,13 @@ import {
 	deleteJournalEntry
 } from './tripJournal';
 import { tripJournalEntries, tripShares, auditLogs } from './db/mongrelSchema';
-import { and, eq } from '@mongreldb/kit';
+import { and, eq } from '@visorcraft/mongreldb-kit';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 
 function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 function makeEvent(

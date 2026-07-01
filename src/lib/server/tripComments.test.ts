@@ -13,7 +13,7 @@ import { makeUser, makeTrip } from '../../../tests/helpers';
 
 import { listComments, addComment, deleteComment } from './tripComments';
 import { tripComments } from './db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 test('comment lifecycle', () => {
 	const u = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'U' });

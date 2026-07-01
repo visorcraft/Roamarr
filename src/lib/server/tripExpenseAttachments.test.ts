@@ -16,7 +16,7 @@ import {
 	listAttachments
 } from './tripExpenseAttachments';
 import { tripExpenseAttachments, tripExpenses, users, trips } from './db/mongrelSchema';
-import { eq, type KitDatabase } from '@mongreldb/kit';
+import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
 import * as expensesRepo from './repositories/expensesRepo';
 

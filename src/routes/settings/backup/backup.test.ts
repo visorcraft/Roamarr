@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
 import tar from 'tar-fs';
-import { KitDatabase } from '@mongreldb/kit';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
 import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 

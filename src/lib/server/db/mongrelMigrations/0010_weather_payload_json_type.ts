@@ -1,4 +1,4 @@
-import type { Migration } from '@mongreldb/kit';
+import type { Migration } from '@visorcraft/mongreldb-kit';
 import { weatherCache } from '../mongrelSchema';
 
 // `weather_cache.payload_json` was originally created as a `text()` column and

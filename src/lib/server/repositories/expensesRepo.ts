@@ -1,5 +1,5 @@
-import { eq as kitEq, and as kitAnd, asc } from '@mongreldb/kit';
-import type { Row, Insert, Update } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd, asc } from '@visorcraft/mongreldb-kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripExpenses,

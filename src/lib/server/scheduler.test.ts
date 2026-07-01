@@ -1,5 +1,5 @@
 import { test, expect, vi } from 'vitest';
-import { asc } from '@mongreldb/kit';
+import { asc } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
@@ -18,7 +18,7 @@ import { schedulerRuns } from './db/mongrelSchema';
 import { beforeEach } from 'vitest';
 
 function getKit() {
-	return (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 }
 
 beforeEach(() => {

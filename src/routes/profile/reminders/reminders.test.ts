@@ -9,10 +9,10 @@ vi.mock('$lib/server/db', async () => {
 
 import { load, actions } from './+page.server';
 import { users, reminders } from '$lib/server/db/mongrelSchema';
-import { eq } from '@mongreldb/kit';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 test('load returns the users reminders', async () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = kit.insertInto(users).values({ email: 'a@x.c', password_hash: 'x', display_name: 'A' }).executeSync();
 	const other = kit.insertInto(users).values({ email: 'b@x.c', password_hash: 'x', display_name: 'B' }).executeSync();
 	kit.insertInto(reminders).values({
@@ -36,7 +36,7 @@ test('load returns the users reminders', async () => {
 });
 
 test('cancel action deletes the users own reminder', async () => {
-	const kit = (ctx as { kit: import('@mongreldb/kit').KitDatabase }).kit;
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = kit.insertInto(users).values({ email: 'c@x.c', password_hash: 'x', display_name: 'C' }).executeSync();
 	const r = kit.insertInto(reminders).values({
 		user_id: u.id,

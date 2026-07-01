@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { eq as kitEq, and as kitAnd } from '@mongreldb/kit';
+import { eq as kitEq, and as kitAnd } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { weatherCache, trips, segments } from './db/mongrelSchema';
 import { getUserById } from './repositories/usersRepo';

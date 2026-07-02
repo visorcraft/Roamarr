@@ -49,9 +49,13 @@ export const actions: Actions = {
 		if (!clientName) return fail(400, { error: 'Client name is required' });
 		if (redirectUris.length === 0) return fail(400, { error: 'At least one redirect URI is required' });
 
-		const result = createClient(u.id, { clientName, redirectUris, scopes, isPublic });
-		setFlash(cookies, `Client created. Save the secret — it won't be shown again.`);
-		return { clientSecret: result.plaintextSecret, clientId: result.client.clientId };
+		try {
+			const result = createClient(u.id, { clientName, redirectUris, scopes, isPublic });
+			setFlash(cookies, `Client created. Save the secret — it won't be shown again.`);
+			return { clientSecret: result.plaintextSecret, clientId: result.client.clientId };
+		} catch (e) {
+			return fail(400, { error: e instanceof Error ? e.message : 'Failed to create client' });
+		}
 	},
 	delete: async ({ request, locals, cookies }) => {
 		const u = requireUser(locals);

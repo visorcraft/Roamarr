@@ -4,6 +4,7 @@ import { kit } from './db';
 import { oauthClients, oauthCodes, oauthTokens } from './db/mongrelSchema';
 import { logAudit } from './audit';
 import { getUserById } from './repositories/usersRepo';
+import { getSettings } from './settings';
 import type { Row } from '@visorcraft/mongreldb-kit';
 
 export type Scope =
@@ -77,10 +78,29 @@ export interface CreateClientInput {
 	scopes: Scope[];
 	/** Public clients (e.g. desktop apps that can't keep a secret) use PKCE only. */
 	isPublic?: boolean;
+	/** Optional pre-approved client ID. Required when an admin allow-list is in effect. */
+	clientId?: string;
+}
+
+export function getOAuthClientAllowList(): string[] | null {
+	return getSettings().oauthClientAllowList;
+}
+
+export function isClientAllowed(clientId: string): boolean {
+	const list = getOAuthClientAllowList();
+	if (!list || list.length === 0) return true;
+	return list.includes(clientId);
+}
+
+export function assertClientAllowed(clientId: string): void {
+	if (!isClientAllowed(clientId)) {
+		throw new Error('Client ID is not on the admin allow-list');
+	}
 }
 
 export function createClient(userId: number, input: CreateClientInput): { client: OAuthClient; plaintextSecret: string | null } {
-	const clientId = randomToken(16);
+	const clientId = input.clientId ?? randomToken(16);
+	assertClientAllowed(clientId);
 	const isConfidential = !input.isPublic;
 	const plaintextSecret = isConfidential ? randomToken(32) : null;
 

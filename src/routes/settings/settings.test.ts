@@ -213,6 +213,31 @@ test('smtpSecurity round-trips', () => {
 	expect(getSettings().smtpSecurity).toBe('ssl/tls');
 });
 
+test('oauthClientAllowList round-trips and clears when empty', () => {
+	const u = makeUser('oauth-allow@x.c');
+	saveAdminSettings(Number(u.id), {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90,
+		oauthClientAllowList: ['client-a', 'client-b']
+	});
+	expect(getSettings().oauthClientAllowList).toEqual(['client-a', 'client-b']);
+
+	saveAdminSettings(Number(u.id), {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90,
+		oauthClientAllowList: null
+	});
+	expect(getSettings().oauthClientAllowList).toBeNull();
+});
+
 test('testEmail action returns 429 when rate limited', async () => {
 	const ip = '9.9.9.9';
 	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit(ip, 'settings_test_email');

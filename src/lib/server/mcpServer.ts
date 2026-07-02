@@ -102,7 +102,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						destination: { type: 'string' },
 						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
 						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
-						status: { type: 'string', enum: ['booked', 'active', 'completed', 'cancelled'] }
+						status: { type: 'string', enum: [...TRIP_STATUSES] }
 					},
 					required: ['tripId']
 				}

@@ -27,8 +27,17 @@ export const load: PageServerLoad = () => {
 	return { passkeyAvailable: isPasskeyAvailable() };
 };
 
+function safeNext(url: URL | undefined): string | null {
+	if (!url) return null;
+	const next = url.searchParams.get('next');
+	if (!next) return null;
+	// Only allow same-origin relative paths to prevent open redirects.
+	if (next.startsWith('/') && !next.startsWith('//')) return next;
+	return null;
+}
+
 export const actions: Actions = {
-	default: async ({ request, cookies, getClientAddress }) => {
+	default: async ({ request, cookies, getClientAddress, url }) => {
 		const limit = checkRateLimit(getClientAddress(), 'login');
 		if (!limit.allowed)
 			return fail(429, {
@@ -41,6 +50,7 @@ export const actions: Actions = {
 
 		const ip = getClientAddress();
 		const ua = request.headers.get('user-agent') ?? undefined;
+		const next = safeNext(url);
 
 		if (isTwoFactorEnabled(u.id)) {
 			const pending = createPendingCookie(u.id, ip, ua);
@@ -48,10 +58,10 @@ export const actions: Actions = {
 				...sessionCookieOptions(),
 				maxAge: pending.maxAge
 			});
-			throw redirect(303, '/login/verify');
+			throw redirect(303, next ? `/login/verify?next=${encodeURIComponent(next)}` : '/login/verify');
 		}
 
 		cookies.set('session', createSession(u.id, ip, ua), sessionCookieOptions());
-		throw redirect(303, '/');
+		throw redirect(303, next ?? '/');
 	}
 };

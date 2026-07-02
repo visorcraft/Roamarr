@@ -4,7 +4,7 @@ import { kit } from '$lib/server/db';
 import { visitedCountries, visitedUsStates, trips, segments } from '$lib/server/db/mongrelSchema';
 import type { Row } from '@visorcraft/mongreldb-kit';
 import { COUNTRIES } from '$lib/countries';
-import { isUsStateCode } from '$lib/usStates';
+import { isUsStateCode, normalizeUsStateCode } from '$lib/usStates';
 import { logAudit } from '$lib/server/audit';
 import { requireOwnedTrip } from '$lib/server/ownership';
 import { lookupUsStateFromLatLng } from './usStateLookup';
@@ -132,9 +132,9 @@ function validateCountry(code: string): string {
 }
 
 function validateState(code: string): string {
-	const upper = code.trim().toUpperCase();
-	if (!isUsStateCode(upper)) throw error(400, `Unknown U.S. state code: ${upper}`);
-	return upper;
+	const normalized = normalizeUsStateCode(code);
+	if (!isUsStateCode(normalized)) throw error(400, `Unknown U.S. state code: ${normalized}`);
+	return normalized;
 }
 
 export function markCountryVisited(

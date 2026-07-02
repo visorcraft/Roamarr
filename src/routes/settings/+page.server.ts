@@ -33,6 +33,7 @@ export function _saveAdminSettings(
 		mapsTileUrl?: string | null;
 		mapsTileAttribution?: string | null;
 		mapsTileApiKey?: string;
+		oauthClientAllowList?: string[] | null;
 	}
 ) {
 	if (!nonNegativeInteger(i.defaultFlightCheckinLeadHours))
@@ -57,7 +58,8 @@ export function _saveAdminSettings(
 		mapsTileProvider: i.mapsTileProvider ?? 'openstreetmap',
 		mapsTileUrl: i.mapsTileUrl ?? null,
 		mapsTileAttribution: i.mapsTileAttribution ?? null,
-		mapsTileApiKey: i.mapsTileApiKey ?? null
+		mapsTileApiKey: i.mapsTileApiKey ?? null,
+		oauthClientAllowList: i.oauthClientAllowList ?? null
 	};
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
 	if (i.mapsTileApiKey !== undefined) patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
@@ -127,6 +129,10 @@ export const actions: Actions = {
 		const pass = String(f.get('smtpPass') || '');
 		const clearSmtpPass = f.get('clearSmtpPass') === 'on';
 		const tileApiKey = String(f.get('mapsTileApiKey') || '');
+		const allowListRaw = String(f.get('oauthClientAllowList') || '')
+			.split('\n')
+			.map((s) => s.trim())
+			.filter(Boolean);
 		_saveAdminSettings(u.id, {
 			instanceName: String(f.get('instanceName') || 'Roamarr'),
 			allowRegistration: f.get('allowRegistration') === 'on',
@@ -144,7 +150,8 @@ export const actions: Actions = {
 			mapsTileProvider: mapsTileProvider as MapTileProvider,
 			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
 			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
-			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined
+			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined,
+			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
 		});
 		setFlash(cookies, 'Settings saved.');
 		throw redirect(303, '/settings');

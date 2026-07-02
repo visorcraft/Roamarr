@@ -80,6 +80,7 @@ test('enable action confirms TOTP and returns backup codes', async () => {
 	} as any)) as { backupCodes: string[] };
 
 	expect(result.backupCodes).toHaveLength(10);
+	expect(result.backupCodes.every((c) => /^[0-9a-f]{4}-[0-9a-f]{4}$/.test(c))).toBe(true);
 	expect(getTwoFactorState(u.id).enabled).toBe(true);
 });
 
@@ -204,6 +205,7 @@ test('regenerate action requires a valid TOTP and replaces backup codes', async 
 	} as any)) as { backupCodes: string[] };
 
 	expect(result.backupCodes).toHaveLength(10);
+	expect(result.backupCodes.every((c) => /^[0-9a-f]{4}-[0-9a-f]{4}$/.test(c))).toBe(true);
 	expect(result.backupCodes).not.toEqual(oldCodes);
 });
 
@@ -230,4 +232,15 @@ test('2FA setup UI uses theme tokens instead of hard-coded palette colors', asyn
 	expect(source).toContain('bg-brand');
 	expect(source).toContain('border-line');
 	expect(source).toContain('bg-surface2');
+});
+
+test('backup-code UI requires an explicit saved acknowledgment', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const source = await readFile(
+		new URL('./+page.svelte', import.meta.url),
+		'utf-8'
+	);
+	expect(source).toContain('I saved these backup codes');
+	expect(source).toContain('bind:checked={savedAck}');
+	expect(source).toContain('aria-disabled={!savedAck}');
 });

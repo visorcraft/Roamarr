@@ -372,6 +372,29 @@
 			</div>
 		</section>
 
+		<section class="card p-5 sm:p-6">
+			<h2 class="section-title">OAuth clients</h2>
+			<p class="mt-1 text-sm text-slate-400">
+				When the allow-list is empty, users can register and authorize any OAuth client. When it
+				contains one or more client IDs, only those clients may be authorized.
+			</p>
+			<div class="settings-rows mt-4">
+				<div class="settings-row">
+					<div>
+						<label class="label" for="oauthClientAllowList">Allowed client IDs</label>
+						<p class="field-help">One client ID per line. Leave empty to allow all clients.</p>
+					</div>
+					<textarea
+						id="oauthClientAllowList"
+						name="oauthClientAllowList"
+						rows="4"
+						class="input font-mono"
+						value={(s.oauthClientAllowList ?? []).join('\n')}
+					></textarea>
+				</div>
+			</div>
+		</section>
+
 		<div class="flex justify-end">
 			<button class="btn btn-primary">Save settings</button>
 		</div>

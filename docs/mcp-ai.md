@@ -43,6 +43,7 @@ trips, segments, packing lists, budgets, and visited places.
 | `trips:write` | Create and update trips and segments |
 | `packing:write` | Manage packing templates and trip checklists |
 | `budgets:write` | Manage trip budgets and expenses |
+| `places:read` | View visited countries and U.S. states |
 | `places:write` | Mark/unmark visited countries and U.S. states |
 | `reminders:write` | Create and update reminders |
 | `profile:read` | Read non-sensitive profile and document-expiry summaries |
@@ -64,7 +65,7 @@ automation bundle is all write scopes plus the reads.
 | `roamarr_packing_list_build` | `packing:write` | Apply a packing template or list current checklist. |
 | `roamarr_budget_set` | `budgets:write` | Set or update a budget category for a trip. |
 | `roamarr_budget_update` | `budgets:write` | View budget categories and spent amounts. |
-| `roamarr_places_list` | `places:write` | List visited countries and states. |
+| `roamarr_places_list` | `places:read` | List visited countries and states. |
 | `roamarr_places_mark` | `places:write` | Mark a country or state as visited. |
 | `roamarr_places_unmark` | `places:write` | Remove a country or state from visited. |
 | `roamarr_reminder_add` | `reminders:write` | Add a reminder to a trip. |

@@ -17,6 +17,7 @@ import {
 	createAuthorizationCode,
 	verifyAccessToken
 } from '$lib/server/oauth';
+import { updateSettings } from '$lib/server/settings';
 import { oauthTokens, oauthClients } from '$lib/server/db/mongrelSchema';
 import { makeUser } from '../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -38,6 +39,7 @@ describe('oauth routes', () => {
 		resetRateLimit();
 		ctx.kit.deleteFrom(oauthTokens).executeSync();
 		ctx.kit.deleteFrom(oauthClients).executeSync();
+		updateSettings({ oauthClientAllowList: null });
 		user = makeUser(ctx.kit);
 	});
 
@@ -74,6 +76,29 @@ describe('oauth routes', () => {
 			expect(result.client.clientId).toBe(client.clientId);
 			expect(result.scopes).toEqual(['trips:read', 'places:read']);
 			expect(result.state).toBe('xyz');
+		});
+
+		test('load redirects unauthenticated users to login preserving the request URL', () => {
+			const url = new URL('http://localhost/oauth/authorize');
+			url.searchParams.set('response_type', 'code');
+			url.searchParams.set('client_id', 'unknown');
+			url.searchParams.set('redirect_uri', 'https://app.example/cb');
+			url.searchParams.set('scope', 'trips:read');
+			url.searchParams.set('code_challenge', 'challenge');
+			url.searchParams.set('code_challenge_method', 'S256');
+			url.searchParams.set('state', 'xyz');
+
+			try {
+				load({
+					locals: {},
+					url,
+					getClientAddress: () => '127.0.0.1'
+				} as any);
+				expect.fail('expected load to redirect unauthenticated users');
+			} catch (e: any) {
+				expect(e.status).toBe(302);
+				expect(e.location).toBe(`/login?next=${encodeURIComponent(url.pathname + url.search)}`);
+			}
 		});
 
 		test('approve action issues a code and redirects', async () => {
@@ -118,6 +143,55 @@ describe('oauth routes', () => {
 				expect(e.location).toBe('https://app.example/cb?error=access_denied&state=xyz');
 				return true;
 			});
+		});
+
+		test('load rejects a client that is not on the admin allow-list', async () => {
+			const { client } = makeClient();
+			updateSettings({ oauthClientAllowList: ['some-other-client'] });
+
+			const { challenge } = pkcePair();
+			const url = new URL('http://localhost/oauth/authorize');
+			url.searchParams.set('response_type', 'code');
+			url.searchParams.set('client_id', client.clientId);
+			url.searchParams.set('redirect_uri', client.redirectUris[0]);
+			url.searchParams.set('scope', 'trips:read');
+			url.searchParams.set('code_challenge', challenge);
+			url.searchParams.set('code_challenge_method', 'S256');
+
+			try {
+				await load({
+					locals: makeLocals(user),
+					url,
+					getClientAddress: () => '127.0.0.1'
+				} as any);
+				expect.fail('expected load to reject unlisted client');
+			} catch (e: any) {
+				expect(e.status).toBe(400);
+				expect(e.body?.message ?? e.message).toMatch(/allow-list/i);
+			}
+		});
+
+		test('approve action rejects a client that is not on the admin allow-list', async () => {
+			const { client } = makeClient();
+			updateSettings({ oauthClientAllowList: ['some-other-client'] });
+			const { challenge } = pkcePair();
+			const form = new FormData();
+			form.set('client_id', client.clientId);
+			form.set('redirect_uri', client.redirectUris[0]);
+			form.set('code_challenge', challenge);
+			form.set('scopes', 'trips:read');
+
+			try {
+				await actions.approve({
+					locals: makeLocals(user),
+					request: { formData: async () => form },
+					getClientAddress: () => '127.0.0.1'
+				} as any);
+				expect.fail('expected approve to reject unlisted client');
+			} catch (e: any) {
+				expect(e.status).toBe(400);
+				expect(e.body?.message ?? e.message).toMatch(/allow-list/i);
+			}
 		});
 
 		test('load is rate limited after repeated requests', async () => {

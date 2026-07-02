@@ -88,7 +88,7 @@ test('mark action persists a US state and redirects', async () => {
 		status: 303,
 		location: '/profile/visited'
 	});
-	expect(kitDb().selectFrom(visitedUsStates).executeSync()[0]!.state_code).toBe('CA');
+	expect(kitDb().selectFrom(visitedUsStates).executeSync()[0]!.state_code).toBe('US-CA');
 });
 
 test('unmark action removes a place and redirects', async () => {
@@ -135,7 +135,7 @@ test('autoMark action derives countries and states from past trips', async () =>
 		.executeSync()
 		.map((r) => r.state_code)
 		.sort();
-	expect(stateCodes).toEqual(['CO', 'IL']);
+	expect(stateCodes).toEqual(['US-CO', 'US-IL']);
 	expect(kitDb().selectFrom(visitedCountries).executeSync()[0]!.country_code).toBe('US');
 });
 

@@ -1,5 +1,5 @@
 import * as OTPAuth from 'otpauth';
-import { randomBytes, createHmac, timingSafeEqual, scryptSync } from 'node:crypto';
+import { randomBytes, createHmac, timingSafeEqual, createHash } from 'node:crypto';
 import type { Transaction } from '@visorcraft/mongreldb/native.js';
 import {
 	eq as kitEq,
@@ -22,7 +22,7 @@ import { logAudit } from './audit';
 
 const ISSUER = 'Roamarr';
 const BACKUP_CODE_COUNT = 10;
-const BACKUP_CODE_BYTES = 10;
+const BACKUP_CODE_BYTES = 4;
 
 export interface TwoFactorState {
 	enabled: boolean;
@@ -64,26 +64,21 @@ export function verifyTotp(secretBase32: string, token: string, window = 1): boo
 }
 
 function hashBackupCode(code: string): string {
-	const salt = randomBytes(16);
-	const hash = scryptSync(code, salt, 32);
-	return `scrypt\$${salt.toString('hex')}\$${hash.toString('hex')}`;
+	return createHash('sha256').update(code).digest('hex');
 }
 
 function verifyBackupCode(code: string, stored: string): boolean {
-	const parts = stored.split('\$');
-	if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
-	const salt = Buffer.from(parts[1], 'hex');
-	const expected = Buffer.from(parts[2], 'hex');
-	if (salt.length !== 16 || expected.length !== 32) return false;
-	const derived = scryptSync(code, salt, 32);
-	return timingSafeEqual(derived, expected);
+	const expected = Buffer.from(stored, 'hex');
+	if (expected.length !== 32) return false;
+	const actual = createHash('sha256').update(code).digest();
+	return timingSafeEqual(actual, expected);
 }
 
 export function generateBackupCodes(): string[] {
 	const codes = new Set<string>();
 	while (codes.size < BACKUP_CODE_COUNT) {
 		const hex = randomBytes(BACKUP_CODE_BYTES).toString('hex');
-		const code = `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}`;
+		const code = `${hex.slice(0, 4)}-${hex.slice(4, 8)}`;
 		codes.add(code);
 	}
 	return Array.from(codes);

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { COUNTRIES } from '$lib/countries';
-	import { US_STATES } from '$lib/usStates';
+	import { US_STATES, usStateDisplayCode } from '$lib/usStates';
+	import { countryContinent, continentSortKey } from '$lib/countryContinents';
 	import { page } from '$app/state';
 
 	let { data } = $props();
@@ -20,6 +21,21 @@
 						c.code.toLowerCase().includes(query.toLowerCase())
 				)
 			: COUNTRIES
+	);
+
+	type Country = (typeof COUNTRIES)[number];
+
+	const countriesByContinent = $derived.by(() => {
+		const groups: Record<string, Country[]> = {};
+		for (const c of filteredCountries) {
+			const continent = countryContinent(c.code);
+			(groups[continent] ??= []).push(c);
+		}
+		return groups;
+	});
+
+	const sortedContinents = $derived(
+		Object.keys(countriesByContinent).sort((a, b) => continentSortKey(a) - continentSortKey(b))
 	);
 </script>
 
@@ -84,37 +100,43 @@
 				</form>
 			{/if}
 		</div>
-		<div class="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-			{#each filteredCountries as c (c.code)}
-				{#if visitedCountryCodes.has(c.code)}
-					<form method="POST" action="?/unmark">
-						<input type="hidden" name="kind" value="country" />
-						<input type="hidden" name="code" value={c.code} />
-						<button
-							type="submit"
-							class="badge badge-brand badge-compact w-full justify-start rounded-md text-left transition hover:opacity-80"
-							aria-pressed="true"
-						>
-							<span class="font-mono text-[10px] opacity-70">{c.code}</span>
-							<span class="truncate">{c.name}</span>
-						</button>
-					</form>
-				{:else}
-					<form method="POST" action="?/mark">
-						<input type="hidden" name="kind" value="country" />
-						<input type="hidden" name="code" value={c.code} />
-						<button
-							type="submit"
-							class="badge badge-slate badge-compact w-full justify-start rounded-md text-left font-normal transition hover:opacity-80"
-							aria-pressed="false"
-						>
-							<span class="font-mono text-[10px] opacity-70">{c.code}</span>
-							<span class="truncate">{c.name}</span>
-						</button>
-					</form>
-				{/if}
-			{/each}
-		</div>
+
+		{#each sortedContinents as continent (continent)}
+			<div class="mb-4">
+				<h2 class="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">{continent}</h2>
+				<div class="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+					{#each countriesByContinent[continent] as c (c.code)}
+						{#if visitedCountryCodes.has(c.code)}
+							<form method="POST" action="?/unmark">
+								<input type="hidden" name="kind" value="country" />
+								<input type="hidden" name="code" value={c.code} />
+								<button
+									type="submit"
+									class="badge badge-brand badge-compact w-full justify-start rounded-md text-left transition hover:opacity-80"
+									aria-pressed="true"
+								>
+									<span class="font-mono text-[10px] opacity-70">{c.code}</span>
+									<span class="truncate">{c.name}</span>
+								</button>
+							</form>
+						{:else}
+							<form method="POST" action="?/mark">
+								<input type="hidden" name="kind" value="country" />
+								<input type="hidden" name="code" value={c.code} />
+								<button
+									type="submit"
+									class="badge badge-slate badge-compact w-full justify-start rounded-md text-left font-normal transition hover:opacity-80"
+									aria-pressed="false"
+								>
+									<span class="font-mono text-[10px] opacity-70">{c.code}</span>
+									<span class="truncate">{c.name}</span>
+								</button>
+							</form>
+						{/if}
+					{/each}
+				</div>
+			</div>
+		{/each}
 
 		{#if data.summaries.length > 0}
 			<div class="mt-6">
@@ -153,7 +175,7 @@
 				<select name="code" class="input w-56" required>
 					<option value="" disabled selected>Choose a state…</option>
 					{#each US_STATES.filter((s) => !visitedStateCodes.has(s.code)) as s (s.code)}
-						<option value={s.code}>{s.name} ({s.code})</option>
+						<option value={s.code}>{s.name} ({usStateDisplayCode(s.code)})</option>
 					{/each}
 				</select>
 			</label>
@@ -186,7 +208,7 @@
 							aria-pressed="true"
 							title={s.name}
 						>
-							{s.code}
+							{usStateDisplayCode(s.code)}
 						</button>
 					</form>
 				{:else}
@@ -199,7 +221,7 @@
 							aria-pressed="false"
 							title={s.name}
 						>
-							{s.code}
+							{usStateDisplayCode(s.code)}
 						</button>
 					</form>
 				{/if}

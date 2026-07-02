@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { eq as kitEq, and as kitAnd } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, gte as kitGte, lte as kitLte } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { weatherCache, trips, segments } from './db/mongrelSchema';
 import { getUserById } from './repositories/usersRepo';
@@ -161,6 +161,58 @@ function upsertCache(locationKeyStr: string, forDate: string, payload: string): 
 			fetched_at: now,
 			payload_json: payload
 		} as any).executeSync();
+	}
+}
+
+/**
+ * Prefetch and cache forecasts for trips starting within the forecast horizon.
+ * Each unique destination coordinate is fetched once; failures for one location
+ * do not block other locations and are logged without throwing.
+ */
+export async function refreshWeatherCache(now: Date = new Date()): Promise<void> {
+	const today = DateTime.fromJSDate(now).startOf('day');
+	const horizonEnd = today.plus({ days: FORECAST_DAYS - 1 });
+
+	const upcoming = kit
+		.selectFrom(trips)
+		.where(
+			kitAnd(
+				kitGte(trips.start_date, today.toISODate()!),
+				kitLte(trips.start_date, horizonEnd.toISODate()!)
+			)
+		)
+		.executeSync();
+
+	const seen = new Set<string>();
+	for (const row of upcoming) {
+		const lat = row.destination_city_lat;
+		const lng = row.destination_city_lng;
+		if (lat == null || lng == null) continue;
+
+		const key = locationKey(Number(lat), Number(lng));
+		if (seen.has(key)) continue;
+		seen.add(key);
+
+		try {
+			const response = await fetchForecast(Number(lat), Number(lng));
+			if (!response.daily) continue;
+			const daily = response.daily;
+			for (let i = 0; i < daily.time.length; i++) {
+				const dayPayload = JSON.stringify({
+					daily: {
+						time: [daily.time[i]],
+						temperature_2m_max: [daily.temperature_2m_max[i]],
+						temperature_2m_min: [daily.temperature_2m_min[i]],
+						precipitation_probability_max: [daily.precipitation_probability_max[i]],
+						wind_speed_10m_max: [daily.wind_speed_10m_max[i]],
+						weather_code: [daily.weather_code[i]]
+					}
+				});
+				upsertCache(key, daily.time[i], dayPayload);
+			}
+		} catch (e) {
+			console.error('[weather] refresh cache failed for', key, e);
+		}
 	}
 }
 

@@ -25,6 +25,7 @@ export type Settings = {
 	mapsTileUrl: string | null;
 	mapsTileAttribution: string | null;
 	mapsTileApiKey: string | null;
+	oauthClientAllowList: string[] | null;
 };
 
 export type SettingsPatch = Partial<Omit<Settings, 'id'>>;
@@ -61,7 +62,8 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	mapsTileProvider: 'maps_tile_provider',
 	mapsTileUrl: 'maps_tile_url',
 	mapsTileAttribution: 'maps_tile_attribution',
-	mapsTileApiKey: 'maps_tile_api_key'
+	mapsTileApiKey: 'maps_tile_api_key',
+	oauthClientAllowList: 'oauth_client_allow_list'
 };
 
 const SETTINGS_INT_FIELDS = new Set([
@@ -96,7 +98,10 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		mapsTileProvider: row.maps_tile_provider,
 		mapsTileUrl: nullableText(row.maps_tile_url),
 		mapsTileAttribution: nullableText(row.maps_tile_attribution),
-		mapsTileApiKey: nullableText(row.maps_tile_api_key)
+		mapsTileApiKey: nullableText(row.maps_tile_api_key),
+		oauthClientAllowList: row.oauth_client_allow_list
+			? (JSON.parse(row.oauth_client_allow_list as string) as string[])
+			: null
 	};
 }
 
@@ -107,6 +112,8 @@ function toKitSettingsPatch(patch: SettingsPatch): Update<typeof settings> {
 		const kitKey = SETTINGS_KEY_MAP[key] ?? key;
 		if (SETTINGS_INT_FIELDS.has(kitKey) && value !== null) {
 			out[kitKey] = BigInt(value as number);
+		} else if (kitKey === 'oauth_client_allow_list' && value !== null) {
+			out[kitKey] = JSON.stringify(value);
 		} else {
 			out[kitKey] = value;
 		}

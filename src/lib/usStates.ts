@@ -1,64 +1,80 @@
 export const US_STATES: readonly { code: string; name: string }[] = [
-	{ code: 'AL', name: 'Alabama' },
-	{ code: 'AK', name: 'Alaska' },
-	{ code: 'AZ', name: 'Arizona' },
-	{ code: 'AR', name: 'Arkansas' },
-	{ code: 'CA', name: 'California' },
-	{ code: 'CO', name: 'Colorado' },
-	{ code: 'CT', name: 'Connecticut' },
-	{ code: 'DE', name: 'Delaware' },
-	{ code: 'DC', name: 'District of Columbia' },
-	{ code: 'FL', name: 'Florida' },
-	{ code: 'GA', name: 'Georgia' },
-	{ code: 'HI', name: 'Hawaii' },
-	{ code: 'ID', name: 'Idaho' },
-	{ code: 'IL', name: 'Illinois' },
-	{ code: 'IN', name: 'Indiana' },
-	{ code: 'IA', name: 'Iowa' },
-	{ code: 'KS', name: 'Kansas' },
-	{ code: 'KY', name: 'Kentucky' },
-	{ code: 'LA', name: 'Louisiana' },
-	{ code: 'ME', name: 'Maine' },
-	{ code: 'MD', name: 'Maryland' },
-	{ code: 'MA', name: 'Massachusetts' },
-	{ code: 'MI', name: 'Michigan' },
-	{ code: 'MN', name: 'Minnesota' },
-	{ code: 'MS', name: 'Mississippi' },
-	{ code: 'MO', name: 'Missouri' },
-	{ code: 'MT', name: 'Montana' },
-	{ code: 'NE', name: 'Nebraska' },
-	{ code: 'NV', name: 'Nevada' },
-	{ code: 'NH', name: 'New Hampshire' },
-	{ code: 'NJ', name: 'New Jersey' },
-	{ code: 'NM', name: 'New Mexico' },
-	{ code: 'NY', name: 'New York' },
-	{ code: 'NC', name: 'North Carolina' },
-	{ code: 'ND', name: 'North Dakota' },
-	{ code: 'OH', name: 'Ohio' },
-	{ code: 'OK', name: 'Oklahoma' },
-	{ code: 'OR', name: 'Oregon' },
-	{ code: 'PA', name: 'Pennsylvania' },
-	{ code: 'RI', name: 'Rhode Island' },
-	{ code: 'SC', name: 'South Carolina' },
-	{ code: 'SD', name: 'South Dakota' },
-	{ code: 'TN', name: 'Tennessee' },
-	{ code: 'TX', name: 'Texas' },
-	{ code: 'UT', name: 'Utah' },
-	{ code: 'VT', name: 'Vermont' },
-	{ code: 'VA', name: 'Virginia' },
-	{ code: 'WA', name: 'Washington' },
-	{ code: 'WV', name: 'West Virginia' },
-	{ code: 'WI', name: 'Wisconsin' },
-	{ code: 'WY', name: 'Wyoming' }
+	{ code: 'US-AL', name: 'Alabama' },
+	{ code: 'US-AK', name: 'Alaska' },
+	{ code: 'US-AZ', name: 'Arizona' },
+	{ code: 'US-AR', name: 'Arkansas' },
+	{ code: 'US-CA', name: 'California' },
+	{ code: 'US-CO', name: 'Colorado' },
+	{ code: 'US-CT', name: 'Connecticut' },
+	{ code: 'US-DE', name: 'Delaware' },
+	{ code: 'US-DC', name: 'District of Columbia' },
+	{ code: 'US-FL', name: 'Florida' },
+	{ code: 'US-GA', name: 'Georgia' },
+	{ code: 'US-HI', name: 'Hawaii' },
+	{ code: 'US-ID', name: 'Idaho' },
+	{ code: 'US-IL', name: 'Illinois' },
+	{ code: 'US-IN', name: 'Indiana' },
+	{ code: 'US-IA', name: 'Iowa' },
+	{ code: 'US-KS', name: 'Kansas' },
+	{ code: 'US-KY', name: 'Kentucky' },
+	{ code: 'US-LA', name: 'Louisiana' },
+	{ code: 'US-ME', name: 'Maine' },
+	{ code: 'US-MD', name: 'Maryland' },
+	{ code: 'US-MA', name: 'Massachusetts' },
+	{ code: 'US-MI', name: 'Michigan' },
+	{ code: 'US-MN', name: 'Minnesota' },
+	{ code: 'US-MS', name: 'Mississippi' },
+	{ code: 'US-MO', name: 'Missouri' },
+	{ code: 'US-MT', name: 'Montana' },
+	{ code: 'US-NE', name: 'Nebraska' },
+	{ code: 'US-NV', name: 'Nevada' },
+	{ code: 'US-NH', name: 'New Hampshire' },
+	{ code: 'US-NJ', name: 'New Jersey' },
+	{ code: 'US-NM', name: 'New Mexico' },
+	{ code: 'US-NY', name: 'New York' },
+	{ code: 'US-NC', name: 'North Carolina' },
+	{ code: 'US-ND', name: 'North Dakota' },
+	{ code: 'US-OH', name: 'Ohio' },
+	{ code: 'US-OK', name: 'Oklahoma' },
+	{ code: 'US-OR', name: 'Oregon' },
+	{ code: 'US-PA', name: 'Pennsylvania' },
+	{ code: 'US-RI', name: 'Rhode Island' },
+	{ code: 'US-SC', name: 'South Carolina' },
+	{ code: 'US-SD', name: 'South Dakota' },
+	{ code: 'US-TN', name: 'Tennessee' },
+	{ code: 'US-TX', name: 'Texas' },
+	{ code: 'US-UT', name: 'Utah' },
+	{ code: 'US-VT', name: 'Vermont' },
+	{ code: 'US-VA', name: 'Virginia' },
+	{ code: 'US-WA', name: 'Washington' },
+	{ code: 'US-WV', name: 'West Virginia' },
+	{ code: 'US-WI', name: 'Wisconsin' },
+	{ code: 'US-WY', name: 'Wyoming' }
 ];
 
 const US_STATE_CODES = new Set(US_STATES.map((s) => s.code));
 
+function toIso3166_2(code: string): string {
+	const upper = code.trim().toUpperCase();
+	if (upper.startsWith('US-')) return upper;
+	return `US-${upper}`;
+}
+
+export function normalizeUsStateCode(code: string): string {
+	return toIso3166_2(code);
+}
+
 export function isUsStateCode(code: string): boolean {
-	return US_STATE_CODES.has(code.toUpperCase());
+	return US_STATE_CODES.has(toIso3166_2(code));
 }
 
 export function usStateName(code: string): string | null {
-	const match = US_STATES.find((s) => s.code === code.toUpperCase());
+	const normalized = toIso3166_2(code);
+	const match = US_STATES.find((s) => s.code === normalized);
 	return match ? match.name : null;
+}
+
+export function usStateDisplayCode(code: string): string {
+	const normalized = toIso3166_2(code);
+	return normalized.slice(3);
 }

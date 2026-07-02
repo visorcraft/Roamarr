@@ -64,11 +64,11 @@ describe('twoFactor', () => {
 	test('generateBackupCodes produces 10 formatted codes', () => {
 		const codes = generateBackupCodes();
 		expect(codes).toHaveLength(10);
-		expect(codes.every((c) => /^[0-9a-f]{4}(-[0-9a-f]{4}){4}$/.test(c))).toBe(true);
+		expect(codes.every((c) => /^[0-9a-f]{4}-[0-9a-f]{4}$/.test(c))).toBe(true);
 		expect(new Set(codes).size).toBe(10);
 	});
 
-	test('backup codes are stored as slow salted scrypt hashes', () => {
+	test('backup codes are stored as sha256 hashes', () => {
 		const setup = generateSecret('u@e.com');
 		const result = enableTwoFactor(userId, setup.secret, validToken(setup.secret));
 		expect(result.ok).toBe(true);
@@ -78,7 +78,7 @@ describe('twoFactor', () => {
 			.where(eq(twoFactorBackupCodes.user_id, BigInt(userId)))
 			.executeSync();
 		expect(hashes.length).toBe(10);
-		expect(hashes.every((h) => String(h.code_hash).startsWith('scrypt$'))).toBe(true);
+		expect(hashes.every((h) => /^[0-9a-f]{64}$/.test(String(h.code_hash)))).toBe(true);
 	});
 
 	test('enableTwoFactor requires a valid token and stores encrypted secret', () => {

@@ -9,6 +9,8 @@ import { migrations as migrations0007 } from './0007_mcp_oauth';
 import { migrations as migrations0008 } from './0008_auto_mark_toggle';
 import { migrations as migrations0009 } from './0009_oauth_constraints';
 import { migrations as migrations0010 } from './0010_weather_payload_json_type';
+import { migrations as migrations0011 } from './0011_oauth_client_allow_list';
+import { migrations as migrations0012 } from './0012_visited_places_source';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -23,5 +25,7 @@ export const migrations: Migration[] = [
 	...migrations0007,
 	...migrations0008,
 	...migrations0009,
-	...migrations0010
+	...migrations0010,
+	...migrations0011,
+	...migrations0012
 ];

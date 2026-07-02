@@ -49,7 +49,7 @@ describe('visitedPlaces', () => {
 		expect(markStateVisited(userId, 'ca').created).toBe(true);
 		expect(markStateVisited(userId, 'ny').created).toBe(true);
 		const { usStates } = listVisited(userId);
-		expect(usStates.map((s) => s.code).sort()).toEqual(['CA', 'NY']);
+		expect(usStates.map((s) => s.code).sort()).toEqual(['US-CA', 'US-NY']);
 	});
 
 	test('rejects unknown country / state codes', () => {
@@ -72,7 +72,7 @@ describe('visitedPlaces', () => {
 		markStateVisited(userId, 'tx');
 		expect(clearVisited(userId, 'country')).toBe(2);
 		expect(listVisited(userId).countries).toHaveLength(0);
-		expect(listVisited(userId).usStates.map((s) => s.code)).toEqual(['TX']);
+		expect(listVisited(userId).usStates.map((s) => s.code)).toEqual(['US-TX']);
 	});
 
 	test('autoMarkFromTrip marks past segment countries once (idempotent)', () => {
@@ -122,8 +122,8 @@ describe('visitedPlaces', () => {
 		});
 		const added = autoMarkFromTrip(userId, t.id);
 		expect(added.countries).toEqual(['US']);
-		expect(added.states.sort()).toEqual(['CA', 'TX']);
-		expect(listVisited(userId).usStates.map((s) => s.code).sort()).toEqual(['CA', 'TX']);
+		expect(added.states.sort()).toEqual(['US-CA', 'US-TX']);
+		expect(listVisited(userId).usStates.map((s) => s.code).sort()).toEqual(['US-CA', 'US-TX']);
 	});
 
 	test('autoMarkFromTrip skips US state when lat/lng are missing', () => {
@@ -158,6 +158,23 @@ describe('visitedPlaces', () => {
 				source: 'invalid'
 			}).executeSync()
 		).toThrow();
+		expect(() =>
+			ctx.kit.insertInto(visitedCountries).values({
+				user_id: BigInt(userId),
+				country_code: 'JP',
+				visited_on: null,
+				source: 'import'
+			}).executeSync()
+		).toThrow();
+	});
+
+	test('ai source is accepted for countries and states', () => {
+		markCountryVisited(userId, 'fr', { source: 'ai' });
+		markStateVisited(userId, 'us-tx', { source: 'ai' });
+		const { countries, usStates } = listVisited(userId);
+		expect(countries[0].source).toBe('ai');
+		expect(usStates[0].source).toBe('ai');
+		expect(usStates[0].code).toBe('US-TX');
 	});
 
 	test('countryVisitSummaries returns first/max dates and trip counts', () => {

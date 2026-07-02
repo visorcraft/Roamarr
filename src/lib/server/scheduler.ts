@@ -3,6 +3,7 @@ import { runFareChecks } from './fareproviders';
 import { purgeExpiredSessions } from './auth';
 import { purgeExpiredChallenges } from './passkeys';
 import { purgeExpiredOauth } from './oauth';
+import { refreshWeatherCache } from './weather';
 import {
 	startSchedulerRun,
 	finishSchedulerRun,
@@ -22,6 +23,7 @@ export async function runTick(now: Date) {
 	try {
 		await runDueReminders(now);
 		await runFareChecks(now);
+		await refreshWeatherCache(now);
 		purgeExpiredSessions();
 		purgeExpiredChallenges();
 		purgeExpiredOauth();

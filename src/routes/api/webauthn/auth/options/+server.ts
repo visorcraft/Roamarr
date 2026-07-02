@@ -8,5 +8,9 @@ export const POST: RequestHandler = async ({ getClientAddress }) => {
 	if (!isPasskeyAvailable()) throw error(400, 'Passkeys are not configured');
 	const limit = checkRateLimit(getClientAddress(), 'webauthn_auth');
 	if (!limit.allowed) throw error(429, 'Too many requests');
-	return json(await createAuthOptions());
+	try {
+		return json(await createAuthOptions());
+	} catch (e) {
+		throw error(400, e instanceof Error ? e.message : 'Could not start authentication');
+	}
 };

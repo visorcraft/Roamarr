@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createHash, randomBytes } from 'node:crypto';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
@@ -18,8 +18,11 @@ import {
 	exchangeAuthorizationCode,
 	refreshAccessToken,
 	verifyAccessToken,
-	revokeTokensForUser
+	revokeTokensForUser,
+	isClientAllowed,
+	assertClientAllowed
 } from './oauth';
+import { updateSettings, getSettings } from './settings';
 import * as usersRepo from './repositories/usersRepo';
 import { makeUser } from '../../../tests/helpers';
 
@@ -209,5 +212,52 @@ describe('oauth', () => {
 
 		expect(revokeTokensForUser(userId)).toBeGreaterThan(0);
 		expect(verifyAccessToken(result.accessToken)).toBeNull();
+	});
+
+	describe('client allow-list', () => {
+		afterEach(() => {
+			updateSettings({ oauthClientAllowList: null });
+		});
+
+		test('client creation succeeds when no allow-list is configured', () => {
+			expect(getSettings().oauthClientAllowList).toBeNull();
+			const { client } = createClient(userId, {
+				clientName: 'Unrestricted',
+				redirectUris: ['https://app.example/cb'],
+				scopes: ['trips:read']
+			});
+			expect(client.clientId).toBeTruthy();
+			expect(isClientAllowed(client.clientId)).toBe(true);
+		});
+
+		test('client creation with a pre-approved ID succeeds when allow-list is set', () => {
+			const approvedId = 'pre-approved-client-id';
+			updateSettings({ oauthClientAllowList: [approvedId] });
+			const { client } = createClient(userId, {
+				clientId: approvedId,
+				clientName: 'Approved',
+				redirectUris: ['https://app.example/cb'],
+				scopes: ['trips:read']
+			});
+			expect(client.clientId).toBe(approvedId);
+			expect(isClientAllowed(approvedId)).toBe(true);
+		});
+
+		test('client creation fails when generated ID is not on the allow-list', () => {
+			updateSettings({ oauthClientAllowList: ['only-this-one'] });
+			expect(() =>
+				createClient(userId, {
+					clientName: 'Not Approved',
+					redirectUris: ['https://app.example/cb'],
+					scopes: ['trips:read']
+				})
+			).toThrow('Client ID is not on the admin allow-list');
+		});
+
+		test('assertClientAllowed throws for unlisted clients when allow-list is non-empty', () => {
+			updateSettings({ oauthClientAllowList: ['listed'] });
+			expect(() => assertClientAllowed('not-listed')).toThrow('Client ID is not on the admin allow-list');
+			expect(() => assertClientAllowed('listed')).not.toThrow();
+		});
 	});
 });

@@ -15,8 +15,16 @@ export const load: PageServerLoad = ({ request, cookies, getClientAddress }) => 
 	return {};
 };
 
+function safeNext(url: URL | undefined): string | null {
+	if (!url) return null;
+	const next = url.searchParams.get('next');
+	if (!next) return null;
+	if (next.startsWith('/') && !next.startsWith('//')) return next;
+	return null;
+}
+
 export const actions: Actions = {
-	default: async ({ request, cookies, getClientAddress }) => {
+	default: async ({ request, cookies, getClientAddress, url }) => {
 		const limit = checkRateLimit(getClientAddress(), 'tfa');
 		if (!limit.allowed)
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
@@ -46,6 +54,6 @@ export const actions: Actions = {
 		const ip = getClientAddress();
 		const ua = request.headers.get('user-agent') ?? undefined;
 		cookies.set('session', createSession(pending.userId, ip, ua), sessionCookieOptions());
-		throw redirect(303, '/');
+		throw redirect(303, safeNext(url) ?? '/');
 	}
 };

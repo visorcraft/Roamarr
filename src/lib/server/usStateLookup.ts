@@ -32,7 +32,7 @@ function pointInMultiPolygon(lat: number, lng: number, coordinates: number[][][]
 }
 
 /**
- * Reverse-geocode a WGS84 lat/lng to a U.S. state ISO-3166-2 code (e.g. "CA")
+ * Reverse-geocode a WGS84 lat/lng to a U.S. state ISO-3166-2 code (e.g. "US-CA")
  * using the bundled, simplified Natural Earth boundary data.
  * Returns null for points outside all 50 states + DC.
  */

@@ -208,7 +208,8 @@ export const settings = table('settings', {
 		}),
 		text('maps_tile_url', { nullable: true }),
 		text('maps_tile_attribution', { nullable: true }),
-		text('maps_tile_api_key', { nullable: true })
+		text('maps_tile_api_key', { nullable: true }),
+		json('oauth_client_allow_list', { nullable: true })
 	],
 	primaryKey: 'id'
 });
@@ -1209,7 +1210,7 @@ export const tripImportantItems = table('trip_important_items', {
 	]
 });
 
-const PLACE_SOURCES = ['manual', 'trip', 'import'] as const;
+const PLACE_SOURCES = ['manual', 'trip', 'ai'] as const;
 
 export const visitedCountries = table('visited_countries', {
 	columns: [
@@ -1234,7 +1235,7 @@ export const visitedCountries = table('visited_countries', {
 		check('visited_countries_source_ck', (r) =>
 			PLACE_SOURCES.includes(r.source as (typeof PLACE_SOURCES)[number])
 				? true
-				: 'source must be manual, trip, or import'
+				: 'source must be manual, trip, or ai'
 		)
 	]
 });
@@ -1262,7 +1263,7 @@ export const visitedUsStates = table('visited_us_states', {
 		check('visited_us_states_source_ck', (r) =>
 			PLACE_SOURCES.includes(r.source as (typeof PLACE_SOURCES)[number])
 				? true
-				: 'source must be manual, trip, or import'
+				: 'source must be manual, trip, or ai'
 		)
 	]
 });

@@ -159,7 +159,7 @@ async function main() {
 		if (!code || !US_STATE_CODES.has(code)) continue;
 		const simplified = simplifyGeometry(feature.geometry, 0.02);
 		if (!simplified) continue;
-		entries.push({ code, geometry: simplified });
+		entries.push({ code: `US-${code}`, geometry: simplified });
 	}
 
 	// Sort deterministically.

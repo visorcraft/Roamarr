@@ -1,6 +1,12 @@
 import { error, redirect, fail, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
-import { getClient, validateScopes, createAuthorizationCode, ALL_SCOPES } from '$lib/server/oauth';
+import {
+	getClient,
+	validateScopes,
+	createAuthorizationCode,
+	ALL_SCOPES,
+	isClientAllowed
+} from '$lib/server/oauth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
@@ -8,7 +14,10 @@ export const load: PageServerLoad = ({ locals, url, getClientAddress }) => {
 	const limit = checkRateLimit(getClientAddress(), 'oauth_authorize');
 	if (!limit.allowed) throw error(429, 'Too many requests');
 
-	const u = requireUser(locals);
+	if (!locals.user) {
+		throw redirect(302, `/login?next=${encodeURIComponent(url.pathname + url.search)}`);
+	}
+	const u = locals.user;
 
 	const responseType = url.searchParams.get('response_type');
 	const clientId = url.searchParams.get('client_id') ?? '';
@@ -23,6 +32,7 @@ export const load: PageServerLoad = ({ locals, url, getClientAddress }) => {
 
 	const client = getClient(clientId);
 	if (!client) throw error(400, 'Unknown client_id');
+	if (!isClientAllowed(clientId)) throw error(400, 'client_id is not on the admin allow-list');
 	if (!client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 	if (!codeChallenge) throw error(400, 'code_challenge is required');
 
@@ -54,6 +64,7 @@ export const actions: Actions = {
 
 		const client = getClient(clientId);
 		if (!client) throw error(400, 'Unknown client');
+		if (!isClientAllowed(clientId)) throw error(400, 'client_id is not on the admin allow-list');
 		// Never trust the posted redirect_uri/scopes: an attacker could tamper the
 		// form to exfiltrate the code to an unregistered URL or escalate scopes.
 		if (!client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');

@@ -9,6 +9,13 @@
 	let setupToken = $state('');
 	let disablePassword = $state('');
 	let regenToken = $state('');
+	let savedAck = $state(false);
+
+	$effect(() => {
+		if (backupCodes) {
+			savedAck = false;
+		}
+	});
 </script>
 
 <header class="page-header">
@@ -35,6 +42,19 @@
 				<div class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
 					{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center">{code}</span>{/each}
 				</div>
+				<label class="mt-4 flex items-center gap-2 text-sm">
+					<input type="checkbox" bind:checked={savedAck} class="checkbox" />
+					I saved these backup codes
+				</label>
+				<a
+					href="/profile/security"
+					class="btn btn-primary mt-3 inline-block"
+					class:opacity-50={!savedAck}
+					class:pointer-events-none={!savedAck}
+					aria-disabled={!savedAck}
+				>
+					Done
+				</a>
 			</div>
 		{/if}
 
@@ -61,7 +81,7 @@
 					</div>
 					<div class="field">
 						<label class="label" for="disableTotp">TOTP code or backup code</label>
-						<input id="disableTotp" name="totpCode" type="text" class="input" placeholder="123456 or abcd-ef12-3456" autocomplete="one-time-code" required />
+						<input id="disableTotp" name="totpCode" type="text" class="input" placeholder="123456 or abcd-ef12" autocomplete="one-time-code" required />
 					</div>
 					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Disable two-factor authentication?">Disable 2FA</ConfirmButton>
 				</form>

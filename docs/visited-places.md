@@ -9,8 +9,8 @@ under Profile in the sidebar.
 ## Manual marking
 
 Toggle any country or U.S. state chip to mark or unmark it. Use the filter box
-to narrow the list by name or code. Chips are grouped into a **Countries** tab
-and a **U.S. States** tab.
+to narrow the list by name or code. Countries are grouped by continent; U.S.
+states are shown on their own tab.
 
 Each entry records:
 - **Code** — ISO 3166-1 alpha-2 country code (e.g. `FR`, `JP`) or ISO
@@ -27,13 +27,14 @@ the trip destination and its segments are derived and marked with
 `source: trip`.
 
 - **Idempotent** — re-running never un-marks or overwrites an existing entry.
-- **U.S. states** are left to manual marking (segments do not store a
-  sub-division code, and Roamarr does not perform offline reverse geocoding).
+- **U.S. states** are also auto-marked when a segment or trip destination has
+  `country_code === 'US'` and includes lat/lng coordinates that fall inside a
+  state boundary.
 
 ## From a trip page
 
 Open any trip and use the trip menu → **Mark places visited** to auto-mark
-countries from that specific trip.
+places from that specific trip.
 
 ## Privacy
 

@@ -13,7 +13,7 @@ vi.mock('$lib/server/db', async () => {
 import { createMcpServer } from './mcpServer';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
-import { trips } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../tests/helpers';
 
@@ -31,6 +31,8 @@ describe('mcpServer', () => {
 
 	beforeEach(() => {
 		ctx.kit.deleteFrom(trips).executeSync();
+		ctx.kit.deleteFrom(visitedCountries).executeSync();
+		ctx.kit.deleteFrom(visitedUsStates).executeSync();
 		userId = makeUser(ctx.kit).id;
 	});
 
@@ -73,6 +75,51 @@ describe('mcpServer', () => {
 		const res: any = await client.callTool({ name: 'roamarr_places_list', arguments: {} });
 		expect(res.isError).toBe(true);
 		expect(res.content[0].text).toContain('places:read');
+	});
+
+	test('places_list works with places:read', async () => {
+		const { markVisited } = await import('./visitedPlaces');
+		markVisited(userId, 'country', 'PT', { source: 'manual' });
+		const { client } = await connect(userId, ['places:read']);
+		const res: any = await client.callTool({ name: 'roamarr_places_list', arguments: {} });
+		expect(res.isError).toBeFalsy();
+		const body = JSON.parse(res.content[0].text);
+		expect(body.countries.map((c: any) => c.code)).toContain('PT');
+	});
+
+	test('trip_update schema rejects cancelled status', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Trip' });
+		const { client } = await connect(userId, ['trips:write']);
+		const res: any = await client.callTool({ name: 'roamarr_trip_update', arguments: { tripId: trip.id, status: 'cancelled' } });
+		expect(res.isError).toBeFalsy();
+		const text = res.content[0].text;
+		expect(text).toContain('status must be one of');
+		expect(text).not.toContain('cancelled');
+	});
+
+	test('places_mark records ai source and ISO-3166-2 state codes', async () => {
+		const { client } = await connect(userId, ['places:write', 'places:read']);
+		const countryRes: any = await client.callTool({
+			name: 'roamarr_places_mark',
+			arguments: { kind: 'country', code: 'PT' }
+		});
+		expect(countryRes.isError).toBeFalsy();
+
+		const stateRes: any = await client.callTool({
+			name: 'roamarr_places_mark',
+			arguments: { kind: 'state', code: 'US-CA' }
+		});
+		expect(stateRes.isError).toBeFalsy();
+
+		const rows = ctx.kit.selectFrom(visitedCountries).executeSync();
+		expect(rows).toHaveLength(1);
+		expect(rows[0].country_code).toBe('PT');
+		expect(rows[0].source).toBe('ai');
+
+		const stateRows = ctx.kit.selectFrom(visitedUsStates).executeSync();
+		expect(stateRows).toHaveLength(1);
+		expect(stateRows[0].state_code).toBe('US-CA');
+		expect(stateRows[0].source).toBe('ai');
 	});
 
 	test('trip_get does not include segment confirmation numbers', async () => {

@@ -31,6 +31,14 @@ import { travelDocuments } from '$lib/server/db/mongrelSchema';
 import { makeLocals } from '../../tests/eventHelpers';
 
 test('dashboard includes upcoming trips shared with the user and labels them shared', () => {
+	// Pinned "today" so `future`/`past` stay future/past regardless of when
+	// this test actually runs (see the agenda tests below for the same
+	// pattern) -- this test previously hardcoded '2026-07-01' as "the
+	// future" without pinning the clock, so it silently broke once real
+	// wall-clock time caught up to and passed that date.
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date('2026-06-01T12:00:00Z'));
+
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const c = makeUser(kit, { email: 'c@x.c', passwordHash: 'x', displayName: 'C' });
@@ -67,18 +75,33 @@ test('dashboard includes upcoming trips shared with the user and labels them sha
 	const forA = load({ locals: makeLocals(a) } as any) as any;
 	expect(forA.upcoming.map((t: any) => t.name).sort()).toEqual(['Group Trip', 'Private Trip', 'Shared Trip']);
 	expect(forA.upcoming.every((t: any) => t.isShared === false)).toBe(true);
+
+	vi.useRealTimers();
 });
 
 
 test('dashboard uses user document expiry lead', () => {
+	// Pinned "today" -- see the note on the first test in this file. '60 days
+	// from today' is only "60 days from whenever this test happens to run"
+	// unless the clock is fixed, and this test's margin (outside a 30-day
+	// window) silently shrinks as real time passes.
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date('2026-06-01T12:00:00Z'));
+
 	const u = makeUser(kit, { email: 'lead@x.c', passwordHash: 'x', displayName: 'U', documentExpiryLeadDays: 30 });
-	// Expires in 60 days, outside the 30-day lead window
+	// Expires in 60+ days from the pinned "today", outside the 30-day lead window
 	kit.insertInto(travelDocuments).values({ user_id: BigInt(u.id), type: 'passport', expires_on: '2026-08-24' }).executeSync();
 	const data = load({ locals: makeLocals(u) } as any) as any;
 	expect(data.expiring).toHaveLength(0);
+
+	vi.useRealTimers();
 });
 
 test('dashboard stats reflect unread notifications, expiring docs and fare watches', () => {
+	// Pinned "today" -- see the note on the first test in this file.
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date('2026-06-01T12:00:00Z'));
+
 	const u = makeUser(kit, { email: 'stats@x.c', passwordHash: 'x', displayName: 'U' });
 	makeNotification(kit, u.id, { title: 'A', body: 'B' });
 	makeTravelDocument(kit, u.id, { type: 'passport', expiresOn: '2026-06-25' });
@@ -92,6 +115,8 @@ test('dashboard stats reflect unread notifications, expiring docs and fare watch
 	expect(data.stats.unread).toBe(1);
 	expect(data.stats.expiring).toBe(1);
 	expect(data.stats.watches).toBe(1);
+
+	vi.useRealTimers();
 });
 
 test('dashboard agenda includes trips covering today and segments starting/ending today in user timezone', () => {

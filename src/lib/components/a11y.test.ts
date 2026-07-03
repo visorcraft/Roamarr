@@ -4,7 +4,7 @@ import Toast from './Toast.svelte';
 import Icon from './Icon.svelte';
 import EmptyState from './EmptyState.svelte';
 import CopyButton from './CopyButton.svelte';
-import FormField from './FormField.svelte';
+import TextField from './TextField.svelte';
 import CityAutocomplete from './segments/CityAutocomplete.svelte';
 
 test('Toast has no axe violations', async () => {
@@ -36,18 +36,18 @@ test('CopyButton has no axe violations', async () => {
 	expect(violations, formatViolations(violations)).toHaveLength(0);
 });
 
-test('FormField with error wires aria-invalid and describedby', async () => {
-	const violations = await checkA11y(FormField, {
+test('TextField with error wires aria-invalid and describedby', async () => {
+	const violations = await checkA11y(TextField, {
 		name: 'email',
 		label: 'Email',
 		type: 'email',
-		error: 'Enter a valid email address.'
+		errors: { email: 'Enter a valid email address.' }
 	});
 	expect(violations, formatViolations(violations)).toHaveLength(0);
 });
 
-test('FormField without error has no invalid/describedby attributes', async () => {
-	const violations = await checkA11y(FormField, { name: 'email', label: 'Email' });
+test('TextField without error has no invalid/describedby attributes', async () => {
+	const violations = await checkA11y(TextField, { name: 'email', label: 'Email' });
 	expect(violations, formatViolations(violations)).toHaveLength(0);
 });
 

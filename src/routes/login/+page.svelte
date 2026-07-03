@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { startAuthentication } from '@simplewebauthn/browser';
-	import FormField from '$lib/components/FormField.svelte';
+	import TextField from '$lib/components/TextField.svelte';
 
 	let { data, form } = $props();
 	let submitting = $state(false);
@@ -42,8 +42,8 @@
 	{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
 	<form method="POST" class="mt-6 grid gap-4" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
-		<FormField name="email" label="Email" type="email" autocomplete="email" placeholder="you@example.com" required disabled={submitting} />
-		<FormField name="password" label="Password" type="password" autocomplete="current-password" placeholder="••••••••" required disabled={submitting} />
+		<TextField name="email" label="Email" type="email" autocomplete="email" placeholder="you@example.com" required disabled={submitting} />
+		<TextField name="password" label="Password" type="password" autocomplete="current-password" placeholder="••••••••" required disabled={submitting} />
 		<div class="flex items-center justify-between">
 			<a href="/forgot-password" class="text-sm link">Forgot password?</a>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Sign in</button>

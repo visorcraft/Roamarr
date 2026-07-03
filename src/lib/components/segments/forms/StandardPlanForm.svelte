@@ -2,6 +2,9 @@
 	import DateTimeRangeFields from '../DateTimeRangeFields.svelte';
 	import BookedRow from '../BookedRow.svelte';
 	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import TextField from '$lib/components/TextField.svelte';
+	import TextAreaField from '$lib/components/TextAreaField.svelte';
+	import SelectField from '$lib/components/SelectField.svelte';
 	import { COUNTRIES } from '$lib/countries';
 
 	let {
@@ -27,71 +30,25 @@
 	} = $props();
 </script>
 
-<div class="field sm:col-span-2">
-	<label class="label" for="title">{titleLabel}</label>
-	<input
-		id="title"
-		name="title"
-		placeholder={titlePlaceholder}
-		class="input {errors.title ? 'input-error' : ''}"
-		required
-	/>
-	{#if errors.title}<p class="field-error">{errors.title}</p>{/if}
-</div>
+<TextField name="title" label={titleLabel} placeholder={titlePlaceholder} required class="sm:col-span-2" {errors} />
 
 <DateTimeRangeFields {errors} {requireEnd} />
 
-<div class="field">
-	<label class="label" for="countryCode">Country</label>
-	<select id="countryCode" name="countryCode" class="input {errors.countryCode ? 'input-error' : ''}">
-		<option value="" selected={!countryCode}>Select country</option>
-		{#each COUNTRIES as c}
-			<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
-		{/each}
-	</select>
-	{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
-</div>
+<SelectField name="countryCode" label="Country" {errors}>
+	<option value="" selected={!countryCode}>Select country</option>
+	{#each COUNTRIES as c (c.code)}
+		<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
+	{/each}
+</SelectField>
 
 <CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
 
-<div class="field sm:col-span-2">
-	<label class="label" for="venue">{locationLabel}</label>
-	<input
-		id="venue"
-		name="venue"
-		placeholder={locationPlaceholder}
-		value={venue}
-		class="input {errors.venue ? 'input-error' : ''}"
-	/>
-	{#if errors.venue}<p class="field-error">{errors.venue}</p>{/if}
-</div>
+<TextField name="venue" label={locationLabel} placeholder={locationPlaceholder} value={venue} class="sm:col-span-2" {errors} />
 
-<div class="field sm:col-span-2">
-	<label class="label" for="meetingPoint">Meeting / rally point</label>
-	<input
-		id="meetingPoint"
-		name="meetingPoint"
-		placeholder="e.g. Hotel lobby, gate A12"
-		class="input {errors.meetingPoint ? 'input-error' : ''}"
-		maxlength="200"
-	/>
-	{#if errors.meetingPoint}<p class="field-error">{errors.meetingPoint}</p>{/if}
-</div>
+<TextField name="meetingPoint" label="Meeting / rally point" placeholder="e.g. Hotel lobby, gate A12" maxlength="200" class="sm:col-span-2" {errors} />
 
-<div class="field">
-	<label class="label" for="meetingAt">Rally time</label>
-	<input
-		id="meetingAt"
-		name="meetingAt"
-		type="datetime-local"
-		class="input {errors.meetingAt ? 'input-error' : ''}"
-	/>
-	{#if errors.meetingAt}<p class="field-error">{errors.meetingAt}</p>{/if}
-</div>
+<TextField name="meetingAt" label="Rally time" type="datetime-local" {errors} />
 
 <BookedRow {errors} />
 
-<div class="field sm:col-span-2">
-	<label class="label" for="detail_notes">Notes</label>
-	<textarea id="detail_notes" name="detail_notes" rows="3" placeholder="Optional notes" class="textarea"></textarea>
-</div>
+<TextAreaField name="detail_notes" label="Notes" rows={3} placeholder="Optional notes" class="sm:col-span-2" />

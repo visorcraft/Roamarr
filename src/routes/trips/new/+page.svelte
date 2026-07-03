@@ -2,6 +2,8 @@
 	import { enhance } from '$app/forms';
 	import { COUNTRIES } from '$lib/countries';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
+	import TextField from '$lib/components/TextField.svelte';
+	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
@@ -73,11 +75,7 @@
 				</select>
 			</div>
 		{/if}
-		<div class="field sm:col-span-2">
-			<label class="label" for="name">Trip name</label>
-			<input id="name" name="name" placeholder="Summer in Lisbon" class="input {form?.errors?.name ? 'input-error' : ''}" required disabled={submitting} />
-			{#if form?.errors?.name}<p class="field-error">{form.errors.name}</p>{/if}
-		</div>
+		<TextField name="name" label="Trip name" placeholder="Summer in Lisbon" required disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<div class="field">
 			<label class="label" for="destinationCountryCode">Destination country</label>
 			<select
@@ -105,16 +103,8 @@
 				disabled={submitting}
 			/>
 		</div>
-		<div class="field">
-			<label class="label" for="startDate">Start date</label>
-			<input id="startDate" name="startDate" type="date" class="input {form?.errors?.startDate ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.startDate}<p class="field-error">{form.errors.startDate}</p>{/if}
-		</div>
-		<div class="field">
-			<label class="label" for="endDate">End date</label>
-			<input id="endDate" name="endDate" type="date" class="input {form?.errors?.endDate ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.endDate}<p class="field-error">{form.errors.endDate}</p>{/if}
-		</div>
+		<TextField name="startDate" label="Start date" type="date" disabled={submitting} errors={form?.errors ?? {}} />
+		<TextField name="endDate" label="End date" type="date" disabled={submitting} errors={form?.errors ?? {}} />
 		<div class="field sm:col-span-2">
 			<label class="label" for="defaultVisibility">Default visibility</label>
 			<select id="defaultVisibility" name="defaultVisibility" class="select {form?.errors?.defaultVisibility ? 'input-error' : ''}" disabled={submitting}>
@@ -124,16 +114,8 @@
 			</select>
 			{#if form?.errors?.defaultVisibility}<p class="field-error">{form.errors.defaultVisibility}</p>{/if}
 		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="notes">Notes</label>
-			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}" disabled={submitting}></textarea>
-			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="tags">Tags</label>
-			<input id="tags" name="tags" placeholder="work, summer, family" class="input {form?.errors?.tags ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.tags}<p class="field-error">{form.errors.tags}</p>{/if}
-		</div>
+		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
+		<TextField name="tags" label="Tags" placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
 			<a href="/trips" class="btn btn-ghost">Cancel</a>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Create trip</button>

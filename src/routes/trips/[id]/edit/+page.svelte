@@ -4,6 +4,8 @@
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 	import { COUNTRIES } from '$lib/countries';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
+	import TextField from '$lib/components/TextField.svelte';
+	import TextAreaField from '$lib/components/TextAreaField.svelte';
 
 	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
@@ -41,11 +43,7 @@
 	<form method="POST" action="?/save" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
-		<div class="field sm:col-span-2">
-			<label class="label" for="name">Trip name</label>
-			<input id="name" name="name" value={data.trip.name} class="input {form?.errors?.name ? 'input-error' : ''}" required disabled={submitting} />
-			{#if form?.errors?.name}<p class="field-error">{form.errors.name}</p>{/if}
-		</div>
+		<TextField name="name" label="Trip name" value={data.trip.name} required disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<div class="field">
 			<label class="label" for="destinationCountryCode">Destination country</label>
 			<select
@@ -73,16 +71,8 @@
 				disabled={submitting}
 			/>
 		</div>
-		<div class="field">
-			<label class="label" for="startDate">Start date</label>
-			<input id="startDate" name="startDate" type="date" value={data.trip.startDate ?? ''} class="input {form?.errors?.startDate ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.startDate}<p class="field-error">{form.errors.startDate}</p>{/if}
-		</div>
-		<div class="field">
-			<label class="label" for="endDate">End date</label>
-			<input id="endDate" name="endDate" type="date" value={data.trip.endDate ?? ''} class="input {form?.errors?.endDate ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.endDate}<p class="field-error">{form.errors.endDate}</p>{/if}
-		</div>
+		<TextField name="startDate" label="Start date" type="date" value={data.trip.startDate ?? ''} disabled={submitting} errors={form?.errors ?? {}} />
+		<TextField name="endDate" label="End date" type="date" value={data.trip.endDate ?? ''} disabled={submitting} errors={form?.errors ?? {}} />
 		<div class="field sm:col-span-2">
 			<label class="label" for="status">Status</label>
 			<select id="status" name="status" value={data.trip.status} class="input {form?.errors?.status ? 'input-error' : ''}" disabled={submitting}>
@@ -92,21 +82,9 @@
 			</select>
 			{#if form?.errors?.status}<p class="field-error">{form.errors.status}</p>{/if}
 		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="notes">Notes</label>
-			<textarea id="notes" name="notes" rows="4" placeholder="Anything worth remembering…" class="textarea {form?.errors?.notes ? 'input-error' : ''}" disabled={submitting}>{data.trip.notes ?? ''}</textarea>
-			{#if form?.errors?.notes}<p class="field-error">{form.errors.notes}</p>{/if}
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="tags">Tags</label>
-			<input id="tags" name="tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" class="input {form?.errors?.tags ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.tags}<p class="field-error">{form.errors.tags}</p>{/if}
-		</div>
-		<div class="field">
-			<label class="label" for="baseCurrency">Base currency</label>
-			<input id="baseCurrency" name="baseCurrency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" class="input {form?.errors?.baseCurrency ? 'input-error' : ''}" disabled={submitting} />
-			{#if form?.errors?.baseCurrency}<p class="field-error">{form.errors.baseCurrency}</p>{/if}
-		</div>
+		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}}>{data.trip.notes ?? ''}</TextAreaField>
+		<TextField name="tags" label="Tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
+		<TextField name="baseCurrency" label="Base currency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" disabled={submitting} errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
 			<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Save changes</button>

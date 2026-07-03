@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StandardPlanForm from './StandardPlanForm.svelte';
+	import TextField from '$lib/components/TextField.svelte';
 
 	let { errors = {} }: { errors?: Record<string, string> } = $props();
 </script>
@@ -12,7 +13,4 @@
 	locationPlaceholder="Cafe address or landmark"
 	requireEnd={true}
 />
-<div class="field sm:col-span-2">
-	<label class="label" for="detail_attendees">Who</label>
-	<input id="detail_attendees" name="detail_attendees" placeholder="Names or group" class="input" />
-</div>
+<TextField name="detail_attendees" label="Who" placeholder="Names or group" class="sm:col-span-2" />

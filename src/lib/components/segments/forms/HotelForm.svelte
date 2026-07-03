@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StandardPlanForm from './StandardPlanForm.svelte';
+	import TextField from '$lib/components/TextField.svelte';
 
 	let { errors = {} }: { errors?: Record<string, string> } = $props();
 </script>
@@ -12,7 +13,4 @@
 	locationPlaceholder="Enter address"
 	requireEnd={true}
 />
-<div class="field sm:col-span-2">
-	<label class="label" for="detail_phone">Phone</label>
-	<input id="detail_phone" name="detail_phone" type="tel" placeholder="Hotel phone" class="input" />
-</div>
+<TextField name="detail_phone" label="Phone" type="tel" placeholder="Hotel phone" class="sm:col-span-2" />

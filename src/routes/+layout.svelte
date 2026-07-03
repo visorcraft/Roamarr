@@ -14,6 +14,7 @@
 	let open = $state(false);
 	let userMenuDetails = $state<HTMLDetailsElement | null>(null);
 	let hamburgerButton = $state<HTMLButtonElement | null>(null);
+	let sidebarEl = $state<HTMLElement | null>(null);
 	let firstNavLink = $state<HTMLAnchorElement | null>(null);
 	let searchInput = $state<HTMLInputElement | null>(null);
 	let searchValue = $state('');
@@ -127,6 +128,31 @@
 				if (firstNavLink === node) firstNavLink = null;
 			}
 		};
+	}
+
+	function focusableIn(container: HTMLElement): HTMLElement[] {
+		return Array.from(
+			container.querySelectorAll<HTMLElement>(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		).filter((el) => el.getClientRects().length > 0);
+	}
+
+	// Focus trap for the mobile navigation drawer: keep Tab cycling inside the dialog.
+	function handleSidebarKeydown(event: KeyboardEvent) {
+		if (!open || event.key !== 'Tab' || !sidebarEl) return;
+		const focusable = focusableIn(sidebarEl);
+		if (focusable.length === 0) return;
+		const first = focusable[0];
+		const last = focusable[focusable.length - 1];
+		const active = document.activeElement as HTMLElement | null;
+		if (event.shiftKey && active === first) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && active === last) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	const NAV: { href: string; label: string; icon: IconName }[] = [
@@ -243,6 +269,7 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 	<div class="theme-root" data-theme={data.themeId}>
+	<a href="#main-content" class="skip-link">Skip to content</a>
 	{#key toastMessage}
 		<Toast message={toastMessage} variant={toastVariant} />
 	{/key}
@@ -252,7 +279,7 @@
 			<header class="flex items-center px-5 py-4 sm:px-8">
 				{@render brand('lg')}
 			</header>
-			<main class="grid flex-1 place-items-center px-4 py-8">
+			<main id="main-content" tabindex="-1" class="grid flex-1 place-items-center px-4 py-8">
 				{@render children()}
 			</main>
 		</div>
@@ -269,6 +296,11 @@
 
 		<!-- Sidebar -->
 		<aside
+			bind:this={sidebarEl}
+			onkeydown={handleSidebarKeydown}
+			role={open ? 'dialog' : 'complementary'}
+			aria-modal={open ? 'true' : undefined}
+			aria-label={open ? 'Navigation' : undefined}
 			class="app-sidebar fixed inset-y-0 left-0 z-40 flex h-dvh w-64 flex-col border-r backdrop-blur-xl transition-transform duration-200 lg:sticky lg:top-0 lg:translate-x-0 {open
 				? 'translate-x-0'
 				: '-translate-x-full'}"
@@ -357,7 +389,7 @@
 				{@render userMenu()}
 			</header>
 
-			<main class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+			<main id="main-content" tabindex="-1" class="w-full min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
 				<div class="mx-auto w-full max-w-[96rem]">
 					{@render children()}
 				</div>

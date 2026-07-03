@@ -460,6 +460,39 @@
 		scrollbar-width: thin;
 		scrollbar-color: color-mix(in oklab, var(--theme-muted) 42%, transparent) transparent;
 	}
+	.skip-link {
+		position: absolute;
+		left: 0.5rem;
+		top: 0.5rem;
+		z-index: 100;
+		transform: translateY(-150%);
+		padding: 0.5rem 0.875rem;
+		border-radius: 0.5rem;
+		background: var(--theme-strong);
+		color: var(--theme-canvas);
+		font-weight: 600;
+		font-size: 0.875rem;
+		text-decoration: none;
+		transition: transform 0.15s ease-in-out;
+	}
+	.skip-link:focus-visible {
+		transform: translateY(0);
+		outline: 3px solid var(--theme-brand);
+		outline-offset: 2px;
+	}
+	#main-content:focus-visible {
+		outline: none;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.001ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.001ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
 }
 
 @layer components {

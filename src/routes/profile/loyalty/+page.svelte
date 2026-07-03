@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
@@ -22,7 +23,7 @@
 			{#each data.programs as p (p.id)}
 				<li class="list-item flex items-start gap-3">
 					<span class="list-icon">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4.5 w-4.5"><path d="M12 2 15 8.5 22 9.3l-5 4.6L18.5 21 12 17.3 5.5 21 7 13.9l-5-4.6L9 8.5Z" /></svg>
+						<Icon name="star" class="h-4.5 w-4.5" />
 					</span>
 					{#if editingId === p.id}
 						<form method="POST" action="?/update" class="min-w-0 flex-1">
@@ -74,7 +75,7 @@
 {:else}
 	<EmptyState message="No loyalty programs yet — add one below.">
 		{#snippet icon()}
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-6 w-6"><path d="M12 2 15 8.5 22 9.3l-5 4.6L18.5 21 12 17.3 5.5 21 7 13.9l-5-4.6L9 8.5Z" /></svg>
+			<Icon name="star" class="h-6 w-6" />
 		{/snippet}
 	</EmptyState>
 {/if}

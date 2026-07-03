@@ -2,6 +2,7 @@
 	import { SEG } from '$lib/segmentLabels';
 	import { formatDateTime } from '$lib/dateFormat';
 	import { formatDestination } from '$lib/tripDestination';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 	const destinationLabel = $derived(formatDestination(data.trip.destinationCityName, data.trip.destinationCountryCode));
@@ -13,7 +14,7 @@
 	<p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
 		{#if destinationLabel}
 			<span class="flex items-center gap-1.5">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 shrink-0 text-slate-500"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></svg>
+				<Icon name="location" class="h-4 w-4 shrink-0 text-slate-500" />
 				{destinationLabel}
 			</span>
 		{/if}

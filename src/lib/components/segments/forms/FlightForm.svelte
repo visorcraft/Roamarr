@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import CollapseSection from '../CollapseSection.svelte';
 	import BookedCheckbox from '../BookedCheckbox.svelte';
 	import BookingInfoSection from '../BookingInfoSection.svelte';
@@ -209,7 +210,7 @@
 
 <div class="sm:col-span-2">
 	<button type="button" class="btn btn-ghost" onclick={addFlight}>
-		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-4 w-4"><path d="M5 12h14M12 5v14" /></svg>
+		<Icon name="plus" class="h-4 w-4" />
 		Add a flight
 	</button>
 </div>

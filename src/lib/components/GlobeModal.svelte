@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import Icon from './Icon.svelte';
 
 	let {
 		open = $bindable(false),
@@ -90,7 +91,7 @@
 	<div class="card globe-modal">
 		<div class="globe-modal-head">
 			<h2 class="section-title">{cityName}</h2>
-			<button class="btn btn-secondary" type="button" onclick={requestClose} aria-label="Close globe">✕</button>
+			<button class="btn btn-secondary" type="button" onclick={requestClose} aria-label="Close globe"><Icon name="close" class="h-4 w-4" /></button>
 		</div>
 		<div class="globe-modal-stage" bind:this={container}>
 			{#if loading}<p class="globe-modal-loading">Loading globe…</p>{/if}

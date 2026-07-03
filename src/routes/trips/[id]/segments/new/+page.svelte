@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ADD_SEGMENT_WIZARD_TYPES, SEG } from '$lib/segmentLabels';
+	import Icon from '$lib/components/Icon.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -8,7 +9,7 @@
 <header class="page-header">
 	<div>
 		<a href={`/trips/${data.trip.id}`} class="back-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+			<Icon name="back" class="h-4 w-4" />
 			Back to {data.trip.name}
 		</a>
 		<h1 class="page-title">Add segment</h1>

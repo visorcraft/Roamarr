@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 	let sharingUser = $state(false);
@@ -27,7 +28,7 @@
 				<li class="flex items-center justify-between gap-3 py-3">
 					<div class="flex items-center gap-3 min-w-0">
 						<span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
-							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+							<Icon name="user" class="h-4 w-4" />
 						</span>
 						<span class="truncate text-sm text-slate-200">{s.email}</span>
 						<span class="badge badge-slate uppercase">{s.permission}</span>
@@ -75,7 +76,7 @@
 					<li class="flex items-center justify-between gap-3 py-3">
 						<div class="flex items-center gap-3 min-w-0">
 							<span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+								<Icon name="users" class="h-4 w-4" />
 							</span>
 							<span class="truncate text-sm text-slate-200">{s.groupName}</span>
 							<span class="badge badge-slate uppercase">{s.permission}</span>

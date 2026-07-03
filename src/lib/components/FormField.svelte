@@ -1,15 +1,28 @@
 <script lang="ts">
-	export let name: string;
-	export let label: string;
-	export let value: string | number = '';
-	export let type = 'text';
-	export let error: string | undefined = undefined;
-	export let disabled = false;
-	export let required = false;
-	export let placeholder = '';
-	export let autocomplete: string | undefined = undefined;
+	let {
+		name,
+		label,
+		value = '',
+		type = 'text',
+		error = undefined,
+		disabled = false,
+		required = false,
+		placeholder = '',
+		autocomplete = undefined
+	}: {
+		name: string;
+		label: string;
+		value?: string | number;
+		type?: string;
+		error?: string | undefined;
+		disabled?: boolean;
+		required?: boolean;
+		placeholder?: string;
+		autocomplete?: string;
+	} = $props();
 
-	$: inputClass = `input ${error ? 'input-error' : ''}`.trim();
+	const inputClass = $derived(`input ${error ? 'input-error' : ''}`.trim());
+	const errorId = $derived(`${name}-error`);
 </script>
 
 <div class="field">
@@ -26,7 +39,8 @@
 		{required}
 		autocomplete={autocomplete as any}
 		class={inputClass}
-		on:input
+		aria-invalid={error ? 'true' : undefined}
+		aria-describedby={error ? errorId : undefined}
 	/>
-	{#if error}<p class="field-error" id="{name}-error">{error}</p>{/if}
+	{#if error}<p class="field-error" id={errorId}>{error}</p>{/if}
 </div>

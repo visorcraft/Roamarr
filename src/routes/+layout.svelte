@@ -8,6 +8,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
 	import { installPickerInputs } from '$lib/pickerInput';
+	import { installFieldErrorA11y } from '$lib/fieldErrorA11y';
 	import type { ToastVariant } from '$lib/toast';
 
 	let { data, children } = $props();
@@ -31,6 +32,7 @@
 
 	onMount(() => {
 		installPickerInputs();
+		const disconnectFieldA11y = installFieldErrorA11y();
 		if (!browser) return;
 		function handleDocumentClick(event: MouseEvent) {
 			if (!userMenuDetails) return;
@@ -39,7 +41,10 @@
 			}
 		}
 		document.addEventListener('click', handleDocumentClick);
-		return () => document.removeEventListener('click', handleDocumentClick);
+		return () => {
+			document.removeEventListener('click', handleDocumentClick);
+			disconnectFieldA11y();
+		};
 	});
 
 	onDestroy(() => {

@@ -5,6 +5,7 @@
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
+	import SegmentEditForm from '$lib/components/segments/SegmentEditForm.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { COUNTRIES } from '$lib/countries';
 	import type { IconName } from '$lib/icons';
@@ -111,13 +112,6 @@
 	const companionNameMap = $derived(new Map((data.companions ?? []).map((c) => [c.id, c.name])));
 	function settlementName(id: 'owner' | number) {
 		return id === 'owner' ? 'You' : (companionNameMap.get(id) ?? 'Unknown');
-	}
-
-	function toDatetimeLocal(iso: string | null | undefined, tz = 'UTC') {
-		if (!iso) return '';
-		const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(tz);
-		if (!dt.isValid) return iso;
-		return dt.toFormat("yyyy-MM-dd'T'HH:mm");
 	}
 
 	function tripDays(start: string | null | undefined, end: string | null | undefined) {
@@ -718,93 +712,7 @@
 											</span>
 
 											{#if isEditor && editingId === s.id}
-												<form method="POST" action={`/trips/${trip.id}/segments?/update`} class="trip-timeline-card grid gap-4 sm:grid-cols-2">
-													<input type="hidden" name="segmentId" value={s.id} />
-													<div class="field">
-														<label class="label" for={`title-${s.id}`}>Title</label>
-														<input id={`title-${s.id}`} name="title" value={s.title} class="input {form?.errors?.title ? 'input-error' : ''}" required />
-														{#if form?.errors?.title}<p class="field-error">{form.errors.title}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`localStart-${s.id}`}>Starts</label>
-														<input id={`localStart-${s.id}`} name="localStart" type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} class="input {form?.errors?.localStart ? 'input-error' : ''}" required />
-														{#if form?.errors?.localStart}<p class="field-error">{form.errors.localStart}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`startTz-${s.id}`}>Timezone</label>
-														<TimezoneSelect id={`startTz-${s.id}`} name="startTz" value={s.startTz} class="input {form?.errors?.startTz ? 'input-error' : ''}" />
-														{#if form?.errors?.startTz}<p class="field-error">{form.errors.startTz}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`endAt-${s.id}`}>Ends</label>
-														<input id={`endAt-${s.id}`} name="endAt" type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} class="input {form?.errors?.endAt ? 'input-error' : ''}" />
-														{#if form?.errors?.endAt}<p class="field-error">{form.errors.endAt}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`endTz-${s.id}`}>End timezone</label>
-													<TimezoneSelect id={`endTz-${s.id}`} name="endTz" value={s.endTz ?? s.startTz} class="input {form?.errors?.endTz ? 'input-error' : ''}" />
-													{#if form?.errors?.endTz}<p class="field-error">{form.errors.endTz}</p>{/if}
-												</div>
-															<div class="field">
-																<label class="label" for={`countryCode-${s.id}`}>Country</label>
-																<select id={`countryCode-${s.id}`} name="countryCode" class="input {form?.errors?.countryCode ? 'input-error' : ''}">
-																	<option value="" selected={!s.countryCode}>Select country</option>
-																	{#each COUNTRIES as c}
-																		<option value={c.code} selected={c.code === s.countryCode}>{c.name}</option>
-																	{/each}
-																</select>
-																{#if form?.errors?.countryCode}<p class="field-error">{form.errors.countryCode}</p>{/if}
-															</div>
-															<CityAutocomplete countryCode={s.countryCode ?? ''} name="cityName" value={s.cityName ?? ''} latName="cityLat" lngName="cityLng" errors={form?.errors} />
-															<div class="field sm:col-span-2">
-																<label class="label" for={`venue-${s.id}`}>Venue</label>
-																<input id={`venue-${s.id}`} name="venue" value={s.venue ?? ''} class="input {form?.errors?.venue ? 'input-error' : ''}" />
-																{#if form?.errors?.venue}<p class="field-error">{form.errors.venue}</p>{/if}
-															</div>
-													<div class="field">
-														<label class="label" for={`confirmationNumber-${s.id}`}>Confirmation #</label>
-														<input id={`confirmationNumber-${s.id}`} name="confirmationNumber" value={s.confirmationNumber ?? ''} class="input {form?.errors?.confirmationNumber ? 'input-error' : ''}" />
-														{#if form?.errors?.confirmationNumber}<p class="field-error">{form.errors.confirmationNumber}</p>{/if}
-													</div>
-													<div class="field sm:col-span-2">
-														<label class="label" for={`meetingPoint-${s.id}`}>Meeting / rally point</label>
-														<input id={`meetingPoint-${s.id}`} name="meetingPoint" value={s.meetingPoint ?? ''} maxlength="200" class="input {form?.errors?.meetingPoint ? 'input-error' : ''}" />
-														{#if form?.errors?.meetingPoint}<p class="field-error">{form.errors.meetingPoint}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`meetingAt-${s.id}`}>Rally time</label>
-														<input id={`meetingAt-${s.id}`} name="meetingAt" type="datetime-local" value={toDatetimeLocal(s.meetingAt, s.startTz ?? 'UTC')} class="input {form?.errors?.meetingAt ? 'input-error' : ''}" />
-														{#if form?.errors?.meetingAt}<p class="field-error">{form.errors.meetingAt}</p>{/if}
-													</div>
-													<div class="field sm:col-span-2">
-													<div class="field">
-														<label class="label" for={`paymentStatus-${s.id}`}>Payment status</label>
-														<select id={`paymentStatus-${s.id}`} name="paymentStatus" class="input {form?.errors?.paymentStatus ? 'input-error' : ''}">
-															<option value="quoted" selected={s.paymentStatus === 'quoted'}>Quoted</option>
-															<option value="deposit_paid" selected={s.paymentStatus === 'deposit_paid'}>Deposit paid</option>
-															<option value="fully_paid" selected={s.paymentStatus === 'fully_paid'}>Fully paid</option>
-															<option value="refunded" selected={s.paymentStatus === 'refunded'}>Refunded</option>
-														</select>
-														{#if form?.errors?.paymentStatus}<p class="field-error">{form.errors.paymentStatus}</p>{/if}
-													</div>
-													<div class="field">
-														<label class="label" for={`paymentDueDate-${s.id}`}>Payment due</label>
-														<input id={`paymentDueDate-${s.id}`} name="paymentDueDate" type="date" value={s.paymentDueDate ?? ''} class="input {form?.errors?.paymentDueDate ? 'input-error' : ''}" />
-														{#if form?.errors?.paymentDueDate}<p class="field-error">{form.errors.paymentDueDate}</p>{/if}
-													</div>
-														<label class="label" for={`detailsJson-${s.id}`}>Details (JSON)</label>
-														<textarea id={`detailsJson-${s.id}`} name="detailsJson" class="input h-20 font-mono text-xs {form?.errors?.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
-														{#if form?.errors?.detailsJson}<p class="field-error">{form.errors.detailsJson}</p>{/if}
-													</div>
-												{#if data.cards?.length}
-													<CardSelect cards={data.cards} name="cardId" value={s.cardId} errors={form?.errors} />
-												{/if}
-
-													<div class="flex gap-2 sm:col-span-2">
-														<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
-														<button class="btn btn-primary">Save</button>
-													</div>
-												</form>
+												<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />
 											{:else}
 										<!-- svelte-ignore a11y_click_events_have_key_events -->
 										<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->

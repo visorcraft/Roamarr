@@ -37,15 +37,6 @@ export function requireOwnedGroup(userId: number, groupId: number) {
 	return g;
 }
 
-export function requireOwnedDocument(userId: number, documentId: number) {
-	const d = kit
-		.selectFrom(travelDocuments)
-		.where(and(kitEq(travelDocuments.id, BigInt(documentId)), kitEq(travelDocuments.user_id, BigInt(userId))))
-		.executeSync()[0];
-	if (!d) throw error(404, 'Not found');
-	return d;
-}
-
 export function requireOwnedTripRow<TTable extends TableSpec & { id: unknown; trip_id: unknown }>(
 	table: TTable,
 	tripId: number,

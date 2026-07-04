@@ -150,7 +150,6 @@ export function createTravelDocument(userId: number, input: TravelDocumentInput)
 			...toKitTravelDocumentInput(input)
 		} as Insert<typeof travelDocuments>)
 		.executeSync();
-(row);
 	return toTravelDocument(row);
 }
 
@@ -189,14 +188,12 @@ export function updateTravelDocument(
 		row = rows[0]!;
 	}
 	const updated = toTravelDocument(row);
-	(updated);
 	return updated;
 }
 
 export function deleteTravelDocument(id: number, userId: number): bigint {
 	const existing = getTravelDocumentById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	(id);
 	return kit
 		.deleteFrom(travelDocuments)
 		.where(eq(travelDocuments.id, toBigInt(id)))
@@ -292,7 +289,6 @@ export function createLoyaltyProgram(userId: number, input: LoyaltyProgramInput)
 			...toKitLoyaltyProgramInput(input)
 		} as Insert<typeof loyaltyPrograms>)
 		.executeSync();
-	(row);
 	logAudit(userId, 'create', 'loyalty_program', idFromBigInt(row.id));
 	return toLoyaltyProgram(row);
 }
@@ -324,7 +320,6 @@ export function updateLoyaltyProgram(
 export function deleteLoyaltyProgram(id: number, userId: number): bigint {
 	const existing = getLoyaltyProgramById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	(id);
 	logAudit(userId, 'delete', 'loyalty_program', id);
 	return kit
 		.deleteFrom(loyaltyPrograms)
@@ -402,7 +397,6 @@ export function createCard(userId: number, input: CardInput): Card {
 			...toKitCardInput(input)
 		} as Insert<typeof cards>)
 		.executeSync();
-	(row);
 	return toCard(row);
 }
 
@@ -422,7 +416,6 @@ export function updateCard(id: number, userId: number, input: CardInput): Card |
 export function deleteCard(id: number, userId: number): bigint {
 	const existing = getCardById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	(id);
 	return kit
 		.deleteFrom(cards)
 		.where(eq(cards.id, toBigInt(id)))
@@ -526,7 +519,6 @@ export function createCardBenefit(
 			...toKitCardBenefitInput(input)
 		} as Insert<typeof cardBenefits>)
 		.executeSync();
-	(row);
 	return toCardBenefit(row);
 }
 
@@ -555,7 +547,6 @@ export function updateCardBenefit(
 export function deleteCardBenefit(id: number, cardId: number): bigint {
 	const existing = getCardBenefitById(id, cardId);
 	if (!existing) throw error(404, 'Not found');
-	(id);
 	return kit
 		.deleteFrom(cardBenefits)
 		.where(
@@ -665,7 +656,6 @@ export function createInsurancePolicy(
 			...toKitInsurancePolicyInput(input)
 		} as Insert<typeof insurancePolicies>)
 		.executeSync();
-	(row);
 	return toInsurancePolicy(row);
 }
 
@@ -704,14 +694,12 @@ export function updateInsurancePolicy(
 		row = rows[0]!;
 	}
 	const updated = toInsurancePolicy(row);
-	(updated);
 	return updated;
 }
 
 export function deleteInsurancePolicy(id: number, userId: number): bigint {
 	const existing = getInsurancePolicyById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	(id);
 	return kit
 		.deleteFrom(insurancePolicies)
 		.where(eq(insurancePolicies.id, toBigInt(id)))
@@ -854,7 +842,6 @@ export function createEmergencyContact(
 			...toKitEmergencyContactInput({ ...input, name })
 		} as Insert<typeof emergencyContacts>)
 		.executeSync();
-	(row);
 	logAudit(userId, 'emergency_contact_create', 'emergency_contact', idFromBigInt(row.id), {
 		name,
 		isPrimary

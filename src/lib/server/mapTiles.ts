@@ -46,10 +46,6 @@ export function defaultTileAttribution(provider: MapTileProvider): string {
 	}
 }
 
-export function providerNeedsApiKey(provider: MapTileProvider): boolean {
-	return ['maptiler', 'stadia', 'thunderforest', 'jawg', 'protomaps'].includes(provider);
-}
-
 export interface ResolvedTileConfig {
 	provider: string;
 	tileUrls: string[];

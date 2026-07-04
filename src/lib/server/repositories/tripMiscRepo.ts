@@ -82,8 +82,6 @@ export interface ChecklistWithItems extends Checklist {
 	items: ChecklistItemWithName[];
 }
 
-export type UpdateChecklistInput = Partial<Pick<Checklist, 'tripId'>>;
-
 function toChecklist(row: Row<typeof tripChecklists>): Checklist {
 	return {
 		id: num(row.id),
@@ -110,22 +108,6 @@ function toChecklistItem(row: Row<typeof tripChecklistItems>): ChecklistItem {
 
 
 
-export function listChecklistsForTrip(tripId: number): Checklist[] {
-	const rows = kit
-		.selectFrom(tripChecklists)
-		.where(eq(tripChecklists.trip_id, kitId(tripId)))
-		.executeSync();
-	return rows.map(toChecklist);
-}
-
-export function getChecklistById(id: number): Checklist | null {
-	const rows = kit
-		.selectFrom(tripChecklists)
-		.where(eq(tripChecklists.id, kitId(id)))
-		.executeSync();
-	return rows[0] ? toChecklist(rows[0]) : null;
-}
-
 export function getChecklistByTripId(tripId: number): Checklist | null {
 	const rows = kit
 		.selectFrom(tripChecklists)
@@ -135,12 +117,10 @@ export function getChecklistByTripId(tripId: number): Checklist | null {
 }
 
 export function createChecklist(tripId: number): Checklist {
-	(tripId);
 	const row = kit
 		.insertInto(tripChecklists)
 		.values({ trip_id: kitId(tripId) } as Insert<typeof tripChecklists>)
 		.executeSync();
-	(row);
 	return toChecklist(row);
 }
 
@@ -148,29 +128,6 @@ export function getOrCreateChecklist(tripId: number): Checklist {
 	const existing = getChecklistByTripId(tripId);
 	if (existing) return existing;
 	return createChecklist(tripId);
-}
-
-export function updateChecklist(id: number, patch: UpdateChecklistInput): Checklist | null {
-	const set: Update<typeof tripChecklists> = {};
-	if (patch.tripId !== undefined) set.trip_id = kitId(patch.tripId);
-	const updated = kit
-		.updateTable(tripChecklists)
-		.set(set)
-		.where(eq(tripChecklists.id, kitId(id)))
-		.executeSync();
-	const row = updated[0];
-	if (!row) return null;
-	(row);
-	return toChecklist(row);
-}
-
-export function deleteChecklist(id: number): number {
-	const deleted = kit
-		.deleteFrom(tripChecklists)
-		.where(eq(tripChecklists.id, kitId(id)))
-		.executeSync();
-	(id);
-	return Number(deleted);
 }
 
 export function listItemsForChecklist(checklistId: number): ChecklistItemWithName[] {
@@ -202,14 +159,6 @@ export function listItemsForChecklist(checklistId: number): ChecklistItemWithNam
 	}));
 }
 
-export function getChecklistItemById(id: number): ChecklistItem | null {
-	const rows = kit
-		.selectFrom(tripChecklistItems)
-		.where(eq(tripChecklistItems.id, kitId(id)))
-		.executeSync();
-	return rows[0] ? toChecklistItem(rows[0]) : null;
-}
-
 export interface CreateChecklistItemInput {
 	checklistId: number;
 	text: string;
@@ -233,7 +182,6 @@ export function createChecklistItem(input: CreateChecklistItemInput): ChecklistI
 			assigned_to_companion_id: nullableInt(input.assignedToCompanionId)
 		} as Insert<typeof tripChecklistItems>)
 		.executeSync();
-	(row);
 	return toChecklistItem(row);
 }
 
@@ -255,7 +203,6 @@ export function updateChecklistItem(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toChecklistItem(row);
 }
 
@@ -264,7 +211,6 @@ export function deleteChecklistItem(id: number): number {
 		.deleteFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -337,7 +283,6 @@ export function createJournalEntry(input: CreateJournalEntryInput): JournalEntry
 			body: input.body
 		} as Insert<typeof tripJournalEntries>)
 		.executeSync();
-	(row);
 	return toJournalEntry(row);
 }
 
@@ -357,7 +302,6 @@ export function updateJournalEntry(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toJournalEntry(row);
 }
 
@@ -366,7 +310,6 @@ export function deleteJournalEntry(id: number): number {
 		.deleteFrom(tripJournalEntries)
 		.where(eq(tripJournalEntries.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -433,7 +376,6 @@ export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink
 			notes: input.notes ?? null
 		} as Insert<typeof tripDocumentLinks>)
 		.executeSync();
-	(row);
 	return toDocumentLink(row);
 }
 
@@ -452,7 +394,6 @@ export function updateDocumentLink(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toDocumentLink(row);
 }
 
@@ -461,7 +402,6 @@ export function deleteDocumentLink(id: number): number {
 		.deleteFrom(tripDocumentLinks)
 		.where(eq(tripDocumentLinks.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -532,7 +472,6 @@ export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
 			sort_order: 0n
 		} as Insert<typeof tripHomeTasks>)
 		.executeSync();
-	(row);
 	return toHomeTask(row);
 }
 
@@ -549,7 +488,6 @@ export function updateHomeTask(id: number, patch: UpdateHomeTaskInput): HomeTask
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toHomeTask(row);
 }
 
@@ -558,7 +496,6 @@ export function deleteHomeTask(id: number): number {
 		.deleteFrom(tripHomeTasks)
 		.where(eq(tripHomeTasks.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -591,8 +528,6 @@ export interface CreateMedicationInput {
 	endsAt?: string | null;
 	notes?: string | null;
 }
-
-export type UpdateMedicationInput = Partial<Omit<CreateMedicationInput, 'tripId'>>;
 
 function toMedication(row: Row<typeof tripMedications>, companionName: string | null = null): Medication {
 	return {
@@ -678,31 +613,6 @@ export function createMedication(input: CreateMedicationInput): Medication {
 			notes: input.notes ?? null
 		} as Insert<typeof tripMedications>)
 		.executeSync();
-	(row);
-	return toMedication(row);
-}
-
-export function updateMedication(id: number, patch: UpdateMedicationInput): Medication | null {
-	const set: Update<typeof tripMedications> = {};
-	if (patch.companionId !== undefined) {
-		if (patch.companionId != null) (patch.companionId);
-		set.companion_id = nullableInt(patch.companionId);
-	}
-	if (patch.name !== undefined) set.name = patch.name;
-	if (patch.dosage !== undefined) set.dosage = patch.dosage ?? null;
-	if (patch.schedule !== undefined) set.schedule = patch.schedule ?? null;
-	if (patch.startsAt !== undefined) set.starts_at = nullableTimestamp(patch.startsAt);
-	if (patch.endsAt !== undefined) set.ends_at = nullableTimestamp(patch.endsAt);
-	if (patch.notes !== undefined) set.notes = patch.notes ?? null;
-	set.updated_at = nowIso();
-	const updated = kit
-		.updateTable(tripMedications)
-		.set(set)
-		.where(eq(tripMedications.id, kitId(id)))
-		.executeSync();
-	const row = updated[0];
-	if (!row) return null;
-	(row);
 	return toMedication(row);
 }
 
@@ -711,7 +621,6 @@ export function deleteMedication(id: number): number {
 		.deleteFrom(tripMedications)
 		.where(eq(tripMedications.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -793,7 +702,6 @@ export function createEntryRequirement(input: CreateEntryRequirementInput): Entr
 			notes: input.notes ?? null
 		} as Insert<typeof tripEntryRequirements>)
 		.executeSync();
-	(row);
 	return toEntryRequirement(row);
 }
 
@@ -813,7 +721,6 @@ export function updateEntryRequirement(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toEntryRequirement(row);
 }
 
@@ -822,7 +729,6 @@ export function deleteEntryRequirement(id: number): number {
 		.deleteFrom(tripEntryRequirements)
 		.where(eq(tripEntryRequirements.id, kitId(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -851,8 +757,6 @@ export interface CreateImportantItemInput {
 	trackerId?: string | null;
 	notes?: string | null;
 }
-
-export type UpdateImportantItemInput = Partial<Omit<CreateImportantItemInput, 'tripId'>>;
 
 function toImportantItem(
 	row: Row<typeof tripImportantItems>,
@@ -938,32 +842,6 @@ export function createImportantItem(input: CreateImportantItemInput): ImportantI
 			notes: input.notes ?? null
 		} as Insert<typeof tripImportantItems>)
 		.executeSync();
-	(row);
-	return toImportantItem(row);
-}
-
-export function updateImportantItem(
-	id: number,
-	patch: UpdateImportantItemInput
-): ImportantItem | null {
-	const set: Update<typeof tripImportantItems> = {};
-	if (patch.companionId !== undefined) {
-		if (patch.companionId != null) (patch.companionId);
-		set.companion_id = nullableInt(patch.companionId);
-	}
-	if (patch.name !== undefined) set.name = patch.name;
-	if (patch.serialNumber !== undefined) set.serial_number = patch.serialNumber ?? null;
-	if (patch.trackerId !== undefined) set.tracker_id = patch.trackerId ?? null;
-	if (patch.notes !== undefined) set.notes = patch.notes ?? null;
-	set.updated_at = nowIso();
-	const updated = kit
-		.updateTable(tripImportantItems)
-		.set(set)
-		.where(eq(tripImportantItems.id, kitId(id)))
-		.executeSync();
-	const row = updated[0];
-	if (!row) return null;
-	(row);
 	return toImportantItem(row);
 }
 

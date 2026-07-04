@@ -250,8 +250,4 @@ export const COUNTRIES = [
 	{ code: "ZW", name: "Zimbabwe" }
 ] as const;
 
-export type CountryCode = (typeof COUNTRIES)[number]["code"];
 
-export function countryName(code: string): string | undefined {
-	return COUNTRIES.find((c) => c.code === code.toUpperCase())?.name;
-}

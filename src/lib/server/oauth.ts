@@ -28,8 +28,6 @@ export const ALL_SCOPES: Scope[] = [
 	'profile:read'
 ];
 
-export const DEFAULT_SCOPES: Scope[] = ['trips:read', 'profile:read'];
-
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
 const CODE_TTL_SEC = 5 * 60;
@@ -357,20 +355,6 @@ export function purgeExpiredOauth(): { codes: number; tokens: number } {
 		.where(kitLt(oauthTokens.refresh_expires_at, now))
 		.executeSync();
 	return { codes: Number(codes), tokens: Number(tokens) };
-}
-
-export function revokeToken(token: string): boolean {
-	const row = kit
-		.selectFrom(oauthTokens)
-		.where(kitEq(oauthTokens.access_token_hash, sha256(token)))
-		.executeSync()[0];
-	if (!row) return false;
-	kit
-		.updateTable(oauthTokens)
-		.set({ revoked_at: new Date().toISOString() })
-		.where(kitEq(oauthTokens.id, row.id))
-		.executeSync();
-	return true;
 }
 
 export function revokeTokenForUser(userId: number, token: string): boolean {

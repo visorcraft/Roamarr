@@ -104,15 +104,6 @@ export function getSegmentById(id: number) {
 	return rows[0] ? toSegmentRow(rows[0]) : null;
 }
 
-export function getSegmentsByIds(ids: number[]) {
-	if (ids.length === 0) return [];
-	return kit
-		.selectFrom(segments)
-		.where(kitInList(segments.id, ids.map(toBigInt)))
-		.executeSync()
-		.map(toSegmentRow);
-}
-
 export function createSegment(input: CreateSegmentInput) {
 	const created = kit.insertInto(segments).values(input as Insert<typeof segments>).executeSync();
 	return toSegmentRow(created);

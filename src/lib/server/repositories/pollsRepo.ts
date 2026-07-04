@@ -149,7 +149,6 @@ export function createPoll(tripId: number, question: string, options: string[]):
 			question
 		} as Insert<typeof tripPolls>)
 		.executeSync();
-(row);
 	const pollId = idFromBigInt(row.id);
 
 	for (let i = 0; i < options.length; i++) {
@@ -161,7 +160,6 @@ export function createPoll(tripId: number, question: string, options: string[]):
 				sort_order: BigInt(i)
 			} as Insert<typeof tripPollOptions>)
 			.executeSync();
-		(optionRow);
 	}
 
 	return getPollById(pollId)!;
@@ -169,7 +167,6 @@ export function createPoll(tripId: number, question: string, options: string[]):
 
 export function deletePoll(pollId: number): number {
 	const deleted = kit.deleteFrom(tripPolls).where(kitEq(tripPolls.id, toBigInt(pollId))).executeSync();
-	(pollId);
 	return Number(deleted);
 }
 
@@ -219,7 +216,6 @@ export function castVote(pollId: number, optionId: number, companionId: number):
 			companion_id: toBigInt(companionId)
 		} as Insert<typeof tripPollVotes>)
 		.executeSync();
-	(row);
 	return toVote(row);
 }
 

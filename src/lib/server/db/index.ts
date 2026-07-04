@@ -5,11 +5,6 @@ import { schema } from './mongrelSchema';
 import { migrations } from './mongrelMigrations';
 import { getDatabasePath } from './paths';
 
-// Backwards-compatible type alias for tests and transitional code that still
-// references the old DB shape. This will be removed once all call sites are
-// fully migrated to the kit singleton.
-export type DB = any;
-
 // MongrelDB Kit synchronous singleton. Lazily opens the kit database and applies
 // migrations on first access so that build-time imports remain side-effect-free.
 let _kit: KitDatabase | null = null;

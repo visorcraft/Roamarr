@@ -9,8 +9,6 @@ import type { Row } from '@visorcraft/mongreldb-kit';
 
 export type SmtpSecurity = 'none' | 'starttls' | 'ssl/tls';
 
-export const SMTP_SECURITY_OPTIONS: readonly SmtpSecurity[] = ['none', 'starttls', 'ssl/tls'];
-
 export const DEFAULT_SMTP_SECURITY: SmtpSecurity = 'starttls';
 
 export interface SmtpTransportConfig {

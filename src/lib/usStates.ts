@@ -68,12 +68,6 @@ export function isUsStateCode(code: string): boolean {
 	return US_STATE_CODES.has(toIso3166_2(code));
 }
 
-export function usStateName(code: string): string | null {
-	const normalized = toIso3166_2(code);
-	const match = US_STATES.find((s) => s.code === normalized);
-	return match ? match.name : null;
-}
-
 export function usStateDisplayCode(code: string): string {
 	const normalized = toIso3166_2(code);
 	return normalized.slice(3);

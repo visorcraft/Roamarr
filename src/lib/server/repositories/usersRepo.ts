@@ -77,10 +77,6 @@ export function updateSessionByTokenHash(
 	return updated[0] ?? null;
 }
 
-export function deleteSession(id: number): bigint {
-	return kit.deleteFrom(sessions).where(kitEq(sessions.id, toBigInt(id))).executeSync();
-}
-
 export function listSessionsForUser(userId: number): KitSession[] {
 	return kit
 		.selectFrom(sessions)

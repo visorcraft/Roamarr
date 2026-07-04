@@ -153,7 +153,6 @@ export function createExpense(input: CreateExpenseInput): ExpenseRow {
 			split_among: input.splitAmong == null ? '[]' : input.splitAmong
 		} as Insert<typeof tripExpenses>)
 		.executeSync();
-(row);
 	return toExpenseRow(row);
 }
 
@@ -189,30 +188,12 @@ export function updateExpense(id: number, patch: UpdateExpenseInput): ExpenseRow
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-(row);
 	return toExpenseRow(row);
 }
 
 export function deleteExpense(id: number): boolean {
 	const deleted = kit.deleteFrom(tripExpenses).where(kitEq(tripExpenses.id, toBigInt(id))).executeSync();
-	(id);
 	return deleted > 0n;
-}
-
-export function deleteExpensesForTrip(tripId: number): bigint {
-	const ids = kit
-		.selectFrom(tripExpenses)
-		.where(kitEq(tripExpenses.trip_id, toBigInt(tripId)))
-		.executeSync()
-		.map((r) => num(r.id));
-	const deleted = kit
-		.deleteFrom(tripExpenses)
-		.where(kitEq(tripExpenses.trip_id, toBigInt(tripId)))
-		.executeSync();
-	for (const id of ids) {
-		(id);
-	}
-	return deleted;
 }
 
 // Attachments
@@ -253,7 +234,6 @@ export function createAttachment(input: CreateAttachmentInput): AttachmentRow {
 			size_bytes: BigInt(input.sizeBytes)
 		} as Insert<typeof tripExpenseAttachments>)
 		.executeSync();
-	(row);
 	return toAttachmentRow(row);
 }
 
@@ -262,24 +242,7 @@ export function deleteAttachment(id: number): boolean {
 		.deleteFrom(tripExpenseAttachments)
 		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
 		.executeSync();
-	(id);
 	return deleted > 0n;
-}
-
-export function deleteAttachmentsForExpense(expenseId: number): bigint {
-	const ids = kit
-		.selectFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
-		.executeSync()
-		.map((r) => num(r.id));
-	const deleted = kit
-		.deleteFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
-		.executeSync();
-	for (const id of ids) {
-		(id);
-	}
-	return deleted;
 }
 
 // Budget categories
@@ -326,7 +289,6 @@ export function createBudgetCategory(input: CreateBudgetCategoryInput): BudgetCa
 			currency: input.currency ?? 'USD'
 		} as Insert<typeof tripBudgetCategories>)
 		.executeSync();
-	(row);
 	return toBudgetCategoryRow(row);
 }
 
@@ -352,7 +314,6 @@ export function updateBudgetCategory(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toBudgetCategoryRow(row);
 }
 
@@ -364,17 +325,3 @@ export function deleteBudgetCategory(id: number): boolean {
 		return deleted > 0n;
 }
 
-export function deleteBudgetCategoriesForTrip(tripId: number): bigint {
-	const ids = kit
-		.selectFrom(tripBudgetCategories)
-		.where(kitEq(tripBudgetCategories.trip_id, toBigInt(tripId)))
-		.executeSync()
-		.map((r) => num(r.id));
-	const deleted = kit
-		.deleteFrom(tripBudgetCategories)
-		.where(kitEq(tripBudgetCategories.trip_id, toBigInt(tripId)))
-		.executeSync();
-	for (const id of ids) {
-			}
-	return deleted;
-}

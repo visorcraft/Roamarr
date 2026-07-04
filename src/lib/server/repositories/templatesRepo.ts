@@ -129,32 +129,11 @@ export function createTripTemplate(input: CreateTripTemplateInput): TripTemplate
 			snapshot_json: JSON.stringify(input.snapshot)
 		} as Insert<typeof tripTemplates>)
 		.executeSync();
-(row);
-	return toTripTemplate(row);
-}
-
-export function updateTripTemplate(
-	id: number,
-	patch: Partial<Pick<CreateTripTemplateInput, 'name' | 'snapshot'>>
-): TripTemplate | null {
-	const set: Update<typeof tripTemplates> = {};
-	if (patch.name !== undefined) set.name = patch.name.trim();
-	if (patch.snapshot !== undefined) set.snapshot_json = JSON.stringify(patch.snapshot);
-
-	const updated = kit
-		.updateTable(tripTemplates)
-		.set(set)
-		.where(kitEq(tripTemplates.id, toBigInt(id)))
-		.executeSync();
-	const row = updated[0];
-	if (!row) return null;
-(row);
 	return toTripTemplate(row);
 }
 
 export function deleteTripTemplate(id: number): number {
 	const deleted = kit.deleteFrom(tripTemplates).where(kitEq(tripTemplates.id, toBigInt(id))).executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -218,7 +197,6 @@ export function createPackingTemplate(input: CreatePackingTemplateInput): Packin
 			is_default: input.isDefault ?? false
 		} as Insert<typeof packingTemplates>)
 		.executeSync();
-	(row);
 	return toPackingTemplate(row);
 }
 
@@ -237,13 +215,11 @@ export function updatePackingTemplate(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return getPackingTemplateById(id);
 }
 
 export function deletePackingTemplate(id: number): number {
 	const deleted = kit.deleteFrom(packingTemplates).where(kitEq(packingTemplates.id, toBigInt(id))).executeSync();
-	(id);
 	return Number(deleted);
 }
 
@@ -275,7 +251,6 @@ export function createPackingTemplateItem(input: CreatePackingTemplateItemInput)
 			category: (input.category?.trim() || 'general')
 		} as Insert<typeof packingTemplateItems>)
 		.executeSync();
-	(row);
 	return toPackingTemplateItem(row);
 }
 
@@ -294,7 +269,6 @@ export function updatePackingTemplateItem(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	(row);
 	return toPackingTemplateItem(row);
 }
 
@@ -303,6 +277,5 @@ export function deletePackingTemplateItem(id: number): number {
 		.deleteFrom(packingTemplateItems)
 		.where(kitEq(packingTemplateItems.id, toBigInt(id)))
 		.executeSync();
-	(id);
 	return Number(deleted);
 }

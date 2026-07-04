@@ -17,7 +17,7 @@ import { countNotifications } from './remindersRepo';
 import { countSegments } from './segmentsRepo';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
-export type KitAuditLog = Row<typeof kitAuditLogs>;
+type KitAuditLog = Row<typeof kitAuditLogs>;
 
 interface AuditMeta {
 	[key: string]: unknown;

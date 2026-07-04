@@ -9,13 +9,6 @@ export function listLoyaltyPrograms(userId: number) {
 	return listRepo(userId);
 }
 
-export function addLoyaltyProgram(
-	userId: number,
-	input: Parameters<typeof createRepo>[1]
-) {
-	return createRepo(userId, input);
-}
-
 export function updateLoyaltyProgram(
 	userId: number,
 	id: number,

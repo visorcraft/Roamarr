@@ -1,4 +1,5 @@
 node_modules
+src/lib/server/repositories/node_modules/
 
 # Output
 .output

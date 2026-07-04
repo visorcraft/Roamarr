@@ -12,6 +12,7 @@ const RATE_LIMITS = {
 	doctor: { maxAttempts: 3, windowMs: 60_000 }
 } as const;
 
+/** Bigint-aware JSON round-trip. Falls back to a structured error object if serialization fails (e.g., circular references). */
 function jsonSafe(value: unknown): unknown {
 	try {
 		return JSON.parse(
@@ -68,7 +69,9 @@ export const actions: Actions = {
 			logAudit(u.id, 'db_check', 'settings', 1, { ok: result.ok, tableCount: result.tableCount });
 			return { action: 'check', success: true, result };
 		} catch (e) {
-			return fail(400, { action: 'check', error: e instanceof Error ? e.message : 'Check failed' });
+			const error = e instanceof Error ? e.message : 'Check failed';
+			logAudit(u.id, 'db_check_failed', 'settings', 1, { error });
+			return fail(400, { action: 'check', error });
 		}
 	},
 
@@ -95,9 +98,11 @@ export const actions: Actions = {
 			logAudit(u.id, 'db_gc', 'settings', 1, result);
 			return { action: 'gc', success: true, result };
 		} catch (e) {
+			const error = e instanceof Error ? e.message : 'Garbage collection failed';
+			logAudit(u.id, 'db_gc_failed', 'settings', 1, { error });
 			return fail(400, {
 				action: 'gc',
-				error: e instanceof Error ? e.message : 'Garbage collection failed'
+				error
 			});
 		}
 	},
@@ -123,7 +128,9 @@ export const actions: Actions = {
 			logAudit(u.id, 'db_flush', 'settings', 1, result);
 			return { action: 'flush', success: true, result };
 		} catch (e) {
-			return fail(400, { action: 'flush', error: e instanceof Error ? e.message : 'Flush failed' });
+			const error = e instanceof Error ? e.message : 'Flush failed';
+			logAudit(u.id, 'db_flush_failed', 'settings', 1, { error });
+			return fail(400, { action: 'flush', error });
 		}
 	},
 
@@ -149,7 +156,9 @@ export const actions: Actions = {
 			});
 			return { action: 'doctor', success: true, result };
 		} catch (e) {
-			return fail(400, { action: 'doctor', error: e instanceof Error ? e.message : 'Doctor failed' });
+			const error = e instanceof Error ? e.message : 'Doctor failed';
+			logAudit(u.id, 'db_doctor_failed', 'settings', 1, { error });
+			return fail(400, { action: 'doctor', error });
 		}
 	}
 };

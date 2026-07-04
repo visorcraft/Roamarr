@@ -207,6 +207,33 @@ test('doctor returns fail when kit.doctor throws', async () => {
 	spy.mockRestore();
 });
 
+for (const action of ['check', 'gc', 'flush', 'doctor'] as MaintenanceAction[]) {
+	test(`${action} failure is audit logged`, async () => {
+		const admin = makeAdmin(ctx.kit);
+		const fn = actions[action] as (event: any) => Promise<unknown>;
+		const methodMap: Record<MaintenanceAction, 'check' | 'compactAll' | 'flush' | 'doctor'> = {
+			check: 'check',
+			gc: 'compactAll',
+			flush: 'flush',
+			doctor: 'doctor'
+		};
+		const spy = vi.spyOn(ctx.kit, methodMap[action]).mockImplementation(() => {
+			throw new Error(`${action} boom`);
+		});
+		const result = (await fn(
+			makeEvent(action, action !== 'check', { id: admin.id, role: admin.role as 'admin' | 'user' })
+		)) as any;
+		expect(result.status).toBe(400);
+		const log = latestAuditLogFor(admin.id);
+		expect(log).toBeDefined();
+		expect(log.action).toBe(`db_${action}_failed`);
+		expect(log.entity_type).toBe('settings');
+		const meta = JSON.parse(log.meta_json as string);
+		expect(meta.error).toBe(`${action} boom`);
+		spy.mockRestore();
+	});
+}
+
 async function expectRateLimited(action: MaintenanceAction, maxAttempts: number) {
 	const ip = `10.0.0.${maxAttempts}`;
 	const actionFn = actions[action] as (event: any) => Promise<unknown>;

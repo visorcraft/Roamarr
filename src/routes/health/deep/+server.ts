@@ -1,12 +1,10 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import mongreldb from '@visorcraft/mongreldb';
-import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
+import { schema } from '$lib/server/db/mongrelSchema';
 import { getDatabasePath } from '$lib/server/db/paths';
 import { isSchedulerRunning } from '$lib/server/scheduler';
 import { getExistingDb } from '$lib/server/db/index';
 import { runReadOnlyDiagnosticQuery } from '$lib/server/db/sqlDiagnostics';
-
-const NativeDatabaseClass = (mongreldb as unknown as { Database: typeof NativeDatabase }).Database;
 
 export const GET: RequestHandler = async () => {
 	let dbOk = false;
@@ -17,14 +15,13 @@ export const GET: RequestHandler = async () => {
 		if (!secret) {
 			throw new Error('ROAMARR_SECRET is not set');
 		}
-		const nativeDb = NativeDatabaseClass.openEncrypted(getDatabasePath(), secret);
+		const kitDb = KitDatabase.openEncryptedSync(getDatabasePath(), schema, secret);
 		try {
-			const checkReport = JSON.parse(nativeDb.check()) as { ok: boolean };
-			nativeDb.table('__kit_schema_migrations').count();
+			const checkReport = kitDb.check() as { ok: boolean };
 			dbOk = checkReport.ok === true;
 			details = { check: { ok: checkReport.ok } };
 		} finally {
-			nativeDb.close();
+			kitDb.close();
 		}
 	} catch (e) {
 		dbOk = false;

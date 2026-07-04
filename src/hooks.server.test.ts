@@ -92,6 +92,17 @@ test('/health is public and not redirected after setup', async () => {
 	expect(res.status).toBe(200);
 });
 
+test('/health/deep is public and not redirected before setup', async () => {
+	const res = (await run('/health/deep')) as Response;
+	expect(res.status).toBe(200);
+});
+
+test('/health/deep is public and not redirected after setup', async () => {
+	updateSettings({ setupComplete: true });
+	const res = (await run('/health/deep')) as Response;
+	expect(res.status).toBe(200);
+});
+
 test('reads a flash cookie into locals and clears it', async () => {
 	updateSettings({ setupComplete: true });
 	const cookies = {

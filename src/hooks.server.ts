@@ -13,7 +13,7 @@ import type { ToastVariant } from '$lib/toast';
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
 
-const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/];
+const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
 
 function contentSecurityPolicy() {
 	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,
@@ -68,7 +68,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const path = event.url.pathname;
 
-	if (!isSetupComplete() && path !== '/setup' && path !== '/health') throw redirect(302, '/setup');
+	if (!isSetupComplete() && path !== '/setup' && path !== '/health' && path !== '/health/deep') throw redirect(302, '/setup');
 	if (isSetupComplete() && path === '/setup') throw redirect(302, '/login');
 
 	const isPublic = PUBLIC.some((re) => re.test(path));

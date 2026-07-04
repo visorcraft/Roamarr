@@ -50,6 +50,10 @@ export function closeDb(): void {
 	}
 }
 
+export function getExistingDb(): KitDatabase | null {
+	return _kit;
+}
+
 export const kit: KitDatabase = new Proxy({} as KitDatabase, {
 	get(_t, p) {
 		const real = getDb() as unknown as Record<PropertyKey, unknown>;

@@ -1,27 +1,24 @@
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { KitDatabase } from '@visorcraft/mongreldb-kit';
-import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
-import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
 
 import { GET as healthGet } from './+server';
 import { GET as deepHealthGet } from './deep/+server';
+import { getDb, closeDb } from '$lib/server/db/index';
 
 let dbDir: string;
 let originalMongrelDatabasePath: string | undefined;
 
 beforeEach(() => {
-	dbDir = join(tmpdir(), `roamarr-health-test-${Date.now()}.kitdb`);
-	const kitInstance = KitDatabase.openSync(dbDir, kitSchema);
-	kitInstance.migrateSync(kitSchema, kitMigrations);
-	kitInstance.close();
+	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-test-'));
 	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
 	process.env.MONGREL_DATABASE_PATH = dbDir;
+	getDb();
 });
 
 afterEach(() => {
+	closeDb();
 	rmSync(dbDir, { recursive: true, force: true });
 	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
 	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
@@ -77,6 +74,7 @@ test('deep health returns 200 when integrity check passes', async () => {
 	const body = await res.json();
 	expect(body.db).toBe(true);
 	expect(body.scheduler).toBe(true);
+	expect(body.sqlDiagnostic).toEqual({ ok: true, rowCount: 1 });
 	expect(body.check).toBeDefined();
 });
 

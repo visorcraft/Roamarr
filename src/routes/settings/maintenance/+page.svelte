@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
+
 	type MaintenanceAction = 'check' | 'gc' | 'flush' | 'doctor';
 	type Operation = {
 		action: MaintenanceAction;
@@ -19,6 +22,18 @@
 			error?: string;
 		};
 	} = $props();
+
+	let busyAction = $state<MaintenanceAction | null>(null);
+
+	function enhanceAction(action: MaintenanceAction): SubmitFunction {
+		return () => {
+			busyAction = action;
+			return async ({ update }) => {
+				await update();
+				busyAction = null;
+			};
+		};
+	}
 
 	const operations: Operation[] = [
 		{
@@ -70,7 +85,7 @@
 
 <section class="mt-6 grid gap-4 sm:grid-cols-2">
 	{#each operations as op (op.action)}
-		<form method="POST" action="?/{op.action}" class="card p-5">
+		<form method="POST" action="?/{op.action}" class="card p-5" use:enhance={enhanceAction(op.action)}>
 			<div class="flex items-start justify-between gap-3">
 				<h2 class="section-title">{op.title}</h2>
 				<span class="badge {op.badgeClass}">{op.badge}</span>
@@ -83,7 +98,14 @@
 				</label>
 			{/if}
 			<div class="mt-4">
-				<button type="submit" class="{op.buttonClass} w-full sm:w-auto">{op.runLabel}</button>
+				<button
+					type="submit"
+					class="{op.buttonClass} w-full sm:w-auto"
+					disabled={busyAction === op.action}
+					aria-busy={busyAction === op.action}
+				>
+					{busyAction === op.action ? 'Running...' : op.runLabel}
+				</button>
 			</div>
 		</form>
 	{/each}

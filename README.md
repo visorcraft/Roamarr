@@ -99,7 +99,8 @@ Roamarr can:
 - Send reminders and operational notifications in app, by SMTP, or through
   signed webhooks.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
-  jobs, backups, restores, demo data, instance stats, health checks, and map
+  jobs, backups, restores, demo data, instance stats, health checks, database
+  maintenance (integrity check, compaction, flush, and doctor), and map
   configuration (GeoNames city import and raster tile providers).
 - Surface license text, runtime credits, package attribution, and app version
   details from the Settings -> About area.
@@ -263,8 +264,8 @@ After the first setup flow, use Settings for:
 - Instance name, public registration, and admin controls.
 - SMTP delivery, signed webhooks, and per-user notification channels.
 - Fare provider accounts and connection tests.
-- Backups, restores, scheduled jobs, audit logs, health information, and demo
-  data.
+- Backups, restores, scheduled jobs, audit logs, health information, database
+  maintenance, and demo data.
 - About, project license, third-party package credits, and runtime component
   acknowledgements.
 

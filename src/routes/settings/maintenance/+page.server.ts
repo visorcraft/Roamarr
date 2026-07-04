@@ -2,8 +2,7 @@ import { fail, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { logAudit } from '$lib/server/audit';
-import { getExistingDb, getDb } from '$lib/server/db';
-import type { KitDatabase } from '@visorcraft/mongreldb-kit';
+import { kit } from '$lib/server/db';
 import type { PageServerLoad } from './$types';
 
 const RATE_LIMITS = {
@@ -12,10 +11,6 @@ const RATE_LIMITS = {
 	flush: { maxAttempts: 5, windowMs: 60_000 },
 	doctor: { maxAttempts: 3, windowMs: 60_000 }
 } as const;
-
-function getDbOrOpen(): KitDatabase {
-	return getExistingDb() ?? getDb();
-}
 
 function jsonSafe(value: unknown): unknown {
 	try {
@@ -69,8 +64,7 @@ export const actions: Actions = {
 			});
 		}
 		try {
-			const db = getDbOrOpen();
-			const result = normalizeCheckReport(db.check());
+			const result = normalizeCheckReport(kit.check());
 			logAudit(u.id, 'db_check', 'settings', 1, { ok: result.ok, tableCount: result.tableCount });
 			return { action: 'check', success: true, result };
 		} catch (e) {
@@ -93,8 +87,7 @@ export const actions: Actions = {
 			return fail(400, { action: 'gc', error: 'Confirm garbage collection before running.' });
 		}
 		try {
-			const db = getDbOrOpen();
-			const compactResult = db.compactAll();
+			const compactResult = kit.compactAll();
 			const result = {
 				compacted: Number(compactResult.compacted ?? 0),
 				skipped: Number(compactResult.skipped ?? 0)
@@ -124,9 +117,8 @@ export const actions: Actions = {
 			return fail(400, { action: 'flush', error: 'Confirm flush before running.' });
 		}
 		try {
-			const db = getDbOrOpen();
-			const tableCount = db.tableNames().length;
-			db.flush();
+			const tableCount = kit.tableNames().length;
+			kit.flush();
 			const result = { tableCount };
 			logAudit(u.id, 'db_flush', 'settings', 1, result);
 			return { action: 'flush', success: true, result };
@@ -150,8 +142,7 @@ export const actions: Actions = {
 			return fail(400, { action: 'doctor', error: 'Confirm doctor before running.' });
 		}
 		try {
-			const db = getDbOrOpen();
-			const result = normalizeDoctorReport(db.doctor());
+			const result = normalizeDoctorReport(kit.doctor());
 			logAudit(u.id, 'db_doctor', 'settings', 1, {
 				ok: result.ok,
 				quarantinedCount: result.quarantinedCount

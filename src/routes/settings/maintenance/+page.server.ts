@@ -17,22 +17,34 @@ function getDbOrOpen(): KitDatabase {
 	return getExistingDb() ?? getDb();
 }
 
+function jsonSafe(value: unknown): unknown {
+	try {
+		return JSON.parse(JSON.stringify(value));
+	} catch {
+		return String(value);
+	}
+}
+
 function normalizeCheckReport(report: unknown): { ok: boolean; tableCount: number; report: unknown } {
 	if (report && typeof report === 'object' && 'ok' in report) {
 		const ok = (report as { ok: unknown }).ok === true;
 		const tables = (report as { tables?: unknown }).tables;
-		return { ok, tableCount: Array.isArray(tables) ? tables.length : 0, report };
+		return { ok, tableCount: Array.isArray(tables) ? tables.length : 0, report: jsonSafe(report) };
 	}
-	return { ok: false, tableCount: 0, report };
+	return { ok: false, tableCount: 0, report: jsonSafe(report) };
 }
 
 function normalizeDoctorReport(report: unknown): { ok: boolean; quarantinedCount: number; report: unknown } {
 	if (report && typeof report === 'object' && 'ok' in report) {
 		const ok = (report as { ok: unknown }).ok === true;
 		const quarantined = (report as { quarantined?: unknown[] }).quarantined;
-		return { ok, quarantinedCount: Array.isArray(quarantined) ? quarantined.length : 0, report };
+		return {
+			ok,
+			quarantinedCount: Array.isArray(quarantined) ? quarantined.length : 0,
+			report: jsonSafe(report)
+		};
 	}
-	return { ok: false, quarantinedCount: 0, report };
+	return { ok: false, quarantinedCount: 0, report: jsonSafe(report) };
 }
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -54,7 +66,7 @@ export const actions: Actions = {
 		try {
 			const db = getDbOrOpen();
 			const result = normalizeCheckReport(db.check());
-			logAudit(u.id, 'db_check', 'settings', 1, result);
+			logAudit(u.id, 'db_check', 'settings', 1, { ok: result.ok, tableCount: result.tableCount });
 			return { action: 'check', success: true, result };
 		} catch (e) {
 			return fail(400, { action: 'check', error: e instanceof Error ? e.message : 'Check failed' });
@@ -135,7 +147,10 @@ export const actions: Actions = {
 		try {
 			const db = getDbOrOpen();
 			const result = normalizeDoctorReport(db.doctor());
-			logAudit(u.id, 'db_doctor', 'settings', 1, result);
+			logAudit(u.id, 'db_doctor', 'settings', 1, {
+				ok: result.ok,
+				quarantinedCount: result.quarantinedCount
+			});
 			return { action: 'doctor', success: true, result };
 		} catch (e) {
 			return fail(400, { action: 'doctor', error: e instanceof Error ? e.message : 'Doctor failed' });

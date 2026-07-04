@@ -74,6 +74,10 @@ export const actions: Actions = {
 
 	gc: async ({ request, locals, getClientAddress }) => {
 		const u = requireAdmin(locals);
+		const f = await request.formData();
+		if (f.get('confirmMaintenance') !== 'gc') {
+			return fail(400, { action: 'gc', error: 'Confirm garbage collection before running.' });
+		}
 		const limit = checkRateLimit(getClientAddress(), 'maintenance_gc', RATE_LIMITS.gc);
 		if (!limit.allowed) {
 			return fail(429, {
@@ -81,10 +85,6 @@ export const actions: Actions = {
 				error: 'Too many attempts. Try again later.',
 				retryAfter: limit.retryAfter
 			});
-		}
-		const f = await request.formData();
-		if (f.get('confirmMaintenance') !== 'gc') {
-			return fail(400, { action: 'gc', error: 'Confirm garbage collection before running.' });
 		}
 		try {
 			const compactResult = kit.compactAll();
@@ -104,6 +104,10 @@ export const actions: Actions = {
 
 	flush: async ({ request, locals, getClientAddress }) => {
 		const u = requireAdmin(locals);
+		const f = await request.formData();
+		if (f.get('confirmMaintenance') !== 'flush') {
+			return fail(400, { action: 'flush', error: 'Confirm flush before running.' });
+		}
 		const limit = checkRateLimit(getClientAddress(), 'maintenance_flush', RATE_LIMITS.flush);
 		if (!limit.allowed) {
 			return fail(429, {
@@ -111,10 +115,6 @@ export const actions: Actions = {
 				error: 'Too many attempts. Try again later.',
 				retryAfter: limit.retryAfter
 			});
-		}
-		const f = await request.formData();
-		if (f.get('confirmMaintenance') !== 'flush') {
-			return fail(400, { action: 'flush', error: 'Confirm flush before running.' });
 		}
 		try {
 			const tableCount = kit.tableNames().length;
@@ -129,6 +129,10 @@ export const actions: Actions = {
 
 	doctor: async ({ request, locals, getClientAddress }) => {
 		const u = requireAdmin(locals);
+		const f = await request.formData();
+		if (f.get('confirmMaintenance') !== 'doctor') {
+			return fail(400, { action: 'doctor', error: 'Confirm doctor before running.' });
+		}
 		const limit = checkRateLimit(getClientAddress(), 'maintenance_doctor', RATE_LIMITS.doctor);
 		if (!limit.allowed) {
 			return fail(429, {
@@ -136,10 +140,6 @@ export const actions: Actions = {
 				error: 'Too many attempts. Try again later.',
 				retryAfter: limit.retryAfter
 			});
-		}
-		const f = await request.formData();
-		if (f.get('confirmMaintenance') !== 'doctor') {
-			return fail(400, { action: 'doctor', error: 'Confirm doctor before running.' });
 		}
 		try {
 			const result = normalizeDoctorReport(kit.doctor());

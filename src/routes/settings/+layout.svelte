@@ -10,6 +10,7 @@
 		{ href: '/settings/jobs', label: 'Jobs' },
 		{ href: '/settings/audit-logs', label: 'Audit log' },
 		{ href: '/settings/backup', label: 'Backup' },
+		{ href: '/settings/maintenance', label: 'Maintenance' },
 		{ href: '/settings/seed', label: 'Seed' },
 		{ href: '/settings/about', label: 'About' }
 	];

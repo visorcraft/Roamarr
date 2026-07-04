@@ -19,9 +19,14 @@ function getDbOrOpen(): KitDatabase {
 
 function jsonSafe(value: unknown): unknown {
 	try {
-		return JSON.parse(JSON.stringify(value));
-	} catch {
-		return String(value);
+		return JSON.parse(
+			JSON.stringify(value, (_key, v) => {
+				if (typeof v === 'bigint') return String(v);
+				return v;
+			})
+		);
+	} catch (e) {
+		return { serializationError: e instanceof Error ? e.message : 'Unknown serialization error' };
 	}
 }
 

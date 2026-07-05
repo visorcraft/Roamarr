@@ -46,7 +46,7 @@
 		<TextField name="password" label="Password" type="password" autocomplete="current-password" placeholder="••••••••" required disabled={submitting} />
 		<div class="flex items-center justify-between">
 			<a href="/forgot-password" class="text-sm link">Forgot password?</a>
-			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Sign in</button>
+			<button type="submit" class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Sign in</button>
 		</div>
 	</form>
 

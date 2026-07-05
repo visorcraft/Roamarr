@@ -41,7 +41,7 @@ test('creates a trip with valid data', async () => {
 	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0];
 	expect(t).toBeDefined();
 	expect(t!.name).toBe('Summer Escape');
-	expect(t!.public_token).toBeTruthy();
+	expect(t!.public_token).toBeFalsy();
 });
 
 test('rejects missing name and invalid date range', async () => {

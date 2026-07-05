@@ -26,7 +26,7 @@ test('owner sees full trip; non-owner without share is blocked', () => {
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'b@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
-	expect(t.publicToken).toBeTruthy();
+	expect(t.publicToken).toBeNull();
 	expect(loadTripFor(a.id, t.id).owner).toBe(true);
 	expect(() => loadTripFor(b.id, t.id)).toThrow();
 });

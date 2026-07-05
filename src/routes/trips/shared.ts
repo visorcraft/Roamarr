@@ -30,7 +30,6 @@ export function createTrip(
 		defaultVisibility?: string;
 	}
 ) {
-	const publicToken = randomBytes(24).toString('base64url');
 	const calendarToken = randomBytes(24).toString('base64url');
 	return tripsRepo.createTrip(userId, {
 		name: i.name,
@@ -43,7 +42,6 @@ export function createTrip(
 		notes: i.notes,
 		tags: serializeTags(i.tags),
 		defaultVisibility: (i.defaultVisibility as 'private' | 'groups' | 'public') ?? 'private',
-		publicToken,
 		calendarToken
 	});
 }

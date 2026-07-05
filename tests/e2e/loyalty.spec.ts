@@ -5,13 +5,15 @@ test('add a loyalty program', async ({ page }) => {
 	await expect(page.locator('h1')).toContainText('Loyalty programs');
 
 	const programName = `E2E Loyalty ${Date.now()}`;
+	const membershipNumber = String(Date.now());
 	const form = page.locator('section:has-text("Add program")');
 	await form.getByLabel('Program', { exact: true }).fill(programName);
-	await form.getByLabel('Membership #', { exact: true }).fill('123456789');
+	await form.getByLabel('Membership #', { exact: true }).fill(membershipNumber);
 	await form.getByLabel('Balance', { exact: true }).fill('50000');
 	await form.getByRole('button', { name: 'Add program', exact: true }).click();
 	await page.waitForLoadState('networkidle');
 
-	await expect(page.getByText(programName)).toBeVisible();
-	await expect(page.getByText('50,000')).toBeVisible();
+	const programRow = page.locator('li.list-item', { hasText: programName });
+	await expect(programRow).toBeVisible();
+	await expect(programRow.locator('span.meta-strong', { hasText: membershipNumber })).toBeVisible();
 });

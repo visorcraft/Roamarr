@@ -10,6 +10,7 @@ test('create a group', async ({ page }) => {
 	await form.getByRole('button', { name: 'Create group', exact: true }).click();
 	await page.waitForLoadState('networkidle');
 
-	await expect(page.getByText(name)).toBeVisible();
-	await expect(page.getByText('0 members')).toBeVisible();
+	const groupCard = page.locator('section.card', { hasText: name });
+	await expect(groupCard).toBeVisible();
+	await expect(groupCard.getByText('0 members')).toBeVisible();
 });

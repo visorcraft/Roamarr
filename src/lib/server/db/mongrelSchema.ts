@@ -1064,24 +1064,49 @@ export const tripBudgetCategories = table('trip_budget_categories', {
 	]
 });
 
+export const attachments = table('attachments', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('attachments_id_seq') }),
+		int('owner_id'),
+		text('storage_key'),
+		text('filename'),
+		text('content_type'),
+		int('size_bytes', { default: staticDefault(0n) }),
+		json('context'),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['storage_key'], { name: 'attachments_storage_key_uq' })],
+	indexes: [index(['owner_id'], { name: 'attachments_owner_idx' })],
+	foreignKeys: [
+		foreignKey(
+			['owner_id'],
+			{ table: 'users', columns: ['id'] },
+			{ name: 'fk_attachments_owner_id_users', onDelete: 'cascade' }
+		)
+	]
+});
+
 export const tripExpenseAttachments = table('trip_expense_attachments', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_expense_attachments_id_seq') }),
 		int('expense_id'),
-		text('filename'),
-		text('storage_key'),
-		text('content_type'),
-		int('size_bytes', { default: staticDefault(0n) }),
+		int('attachment_id'),
 		timestamp('created_at', { default: nowDefault() })
 	],
 	primaryKey: 'id',
-	unique: [unique(['storage_key'], { name: 'trip_expense_attachments_storage_key_uq' })],
+	unique: [unique(['attachment_id'], { name: 'trip_expense_attachments_attachment_id_uq' })],
 	indexes: [index(['expense_id'], { name: 'expense_attachments_expense_idx' })],
 	foreignKeys: [
 		foreignKey(
 			['expense_id'],
 			{ table: 'trip_expenses', columns: ['id'] },
 			{ name: 'fk_trip_expense_attachments_expense_id_trip_expenses', onDelete: 'cascade' }
+		),
+		foreignKey(
+			['attachment_id'],
+			{ table: 'attachments', columns: ['id'] },
+			{ name: 'fk_trip_expense_attachments_attachment_id_attachments', onDelete: 'cascade' }
 		)
 	]
 });
@@ -1306,6 +1331,7 @@ export const schema = new Schema([
 	tripPollOptions,
 	tripPollVotes,
 	tripBudgetCategories,
+	attachments,
 	tripExpenseAttachments,
 	tripTemplates,
 	tripHomeTasks,

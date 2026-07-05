@@ -3,12 +3,14 @@ import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripExpenses,
+	attachments,
 	tripExpenseAttachments,
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
 
 export type KitExpense = Row<typeof tripExpenses>;
-export type KitAttachment = Row<typeof tripExpenseAttachments>;
+export type KitAttachment = Row<typeof attachments>;
+export type KitExpenseAttachmentLink = Row<typeof tripExpenseAttachments>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
 
 export interface ExpenseRow {
@@ -57,7 +59,9 @@ export type UpdateExpenseInput = Partial<
 export type CreateAttachmentInput = Pick<
 	AttachmentRow,
 	'expenseId' | 'filename' | 'storageKey' | 'contentType' | 'sizeBytes'
->;
+> & {
+	ownerId: number;
+};
 
 export type CreateBudgetCategoryInput = Pick<BudgetCategoryRow, 'tripId' | 'category' | 'amount'> &
 	Partial<Pick<BudgetCategoryRow, 'currency'>>;
@@ -99,16 +103,29 @@ export function toExpenseRow(row: KitExpense): ExpenseRow {
 	};
 }
 
-export function toAttachmentRow(row: KitAttachment): AttachmentRow {
+export function toAttachmentRow(
+	attachment: KitAttachment,
+	link: KitExpenseAttachmentLink
+): AttachmentRow {
 	return {
-		id: num(row.id),
-		expenseId: num(row.expense_id),
-		filename: row.filename,
-		storageKey: row.storage_key,
-		contentType: row.content_type,
-		sizeBytes: Number(row.size_bytes),
-		createdAt: row.created_at
+		id: num(attachment.id),
+		expenseId: num(link.expense_id),
+		filename: attachment.filename,
+		storageKey: attachment.storage_key,
+		contentType: attachment.content_type,
+		sizeBytes: Number(attachment.size_bytes),
+		createdAt: attachment.created_at
 	};
+}
+
+function findExpenseAttachmentLink(
+	attachmentId: bigint
+): KitExpenseAttachmentLink | null {
+	const links = kit
+		.selectFrom(tripExpenseAttachments)
+		.where(kitEq(tripExpenseAttachments.attachment_id, attachmentId))
+		.executeSync();
+	return links[0] ?? null;
 }
 
 export function toBudgetCategoryRow(row: KitBudgetCategory): BudgetCategoryRow {
@@ -199,49 +216,74 @@ export function deleteExpense(id: number): boolean {
 // Attachments
 
 export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
-	return kit
+	const links = kit
 		.selectFrom(tripExpenseAttachments)
 		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
 		.orderBy(asc(tripExpenseAttachments.created_at))
-		.executeSync()
-		.map(toAttachmentRow);
+		.executeSync();
+	if (links.length === 0) return [];
+	// Fetch all attachments by iterating ids (MongrelDB Kit does not support IN).
+	const attachmentById = new Map<bigint, KitAttachment>();
+	for (const link of links) {
+		const rows = kit
+			.selectFrom(attachments)
+			.where(kitEq(attachments.id, link.attachment_id))
+			.executeSync();
+		if (rows[0]) attachmentById.set(link.attachment_id, rows[0]);
+	}
+	return links
+		.filter((l) => attachmentById.has(l.attachment_id))
+		.map((l) => toAttachmentRow(attachmentById.get(l.attachment_id)!, l));
 }
 
 export function getAttachmentById(id: number): AttachmentRow | null {
-	const rows = kit
-		.selectFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
+	const attachmentRows = kit
+		.selectFrom(attachments)
+		.where(kitEq(attachments.id, toBigInt(id)))
 		.executeSync();
-	return rows[0] ? toAttachmentRow(rows[0]) : null;
+	const attachment = attachmentRows[0];
+	if (!attachment) return null;
+	const link = findExpenseAttachmentLink(attachment.id);
+	if (!link) return null;
+	return toAttachmentRow(attachment, link);
 }
 
 export function getAttachmentByStorageKey(storageKey: string): AttachmentRow | null {
-	const rows = kit
-		.selectFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.storage_key, storageKey))
+	const attachmentRows = kit
+		.selectFrom(attachments)
+		.where(kitEq(attachments.storage_key, storageKey))
 		.executeSync();
-	return rows[0] ? toAttachmentRow(rows[0]) : null;
+	const attachment = attachmentRows[0];
+	if (!attachment) return null;
+	const link = findExpenseAttachmentLink(attachment.id);
+	if (!link) return null;
+	return toAttachmentRow(attachment, link);
 }
 
 export function createAttachment(input: CreateAttachmentInput): AttachmentRow {
-	const row = kit
+	const attachment = kit
+		.insertInto(attachments)
+		.values({
+			owner_id: toBigInt(input.ownerId),
+			storage_key: input.storageKey,
+			filename: input.filename,
+			content_type: input.contentType,
+			size_bytes: BigInt(input.sizeBytes),
+			context: '{}'
+		} as Insert<typeof attachments>)
+		.executeSync();
+	const link = kit
 		.insertInto(tripExpenseAttachments)
 		.values({
 			expense_id: toBigInt(input.expenseId),
-			filename: input.filename,
-			storage_key: input.storageKey,
-			content_type: input.contentType,
-			size_bytes: BigInt(input.sizeBytes)
+			attachment_id: attachment.id
 		} as Insert<typeof tripExpenseAttachments>)
 		.executeSync();
-	return toAttachmentRow(row);
+	return toAttachmentRow(attachment, link);
 }
 
 export function deleteAttachment(id: number): boolean {
-	const deleted = kit
-		.deleteFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
-		.executeSync();
+	const deleted = kit.deleteFrom(attachments).where(kitEq(attachments.id, toBigInt(id))).executeSync();
 	return deleted > 0n;
 }
 

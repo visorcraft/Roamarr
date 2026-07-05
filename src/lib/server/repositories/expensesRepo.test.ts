@@ -16,6 +16,7 @@ import {
 	users,
 	trips,
 	tripExpenses,
+	attachments,
 	tripExpenseAttachments,
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
@@ -118,6 +119,7 @@ test('attachment CRUD', () => {
 	});
 
 	const att = expensesRepo.createAttachment({
+		ownerId: Number(u.id),
 		expenseId: e.id,
 		filename: 'receipt.pdf',
 		storageKey: 'abc-123',
@@ -132,8 +134,8 @@ test('attachment CRUD', () => {
 	expect(expensesRepo.getAttachmentByStorageKey('abc-123')?.id).toBe(att.id);
 
 	const stored = kit
-		.selectFrom(tripExpenseAttachments)
-		.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+		.selectFrom(attachments)
+		.where(eq(attachments.id, BigInt(att.id)))
 		.executeSync()[0];
 	expect(stored?.filename).toBe('receipt.pdf');
 
@@ -142,8 +144,8 @@ test('attachment CRUD', () => {
 	expect(expensesRepo.listAttachmentsForExpense(e.id)).toHaveLength(0);
 	expect(
 		kit
-			.selectFrom(tripExpenseAttachments)
-			.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+			.selectFrom(attachments)
+			.where(eq(attachments.id, BigInt(att.id)))
 			.executeSync()[0]
 	).toBeUndefined();
 });
@@ -208,6 +210,7 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 		baseAmount: 50000
 	});
 	const att = expensesRepo.createAttachment({
+		ownerId: Number(u.id),
 		expenseId: e.id,
 		filename: 'invoice.pdf',
 		storageKey: 'cascade-key',
@@ -236,7 +239,7 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 	expect(
 		kit
 			.selectFrom(tripExpenseAttachments)
-			.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+			.where(eq(tripExpenseAttachments.attachment_id, BigInt(att.id)))
 			.executeSync()[0]
 	).toBeUndefined();
 	expect(

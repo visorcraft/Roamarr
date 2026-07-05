@@ -26,6 +26,7 @@ import {
 	reminders,
 	notifications,
 	tripExpenses,
+	attachments,
 	tripExpenseAttachments,
 	schedulerRuns,
 	schema
@@ -593,21 +594,28 @@ export function makeAttachment(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
-	const row = kit.insertInto(tripExpenseAttachments).values({
-		expense_id: BigInt((over.expenseId as number) ?? 0),
-		filename: (over.filename as string) ?? 'file.png',
+	const ownerId = BigInt((over.ownerId as number) ?? 0);
+	const expenseId = BigInt((over.expenseId as number) ?? 0);
+	const attachment = kit.insertInto(attachments).values({
+		owner_id: ownerId,
 		storage_key: (over.storageKey as string) ?? 'key',
+		filename: (over.filename as string) ?? 'file.png',
 		content_type: (over.contentType as string) ?? 'image/png',
-		size_bytes: BigInt((over.sizeBytes as number) ?? 0)
+		size_bytes: BigInt((over.sizeBytes as number) ?? 0),
+		context: '{}'
+	} as any).executeSync();
+	const link = kit.insertInto(tripExpenseAttachments).values({
+		expense_id: expenseId,
+		attachment_id: attachment.id
 	} as any).executeSync();
 	return {
-		id: Number(row.id),
-		expenseId: Number(row.expense_id),
-		filename: row.filename,
-		storageKey: row.storage_key,
-		contentType: row.content_type,
-		sizeBytes: Number(row.size_bytes),
-		createdAt: row.created_at
+		id: Number(attachment.id),
+		expenseId: Number(link.expense_id),
+		filename: attachment.filename,
+		storageKey: attachment.storage_key,
+		contentType: attachment.content_type,
+		sizeBytes: Number(attachment.size_bytes),
+		createdAt: attachment.created_at
 	};
 }
 

@@ -55,6 +55,7 @@ export async function addAttachment(
 	writeFileSync(attachmentPath(storageKey), bytes);
 
 	const inserted = expensesRepo.createAttachment({
+		ownerId: userId,
 		expenseId,
 		filename: file.name,
 		storageKey,

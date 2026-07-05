@@ -56,18 +56,35 @@ export async function createAttachment(input: CreateAttachmentInput) {
 		throw e;
 	}
 
-	const row = repo.createAttachment({
-		ownerId,
-		storageKey: finalKey,
-		filename: file.name,
-		contentType: file.type,
-		sizeBytes: plaintextBytes,
-		context
-	});
+	let row: repo.AttachmentRecord | undefined;
+	try {
+		row = repo.createAttachment({
+			ownerId,
+			storageKey: finalKey,
+			filename: file.name,
+			contentType: file.type,
+			sizeBytes: plaintextBytes,
+			context
+		});
 
-	const finalPath = attachmentPath(finalKey, baseDir);
-	await fs.mkdir(path.dirname(finalPath), { recursive: true });
-	await fs.rename(stagingPath, finalPath);
+		const finalPath = attachmentPath(finalKey, baseDir);
+		await fs.mkdir(path.dirname(finalPath), { recursive: true });
+		await fs.rename(stagingPath, finalPath);
+	} catch (e) {
+		if (row) {
+			try {
+				repo.deleteAttachment(row.id);
+			} catch {
+				// best-effort DB cleanup
+			}
+		}
+		try {
+			await fs.unlink(stagingPath);
+		} catch {
+			// ignore cleanup failure
+		}
+		throw e;
+	}
 
 	logAudit(ownerId, 'create', 'attachment', row.id, {
 		filename: file.name,
@@ -94,8 +111,8 @@ export async function deleteAttachment(attachmentId: number): Promise<repo.Attac
 	if (!row) throw error(404, 'Attachment not found');
 
 	const baseDir = getAttachmentsPath();
-	deleteEncryptedAttachment(row.storageKey, baseDir);
 	repo.deleteAttachment(attachmentId);
+	deleteEncryptedAttachment(row.storageKey, baseDir);
 
 	logAudit(row.ownerId, 'delete', 'attachment', attachmentId, {
 		filename: row.filename

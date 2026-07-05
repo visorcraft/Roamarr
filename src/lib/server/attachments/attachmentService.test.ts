@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -15,9 +15,11 @@ import {
 	readAttachmentStream,
 	deleteAttachment
 } from './attachmentService';
-import { attachments as attachmentsTable } from '../db/mongrelSchema';
-import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
+import { attachments as attachmentsTable, auditLogs } from '../db/mongrelSchema';
+import { and, eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser } from '../../../../tests/helpers';
+import { attachmentPath } from './attachmentStorage';
+import * as repo from './attachmentRepo';
 
 async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
 	const chunks: Buffer[] = [];
@@ -44,6 +46,7 @@ describe('attachmentService', () => {
 		process.env.ATTACHMENTS_PATH = baseDir;
 		const kit = getKit();
 		kit.deleteFrom(attachmentsTable).executeSync();
+		kit.deleteFrom(auditLogs).executeSync();
 		const u = makeSyncedUser(kit, {
 			email: `a${emailCounter++}@b.c`,
 			passwordHash: 'x',
@@ -94,5 +97,84 @@ describe('attachmentService', () => {
 	test('rejects oversized files', async () => {
 		const file = fileFromString('x'.repeat(10 * 1024 * 1024 + 1), 'x.png', 'image/png');
 		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
+	test('readAttachmentStream returns 404 for missing attachment', async () => {
+		await expect(readAttachmentStream(999999)).rejects.toMatchObject({ status: 404 });
+	});
+
+	test('deleteAttachment returns 404 for missing attachment', async () => {
+		await expect(deleteAttachment(999999)).rejects.toMatchObject({ status: 404 });
+	});
+
+	test('deleteAttachment removes the ciphertext file from disk', async () => {
+		const file = fileFromString('disk test', 'disk.pdf', 'application/pdf');
+		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+		const cipherPath = attachmentPath(att.storageKey, baseDir);
+		expect(existsSync(cipherPath)).toBe(true);
+
+		await deleteAttachment(att.id);
+
+		expect(existsSync(cipherPath)).toBe(false);
+	});
+
+	test('createAttachment writes an audit log entry', async () => {
+		const file = fileFromString('audit', 'audit.pdf', 'application/pdf');
+		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+
+		const kit = getKit();
+		const logs = kit
+			.selectFrom(auditLogs)
+			.where(
+				and(
+					eq(auditLogs.action, 'create'),
+					eq(auditLogs.entity_type, 'attachment'),
+					eq(auditLogs.entity_id, BigInt(att.id))
+				)
+			)
+			.executeSync();
+		expect(logs).toHaveLength(1);
+		expect(logs[0].user_id).toBe(BigInt(userId));
+	});
+
+	test('deleteAttachment writes an audit log entry', async () => {
+		const file = fileFromString('audit', 'audit.pdf', 'application/pdf');
+		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+		await deleteAttachment(att.id);
+
+		const kit = getKit();
+		const logs = kit
+			.selectFrom(auditLogs)
+			.where(
+				and(
+					eq(auditLogs.action, 'delete'),
+					eq(auditLogs.entity_type, 'attachment'),
+					eq(auditLogs.entity_id, BigInt(att.id))
+				)
+			)
+			.executeSync();
+		expect(logs).toHaveLength(1);
+		expect(logs[0].user_id).toBe(BigInt(userId));
+	});
+
+	function countFilesRecursively(dir: string): number {
+		let count = 0;
+		for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
+			if (entry.isFile()) count++;
+		}
+		return count;
+	}
+
+	test('cleans up staging ciphertext when DB insert fails', async () => {
+		vi.spyOn(repo, 'createAttachment').mockImplementationOnce(() => {
+			throw new Error('db boom');
+		});
+
+		const file = fileFromString('staging', 'staging.pdf', 'application/pdf');
+		await expect(
+			createAttachment({ ownerId: userId, file, context: { kind: 'test' } })
+		).rejects.toThrow('db boom');
+
+		expect(countFilesRecursively(baseDir)).toBe(0);
 	});
 });

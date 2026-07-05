@@ -134,7 +134,7 @@ describe('attachmentCrypto', () => {
 		const bytes = readFileSync(cipherPath);
 		const footerStart = findFooterStart(bytes);
 		expect(footerStart).toBeGreaterThan(0);
-		const chunkStart = findPreviousChunkStart(bytes, footerStart);
+		const chunkStart = findPreviousChunkStart(bytes);
 		writeFileSync(cipherPath, bytes.subarray(0, chunkStart));
 		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
 	});
@@ -252,14 +252,9 @@ function findFooterStart(bytes: Buffer): number {
 	return -1;
 }
 
-function findPreviousChunkStart(bytes: Buffer, footerStart: number): number {
-	let pos = footerStart;
-	// The current chunk starts at `pos`; its length is at pos + INDEX_LENGTH.
-	pos -= TAG_LENGTH + 8 + LEN_LENGTH + INDEX_LENGTH;
-	if (pos < HEADER_LENGTH) return HEADER_LENGTH;
-	const len = bytes.readUInt32BE(pos + INDEX_LENGTH);
-	pos -= len + LEN_LENGTH + INDEX_LENGTH;
-	return Math.max(HEADER_LENGTH, pos);
+function findPreviousChunkStart(bytes: Buffer): number {
+	const offsets = getChunkOffsets(bytes);
+	return offsets.length > 0 ? offsets[offsets.length - 1] : HEADER_LENGTH;
 }
 
 function chunkCipherLength(bytes: Buffer, chunkStart: number): number {

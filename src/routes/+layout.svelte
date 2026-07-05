@@ -411,9 +411,8 @@
 								class="app-nav-chevron h-4 w-4 transition-transform {sectionExpanded ? 'rotate-180' : ''}"
 							/>
 						</button>
-						{#if sectionExpanded}
-							<div id={sectionItemsId} class="app-nav-section-items space-y-1">
-								{#each section.items as item (item.href)}
+						<div id={sectionItemsId} class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
+							{#each section.items as item (item.href)}
 									<a
 										href={item.href}
 										onclick={() => (open = false)}
@@ -432,8 +431,7 @@
 										{/if}
 									</a>
 								{/each}
-							</div>
-						{/if}
+						</div>
 					</section>
 				{/each}
 			</nav>

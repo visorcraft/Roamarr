@@ -2,9 +2,12 @@ import { kit } from './db';
 import { startScheduler } from './scheduler';
 import { ensureDefaultBenefitTemplates } from './benefitTemplates';
 import { applyPendingRestore, cleanupRestoreOldDirectories } from './restore';
+import { validateSecretFormat } from './crypto';
 
 export function requireSecret(secret: string | undefined) {
 	if (!secret) throw new Error('ROAMARR_SECRET is required to start Roamarr');
+	const validation = validateSecretFormat(secret);
+	if (!validation.ok) throw new Error(validation.error);
 }
 
 let booted = false;
@@ -39,6 +42,8 @@ export function bootApp() {
 	}
 
 	try {
+		requireSecret(process.env.ROAMARR_SECRET);
+
 		// Apply a pending restore before opening the database so the replacement
 		// directory is used on this boot.
 		applyPendingRestore();

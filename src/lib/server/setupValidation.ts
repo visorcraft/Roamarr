@@ -1,4 +1,5 @@
 import { getDb } from './db';
+import { validateSecretFormat } from './crypto';
 
 export interface SetupCheckResult {
 	secretPresent: boolean;
@@ -9,7 +10,7 @@ export interface SetupCheckResult {
 
 /**
  * Validate the preconditions for running setup:
- * - ROAMARR_SECRET is present
+ * - ROAMARR_SECRET is present and is a base64-encoded 32-byte value
  * - The MongrelDB Kit database can be opened/migrated
  * - The database is writable (smoke test: create/write/read/delete a temp table)
  */
@@ -20,6 +21,16 @@ export async function validateSetupDb(): Promise<SetupCheckResult> {
 			encrypted: false,
 			writable: false,
 			error: 'ROAMARR_SECRET is not set.'
+		};
+	}
+
+	const validation = validateSecretFormat(process.env.ROAMARR_SECRET);
+	if (!validation.ok) {
+		return {
+			secretPresent: true,
+			encrypted: false,
+			writable: false,
+			error: validation.error
 		};
 	}
 

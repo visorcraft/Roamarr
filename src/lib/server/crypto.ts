@@ -1,4 +1,15 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+
+export function validateSecretFormat(secret: string): { ok: true } | { ok: false; error: string } {
+	const raw = Buffer.from(secret, 'base64');
+	if (raw.length !== 32) {
+		return {
+			ok: false,
+			error: `ROAMARR_SECRET must be a base64-encoded 32-byte value (got ${raw.length} bytes). Generate one with: openssl rand -base64 32`
+		};
+	}
+	return { ok: true };
+}
 
 let cached: Buffer | null = null;
 
@@ -6,8 +17,9 @@ function key(): Buffer {
 	if (cached) return cached;
 	const secret = process.env.ROAMARR_SECRET;
 	if (!secret) throw new Error('ROAMARR_SECRET is required');
-	const raw = Buffer.from(secret, 'base64');
-	cached = raw.length === 32 ? raw : scryptSync(secret, 'roamarr.v1', 32);
+	const validation = validateSecretFormat(secret);
+	if (!validation.ok) throw new Error(validation.error);
+	cached = Buffer.from(secret, 'base64');
 	return cached;
 }
 

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Encrypt every uploaded attachment (currently expense receipts) at rest on disk using streaming AES-256-GCM, while keeping the attachment metadata in MongrelDB and preserving the existing download/upload interfaces.
+**Goal:** Encrypt every uploaded attachment (currently expense receipts) at rest on disk using streaming chunked AES-256-GCM, while keeping attachment metadata in MongrelDB and preserving the existing download/upload interfaces. No plaintext copy of an attachment is ever written to disk during download.
 
-**Architecture:** Introduce a small `attachments` subsystem with three layers: (1) `attachmentCrypto` for streaming AES-256-GCM encryption to a ciphertext file and streaming decryption to a temporary plaintext file, (2) `attachmentStorage` for sharded, extensionless ciphertext files on disk, and (3) `attachmentService` for generic attachment metadata CRUD, validation, and audit logging. Authorization is the caller's responsibility; existing expense attachment code performs trip-based auth and delegates storage to the generic service. Ciphertext is stored with a one-byte version header, a 12-byte IV, and a 16-byte GCM auth tag appended to the stream. Downloads verify the auth tag in full before streaming any plaintext to the client.
+**Architecture:** Introduce a small `attachments` subsystem with three layers: (1) `attachmentCrypto` for chunked AES-256-GCM encryption to a ciphertext file and streaming decryption directly to a web `ReadableStream`, (2) `attachmentStorage` for sharded, extensionless ciphertext files on disk, and (3) `attachmentService` for generic attachment metadata CRUD, validation, and audit logging. Authorization is the caller's responsibility; existing expense attachment code performs trip-based auth and delegates storage to the generic service.
 
 **Tech Stack:** Node.js `crypto` streams, SvelteKit form actions, `node:fs` streams, Vitest, Playwright.
 
@@ -14,9 +14,9 @@
 
 | File | Responsibility |
 |---|---|
-| `src/lib/server/attachments/attachmentCrypto.ts` | Streaming AES-256-GCM primitives: encrypt a `ReadableStream` to a ciphertext file, decrypt a ciphertext file to a temporary plaintext file. |
-| `src/lib/server/attachments/attachmentCrypto.test.ts` | Unit tests for round-trip, tamper detection, edge cases, and integrity-before-release. |
-| `src/lib/server/attachments/attachmentStorage.ts` | Sharded ciphertext file storage: save, read (decrypt to temp), delete. |
+| `src/lib/server/attachments/attachmentCrypto.ts` | Chunked AES-256-GCM primitives: encrypt a `ReadableStream` to a ciphertext file, decrypt a ciphertext file to a web `ReadableStream`. |
+| `src/lib/server/attachments/attachmentCrypto.test.ts` | Unit tests for round-trip, tampered-chunk detection, truncation, empty file, and large-file integrity. |
+| `src/lib/server/attachments/attachmentStorage.ts` | Sharded ciphertext file storage: save, read as a decrypting stream, delete. |
 | `src/lib/server/attachments/attachmentStorage.test.ts` | Unit tests for storage paths and save/read/delete. |
 | `src/lib/server/attachments/attachmentService.ts` | Generic attachment service: create/read/delete metadata, content-type/size validation, audit logging. No authorization. |
 | `src/lib/server/attachments/attachmentRepo.ts` | MongrelDB queries for the generic `attachments` table. |
@@ -27,7 +27,7 @@
 | `src/lib/server/tripExpenseAttachments.ts` | Refactored to delegate storage/metadata to `attachmentService` and enforce trip-based auth. |
 | `src/lib/server/tripExpenseAttachments.test.ts` | Updated to test encrypted round-trip. |
 | `src/lib/server/repositories/expensesRepo.ts` | New helpers for expense/attachment links. |
-| `src/routes/trips/[id]/expenses/[expenseId]/attachments/[attachmentId]/+server.ts` | Refactored to read decrypted temp file and stream it as a web `ReadableStream`. |
+| `src/routes/trips/[id]/expenses/[expenseId]/attachments/[attachmentId]/+server.ts` | Refactored to stream decrypted chunks directly to the response. |
 | `tests/e2e/expenses.spec.ts` or new `tests/e2e/attachments.spec.ts` | E2E coverage that uploads a PDF and downloads it intact. |
 
 ---
@@ -36,15 +36,28 @@
 
 ### File format on disk
 
-Each ciphertext file is a flat byte stream:
+Each ciphertext file is a chunked byte stream (version 2):
 
 ```
-[ version: 1 byte ][ IV: 12 bytes ][ ciphertext: N bytes ][ authTag: 16 bytes ]
+[ version: 1 byte = 0x02 ]
+[ chunkSize: 4 bytes big-endian uint32 ]
+[ baseIV: 12 bytes ]
+[ chunk0Index: 4 bytes big-endian uint32 ]
+[ chunk0Len: 4 bytes big-endian uint32 ]
+[ chunk0 ciphertext: chunk0Len bytes ]
+[ chunk0 tag: 16 bytes ]
+[ chunk1Index: 4 bytes ]
+[ chunk1Len: 4 bytes ]
+[ chunk1 ciphertext ]
+[ chunk1 tag ]
+…
 ```
 
-- `version` (`0x01`) lets us rotate algorithms later without guessing.
-- `IV` is generated per file with `randomBytes(12)`.
-- `authTag` is the AES-256-GCM tag produced at the end of encryption.
+- `version` (`0x02`) lets us rotate algorithms later without guessing.
+- `chunkSize` is the maximum plaintext bytes per chunk (default 64 KB). The final chunk may be smaller.
+- `baseIV` is generated per file with `randomBytes(12)`.
+- Chunk `n` uses a derived IV: the last 4 bytes of `baseIV` are incremented by `n` (big-endian), with carry wrapping within those 4 bytes. This guarantees unique IVs per chunk.
+- Each chunk carries its own 16-byte AES-256-GCM auth tag. A chunk is verified before any of its plaintext is released.
 - Files keep the existing sharded UUID path and have **no extension**.
 
 ### Key material
@@ -53,35 +66,39 @@ Reuse the existing key derivation in `src/lib/server/crypto.ts` (`ROAMARR_SECRET
 
 ### Encryption flow (streaming)
 
-1. Generate IV and a temp ciphertext path (`<final>.tmp`).
-2. Open a write stream to the temp file.
-3. Write the version byte and IV.
-4. Pipe the upload `ReadableStream` through `crypto.createCipheriv('aes-256-gcm', key, iv)` into the temp file stream.
-5. When the cipher stream finishes, retrieve the auth tag and append it.
-6. `fsync` the temp file and atomically rename it to the final sharded path.
-7. Clean up the temp file on any failure.
-8. Return the `storageKey` and plaintext `sizeBytes` to the caller.
+1. Generate `baseIV` and pick `chunkSize` (64 KB default).
+2. Open a write stream to a temp ciphertext path (`<final>.tmp`).
+3. Write the header: version byte, `chunkSize`, and `baseIV`.
+4. For each plaintext chunk from the upload `ReadableStream`:
+   - Derive the chunk IV from `baseIV` + chunk index.
+   - Encrypt with `createCipheriv('aes-256-gcm', key, chunkIV)`.
+   - Write chunk index, ciphertext length, ciphertext, and auth tag.
+5. `fsync` the temp ciphertext file and atomically rename it to the final sharded path.
+6. Clean up the temp file on any failure.
+7. Return the `storageKey` and plaintext `sizeBytes` to the caller.
 
-### Decryption flow (streaming with integrity before release)
+### Decryption flow (streaming without plaintext temp files)
 
-AES-256-GCM cannot verify authenticity until the entire ciphertext is processed. To prevent releasing unauthenticated plaintext to the client, we stream-decrypt to a temporary plaintext file first, verify the auth tag at the end, and only then stream the verified plaintext file to the response.
+AES-256-GCM cannot verify a flat stream until the entire ciphertext is processed. To avoid releasing unauthenticated plaintext and to avoid writing a plaintext temp file, we use chunked encryption: each chunk is verified independently before its plaintext is released.
 
 1. Open a read stream from the ciphertext file.
-2. Open a write stream to a temp plaintext file (`<final>.decrypt.tmp`).
-3. Read the version byte and IV from the ciphertext stream.
-4. Pipe the remaining ciphertext through `crypto.createDecipheriv('aes-256-gcm', key, iv)` into the temp plaintext file.
-5. On stream end, the auth tag has been verified by the decipher.
-6. Rename the temp plaintext file to a stable intermediate path (or keep as temp and stream from it).
-7. Stream the verified plaintext file to the client as a web `ReadableStream`.
-8. Delete the temp plaintext file when the response stream closes or errors.
+2. Read and validate the header (version, chunkSize, baseIV).
+3. Return a Node.js `Readable` whose `_read` implementation pulls one chunk at a time from the ciphertext stream:
+   - Read chunk index, ciphertext length, ciphertext, and tag.
+   - Derive the chunk IV.
+   - Decrypt and verify the tag with `createDecipheriv('aes-256-gcm', key, chunkIV)`.
+   - If verification succeeds, push plaintext into the readable.
+   - If verification fails, destroy the readable with an error.
+4. The caller wraps this as a web `ReadableStream` and sends it to the client.
 
-This uses bounded memory (chunk-sized buffers) and bounded disk (one plaintext temp copy), but guarantees the client never receives bytes that fail authentication.
+No plaintext file is ever written to disk during download.
 
 ### Memory and disk bounds
 
-- Encryption and decryption both use Node stream pipelines; only chunk-sized buffers are in memory.
-- Decryption creates one temporary plaintext copy on disk. After the response finishes, the temp file is deleted.
-- Because the current `MAX_SIZE` is 5 MB, temp files are small, but the design works for larger limits if raised later.
+- Encryption and decryption both use bounded chunk-sized buffers in memory.
+- The only temporary file on disk is the ciphertext `.tmp` during upload, removed on failure.
+- Because each chunk is authenticated independently, the client never receives bytes that fail authentication.
+- Default upload limit is **10 MB**.
 
 ### Database schema
 
@@ -110,7 +127,7 @@ This avoids the bug where a trip editor uploads a receipt and the trip owner is 
 
 ### Backward compatibility
 
-Since Roamarr has no production users, no migration is needed. New files are encrypted; legacy plaintext files do not exist in the wild. Any local dev/test plaintext attachments should be removed before testing.
+Since Roamarr has no production users, no migration is needed. New files use version 2; legacy ciphertext files do not exist in the wild. Any local dev/test plaintext attachments should be removed before testing.
 
 ---
 
@@ -126,7 +143,7 @@ Since Roamarr has no production users, no migration is needed. New files are enc
 import { test, expect, describe } from 'vitest';
 
 describe('getAttachmentsPath', () => {
-	test('respects ATTACHMENTS_PATH env var', () => {
+	test('respects ATTACHMENTS_PATH env var', async () => {
 		const original = process.env.ATTACHMENTS_PATH;
 		process.env.ATTACHMENTS_PATH = '/custom/attachments';
 		const { getAttachmentsPath } = await import('./paths');
@@ -134,7 +151,7 @@ describe('getAttachmentsPath', () => {
 		process.env.ATTACHMENTS_PATH = original;
 	});
 
-	test('falls back to directory beside database', () => {
+	test('falls back to directory beside database', async () => {
 		delete process.env.ATTACHMENTS_PATH;
 		const { getAttachmentsPath } = await import('./paths');
 		expect(getAttachmentsPath()).toMatch(/attachments$/);
@@ -186,7 +203,7 @@ git commit -m "fix: getAttachmentsPath respects ATTACHMENTS_PATH env var"
 import { describe, it, expect } from 'vitest';
 
 describe('crypto key', () => {
-	it('returns a 32-byte buffer for aesKey', () => {
+	it('returns a 32-byte buffer for aesKey', async () => {
 		const { aesKey } = await import('./crypto');
 		expect(aesKey()).toBeInstanceOf(Buffer);
 		expect(aesKey().length).toBe(32);
@@ -221,7 +238,7 @@ git commit -m "feat: expose aesKey helper for binary encryption"
 
 ---
 
-## Task 3: Implement streaming attachment crypto
+## Task 3: Implement chunked streaming attachment crypto
 
 **Files:**
 - Create: `src/lib/server/attachments/attachmentCrypto.ts`
@@ -237,81 +254,92 @@ import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { encryptFile, decryptFileToPath, encryptedFileSize } from './attachmentCrypto';
+import { pipeline } from 'node:stream/promises';
+import { encryptChunkedFile, decryptChunkedFileStream, CHUNK_SIZE } from './attachmentCrypto';
+
+async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(value));
+	}
+	return Buffer.concat(chunks);
+}
 
 describe('attachmentCrypto', () => {
 	let dir: string;
 	beforeEach(() => {
 		dir = mkdtempSync(path.join(tmpdir(), 'roamarr-attach-'));
+		process.env.ROAMARR_SECRET = 'ACpm0VlkwltJpcNWtxlilgjX+ZbW2nTV7QqYbZK0Fig=';
 	});
 	afterEach(() => {
 		if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 	});
 
-	function streamFromString(s: string): ReadableStream {
-		return Readable.from([Buffer.from(s)]) as unknown as ReadableStream;
+	function streamFromBuffer(b: Buffer | string): ReadableStream {
+		const buf = Buffer.isBuffer(b) ? b : Buffer.from(b);
+		return Readable.from([buf]) as unknown as ReadableStream;
 	}
 
 	test('round-trips a small file', async () => {
 		const plain = 'hello encrypted world';
 		const cipherPath = path.join(dir, 'cipher');
-		const plainPath = path.join(dir, 'plain.out');
-		await encryptFile(streamFromString(plain), cipherPath);
-		await decryptFileToPath(cipherPath, plainPath);
-		expect(readFileSync(plainPath, 'utf8')).toBe(plain);
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
+		expect(out.toString('utf8')).toBe(plain);
 	});
 
 	test('round-trips a 1 MB file', async () => {
 		const plain = Buffer.alloc(1024 * 1024, 'a');
 		const cipherPath = path.join(dir, 'cipher');
-		const plainPath = path.join(dir, 'plain.out');
-		await encryptFile(Readable.from([plain]) as unknown as ReadableStream, cipherPath);
-		await decryptFileToPath(cipherPath, plainPath);
-		expect(readFileSync(plainPath).equals(plain)).toBe(true);
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
+		expect(out.equals(plain)).toBe(true);
 	});
 
-	test('tampered ciphertext fails decryption', async () => {
+	test('round-trips an empty file', async () => {
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(''), cipherPath);
+		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
+		expect(out.length).toBe(0);
+	});
+
+	test('round-trips a file that spans multiple chunks', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE * 3 + 17, 'x');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
+		expect(out.equals(plain)).toBe(true);
+	});
+
+	test('tampered chunk fails decryption', async () => {
 		const plain = 'secret';
 		const cipherPath = path.join(dir, 'cipher');
-		const plainPath = path.join(dir, 'plain.out');
-		await encryptFile(streamFromString(plain), cipherPath);
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
 		const bytes = readFileSync(cipherPath);
-		bytes[bytes.length - 1] ^= 0xff;
+		// Flip a byte well inside the first chunk body.
+		bytes[30] ^= 0xff;
 		writeFileSync(cipherPath, bytes);
-		await expect(decryptFileToPath(cipherPath, plainPath)).rejects.toThrow();
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
 	});
 
 	test('truncated ciphertext fails decryption', async () => {
 		const plain = 'secret';
 		const cipherPath = path.join(dir, 'cipher');
-		const plainPath = path.join(dir, 'plain.out');
-		await encryptFile(streamFromString(plain), cipherPath);
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
 		const bytes = readFileSync(cipherPath);
 		writeFileSync(cipherPath, bytes.subarray(0, bytes.length - 4));
-		await expect(decryptFileToPath(cipherPath, plainPath)).rejects.toThrow();
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
 	});
 
-	test('encrypted file has version header', async () => {
+	test('encrypted file has version 2 header', async () => {
 		const cipherPath = path.join(dir, 'cipher');
-		await encryptFile(streamFromString('x'), cipherPath);
+		await encryptChunkedFile(streamFromBuffer('x'), cipherPath);
 		const bytes = readFileSync(cipherPath);
-		expect(bytes[0]).toBe(1);
-		expect(bytes.length).toBeGreaterThan(1 + 12 + 16 + 1);
-	});
-
-	test('empty file round-trips', async () => {
-		const cipherPath = path.join(dir, 'cipher');
-		const plainPath = path.join(dir, 'plain.out');
-		await encryptFile(streamFromString(''), cipherPath);
-		await decryptFileToPath(cipherPath, plainPath);
-		expect(readFileSync(plainPath).length).toBe(0);
-	});
-
-	test('encrypted file size is predictable', async () => {
-		const cipherPath = path.join(dir, 'cipher');
-		await encryptFile(streamFromString('hello'), cipherPath);
-		const stat = await fs.promises.stat(cipherPath);
-		expect(encryptedFileSize(5)).toBe(stat.size);
+		expect(bytes[0]).toBe(2);
+		expect(bytes.length).toBeGreaterThan(1 + 4 + 12 + 4 + 4 + 16 + 1);
 	});
 });
 ```
@@ -321,7 +349,7 @@ describe('attachmentCrypto', () => {
 Run: `rtk npx vitest run src/lib/server/attachments/attachmentCrypto.test.ts`
 Expected: FAIL — functions not defined.
 
-- [ ] **Step 3: Implement streaming crypto**
+- [ ] **Step 3: Implement chunked streaming crypto**
 
 Create `src/lib/server/attachments/attachmentCrypto.ts`:
 
@@ -333,31 +361,81 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { aesKey } from '../crypto';
 
-export const VERSION = 1;
+export const VERSION = 2;
+export const CHUNK_SIZE = 64 * 1024;
 export const IV_LENGTH = 12;
 export const TAG_LENGTH = 16;
-export const HEADER_LENGTH = 1 + IV_LENGTH;
+export const INDEX_LENGTH = 4;
+export const LEN_LENGTH = 4;
+export const HEADER_LENGTH = 1 + LEN_LENGTH + IV_LENGTH; // version + chunkSize + baseIV
 
-export function encryptedFileSize(plainSize: number): number {
-	return HEADER_LENGTH + plainSize + TAG_LENGTH;
+function deriveChunkIV(baseIV: Buffer, index: number): Buffer {
+	const iv = Buffer.from(baseIV);
+	const counter = iv.readUInt32BE(IV_LENGTH - 4);
+	iv.writeUInt32BE((counter + index) >>> 0, IV_LENGTH - 4);
+	return iv;
 }
 
-export async function encryptFile(input: ReadableStream, outputPath: string): Promise<void> {
-	const iv = randomBytes(IV_LENGTH);
-	const cipher = createCipheriv('aes-256-gcm', aesKey(), iv);
-	const tempPath = `${outputPath}.tmp`;
+async function* chunkStream(input: ReadableStream<Uint8Array>, chunkSize: number) {
+	const reader = input.getReader();
+	let buffer = Buffer.alloc(0);
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (value) {
+				buffer = Buffer.concat([buffer, Buffer.from(value)]);
+			}
+			while (buffer.length >= chunkSize || (done && buffer.length > 0)) {
+				const take = Math.min(chunkSize, buffer.length);
+				yield buffer.subarray(0, take);
+				buffer = buffer.subarray(take);
+			}
+			if (done) break;
+		}
+	} finally {
+		reader.releaseLock();
+	}
+}
 
+export async function encryptChunkedFile(input: ReadableStream, outputPath: string): Promise<void> {
+	const baseIV = randomBytes(IV_LENGTH);
+	const tempPath = `${outputPath}.tmp`;
 	await fs.mkdir(path.dirname(outputPath), { recursive: true });
 	const output = createWriteStream(tempPath);
 
 	output.write(Buffer.from([VERSION]));
-	output.write(iv);
+	const sizeBuf = Buffer.alloc(LEN_LENGTH);
+	sizeBuf.writeUInt32BE(CHUNK_SIZE, 0);
+	output.write(sizeBuf);
+	output.write(baseIV);
 
 	try {
-		const nodeInput = Readable.fromWeb(input as import('node:stream/web').ReadableStream);
-		await pipeline(nodeInput, cipher, output);
-		const tag = cipher.getAuthTag();
-		await fs.appendFile(tempPath, tag);
+		let index = 0;
+		for await (const plainChunk of chunkStream(input as ReadableStream<Uint8Array>, CHUNK_SIZE)) {
+			const iv = deriveChunkIV(baseIV, index);
+			const cipher = createCipheriv('aes-256-gcm', aesKey(), iv);
+			const cipherChunk = Buffer.concat([cipher.update(plainChunk), cipher.final()]);
+			const tag = cipher.getAuthTag();
+
+			const idxBuf = Buffer.alloc(INDEX_LENGTH);
+			idxBuf.writeUInt32BE(index, 0);
+			output.write(idxBuf);
+
+			const lenBuf = Buffer.alloc(LEN_LENGTH);
+			lenBuf.writeUInt32BE(cipherChunk.length, 0);
+			output.write(lenBuf);
+
+			output.write(cipherChunk);
+			output.write(tag);
+			index++;
+		}
+
+		await new Promise<void>((resolve, reject) => {
+			output.on('finish', resolve);
+			output.on('error', reject);
+			output.end();
+		});
+
 		const handle = await fs.open(tempPath, 'r+');
 		await handle.sync();
 		await handle.close();
@@ -372,67 +450,148 @@ export async function encryptFile(input: ReadableStream, outputPath: string): Pr
 	}
 }
 
-export async function decryptFileToPath(cipherPath: string, plainPath: string): Promise<void> {
-	const tempPath = `${plainPath}.tmp`;
+export async function decryptChunkedFileStream(cipherPath: string): Promise<ReadableStream> {
 	const source = createReadStream(cipherPath);
-	const output = createWriteStream(tempPath);
-
 	let headerRead = false;
 	let headerBuffer = Buffer.alloc(0);
-	let decipher: ReturnType<typeof createDecipheriv> | null = null;
+	let baseIV: Buffer | null = null;
+	let chunkSize = 0;
+	let nextIndex = 0;
+	let finished = false;
+	let error: Error | null = null;
 
-	try {
-		await new Promise<void>((resolve, reject) => {
-			source.on('error', reject);
-			output.on('error', reject);
-
-			source.on('readable', () => {
-				if (headerRead) return;
-				let chunk;
-				while (!headerRead && null !== (chunk = source.read(HEADER_LENGTH - headerBuffer.length))) {
-					headerBuffer = Buffer.concat([headerBuffer, chunk]);
-					if (headerBuffer.length >= HEADER_LENGTH) {
-						headerRead = true;
-						if (headerBuffer[0] !== VERSION) {
-							reject(new Error(`unsupported attachment encryption version: ${headerBuffer[0]}`));
-							return;
-						}
-						const iv = headerBuffer.subarray(1, HEADER_LENGTH);
-						decipher = createDecipheriv('aes-256-gcm', aesKey(), iv);
-						source.pipe(decipher).pipe(output);
-					}
-				}
-			});
-
-			source.on('end', () => {
-				if (!headerRead) {
-					reject(new Error('attachment ciphertext header truncated'));
-					return;
-				}
-			});
-
-			output.on('finish', () => {
-				if (!decipher) {
-					reject(new Error('decipher not initialized'));
-					return;
-				}
-				resolve();
-			});
-		});
-
-		await fs.rename(tempPath, plainPath);
-	} catch (e) {
-		try {
-			await fs.unlink(tempPath);
-		} catch {
-			// ignore cleanup failure
+	const readable = new Readable({
+		read() {
+			if (finished) {
+				this.push(null);
+				return;
+			}
+			if (error) {
+				this.destroy(error);
+				return;
+			}
+			pullChunk();
 		}
-		throw e;
+	});
+
+	function fail(err: Error) {
+		error = err;
+		readable.destroy(err);
 	}
+
+	async function pullChunk() {
+		try {
+			if (!headerRead) {
+				headerBuffer = await readExactly(source, HEADER_LENGTH, headerBuffer);
+				if (headerBuffer.length < HEADER_LENGTH) {
+					throw new Error('attachment ciphertext header truncated');
+				}
+				if (headerBuffer[0] !== VERSION) {
+					throw new Error(`unsupported attachment encryption version: ${headerBuffer[0]}`);
+				}
+				chunkSize = headerBuffer.readUInt32BE(1);
+				baseIV = headerBuffer.subarray(1 + LEN_LENGTH, HEADER_LENGTH);
+				headerRead = true;
+			}
+
+			const idxBuf = await readExactly(source, INDEX_LENGTH);
+			if (idxBuf.length === 0) {
+				finished = true;
+				readable.push(null);
+				return;
+			}
+			if (idxBuf.length < INDEX_LENGTH) {
+				throw new Error('attachment chunk index truncated');
+			}
+
+			const lenBuf = await readExactly(source, LEN_LENGTH);
+			if (lenBuf.length < LEN_LENGTH) {
+				throw new Error('attachment chunk length truncated');
+			}
+			const chunkLen = lenBuf.readUInt32BE(0);
+
+			const cipherChunk = await readExactly(source, chunkLen);
+			if (cipherChunk.length < chunkLen) {
+				throw new Error('attachment chunk ciphertext truncated');
+			}
+
+			const tag = await readExactly(source, TAG_LENGTH);
+			if (tag.length < TAG_LENGTH) {
+				throw new Error('attachment chunk tag truncated');
+			}
+
+			const index = idxBuf.readUInt32BE(0);
+			if (index !== nextIndex) {
+				throw new Error(`attachment chunk out of order: expected ${nextIndex}, got ${index}`);
+			}
+			nextIndex++;
+
+			const iv = deriveChunkIV(baseIV!, index);
+			const decipher = createDecipheriv('aes-256-gcm', aesKey(), iv);
+			decipher.setAuthTag(tag);
+			const plain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
+			readable.push(plain);
+		} catch (err) {
+			finished = true;
+			fail(err as Error);
+		}
+	}
+
+	source.on('end', () => {
+		if (!headerRead) {
+			fail(new Error('attachment ciphertext header truncated'));
+		} else if (!finished) {
+			finished = true;
+			readable.push(null);
+		}
+	});
+
+	source.on('error', (err) => fail(err));
+
+	return Readable.toWeb(readable) as ReadableStream;
+}
+
+function readExactly(stream: ReturnType<typeof createReadStream>, n: number, existing: Buffer = Buffer.alloc(0)): Promise<Buffer> {
+	return new Promise((resolve, reject) => {
+		let buf = existing;
+
+		function onData(data: Buffer) {
+			buf = Buffer.concat([buf, data]);
+			if (buf.length >= n) {
+				cleanup();
+				const result = buf.subarray(0, n);
+				if (buf.length > n) {
+					stream.unshift(buf.subarray(n));
+				}
+				resolve(result);
+			}
+		}
+
+		function onEnd() {
+			cleanup();
+			resolve(buf);
+		}
+
+		function onError(err: Error) {
+			cleanup();
+			reject(err);
+		}
+
+		function cleanup() {
+			stream.off('data', onData);
+			stream.off('end', onEnd);
+			stream.off('error', onError);
+		}
+
+		stream.on('data', onData);
+		stream.on('end', onEnd);
+		stream.on('error', onError);
+		stream.resume();
+	});
 }
 ```
 
-> **Note:** The `decryptFileToPath` implementation above must be verified carefully. The auth tag is verified automatically by the decipher stream during the final `final()` call, which happens when the source stream ends. If the implementation has subtle issues with backpressure or tag handling, adjust to use `pipeline(source, decipher, output)` after reading the header.
+> **Note:** The `readExactly` helper must unshift excess bytes so chunk boundaries align. The implementing agent must verify that `decryptChunkedFileStream` correctly handles backpressure, errors, and stream cleanup.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -443,7 +602,7 @@ Expected: PASS.
 
 ```bash
 git add src/lib/server/attachments/attachmentCrypto.ts src/lib/server/attachments/attachmentCrypto.test.ts
-git commit -m "feat: streaming AES-256-GCM attachment crypto with verified plaintext temp output"
+git commit -m "feat: chunked AES-256-GCM attachment crypto without plaintext temp files"
 ```
 
 ---
@@ -460,16 +619,27 @@ Create `src/lib/server/attachments/attachmentStorage.test.ts`:
 
 ```ts
 import { test, expect, describe, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import {
 	saveEncryptedAttachment,
-	readEncryptedAttachmentToPath,
+	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment,
 	attachmentPath
 } from './attachmentStorage';
+
+async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(Buffer.from(value));
+	}
+	return Buffer.concat(chunks);
+}
 
 describe('attachmentStorage', () => {
 	let dir: string;
@@ -493,12 +663,12 @@ describe('attachmentStorage', () => {
 		expect(p).toContain(path.join(key.slice(0, 2), key.slice(2, 4), key));
 	});
 
-	test('readEncryptedAttachmentToPath decrypts to a temp file', async () => {
+	test('readEncryptedAttachmentStream decrypts to a stream', async () => {
 		const plain = 'stored securely';
 		const key = await saveEncryptedAttachment(streamFromString(plain), dir);
-		const outPath = path.join(dir, 'decrypted');
-		await readEncryptedAttachmentToPath(key, dir, outPath);
-		expect(readFileSync(outPath, 'utf8')).toBe(plain);
+		const stream = await readEncryptedAttachmentStream(key, dir);
+		const out = await streamToBuffer(stream);
+		expect(out.toString('utf8')).toBe(plain);
 	});
 
 	test('deleteEncryptedAttachment removes the ciphertext file', async () => {
@@ -524,7 +694,7 @@ Create `src/lib/server/attachments/attachmentStorage.ts`:
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
-import { encryptFile, decryptFileToPath } from './attachmentCrypto';
+import { encryptChunkedFile, decryptChunkedFileStream } from './attachmentCrypto';
 
 export function attachmentPath(storageKey: string, baseDir: string): string {
 	return path.join(baseDir, storageKey.slice(0, 2), storageKey.slice(2, 4), storageKey);
@@ -536,16 +706,15 @@ export async function saveEncryptedAttachment(
 ): Promise<string> {
 	const storageKey = randomUUID();
 	const outPath = attachmentPath(storageKey, baseDir);
-	await encryptFile(input, outPath);
+	await encryptChunkedFile(input, outPath);
 	return storageKey;
 }
 
-export async function readEncryptedAttachmentToPath(
+export async function readEncryptedAttachmentStream(
 	storageKey: string,
-	baseDir: string,
-	plainPath: string
-): Promise<void> {
-	return decryptFileToPath(attachmentPath(storageKey, baseDir), plainPath);
+	baseDir: string
+): Promise<ReadableStream> {
+	return decryptChunkedFileStream(attachmentPath(storageKey, baseDir));
 }
 
 export function deleteEncryptedAttachment(storageKey: string, baseDir: string): void {
@@ -703,7 +872,7 @@ Create `src/lib/server/attachments/attachmentService.test.ts`:
 
 ```ts
 import { test, expect, describe, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -716,12 +885,23 @@ vi.mock('../db', async () => {
 
 import {
 	createAttachment,
-	readAttachmentToPath,
+	readAttachmentStream,
 	deleteAttachment
 } from './attachmentService';
 import { attachments as attachmentsTable } from '../db/mongrelSchema';
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser } from '../../../../tests/helpers';
+
+async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(Buffer.from(value));
+	}
+	return Buffer.concat(chunks);
+}
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -758,12 +938,12 @@ describe('attachmentService', () => {
 		expect(att.storageKey).toBeTruthy();
 	});
 
-	test('readAttachmentToPath decrypts the stored file', async () => {
+	test('readAttachmentStream decrypts the stored file', async () => {
 		const file = fileFromString('round trip', 'note.txt', 'text/plain');
 		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
-		const outPath = path.join(baseDir, 'decrypted');
-		await readAttachmentToPath(att.id, outPath);
-		expect(readFileSync(outPath, 'utf8')).toBe('round trip');
+		const stream = await readAttachmentStream(att.id);
+		const out = await streamToBuffer(stream);
+		expect(out.toString('utf8')).toBe('round trip');
 	});
 
 	test('deleteAttachment removes row and ciphertext', async () => {
@@ -781,7 +961,7 @@ describe('attachmentService', () => {
 	});
 
 	test('rejects oversized files', async () => {
-		const file = fileFromString('x'.repeat(5 * 1024 * 1024 + 1), 'x.png', 'image/png');
+		const file = fileFromString('x'.repeat(10 * 1024 * 1024 + 1), 'x.png', 'image/png');
 		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
 	});
 });
@@ -873,14 +1053,14 @@ import { error } from '@sveltejs/kit';
 import { getAttachmentsPath } from '../paths';
 import {
 	saveEncryptedAttachment,
-	readEncryptedAttachmentToPath,
+	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment
 } from './attachmentStorage';
 import * as repo from './attachmentRepo';
 import { logAudit } from '../audit';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_SIZE = 5 * 1024 * 1024;
+export const MAX_SIZE = 10 * 1024 * 1024;
 
 export interface CreateAttachmentInput {
 	ownerId: number;
@@ -895,7 +1075,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 		throw error(400, 'Only JPEG, PNG, WebP, or PDF files are allowed');
 	}
 	if (file.size > MAX_SIZE) {
-		throw error(400, 'File must be 5 MB or smaller');
+		throw error(400, 'File must be 10 MB or smaller');
 	}
 
 	const baseDir = getAttachmentsPath();
@@ -919,13 +1099,13 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	return row;
 }
 
-export async function readAttachmentToPath(attachmentId: number, plainPath: string): Promise<repo.AttachmentRecord> {
+export async function readAttachmentStream(attachmentId: number): Promise<{ stream: ReadableStream; record: repo.AttachmentRecord }> {
 	const row = repo.getAttachmentById(attachmentId);
 	if (!row) throw error(404, 'Attachment not found');
 
 	const baseDir = getAttachmentsPath();
-	await readEncryptedAttachmentToPath(row.storageKey, baseDir, plainPath);
-	return row;
+	const stream = await readEncryptedAttachmentStream(row.storageKey, baseDir);
+	return { stream, record: row };
 }
 
 export async function deleteAttachment(attachmentId: number): Promise<repo.AttachmentRecord> {
@@ -1011,6 +1191,14 @@ export function getExpenseAttachmentLinkById(id: number): ExpenseAttachmentLink 
 	};
 }
 
+export interface AttachmentRow {
+	id: number;
+	filename: string;
+	contentType: string;
+	sizeBytes: number;
+	linkId: number;
+}
+
 export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
 	const db = getDb();
 	const rows = db
@@ -1052,7 +1240,7 @@ import { error } from '@sveltejs/kit';
 import * as expensesRepo from './repositories/expensesRepo';
 import { requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
-import { createAttachment, readAttachmentToPath, deleteAttachment as deleteGenericAttachment } from './attachments/attachmentService';
+import { createAttachment, readAttachmentStream, deleteAttachment as deleteGenericAttachment } from './attachments/attachmentService';
 
 export async function addAttachment(userId: number, expenseId: number, file: File) {
 	const expense = expensesRepo.getExpenseById(expenseId);
@@ -1089,10 +1277,10 @@ export function getAttachmentLink(userId: number, linkId: number) {
 	return { link, tripId: expense.tripId };
 }
 
-export async function readAttachment(userId: number, linkId: number, plainPath: string) {
+export async function readAttachment(userId: number, linkId: number) {
 	const { link, tripId } = getAttachmentLink(userId, linkId);
-	const attachment = await readAttachmentToPath(link.attachmentId, plainPath);
-	return { ...attachment, tripId, expenseId: link.expenseId, linkId };
+	const { stream, record } = await readAttachmentStream(link.attachmentId);
+	return { stream, record, tripId, expenseId: link.expenseId, linkId };
 }
 
 export async function deleteAttachment(userId: number, linkId: number) {
@@ -1113,7 +1301,7 @@ Find any place that loads expense attachments and update field names to match th
 
 - [ ] **Step 4: Update tests in `tripExpenseAttachments.test.ts`**
 
-Update assertions to use the new `{ link, attachment }` return shape and the new `AttachmentRow` fields. Add a test that decrypts an uploaded file and verifies the plaintext.
+Update assertions to use the new `{ link, attachment }` return shape and the new `AttachmentRow` fields. Add a test that decrypts an uploaded file and verifies the plaintext via the stream.
 
 - [ ] **Step 5: Run tests**
 
@@ -1129,20 +1317,17 @@ git commit -m "refactor: expense attachments use generic encrypted attachment se
 
 ---
 
-## Task 8: Update download route to decrypt to temp and stream
+## Task 8: Update download route to stream decrypted chunks
 
 **Files:**
 - Modify: `src/routes/trips/[id]/expenses/[expenseId]/attachments/[attachmentId]/+server.ts`
 
-- [ ] **Step 1: Replace synchronous read with streaming read from verified temp file**
+- [ ] **Step 1: Replace synchronous read with streaming chunked decryption**
 
 ```ts
 import { error } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { readAttachment } from '$lib/server/tripExpenseAttachments';
-import { mkdtempSync, rmSync, createReadStream } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import type { RequestHandler } from './$types';
 
 function sanitizeFilename(name: string): string {
@@ -1161,33 +1346,22 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 		throw error(400, 'Invalid request');
 	}
 
-	const tempDir = mkdtempSync(path.join(tmpdir(), 'roamarr-dl-'));
-	const tempPath = path.join(tempDir, 'plain');
-
-	try {
-		const attachment = await readAttachment(u.id, linkId, tempPath);
-		if (attachment.tripId !== tripId || attachment.expenseId !== expenseId) {
-			throw error(404, 'Attachment not found');
-		}
-
-		const safeFilename = sanitizeFilename(attachment.filename);
-		const fileStream = createReadStream(tempPath);
-
-		return new Response(Readable.toWeb(fileStream) as ReadableStream, {
-			headers: {
-				'Content-Type': attachment.contentType,
-				'Content-Disposition': `inline; filename="${safeFilename}"`,
-				'Content-Length': String(attachment.sizeBytes)
-			}
-		});
-	} catch (e) {
-		rmSync(tempDir, { recursive: true, force: true });
-		throw e;
+	const { stream, record, tripId: actualTripId, expenseId: actualExpenseId } = await readAttachment(u.id, linkId);
+	if (actualTripId !== tripId || actualExpenseId !== expenseId) {
+		throw error(404, 'Attachment not found');
 	}
+
+	const safeFilename = sanitizeFilename(record.filename);
+
+	return new Response(stream, {
+		headers: {
+			'Content-Type': record.contentType,
+			'Content-Disposition': `inline; filename="${safeFilename}"`,
+			'Content-Length': String(record.sizeBytes)
+		}
+	});
 };
 ```
-
-> **Note:** Cleanup of `tempDir` after the response finishes should be handled. SvelteKit/Node will keep the response stream alive; after it closes, the temp directory should be removed. The simplest robust approach is to register `fileStream.on('close', () => rmSync(tempDir, { recursive: true, force: true }))` before returning the response. Add this in the implementation.
 
 - [ ] **Step 2: Run type check**
 
@@ -1198,7 +1372,7 @@ Expected: PASS.
 
 ```bash
 git add src/routes/trips/[id]/expenses/[expenseId]/attachments/[attachmentId]/+server.ts
-git commit -m "feat: decrypt expense attachments to verified temp file before streaming"
+git commit -m "feat: stream expense attachments as chunked decrypted bytes"
 ```
 
 ---
@@ -1309,7 +1483,7 @@ Expected: all tests pass.
 
 - [ ] **Step 2: E2E tests**
 
-Run: `rtk npm run test:e2e`
+Run: `rtk npx playwright test`
 Expected: all tests pass.
 
 - [ ] **Step 3: Final commit if any fixes**
@@ -1323,8 +1497,8 @@ git commit -a -m "fix: final encrypted attachment verification adjustments" || t
 ## Self-review
 
 **Spec coverage:**
-- Streaming encryption → Task 3.
-- Streaming decryption with verified plaintext temp → Task 3.
+- Streaming chunked encryption → Task 3.
+- Streaming chunked decryption without plaintext temp files → Task 3.
 - Generic service layer → Task 6.
 - Schema changes → Task 5.
 - Expense receipt refactor → Task 7.
@@ -1337,12 +1511,13 @@ git commit -a -m "fix: final encrypted attachment verification adjustments" || t
 
 **Type consistency:**
 - `attachmentService.createAttachment` returns `AttachmentRecord` (camelCase).
+- `attachmentService.readAttachmentStream` returns `{ stream, record }`.
 - `tripExpenseAttachments.addAttachment` returns `{ link, attachment }`.
-- `readAttachment` returns the attachment record plus `tripId`, `expenseId`, `linkId`.
+- `readAttachment` returns the stream, record, plus `tripId`, `expenseId`, `linkId`.
 
 **Gaps:**
 - The exact MongrelDB Kit query syntax for `innerJoin` in `expensesRepo.listAttachmentsForExpense` may need adjustment based on the actual Kit API. The implementing agent must verify and fix.
-- `decryptFileToPath` must be carefully tested for backpressure and tag verification edge cases.
+- `decryptChunkedFileStream` must be carefully tested for backpressure, chunk-boundary alignment, and stream cleanup.
 
 ---
 
@@ -1352,7 +1527,7 @@ Plan complete and saved to `docs/specs/2026-07-05-encrypted-attachment-storage-p
 
 **Two execution options:**
 
-1. **Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration.
-2. **Inline Execution** — I implement the tasks in this session using `executing-plans`, batch execution with checkpoints.
+1. **Subagent-Driven (recommended)** — Dispatch a fresh subagent per task, review between tasks, fast iteration.
+2. **Inline Execution** — Implement the tasks in this session using `executing-plans`, batch execution with checkpoints.
 
 Which approach would you like?

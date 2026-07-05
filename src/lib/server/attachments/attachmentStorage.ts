@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
-import { encryptChunkedFile, decryptChunkedFileStream } from './attachmentCrypto';
+import { promises as fs } from 'node:fs';
+import { encryptChunkedFile, decryptChunkedFileStream, AttachmentSizeLimitError } from './attachmentCrypto';
 import type { EncryptResult } from './attachmentCrypto';
+
+export { AttachmentSizeLimitError };
 
 const STORAGE_KEY_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -40,7 +42,7 @@ export async function readEncryptedAttachmentStream(
 }
 
 // Silently succeeds if the file is already gone (idempotent deletion).
-export function deleteEncryptedAttachment(storageKey: string, baseDir: string): void {
+export async function deleteEncryptedAttachment(storageKey: string, baseDir: string): Promise<void> {
 	const p = attachmentPath(storageKey, baseDir);
-	if (existsSync(p)) rmSync(p);
+	await fs.rm(p, { force: true });
 }

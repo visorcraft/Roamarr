@@ -53,12 +53,19 @@ function streamFromBufferChunks(b: Buffer, chunkSize: number): ReadableStream<Ui
 
 describe('attachmentCrypto', () => {
 	let dir: string;
+	let originalSecret: string | undefined;
 	beforeEach(() => {
 		dir = mkdtempSync(path.join(tmpdir(), 'roamarr-attach-'));
+		originalSecret = process.env.ROAMARR_SECRET;
 		process.env.ROAMARR_SECRET = 'ACpm0VlkwltJpcNWtxlilgjX+ZbW2nTV7QqYbZK0Fig=';
 	});
 	afterEach(() => {
 		if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+		if (originalSecret === undefined) {
+			delete process.env.ROAMARR_SECRET;
+		} else {
+			process.env.ROAMARR_SECRET = originalSecret;
+		}
 	});
 
 	test('round-trips a small file', async () => {

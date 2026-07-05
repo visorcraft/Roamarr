@@ -35,8 +35,20 @@ export const LEN_LENGTH = 4;
 export const HEADER_LENGTH = 1 + LEN_LENGTH + IV_LENGTH;
 export const FOOTER_INDEX = 0xffffffff;
 
+export class AttachmentSizeLimitError extends Error {
+	constructor(message = 'attachment exceeds maximum allowed size') {
+		super(message);
+		this.name = 'AttachmentSizeLimitError';
+	}
+}
+
+let cachedAttachmentKey: Buffer | null = null;
+
 function attachmentKey(): Buffer {
-	return scryptSync(aesKey(), 'roamarr.attachments.v1', 32);
+	if (!cachedAttachmentKey) {
+		cachedAttachmentKey = scryptSync(aesKey(), 'roamarr.attachments.v1', 32);
+	}
+	return cachedAttachmentKey;
 }
 
 function deriveChunkIV(baseIV: Buffer, index: number): Buffer {
@@ -58,17 +70,30 @@ function deriveFooterIV(baseIV: Buffer): Buffer {
 
 async function* chunkStream(input: ReadableStream<Uint8Array>, chunkSize: number) {
 	const reader = input.getReader();
-	let buffer = Buffer.alloc(0);
+	const chunks: Buffer[] = [];
+	let buffered = 0;
 	try {
 		while (true) {
 			const { done, value } = await reader.read();
-			if (value) {
-				buffer = Buffer.concat([buffer, Buffer.from(value)]);
+			if (value && value.length > 0) {
+				chunks.push(Buffer.from(value));
+				buffered += value.length;
 			}
-			while (buffer.length >= chunkSize || (done && buffer.length > 0)) {
-				const take = Math.min(chunkSize, buffer.length);
-				yield buffer.subarray(0, take);
-				buffer = buffer.subarray(take);
+			while (buffered >= chunkSize || (done && buffered > 0)) {
+				const take = Math.min(chunkSize, buffered);
+				if (chunks.length === 1 && chunks[0].length >= take) {
+					const chunk = chunks[0];
+					yield chunk.subarray(0, take);
+					chunks[0] = chunk.subarray(take);
+					buffered -= take;
+				} else {
+					const merged = Buffer.concat(chunks);
+					chunks.length = 0;
+					yield merged.subarray(0, take);
+					const rest = merged.subarray(take);
+					if (rest.length > 0) chunks.push(rest);
+					buffered = rest.length;
+				}
 			}
 			if (done) break;
 		}
@@ -138,7 +163,7 @@ export async function encryptChunkedFile(
 		for await (const plainChunk of chunkStream(input, CHUNK_SIZE)) {
 			plaintextBytes += plainChunk.length;
 			if (plaintextBytes > maxBytes) {
-				throw new Error('attachment exceeds maximum allowed size');
+				throw new AttachmentSizeLimitError();
 			}
 			const iv = deriveChunkIV(baseIV, index);
 			await writeChunk(output, key, iv, index, plainChunk);
@@ -248,7 +273,7 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 	const nodeReadable = Readable.from(decryptChunks(), { objectMode: false });
 	nodeReadable.on('error', () => source.destroy());
 	nodeReadable.on('close', () => source.destroy());
-	return Readable.toWeb(nodeReadable) as ReadableStream<Uint8Array>;
+	return Readable.toWeb(nodeReadable) as unknown as ReadableStream<Uint8Array>;
 }
 
 export function readExactly(stream: ReturnType<typeof createReadStream>, n: number): Promise<Buffer> {

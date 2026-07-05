@@ -3,7 +3,8 @@ import { getAttachmentsPath } from '../paths';
 import {
 	saveEncryptedAttachment,
 	readEncryptedAttachmentStream,
-	deleteEncryptedAttachment
+	deleteEncryptedAttachment,
+	AttachmentSizeLimitError
 } from './attachmentStorage';
 import * as repo from './attachmentRepo';
 import { logAudit } from '../audit';
@@ -30,13 +31,9 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	const baseDir = getAttachmentsPath();
 	let saveResult: Awaited<ReturnType<typeof saveEncryptedAttachment>>;
 	try {
-		saveResult = await saveEncryptedAttachment(
-			file.stream() as ReadableStream<Uint8Array>,
-			baseDir,
-			{ maxBytes: MAX_SIZE }
-		);
+		saveResult = await saveEncryptedAttachment(file.stream(), baseDir, { maxBytes: MAX_SIZE });
 	} catch (e) {
-		if ((e as Error).message.includes('maximum allowed size')) {
+		if (e instanceof AttachmentSizeLimitError) {
 			throw error(400, 'File must be 10 MB or smaller');
 		}
 		throw e;
@@ -54,7 +51,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 			context
 		});
 	} catch (e) {
-		deleteEncryptedAttachment(storageKey, baseDir);
+		await deleteEncryptedAttachment(storageKey, baseDir);
 		throw e;
 	}
 
@@ -83,8 +80,8 @@ export async function deleteAttachment(attachmentId: number): Promise<repo.Attac
 	if (!row) throw error(404, 'Attachment not found');
 
 	const baseDir = getAttachmentsPath();
+	await deleteEncryptedAttachment(row.storageKey, baseDir);
 	repo.deleteAttachment(attachmentId);
-	deleteEncryptedAttachment(row.storageKey, baseDir);
 
 	logAudit(row.ownerId, 'delete', 'attachment', attachmentId, {
 		filename: row.filename

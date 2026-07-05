@@ -59,7 +59,15 @@ describe('attachmentStorage', () => {
 		const { storageKey } = await saveEncryptedAttachment(streamFromString('x'), dir);
 		const p = attachmentPath(storageKey, dir);
 		expect(existsSync(p)).toBe(true);
-		deleteEncryptedAttachment(storageKey, dir);
+		await deleteEncryptedAttachment(storageKey, dir);
+		expect(existsSync(p)).toBe(false);
+	});
+
+	test('deleteEncryptedAttachment is idempotent when the file does not exist', async () => {
+		const storageKey = '00000000-0000-0000-0000-000000000000';
+		const p = attachmentPath(storageKey, dir);
+		expect(existsSync(p)).toBe(false);
+		await expect(deleteEncryptedAttachment(storageKey, dir)).resolves.toBeUndefined();
 		expect(existsSync(p)).toBe(false);
 	});
 

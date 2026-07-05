@@ -11,6 +11,10 @@ function key(): Buffer {
 	return cached;
 }
 
+export function aesKey(): Buffer {
+	return key();
+}
+
 export function encrypt(plain: string): string {
 	const nonce = randomBytes(12);
 	const c = createCipheriv('aes-256-gcm', key(), nonce);

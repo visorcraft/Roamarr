@@ -1,5 +1,13 @@
-import { test, expect } from 'vitest';
+import { describe, test, it, expect } from 'vitest';
 import { encrypt, decrypt } from './crypto';
+
+describe('crypto key', () => {
+	it('returns a 32-byte buffer for aesKey', async () => {
+		const { aesKey } = await import('./crypto');
+		expect(aesKey()).toBeInstanceOf(Buffer);
+		expect(aesKey().length).toBe(32);
+	});
+});
 
 test('round-trips', () => {
 	expect(decrypt(encrypt('passport-42'))).toBe('passport-42');

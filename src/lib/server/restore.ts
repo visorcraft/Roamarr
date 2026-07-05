@@ -12,6 +12,9 @@ import { dirname, join, resolve, basename } from 'node:path';
 import mongreldb from '@visorcraft/mongreldb';
 import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
 import { getDatabasePath } from './db/paths';
+import { getAttachmentsPath } from './paths';
+
+export { getAttachmentsPath };
 
 const NativeDatabaseClass = (mongreldb as unknown as { Database: typeof NativeDatabase }).Database;
 
@@ -19,10 +22,6 @@ export type RestoreMarker = {
 	databasePath: string;
 	attachmentsPath?: string;
 };
-
-export function getAttachmentsPath(dbPath: string = getDatabasePath()): string {
-	return process.env.ATTACHMENTS_PATH ?? join(dbPath, 'attachments');
-}
 
 export function getRestoreMarkerPath(dbPath: string = getDatabasePath()): string {
 	return join(resolve(dirname(dbPath)), 'restore-pending.json');

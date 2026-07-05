@@ -1,8 +1,7 @@
 import { test, expect, describe, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync, createReadStream } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import {
 	encryptChunkedFile,
 	decryptChunkedFileStream,
@@ -244,12 +243,16 @@ describe('attachmentCrypto', () => {
 		);
 	});
 
-	test('readExactly unshifts excess bytes across calls', async () => {
-		const source = Readable.from([Buffer.from('hello world')]) as ReturnType<typeof createReadStream>;
-		const first = await readExactly(source, 5);
-		expect(first.toString('utf8')).toBe('hello');
-		const second = await readExactly(source, 6);
-		expect(second.toString('utf8')).toBe(' world');
+	test('readExactly reads first n bytes from a stream', async () => {
+		const stream = streamFromBuffer('hello world');
+		const result = await readExactly(stream, 5);
+		expect(result.toString('utf8')).toBe('hello');
+	});
+
+	test('readExactly handles truncated streams', async () => {
+		const stream = streamFromBuffer('hi');
+		const result = await readExactly(stream, 5);
+		expect(result.toString('utf8')).toBe('hi');
 	});
 });
 

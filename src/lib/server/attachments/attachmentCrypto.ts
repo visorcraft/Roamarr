@@ -1,7 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'node:crypto';
-import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
+import { createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
-import { Readable } from 'node:stream';
 import { aesKey } from '../crypto';
 
 /**
@@ -71,6 +70,33 @@ function deriveFooterIV(baseIV: Buffer): Buffer {
 	const counter = iv.readUInt32BE(IV_LENGTH - 4);
 	iv.writeUInt32BE((counter + FOOTER_INDEX) >>> 0, IV_LENGTH - 4);
 	return iv;
+}
+
+class BufferedReader {
+	private reader: ReadableStreamDefaultReader<Uint8Array>;
+	private buffer = Buffer.alloc(0);
+	private done = false;
+
+	constructor(stream: ReadableStream<Uint8Array>) {
+		this.reader = stream.getReader();
+	}
+
+	async readExactly(n: number): Promise<Buffer> {
+		while (!this.done && this.buffer.length < n) {
+			const { done, value } = await this.reader.read();
+			this.done = done ?? false;
+			if (value && value.length > 0) {
+				this.buffer = Buffer.concat([this.buffer, Buffer.from(value)]);
+			}
+		}
+		const result = this.buffer.subarray(0, n);
+		this.buffer = this.buffer.subarray(n);
+		return result;
+	}
+
+	release() {
+		this.reader.releaseLock();
+	}
 }
 
 async function* chunkStream(input: ReadableStream<Uint8Array>, chunkSize: number) {
@@ -205,122 +231,119 @@ export async function encryptChunkedFile(
 }
 
 export async function decryptChunkedFileStream(cipherPath: string): Promise<ReadableStream<Uint8Array>> {
-	const source = createReadStream(cipherPath);
+	const handle = await fs.open(cipherPath, 'r');
+	const source = handle.readableWebStream() as ReadableStream<Uint8Array>;
+	const buffered = new BufferedReader(source);
 
-	async function* decryptChunks() {
-		const key = await attachmentKey();
-		const header = await readExactly(source, HEADER_LENGTH);
-		if (header.length < HEADER_LENGTH) {
-			throw new Error('attachment ciphertext header truncated');
-		}
-		if (header[0] !== VERSION) {
-			throw new Error(`unsupported attachment encryption version: ${header[0]}`);
-		}
-		const chunkSize = header.readUInt32BE(1);
-		const baseIV = header.subarray(1 + LEN_LENGTH, HEADER_LENGTH);
+	async function* decryptChunks(): AsyncGenerator<Uint8Array, void, unknown> {
+		try {
+			const key = await attachmentKey();
+			const header = await buffered.readExactly(HEADER_LENGTH);
+			if (header.length < HEADER_LENGTH) {
+				throw new Error('attachment ciphertext header truncated');
+			}
+			if (header[0] !== VERSION) {
+				throw new Error(`unsupported attachment encryption version: ${header[0]}`);
+			}
+			const chunkSize = header.readUInt32BE(1);
+			const baseIV = header.subarray(1 + LEN_LENGTH, HEADER_LENGTH);
 
-		let dataChunkCount = 0;
-		while (true) {
-			const idxBuf = await readExactly(source, INDEX_LENGTH);
-			if (idxBuf.length === 0) {
-				throw new Error('attachment footer missing');
-			}
-			if (idxBuf.length < INDEX_LENGTH) {
-				throw new Error('attachment chunk index truncated');
-			}
+			let dataChunkCount = 0;
+			while (true) {
+				const idxBuf = await buffered.readExactly(INDEX_LENGTH);
+				if (idxBuf.length === 0) {
+					throw new Error('attachment footer missing');
+				}
+				if (idxBuf.length < INDEX_LENGTH) {
+					throw new Error('attachment chunk index truncated');
+				}
 
-			const lenBuf = await readExactly(source, LEN_LENGTH);
-			if (lenBuf.length < LEN_LENGTH) {
-				throw new Error('attachment chunk length truncated');
-			}
-			const chunkLen = lenBuf.readUInt32BE(0);
-			if (chunkLen > chunkSize) {
-				throw new Error(`attachment chunk length exceeds stored maximum: ${chunkLen}`);
-			}
+				const lenBuf = await buffered.readExactly(LEN_LENGTH);
+				if (lenBuf.length < LEN_LENGTH) {
+					throw new Error('attachment chunk length truncated');
+				}
+				const chunkLen = lenBuf.readUInt32BE(0);
+				if (chunkLen > chunkSize) {
+					throw new Error(`attachment chunk length exceeds stored maximum: ${chunkLen}`);
+				}
 
-			const cipherChunk = await readExactly(source, chunkLen);
-			if (cipherChunk.length < chunkLen) {
-				throw new Error('attachment chunk ciphertext truncated');
-			}
+				const cipherChunk = await buffered.readExactly(chunkLen);
+				if (cipherChunk.length < chunkLen) {
+					throw new Error('attachment chunk ciphertext truncated');
+				}
 
-			const tag = await readExactly(source, TAG_LENGTH);
-			if (tag.length < TAG_LENGTH) {
-				throw new Error('attachment chunk tag truncated');
-			}
+				const tag = await buffered.readExactly(TAG_LENGTH);
+				if (tag.length < TAG_LENGTH) {
+					throw new Error('attachment chunk tag truncated');
+				}
 
-			const index = idxBuf.readUInt32BE(0);
-			if (index === FOOTER_INDEX) {
-				const iv = deriveFooterIV(baseIV);
+				const index = idxBuf.readUInt32BE(0);
+				if (index === FOOTER_INDEX) {
+					const iv = deriveFooterIV(baseIV);
+					const decipher = createDecipheriv('aes-256-gcm', key, iv);
+					decipher.setAuthTag(tag);
+					const footerPlain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
+					const expectedCount = Number(footerPlain.readBigUInt64BE(0));
+					if (expectedCount !== dataChunkCount) {
+						throw new Error(`attachment chunk count mismatch: expected ${expectedCount}, got ${dataChunkCount}`);
+					}
+					return;
+				}
+
+				if (index !== dataChunkCount) {
+					throw new Error(`attachment chunk out of order: expected ${dataChunkCount}, got ${index}`);
+				}
+
+				const iv = deriveChunkIV(baseIV, index);
 				const decipher = createDecipheriv('aes-256-gcm', key, iv);
 				decipher.setAuthTag(tag);
-				const footerPlain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
-				const expectedCount = Number(footerPlain.readBigUInt64BE(0));
-				if (expectedCount !== dataChunkCount) {
-					throw new Error(`attachment chunk count mismatch: expected ${expectedCount}, got ${dataChunkCount}`);
-				}
-				source.destroy();
-				return;
+				const plain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
+				yield new Uint8Array(plain);
+				dataChunkCount++;
 			}
-
-			if (index !== dataChunkCount) {
-				throw new Error(`attachment chunk out of order: expected ${dataChunkCount}, got ${index}`);
-			}
-
-			const iv = deriveChunkIV(baseIV, index);
-			const decipher = createDecipheriv('aes-256-gcm', key, iv);
-			decipher.setAuthTag(tag);
-			const plain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
-			yield plain;
-			dataChunkCount++;
+		} finally {
+			buffered.release();
+			await handle.close();
 		}
 	}
 
-	const nodeReadable = Readable.from(decryptChunks(), { objectMode: false });
-	nodeReadable.on('error', () => source.destroy());
-	nodeReadable.on('close', () => source.destroy());
-	return Readable.toWeb(nodeReadable) as unknown as ReadableStream<Uint8Array>;
+	const iterator = decryptChunks();
+
+	return new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			try {
+				const { done, value } = await iterator.next();
+				if (value && value.length > 0) {
+					controller.enqueue(value);
+				}
+				if (done) {
+					controller.close();
+				}
+			} catch (err) {
+				controller.error(err);
+			}
+		},
+		async cancel() {
+			await iterator.return?.();
+		}
+	});
 }
 
-export function readExactly(stream: ReturnType<typeof createReadStream>, n: number): Promise<Buffer> {
-	return new Promise((resolve, reject) => {
-		if (stream.readableEnded) {
-			return resolve(Buffer.alloc(0));
-		}
-
-		let buf = Buffer.alloc(0);
-
-		function onData(data: Buffer) {
-			buf = Buffer.concat([buf, data]);
-			if (buf.length >= n) {
-				cleanup();
-				const result = buf.subarray(0, n);
-				if (buf.length > n) {
-					stream.unshift(buf.subarray(n));
-				}
-				resolve(result);
+export async function readExactly(stream: ReadableStream<Uint8Array>, n: number): Promise<Buffer> {
+	const reader = stream.getReader();
+	try {
+		const chunks: Buffer[] = [];
+		let total = 0;
+		while (total < n) {
+			const { done, value } = await reader.read();
+			if (value && value.length > 0) {
+				chunks.push(Buffer.from(value));
+				total += value.length;
 			}
+			if (done) break;
 		}
-
-		function onEnd() {
-			cleanup();
-			resolve(buf);
-		}
-
-		function onError(err: Error) {
-			cleanup();
-			reject(err);
-		}
-
-		function cleanup() {
-			stream.pause();
-			stream.off('data', onData);
-			stream.off('end', onEnd);
-			stream.off('error', onError);
-		}
-
-		stream.on('data', onData);
-		stream.on('end', onEnd);
-		stream.on('error', onError);
-		stream.resume();
-	});
+		return Buffer.concat(chunks).subarray(0, n);
+	} finally {
+		reader.releaseLock();
+	}
 }

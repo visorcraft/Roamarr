@@ -123,18 +123,18 @@ export async function encryptChunkedFile(
 	await fs.mkdir(path.dirname(outputPath), { recursive: true });
 	const output = createWriteStream(tempPath);
 
-	await new Promise<void>((resolve, reject) => {
-		const sizeBuf = Buffer.alloc(LEN_LENGTH);
-		sizeBuf.writeUInt32BE(CHUNK_SIZE, 0);
-		output.write(Buffer.concat([Buffer.from([VERSION]), sizeBuf, baseIV]), (err) => {
-			if (err) reject(err);
-			else resolve();
-		});
-	});
-
 	let index = 0;
 	let plaintextBytes = 0;
 	try {
+		await new Promise<void>((resolve, reject) => {
+			const sizeBuf = Buffer.alloc(LEN_LENGTH);
+			sizeBuf.writeUInt32BE(CHUNK_SIZE, 0);
+			output.write(Buffer.concat([Buffer.from([VERSION]), sizeBuf, baseIV]), (err) => {
+				if (err) reject(err);
+				else resolve();
+			});
+		});
+
 		for await (const plainChunk of chunkStream(input, CHUNK_SIZE)) {
 			plaintextBytes += plainChunk.length;
 			if (plaintextBytes > maxBytes) {

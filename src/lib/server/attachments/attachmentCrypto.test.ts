@@ -108,6 +108,19 @@ describe('attachmentCrypto', () => {
 		).rejects.toThrow();
 	});
 
+	test('cleans up temp file on encryption failure', async () => {
+		const cipherPath = path.join(dir, 'cipher');
+		const badStream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new Uint8Array(Buffer.from('data')));
+				controller.error(new Error('stream error'));
+			}
+		});
+		await expect(encryptChunkedFile(badStream, cipherPath)).rejects.toThrow();
+		expect(existsSync(cipherPath)).toBe(false);
+		expect(existsSync(`${cipherPath}.tmp`)).toBe(false);
+	});
+
 	test('tampered chunk fails decryption', async () => {
 		const plain = 'secret';
 		const cipherPath = path.join(dir, 'cipher');

@@ -50,7 +50,13 @@ export async function addAttachment(
 		context: { kind: 'expense_receipt', expenseId, tripId: expense.tripId }
 	});
 
-	const link = expensesRepo.createExpenseAttachmentLink(expenseId, attachment.id);
+	let link: expensesRepo.ExpenseAttachmentLinkRow;
+	try {
+		link = expensesRepo.createExpenseAttachmentLink(expenseId, attachment.id);
+	} catch (e) {
+		await deleteGenericAttachment(attachment.id);
+		throw e;
+	}
 
 	logAudit(userId, 'create', 'trip_expense_attachment', link.id, {
 		expenseId,
@@ -83,8 +89,8 @@ export async function readAttachment(
 export async function deleteAttachment(userId: number, linkId: number): Promise<void> {
 	const { link } = requireAttachmentLinkForEdit(userId, linkId);
 	const attachmentId = link.attachmentId;
-	expensesRepo.deleteExpenseAttachmentLink(link.id);
 	const attachment = await deleteGenericAttachment(attachmentId);
+	expensesRepo.deleteExpenseAttachmentLink(link.id);
 	logAudit(userId, 'delete', 'trip_expense_attachment', linkId, {
 		expenseId: link.expenseId,
 		attachmentId,

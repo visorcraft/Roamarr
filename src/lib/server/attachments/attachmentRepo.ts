@@ -22,6 +22,22 @@ export interface AttachmentRecord {
 	createdAt: Date | string;
 }
 
+function parseContext(value: unknown): Record<string, unknown> {
+	if (value == null) return {};
+	if (typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+	if (typeof value === 'string') {
+		try {
+			const parsed = JSON.parse(value);
+			if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+				return parsed as Record<string, unknown>;
+			}
+		} catch {
+			/* fall through to empty default */
+		}
+	}
+	return {};
+}
+
 function mapRow(row: Record<string, unknown>): AttachmentRecord {
 	return {
 		id: Number(row.id),
@@ -30,7 +46,7 @@ function mapRow(row: Record<string, unknown>): AttachmentRecord {
 		filename: String(row.filename),
 		contentType: String(row.content_type),
 		sizeBytes: Number(row.size_bytes),
-		context: typeof row.context === 'string' ? JSON.parse(row.context) : (row.context ?? {}),
+		context: parseContext(row.context),
 		createdAt: row.created_at as Date | string
 	};
 }

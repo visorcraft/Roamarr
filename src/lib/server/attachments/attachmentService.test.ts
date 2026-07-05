@@ -55,8 +55,18 @@ describe('attachmentService', () => {
 		}
 	});
 
+	const MAGIC_PREFIX: Record<string, Uint8Array> = {
+		'application/pdf': new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+		'image/png': new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+		'image/jpeg': new Uint8Array([0xff, 0xd8, 0xff]),
+		'image/webp': new Uint8Array([0x52, 0x49, 0x46, 0x46])
+	};
+
 	function fileFromString(s: string, name: string, type: string) {
-		return new File([s], name, { type });
+		const prefix = MAGIC_PREFIX[type];
+		if (!prefix) return new File([s], name, { type });
+		const body = typeof s === 'string' ? Buffer.from(s) : s;
+		return new File([Buffer.concat([prefix, body])], name, { type });
 	}
 
 	test('createAttachment stores metadata and ciphertext', async () => {
@@ -64,7 +74,7 @@ describe('attachmentService', () => {
 		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
 		expect(att.filename).toBe('note.pdf');
 		expect(att.contentType).toBe('application/pdf');
-		expect(att.sizeBytes).toBe(5);
+		expect(att.sizeBytes).toBe(9); // 4-byte PDF magic + 'hello'
 		expect(att.storageKey).toBeTruthy();
 	});
 
@@ -73,7 +83,7 @@ describe('attachmentService', () => {
 		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
 		const { stream } = await readAttachmentStream(att.id);
 		const out = await streamToBuffer(stream);
-		expect(out.toString('utf8')).toBe('round trip');
+		expect(out.toString('utf8')).toBe('%PDFround trip');
 	});
 
 	test('deleteAttachment removes row and ciphertext', async () => {
@@ -87,6 +97,11 @@ describe('attachmentService', () => {
 
 	test('rejects disallowed content types', async () => {
 		const file = fileFromString('x', 'x.exe', 'application/x-msdownload');
+		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
+	test('rejects content type mismatched to file bytes', async () => {
+		const file = new File(['not a real pdf'], 'fake.pdf', { type: 'application/pdf' });
 		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
 	});
 
@@ -177,7 +192,7 @@ describe('attachmentService', () => {
 	});
 
 	test('cleans up temp ciphertext when encryption fails', async () => {
-		const file = new File(['x'], 'big.png', { type: 'image/png' });
+		const file = fileFromString('x', 'big.png', 'image/png');
 		const largeStream = new ReadableStream<Uint8Array<ArrayBuffer>>({
 			pull(controller) {
 				controller.enqueue(new Uint8Array(Buffer.alloc(11 * 1024 * 1024, 0x78)));

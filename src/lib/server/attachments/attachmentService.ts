@@ -12,6 +12,22 @@ import { logAudit } from '../audit';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 export const MAX_SIZE = 10 * 1024 * 1024;
 
+const MAGIC_BYTES: Record<string, Uint8Array[]> = {
+	'image/jpeg': [new Uint8Array([0xff, 0xd8, 0xff])],
+	'image/png': [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+	'image/webp': [new Uint8Array([0x52, 0x49, 0x46, 0x46])],
+	'application/pdf': [new Uint8Array([0x25, 0x50, 0x44, 0x46])]
+};
+
+async function validateMagicBytes(file: File): Promise<void> {
+	const expected = MAGIC_BYTES[file.type];
+	if (!expected) return; // No magic-byte check for unknown types (they're rejected earlier anyway).
+	const prefix = new Uint8Array(await file.slice(0, Math.max(...expected.map((m) => m.length))).arrayBuffer());
+	if (!expected.some((m) => prefix.length >= m.length && m.every((b, i) => b === prefix[i]))) {
+		throw error(400, 'File content does not match its extension/content type');
+	}
+}
+
 export interface CreateAttachmentInput {
 	ownerId: number;
 	file: File;
@@ -27,6 +43,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	if (file.size > MAX_SIZE) {
 		throw error(400, 'File must be 10 MB or smaller');
 	}
+	await validateMagicBytes(file);
 
 	const baseDir = getAttachmentsPath();
 	let saveResult: Awaited<ReturnType<typeof saveEncryptedAttachment>>;

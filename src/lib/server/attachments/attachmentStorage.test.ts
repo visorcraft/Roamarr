@@ -8,17 +8,7 @@ import {
 	deleteEncryptedAttachment,
 	attachmentPath
 } from './attachmentStorage';
-
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-	const chunks: Buffer[] = [];
-	const reader = stream.getReader();
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		chunks.push(Buffer.from(value));
-	}
-	return Buffer.concat(chunks);
-}
+import { streamToBuffer } from '../../../../tests/helpers';
 
 describe('attachmentStorage', () => {
 	let dir: string;

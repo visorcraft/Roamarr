@@ -14,17 +14,7 @@ import {
 	HEADER_LENGTH,
 	FOOTER_INDEX
 } from './attachmentCrypto';
-
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-	const chunks: Buffer[] = [];
-	const reader = stream.getReader();
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		chunks.push(Buffer.from(value));
-	}
-	return Buffer.concat(chunks);
-}
+import { streamToBuffer } from '../../../../tests/helpers';
 
 function streamFromBuffer(b: Buffer | string): ReadableStream<Uint8Array> {
 	const buf = Buffer.isBuffer(b) ? b : Buffer.from(b);
@@ -250,7 +240,7 @@ describe('attachmentCrypto', () => {
 		bytes.writeUInt32BE(CHUNK_SIZE + 1, offsets[0] + INDEX_LENGTH);
 		writeFileSync(cipherPath, bytes);
 		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
-			/chunk length exceeds maximum/
+			/chunk length exceeds stored maximum/
 		);
 	});
 

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'node:crypto';
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -42,13 +42,18 @@ export class AttachmentSizeLimitError extends Error {
 	}
 }
 
-let cachedAttachmentKey: Buffer | null = null;
+let cachedAttachmentKeyPromise: Promise<Buffer> | null = null;
 
-function attachmentKey(): Buffer {
-	if (!cachedAttachmentKey) {
-		cachedAttachmentKey = scryptSync(aesKey(), 'roamarr.attachments.v1', 32);
+function attachmentKey(): Promise<Buffer> {
+	if (!cachedAttachmentKeyPromise) {
+		cachedAttachmentKeyPromise = new Promise<Buffer>((resolve, reject) => {
+			scrypt(aesKey(), 'roamarr.attachments.v1', 32, (err, key) => {
+				if (err) reject(err);
+				else resolve(key);
+			});
+		});
 	}
-	return cachedAttachmentKey;
+	return cachedAttachmentKeyPromise;
 }
 
 function deriveChunkIV(baseIV: Buffer, index: number): Buffer {
@@ -142,7 +147,7 @@ export async function encryptChunkedFile(
 	options: EncryptOptions = {}
 ): Promise<EncryptResult> {
 	const { maxBytes = Number.MAX_SAFE_INTEGER } = options;
-	const key = attachmentKey();
+	const key = await attachmentKey();
 	const baseIV = randomBytes(IV_LENGTH);
 	const tempPath = `${outputPath}.tmp`;
 	await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -203,7 +208,7 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 	const source = createReadStream(cipherPath);
 
 	async function* decryptChunks() {
-		const key = attachmentKey();
+		const key = await attachmentKey();
 		const header = await readExactly(source, HEADER_LENGTH);
 		if (header.length < HEADER_LENGTH) {
 			throw new Error('attachment ciphertext header truncated');
@@ -229,8 +234,8 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 				throw new Error('attachment chunk length truncated');
 			}
 			const chunkLen = lenBuf.readUInt32BE(0);
-			if (chunkLen > CHUNK_SIZE) {
-				throw new Error(`attachment chunk length exceeds maximum: ${chunkLen}`);
+			if (chunkLen > chunkSize) {
+				throw new Error(`attachment chunk length exceeds stored maximum: ${chunkLen}`);
 			}
 
 			const cipherChunk = await readExactly(source, chunkLen);

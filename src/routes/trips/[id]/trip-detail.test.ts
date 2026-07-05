@@ -468,7 +468,8 @@ test('addAttachment action uploads a receipt and redirects', async () => {
 
 	const f = new FormData();
 	f.set('expenseId', String(e.id));
-	f.set('file', new File(['hello'], 'receipt.png', { type: 'image/png' }));
+	const pngMagic = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+	f.set('file', new File([Buffer.concat([pngMagic, Buffer.from('hello')])], 'receipt.png', { type: 'image/png' }));
 	await expect(actions.addAttachment(formEvent(u, t.id, f))).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`

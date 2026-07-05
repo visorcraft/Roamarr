@@ -29,8 +29,10 @@ describe('attachmentService', () => {
 	let baseDir: string;
 	let userId: number;
 	let emailCounter = 0;
+	let originalAttachmentsPath: string | undefined;
 
 	beforeEach(() => {
+		originalAttachmentsPath = process.env.ATTACHMENTS_PATH;
 		baseDir = mkdtempSync(path.join(tmpdir(), 'roamarr-svc-'));
 		process.env.ATTACHMENTS_PATH = baseDir;
 		const kit = getKit();
@@ -46,6 +48,11 @@ describe('attachmentService', () => {
 
 	afterEach(() => {
 		if (existsSync(baseDir)) rmSync(baseDir, { recursive: true, force: true });
+		if (originalAttachmentsPath === undefined) {
+			delete process.env.ATTACHMENTS_PATH;
+		} else {
+			process.env.ATTACHMENTS_PATH = originalAttachmentsPath;
+		}
 	});
 
 	function fileFromString(s: string, name: string, type: string) {

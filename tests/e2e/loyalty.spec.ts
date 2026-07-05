@@ -1,0 +1,17 @@
+import { test, expect } from './fixtures';
+
+test('add a loyalty program', async ({ page }) => {
+	await page.goto('/profile/loyalty', { waitUntil: 'networkidle' });
+	await expect(page.locator('h1')).toContainText('Loyalty programs');
+
+	const programName = `E2E Loyalty ${Date.now()}`;
+	const form = page.locator('section:has-text("Add program")');
+	await form.getByLabel('Program', { exact: true }).fill(programName);
+	await form.getByLabel('Membership #', { exact: true }).fill('123456789');
+	await form.getByLabel('Balance', { exact: true }).fill('50000');
+	await form.getByRole('button', { name: 'Add program', exact: true }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.getByText(programName)).toBeVisible();
+	await expect(page.getByText('50,000')).toBeVisible();
+});

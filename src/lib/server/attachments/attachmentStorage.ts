@@ -23,14 +23,42 @@ export interface SaveOptions {
 	maxBytes?: number;
 }
 
+export interface StageResult extends SaveResult {
+	stagingPath: string;
+	finalPath: string;
+}
+
+export async function stageEncryptedAttachment(
+	input: ReadableStream<Uint8Array>,
+	baseDir: string,
+	options: SaveOptions = {}
+): Promise<StageResult> {
+	const storageKey = randomUUID();
+	const finalPath = attachmentPath(storageKey, baseDir);
+	const stagingPath = `${finalPath}.staging`;
+	const { plaintextBytes, chunkCount } = await encryptChunkedFile(input, stagingPath, options);
+	return { storageKey, plaintextBytes, chunkCount, stagingPath, finalPath };
+}
+
+export async function commitAttachment(stagingPath: string, finalPath: string): Promise<void> {
+	await fs.rename(stagingPath, finalPath);
+}
+
+export async function abortAttachment(stagingPath: string): Promise<void> {
+	await fs.rm(stagingPath, { force: true });
+}
+
 export async function saveEncryptedAttachment(
 	input: ReadableStream<Uint8Array>,
 	baseDir: string,
 	options: SaveOptions = {}
 ): Promise<SaveResult> {
-	const storageKey = randomUUID();
-	const outPath = attachmentPath(storageKey, baseDir);
-	const { plaintextBytes, chunkCount } = await encryptChunkedFile(input, outPath, options);
+	const { storageKey, plaintextBytes, chunkCount, stagingPath, finalPath } = await stageEncryptedAttachment(
+		input,
+		baseDir,
+		options
+	);
+	await commitAttachment(stagingPath, finalPath);
 	return { storageKey, plaintextBytes, chunkCount };
 }
 
@@ -38,7 +66,19 @@ export async function readEncryptedAttachmentStream(
 	storageKey: string,
 	baseDir: string
 ): Promise<ReadableStream<Uint8Array>> {
-	return decryptChunkedFileStream(attachmentPath(storageKey, baseDir));
+	const finalPath = attachmentPath(storageKey, baseDir);
+	try {
+		return await decryptChunkedFileStream(finalPath);
+	} catch (err) {
+		const stagingPath = `${finalPath}.staging`;
+		try {
+			await fs.access(stagingPath);
+		} catch {
+			throw err;
+		}
+		await fs.rename(stagingPath, finalPath);
+		return decryptChunkedFileStream(finalPath);
+	}
 }
 
 // Silently succeeds if the file is already gone (idempotent deletion).

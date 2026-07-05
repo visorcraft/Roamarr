@@ -1,7 +1,9 @@
 import { error } from '@sveltejs/kit';
 import { getAttachmentsPath } from '../paths';
 import {
-	saveEncryptedAttachment,
+	stageEncryptedAttachment,
+	commitAttachment,
+	abortAttachment,
 	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment,
 	AttachmentSizeLimitError
@@ -53,29 +55,29 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	await validateMagicBytes(file);
 
 	const baseDir = getAttachmentsPath();
-	let saveResult: Awaited<ReturnType<typeof saveEncryptedAttachment>>;
+	let stageResult: Awaited<ReturnType<typeof stageEncryptedAttachment>>;
 	try {
-		saveResult = await saveEncryptedAttachment(file.stream(), baseDir, { maxBytes: MAX_SIZE });
+		stageResult = await stageEncryptedAttachment(file.stream(), baseDir, { maxBytes: MAX_SIZE });
 	} catch (e) {
 		if (e instanceof AttachmentSizeLimitError) {
 			throw error(400, 'File must be 10 MB or smaller');
 		}
 		throw e;
 	}
-	const { storageKey, plaintextBytes } = saveResult;
 
 	let row: repo.AttachmentRecord;
 	try {
 		row = repo.createAttachment({
 			ownerId,
-			storageKey,
+			storageKey: stageResult.storageKey,
 			filename: file.name,
 			contentType: file.type,
-			sizeBytes: plaintextBytes,
+			sizeBytes: stageResult.plaintextBytes,
 			context
 		});
+		await commitAttachment(stageResult.stagingPath, stageResult.finalPath);
 	} catch (e) {
-		await deleteEncryptedAttachment(storageKey, baseDir);
+		await abortAttachment(stageResult.stagingPath);
 		throw e;
 	}
 
@@ -104,8 +106,16 @@ export async function deleteAttachment(attachmentId: number): Promise<repo.Attac
 	if (!row) throw error(404, 'Attachment not found');
 
 	const baseDir = getAttachmentsPath();
-	await deleteEncryptedAttachment(row.storageKey, baseDir);
 	repo.deleteAttachment(attachmentId);
+	try {
+		await deleteEncryptedAttachment(row.storageKey, baseDir);
+	} catch (e) {
+		console.warn('Failed to delete attachment ciphertext; file is orphaned', {
+			attachmentId,
+			storageKey: row.storageKey,
+			error: e
+		});
+	}
 
 	logAudit(row.ownerId, 'delete', 'attachment', attachmentId, {
 		filename: row.filename

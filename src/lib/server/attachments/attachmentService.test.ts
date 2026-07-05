@@ -176,18 +176,18 @@ describe('attachmentService', () => {
 		return count;
 	}
 
-	test('cleans up ciphertext file when DB insert fails', async () => {
+	test('cleans up staged ciphertext file when DB insert fails', async () => {
 		vi.spyOn(repo, 'createAttachment').mockImplementationOnce(() => {
 			throw new Error('db boom');
 		});
-		const deleteSpy = vi.spyOn(attachmentStorage, 'deleteEncryptedAttachment');
+		const abortSpy = vi.spyOn(attachmentStorage, 'abortAttachment');
 
 		const file = fileFromString('staging', 'staging.pdf', 'application/pdf');
 		await expect(
 			createAttachment({ ownerId: userId, file, context: { kind: 'test' } })
 		).rejects.toThrow('db boom');
 
-		expect(deleteSpy).toHaveBeenCalledTimes(1);
+		expect(abortSpy).toHaveBeenCalledTimes(1);
 		expect(countFilesRecursively(baseDir)).toBe(0);
 	});
 

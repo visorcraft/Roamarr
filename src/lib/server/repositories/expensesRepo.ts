@@ -1,6 +1,14 @@
 import { eq as kitEq, and as kitAnd, asc, joinEq } from '@visorcraft/mongreldb-kit';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
-import { kit } from '$lib/server/db';
+import {
+	runSyncTxn,
+	toCells,
+	enforceForeignKeys,
+	stageUniqueGuards,
+	stagePkGuard,
+	planDelete
+} from '@visorcraft/mongreldb-kit';
+import { kit, getDb } from '$lib/server/db';
 import {
 	tripExpenses,
 	attachments,
@@ -228,23 +236,39 @@ export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
 	return rows.map(mapJoinedAttachmentRow);
 }
 
+function constraintKit() {
+	const db = getDb();
+	return { db: db.nativeDb, schema: db.schema };
+}
+
 export function createExpenseAttachmentLink(
 	expenseId: number,
 	attachmentId: number
 ): ExpenseAttachmentLinkRow {
-	const link = kit
-		.insertInto(tripExpenseAttachments)
-		.values({
-			expense_id: toBigInt(expenseId),
-			attachment_id: toBigInt(attachmentId)
-		} as Insert<typeof tripExpenseAttachments>)
-		.executeSync();
-	return {
-		id: num(link.id),
-		expenseId: num(link.expense_id),
-		attachmentId: num(link.attachment_id),
-		createdAt: link.created_at
+	const db = getDb();
+	const id = db.reserveAutoIncSync(tripExpenseAttachments.name)!;
+	const now = new Date().toISOString();
+	const row = {
+		id,
+		expense_id: toBigInt(expenseId),
+		attachment_id: toBigInt(attachmentId),
+		created_at: now
 	};
+	const ck = constraintKit();
+	let result: ExpenseAttachmentLinkRow;
+	runSyncTxn(db, (txn) => {
+		enforceForeignKeys(ck, txn, tripExpenseAttachments, row);
+		stageUniqueGuards(ck, txn, tripExpenseAttachments, row, id);
+		stagePkGuard(ck, txn, tripExpenseAttachments, id, true);
+		txn.put(tripExpenseAttachments.name, toCells(tripExpenseAttachments, row));
+		result = {
+			id: num(row.id),
+			expenseId: num(row.expense_id),
+			attachmentId: num(row.attachment_id),
+			createdAt: row.created_at
+		};
+	});
+	return result!;
 }
 
 export function getExpenseAttachmentLinkById(id: number): ExpenseAttachmentLinkRow | null {
@@ -263,11 +287,19 @@ export function getExpenseAttachmentLinkById(id: number): ExpenseAttachmentLinkR
 }
 
 export function deleteExpenseAttachmentLink(id: number): boolean {
-	const deleted = kit
-		.deleteFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
-		.executeSync();
-	return deleted > 0n;
+	const db = getDb();
+	const rowJs = db.nativeDb.table(tripExpenseAttachments.name).getByPkInt64(BigInt(id));
+	if (!rowJs) return false;
+	const row = db
+		.selectFrom(tripExpenseAttachments)
+		.where(kitEq(tripExpenseAttachments.id, BigInt(id)))
+		.executeSync()[0];
+	if (!row) return false;
+	const ck = constraintKit();
+	runSyncTxn(db, (txn) => {
+		planDelete(ck, txn, tripExpenseAttachments, BigInt(id), { row, rowId: rowJs.rowId });
+	});
+	return true;
 }
 
 // Budget categories

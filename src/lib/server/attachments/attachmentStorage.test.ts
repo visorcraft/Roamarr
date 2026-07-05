@@ -24,7 +24,6 @@ describe('attachmentStorage', () => {
 	let dir: string;
 	beforeEach(() => {
 		dir = mkdtempSync(path.join(tmpdir(), 'roamarr-storage-'));
-		process.env.ROAMARR_SECRET = 'ACpm0VlkwltJpcNWtxlilgjX+ZbW2nTV7QqYbZK0Fig=';
 	});
 	afterEach(() => {
 		if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
@@ -62,5 +61,10 @@ describe('attachmentStorage', () => {
 		expect(existsSync(p)).toBe(true);
 		deleteEncryptedAttachment(storageKey, dir);
 		expect(existsSync(p)).toBe(false);
+	});
+
+	test('attachmentPath rejects invalid storage keys', () => {
+		expect(() => attachmentPath('../../../etc/passwd', dir)).toThrow('invalid attachment storage key');
+		expect(() => attachmentPath('not-a-uuid', dir)).toThrow('invalid attachment storage key');
 	});
 });

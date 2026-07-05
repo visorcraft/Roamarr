@@ -32,21 +32,21 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	}
 
 	const baseDir = getAttachmentsPath();
-	const stagingKey = randomUUID();
-	const stagingPath = attachmentPath(stagingKey, baseDir);
-	const finalKey = randomUUID();
+	const storageKey = randomUUID();
+	const finalPath = attachmentPath(storageKey, baseDir);
+	const tempPath = `${finalPath}.tmp`;
 
 	let plaintextBytes = 0;
 	try {
 		const result = await encryptChunkedFile(
 			file.stream() as ReadableStream<Uint8Array>,
-			stagingPath,
+			tempPath,
 			{ maxBytes: MAX_SIZE }
 		);
 		plaintextBytes = result.plaintextBytes;
 	} catch (e) {
 		try {
-			await fs.unlink(stagingPath);
+			await fs.unlink(tempPath);
 		} catch {
 			// ignore cleanup failure
 		}
@@ -56,30 +56,22 @@ export async function createAttachment(input: CreateAttachmentInput) {
 		throw e;
 	}
 
-	let row: repo.AttachmentRecord | undefined;
+	await fs.mkdir(path.dirname(finalPath), { recursive: true });
+	await fs.rename(tempPath, finalPath);
+
+	let row: repo.AttachmentRecord;
 	try {
 		row = repo.createAttachment({
 			ownerId,
-			storageKey: finalKey,
+			storageKey,
 			filename: file.name,
 			contentType: file.type,
 			sizeBytes: plaintextBytes,
 			context
 		});
-
-		const finalPath = attachmentPath(finalKey, baseDir);
-		await fs.mkdir(path.dirname(finalPath), { recursive: true });
-		await fs.rename(stagingPath, finalPath);
 	} catch (e) {
-		if (row) {
-			try {
-				repo.deleteAttachment(row.id);
-			} catch {
-				// best-effort DB cleanup
-			}
-		}
 		try {
-			await fs.unlink(stagingPath);
+			await fs.unlink(finalPath);
 		} catch {
 			// ignore cleanup failure
 		}

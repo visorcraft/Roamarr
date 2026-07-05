@@ -165,7 +165,7 @@ describe('attachmentService', () => {
 		return count;
 	}
 
-	test('cleans up staging ciphertext when DB insert fails', async () => {
+	test('cleans up ciphertext file when DB insert fails', async () => {
 		vi.spyOn(repo, 'createAttachment').mockImplementationOnce(() => {
 			throw new Error('db boom');
 		});

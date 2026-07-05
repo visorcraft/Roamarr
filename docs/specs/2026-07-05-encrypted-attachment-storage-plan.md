@@ -51,18 +51,23 @@ Each ciphertext file is a chunked byte stream (version 2):
 [ chunk1 ciphertext ]
 [ chunk1 tag ]
 …
+[ footerIndex: 4 bytes = 0xFFFFFFFF ]
+[ footerLen: 4 bytes = 8 ]
+[ footerCiphertext: 8 bytes big-endian uint64 = totalChunkCount ]
+[ footerTag: 16 bytes ]
 ```
 
 - `version` (`0x02`) lets us rotate algorithms later without guessing.
 - `chunkSize` is the maximum plaintext bytes per chunk (default 64 KB). The final chunk may be smaller.
 - `baseIV` is generated per file with `randomBytes(12)`.
-- Chunk `n` uses a derived IV: the last 4 bytes of `baseIV` are incremented by `n` (big-endian), with carry wrapping within those 4 bytes. This guarantees unique IVs per chunk.
+- Chunk `n` uses a derived IV: the last 4 bytes of `baseIV` are incremented by `n` (big-endian), with carry wrapping within those 4 bytes. This guarantees unique IVs per chunk. The format supports up to `2^32` chunks; a chunk index at or above `2^32` is an error.
 - Each chunk carries its own 16-byte AES-256-GCM auth tag. A chunk is verified before any of its plaintext is released.
+- A **footer chunk** with index `0xFFFFFFFF` is written after the last data chunk. It authenticates the total chunk count. This detects truncation at a chunk boundary: if the last data chunk is removed, the footer is missing and decryption fails. The footer produces no plaintext.
 - Files keep the existing sharded UUID path and have **no extension**.
 
 ### Key material
 
-Reuse the existing key derivation in `src/lib/server/crypto.ts` (`ROAMARR_SECRET` → 32-byte AES key). Add a binary variant that returns a `Buffer` key rather than re-deriving independently.
+Reuse the existing key derivation in `src/lib/server/crypto.ts` (`ROAMARR_SECRET` → 32-byte AES key). Add a binary variant that returns a `Buffer` key rather than re-deriving independently. Optionally derive an attachment-specific subkey with `scryptSync(key(), 'roamarr.attachments.v1', 32)` for domain separation.
 
 ### Encryption flow (streaming)
 
@@ -73,25 +78,30 @@ Reuse the existing key derivation in `src/lib/server/crypto.ts` (`ROAMARR_SECRET
    - Derive the chunk IV from `baseIV` + chunk index.
    - Encrypt with `createCipheriv('aes-256-gcm', key, chunkIV)`.
    - Write chunk index, ciphertext length, ciphertext, and auth tag.
-5. `fsync` the temp ciphertext file and atomically rename it to the final sharded path.
-6. Clean up the temp file on any failure.
-7. Return the `storageKey` and plaintext `sizeBytes` to the caller.
+   - Count actual plaintext bytes and chunks; fail immediately if the running total exceeds the configured maximum.
+5. Write the footer chunk (index `0xFFFFFFFF`, total chunk count).
+6. `fsync` the temp ciphertext file and atomically rename it to the final sharded path.
+7. Clean up the temp file on any failure.
+8. Return the `storageKey`, actual `plaintextBytes`, and `chunkCount` to the caller.
 
 ### Decryption flow (streaming without plaintext temp files)
 
-AES-256-GCM cannot verify a flat stream until the entire ciphertext is processed. To avoid releasing unauthenticated plaintext and to avoid writing a plaintext temp file, we use chunked encryption: each chunk is verified independently before its plaintext is released.
+AES-256-GCM cannot verify a flat stream until the entire ciphertext is processed. To avoid releasing unauthenticated plaintext and to avoid writing a plaintext temp file, we use chunked encryption: each chunk is verified independently before its plaintext is released. A footer authenticates the total chunk count so truncation at a chunk boundary is detected.
 
 1. Open a read stream from the ciphertext file.
 2. Read and validate the header (version, chunkSize, baseIV).
-3. Return a Node.js `Readable` whose `_read` implementation pulls one chunk at a time from the ciphertext stream:
+3. Return a Node.js `Readable` produced by `Readable.from(asyncGenerator)`, where the async generator consumes the ciphertext stream and yields verified plaintext chunks:
    - Read chunk index, ciphertext length, ciphertext, and tag.
+   - If index is `0xFFFFFFFF`, verify the footer tag and total chunk count, then end the generator.
    - Derive the chunk IV.
    - Decrypt and verify the tag with `createDecipheriv('aes-256-gcm', key, chunkIV)`.
-   - If verification succeeds, push plaintext into the readable.
-   - If verification fails, destroy the readable with an error.
-4. The caller wraps this as a web `ReadableStream` and sends it to the client.
+   - If verification succeeds, yield plaintext.
+   - If verification fails or the footer is missing/invalid, throw.
+4. The caller converts this to a web `ReadableStream` and sends it to the client.
 
 No plaintext file is ever written to disk during download.
+
+**Truncation behavior:** Tampering within a chunk fails immediately when that chunk is verified. Truncation at a chunk boundary is detected only when the footer is reached (or EOF before footer). Because plaintext is streamed chunk-by-chunk, the client may receive some bytes before a late truncation error is raised. This is the inherent trade-off between bounded-memory streaming and whole-file pre-authentication.
 
 ### Memory and disk bounds
 
@@ -151,10 +161,22 @@ describe('getAttachmentsPath', () => {
 		process.env.ATTACHMENTS_PATH = original;
 	});
 
-	test('falls back to directory beside database', async () => {
+	test('falls back beside a database file path', async () => {
 		delete process.env.ATTACHMENTS_PATH;
+		const original = process.env.DATABASE_PATH;
+		process.env.DATABASE_PATH = '/data/roamarr-db/db.kitdb';
 		const { getAttachmentsPath } = await import('./paths');
-		expect(getAttachmentsPath()).toMatch(/attachments$/);
+		expect(getAttachmentsPath()).toBe('/data/roamarr-db/attachments');
+		process.env.DATABASE_PATH = original;
+	});
+
+	test('falls back inside a database directory path', async () => {
+		delete process.env.ATTACHMENTS_PATH;
+		const original = process.env.DATABASE_PATH;
+		process.env.DATABASE_PATH = '/data/roamarr-db';
+		const { getAttachmentsPath } = await import('./paths');
+		expect(getAttachmentsPath()).toBe('/data/roamarr-db/attachments');
+		process.env.DATABASE_PATH = original;
 	});
 });
 ```
@@ -162,7 +184,7 @@ describe('getAttachmentsPath', () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `rtk npx vitest run src/lib/server/paths.test.ts`
-Expected: FAIL — current `getAttachmentsPath` ignores `ATTACHMENTS_PATH`.
+Expected: FAIL — current `getAttachmentsPath` ignores `ATTACHMENTS_PATH` and does not handle directory paths.
 
 - [ ] **Step 3: Update `paths.ts`**
 
@@ -172,21 +194,34 @@ import { DEFAULT_KIT_DATABASE_PATH, getDatabasePath } from './db/paths';
 
 export { DEFAULT_KIT_DATABASE_PATH as DEFAULT_DATABASE_PATH, getDatabasePath };
 
+function isDatabaseFilePath(p: string): boolean {
+	return /\.(db|sqlite|kitdb)$/i.test(path.basename(p));
+}
+
 export function getAttachmentsPath() {
-	return process.env.ATTACHMENTS_PATH ?? path.join(path.dirname(getDatabasePath()), 'attachments');
+	if (process.env.ATTACHMENTS_PATH) {
+		return process.env.ATTACHMENTS_PATH;
+	}
+	const dbPath = getDatabasePath();
+	const baseDir = isDatabaseFilePath(dbPath) ? path.dirname(dbPath) : dbPath;
+	return path.join(baseDir, 'attachments');
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [ ] **Step 4: Align `restore.ts` with the same logic**
 
-Run: `rtk npx vitest run src/lib/server/paths.test.ts`
+In `src/lib/server/restore.ts`, replace the local `getAttachmentsPath` implementation with an import from `../paths` (or duplicate the same directory/file detection). Ensure restore tests still pass.
+
+- [ ] **Step 5: Run test to verify it passes**
+
+Run: `rtk npx vitest run src/lib/server/paths.test.ts src/lib/server/restore.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/lib/server/paths.ts src/lib/server/paths.test.ts
-git commit -m "fix: getAttachmentsPath respects ATTACHMENTS_PATH env var"
+git add src/lib/server/paths.ts src/lib/server/paths.test.ts src/lib/server/restore.ts
+git commit -m "fix: getAttachmentsPath respects ATTACHMENTS_PATH and database directory paths"
 ```
 
 ---
@@ -253,19 +288,49 @@ import { test, expect, describe, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
-import { encryptChunkedFile, decryptChunkedFileStream, CHUNK_SIZE } from './attachmentCrypto';
+import {
+	encryptChunkedFile,
+	decryptChunkedFileStream,
+	CHUNK_SIZE,
+	INDEX_LENGTH,
+	LEN_LENGTH,
+	TAG_LENGTH
+} from './attachmentCrypto';
 
-async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
 	const chunks: Buffer[] = [];
 	const reader = stream.getReader();
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;
-		chunks.push(Buffer.isBuffer(value) ? value : Buffer.from(value));
+		chunks.push(Buffer.from(value));
 	}
 	return Buffer.concat(chunks);
+}
+
+function streamFromBuffer(b: Buffer | string): ReadableStream<Uint8Array> {
+	const buf = Buffer.isBuffer(b) ? b : Buffer.from(b);
+	return new ReadableStream({
+		start(controller) {
+			controller.enqueue(new Uint8Array(buf));
+			controller.close();
+		}
+	});
+}
+
+function streamFromBufferChunks(b: Buffer, chunkSize: number): ReadableStream<Uint8Array> {
+	let offset = 0;
+	return new ReadableStream({
+		pull(controller) {
+			if (offset >= b.length) {
+				controller.close();
+				return;
+			}
+			const end = Math.min(b.length, offset + chunkSize);
+			controller.enqueue(new Uint8Array(b.subarray(offset, end)));
+			offset = end;
+		}
+	});
 }
 
 describe('attachmentCrypto', () => {
@@ -278,11 +343,6 @@ describe('attachmentCrypto', () => {
 		if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 	});
 
-	function streamFromBuffer(b: Buffer | string): ReadableStream {
-		const buf = Buffer.isBuffer(b) ? b : Buffer.from(b);
-		return Readable.from([buf]) as unknown as ReadableStream;
-	}
-
 	test('round-trips a small file', async () => {
 		const plain = 'hello encrypted world';
 		const cipherPath = path.join(dir, 'cipher');
@@ -294,7 +354,7 @@ describe('attachmentCrypto', () => {
 	test('round-trips a 1 MB file', async () => {
 		const plain = Buffer.alloc(1024 * 1024, 'a');
 		const cipherPath = path.join(dir, 'cipher');
-		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		await encryptChunkedFile(streamFromBufferChunks(plain, 8192), cipherPath);
 		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
 		expect(out.equals(plain)).toBe(true);
 	});
@@ -309,9 +369,25 @@ describe('attachmentCrypto', () => {
 	test('round-trips a file that spans multiple chunks', async () => {
 		const plain = Buffer.alloc(CHUNK_SIZE * 3 + 17, 'x');
 		const cipherPath = path.join(dir, 'cipher');
-		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		await encryptChunkedFile(streamFromBufferChunks(plain, CHUNK_SIZE), cipherPath);
 		const out = await streamToBuffer(await decryptChunkedFileStream(cipherPath));
 		expect(out.equals(plain)).toBe(true);
+	});
+
+	test('reports actual plaintext bytes and chunk count', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE + 100, 'y');
+		const cipherPath = path.join(dir, 'cipher');
+		const result = await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		expect(result.plaintextBytes).toBe(plain.length);
+		expect(result.chunkCount).toBe(2);
+	});
+
+	test('enforces maxBytes during encryption', async () => {
+		const plain = Buffer.alloc(100);
+		const cipherPath = path.join(dir, 'cipher');
+		await expect(
+			encryptChunkedFile(streamFromBuffer(plain), cipherPath, { maxBytes: 50 })
+		).rejects.toThrow();
 	});
 
 	test('tampered chunk fails decryption', async () => {
@@ -325,12 +401,25 @@ describe('attachmentCrypto', () => {
 		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
 	});
 
-	test('truncated ciphertext fails decryption', async () => {
+	test('truncated final tag fails decryption', async () => {
 		const plain = 'secret';
 		const cipherPath = path.join(dir, 'cipher');
 		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
 		const bytes = readFileSync(cipherPath);
 		writeFileSync(cipherPath, bytes.subarray(0, bytes.length - 4));
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
+	});
+
+	test('truncation at a chunk boundary fails decryption', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE * 2, 'z');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = readFileSync(cipherPath);
+		// Drop the last complete data chunk and the footer.
+		const footerStart = findFooterStart(bytes);
+		expect(footerStart).toBeGreaterThan(0);
+		const chunkStart = findPreviousChunkStart(bytes, footerStart);
+		writeFileSync(cipherPath, bytes.subarray(0, chunkStart));
 		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow();
 	});
 
@@ -342,6 +431,27 @@ describe('attachmentCrypto', () => {
 		expect(bytes.length).toBeGreaterThan(1 + 4 + 12 + 4 + 4 + 16 + 1);
 	});
 });
+
+function findFooterStart(bytes: Buffer): number {
+	// Footer index sentinel is 0xFFFFFFFF. Search backward for the length pattern.
+	for (let i = bytes.length - TAG_LENGTH - LEN_LENGTH; i >= HEADER_LENGTH + INDEX_LENGTH + LEN_LENGTH; i--) {
+		if (bytes.readUInt32BE(i - INDEX_LENGTH) === 0xffffffff && bytes.readUInt32BE(i) === 8) {
+			return i - INDEX_LENGTH;
+		}
+	}
+	return -1;
+}
+
+function findPreviousChunkStart(bytes: Buffer, footerStart: number): number {
+	// Walk back one chunk record from the footer start.
+	let pos = footerStart;
+	// Skip footer index, len, ciphertext (8), tag.
+	pos -= TAG_LENGTH + 8 + LEN_LENGTH + INDEX_LENGTH;
+	if (pos < HEADER_LENGTH) return HEADER_LENGTH;
+	const len = bytes.readUInt32BE(pos);
+	pos -= len + LEN_LENGTH + INDEX_LENGTH;
+	return Math.max(HEADER_LENGTH, pos);
+}
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -354,11 +464,10 @@ Expected: FAIL — functions not defined.
 Create `src/lib/server/attachments/attachmentCrypto.ts`:
 
 ```ts
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
 import { createReadStream, createWriteStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
 import { aesKey } from '../crypto';
 
 export const VERSION = 2;
@@ -367,9 +476,17 @@ export const IV_LENGTH = 12;
 export const TAG_LENGTH = 16;
 export const INDEX_LENGTH = 4;
 export const LEN_LENGTH = 4;
-export const HEADER_LENGTH = 1 + LEN_LENGTH + IV_LENGTH; // version + chunkSize + baseIV
+export const HEADER_LENGTH = 1 + LEN_LENGTH + IV_LENGTH;
+export const FOOTER_INDEX = 0xffffffff;
+
+function attachmentKey(): Buffer {
+	return scryptSync(aesKey(), 'roamarr.attachments.v1', 32);
+}
 
 function deriveChunkIV(baseIV: Buffer, index: number): Buffer {
+	if (index >= 2 ** 32) {
+		throw new Error('attachment chunk index overflow');
+	}
 	const iv = Buffer.from(baseIV);
 	const counter = iv.readUInt32BE(IV_LENGTH - 4);
 	iv.writeUInt32BE((counter + index) >>> 0, IV_LENGTH - 4);
@@ -397,38 +514,76 @@ async function* chunkStream(input: ReadableStream<Uint8Array>, chunkSize: number
 	}
 }
 
-export async function encryptChunkedFile(input: ReadableStream, outputPath: string): Promise<void> {
+async function writeChunk(
+	output: ReturnType<typeof createWriteStream>,
+	baseIV: Buffer,
+	index: number,
+	plainChunk: Buffer
+): Promise<void> {
+	const iv = deriveChunkIV(baseIV, index);
+	const cipher = createCipheriv('aes-256-gcm', attachmentKey(), iv);
+	const cipherChunk = Buffer.concat([cipher.update(plainChunk), cipher.final()]);
+	const tag = cipher.getAuthTag();
+
+	const idxBuf = Buffer.alloc(INDEX_LENGTH);
+	idxBuf.writeUInt32BE(index, 0);
+
+	const lenBuf = Buffer.alloc(LEN_LENGTH);
+	lenBuf.writeUInt32BE(cipherChunk.length, 0);
+
+	await new Promise<void>((resolve, reject) => {
+		output.write(Buffer.concat([idxBuf, lenBuf, cipherChunk, tag]), (err) => {
+			if (err) reject(err);
+			else resolve();
+		});
+	});
+}
+
+export interface EncryptResult {
+	plaintextBytes: number;
+	chunkCount: number;
+}
+
+export interface EncryptOptions {
+	maxBytes?: number;
+}
+
+export async function encryptChunkedFile(
+	input: ReadableStream<Uint8Array>,
+	outputPath: string,
+	options: EncryptOptions = {}
+): Promise<EncryptResult> {
+	const { maxBytes = Number.MAX_SAFE_INTEGER } = options;
 	const baseIV = randomBytes(IV_LENGTH);
 	const tempPath = `${outputPath}.tmp`;
 	await fs.mkdir(path.dirname(outputPath), { recursive: true });
 	const output = createWriteStream(tempPath);
 
-	output.write(Buffer.from([VERSION]));
-	const sizeBuf = Buffer.alloc(LEN_LENGTH);
-	sizeBuf.writeUInt32BE(CHUNK_SIZE, 0);
-	output.write(sizeBuf);
-	output.write(baseIV);
+	await new Promise<void>((resolve, reject) => {
+		const sizeBuf = Buffer.alloc(LEN_LENGTH);
+		sizeBuf.writeUInt32BE(CHUNK_SIZE, 0);
+		output.write(Buffer.concat([Buffer.from([VERSION]), sizeBuf, baseIV]), (err) => {
+			if (err) reject(err);
+			else resolve();
+		});
+	});
 
+	let index = 0;
+	let plaintextBytes = 0;
 	try {
-		let index = 0;
-		for await (const plainChunk of chunkStream(input as ReadableStream<Uint8Array>, CHUNK_SIZE)) {
-			const iv = deriveChunkIV(baseIV, index);
-			const cipher = createCipheriv('aes-256-gcm', aesKey(), iv);
-			const cipherChunk = Buffer.concat([cipher.update(plainChunk), cipher.final()]);
-			const tag = cipher.getAuthTag();
-
-			const idxBuf = Buffer.alloc(INDEX_LENGTH);
-			idxBuf.writeUInt32BE(index, 0);
-			output.write(idxBuf);
-
-			const lenBuf = Buffer.alloc(LEN_LENGTH);
-			lenBuf.writeUInt32BE(cipherChunk.length, 0);
-			output.write(lenBuf);
-
-			output.write(cipherChunk);
-			output.write(tag);
+		for await (const plainChunk of chunkStream(input, CHUNK_SIZE)) {
+			plaintextBytes += plainChunk.length;
+			if (plaintextBytes > maxBytes) {
+				throw new Error('attachment exceeds maximum allowed size');
+			}
+			await writeChunk(output, baseIV, index, plainChunk);
 			index++;
 		}
+
+		// Footer authenticates total chunk count.
+		const footerPlain = Buffer.alloc(8);
+		footerPlain.writeBigUInt64BE(BigInt(index), 0);
+		await writeChunk(output, baseIV, FOOTER_INDEX, footerPlain);
 
 		await new Promise<void>((resolve, reject) => {
 			output.on('finish', resolve);
@@ -440,7 +595,10 @@ export async function encryptChunkedFile(input: ReadableStream, outputPath: stri
 		await handle.sync();
 		await handle.close();
 		await fs.rename(tempPath, outputPath);
+
+		return { plaintextBytes, chunkCount: index };
 	} catch (e) {
+		output.destroy();
 		try {
 			await fs.unlink(tempPath);
 		} catch {
@@ -450,55 +608,25 @@ export async function encryptChunkedFile(input: ReadableStream, outputPath: stri
 	}
 }
 
-export async function decryptChunkedFileStream(cipherPath: string): Promise<ReadableStream> {
+export async function decryptChunkedFileStream(cipherPath: string): Promise<ReadableStream<Uint8Array>> {
 	const source = createReadStream(cipherPath);
-	let headerRead = false;
-	let headerBuffer = Buffer.alloc(0);
-	let baseIV: Buffer | null = null;
-	let chunkSize = 0;
-	let nextIndex = 0;
-	let finished = false;
-	let error: Error | null = null;
 
-	const readable = new Readable({
-		read() {
-			if (finished) {
-				this.push(null);
-				return;
-			}
-			if (error) {
-				this.destroy(error);
-				return;
-			}
-			pullChunk();
+	async function* decryptChunks() {
+		const header = await readExactly(source, HEADER_LENGTH);
+		if (header.length < HEADER_LENGTH) {
+			throw new Error('attachment ciphertext header truncated');
 		}
-	});
+		if (header[0] !== VERSION) {
+			throw new Error(`unsupported attachment encryption version: ${header[0]}`);
+		}
+		const chunkSize = header.readUInt32BE(1);
+		const baseIV = header.subarray(1 + LEN_LENGTH, HEADER_LENGTH);
 
-	function fail(err: Error) {
-		error = err;
-		readable.destroy(err);
-	}
-
-	async function pullChunk() {
-		try {
-			if (!headerRead) {
-				headerBuffer = await readExactly(source, HEADER_LENGTH, headerBuffer);
-				if (headerBuffer.length < HEADER_LENGTH) {
-					throw new Error('attachment ciphertext header truncated');
-				}
-				if (headerBuffer[0] !== VERSION) {
-					throw new Error(`unsupported attachment encryption version: ${headerBuffer[0]}`);
-				}
-				chunkSize = headerBuffer.readUInt32BE(1);
-				baseIV = headerBuffer.subarray(1 + LEN_LENGTH, HEADER_LENGTH);
-				headerRead = true;
-			}
-
+		let dataChunkCount = 0;
+		while (true) {
 			const idxBuf = await readExactly(source, INDEX_LENGTH);
 			if (idxBuf.length === 0) {
-				finished = true;
-				readable.push(null);
-				return;
+				throw new Error('attachment footer missing');
 			}
 			if (idxBuf.length < INDEX_LENGTH) {
 				throw new Error('attachment chunk index truncated');
@@ -521,39 +649,39 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 			}
 
 			const index = idxBuf.readUInt32BE(0);
-			if (index !== nextIndex) {
-				throw new Error(`attachment chunk out of order: expected ${nextIndex}, got ${index}`);
+			if (index === FOOTER_INDEX) {
+				const iv = deriveChunkIV(baseIV, FOOTER_INDEX);
+				const decipher = createDecipheriv('aes-256-gcm', attachmentKey(), iv);
+				decipher.setAuthTag(tag);
+				const footerPlain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
+				const expectedCount = Number(footerPlain.readBigUInt64BE(0));
+				if (expectedCount !== dataChunkCount) {
+					throw new Error(`attachment chunk count mismatch: expected ${expectedCount}, got ${dataChunkCount}`);
+				}
+				return;
 			}
-			nextIndex++;
 
-			const iv = deriveChunkIV(baseIV!, index);
-			const decipher = createDecipheriv('aes-256-gcm', aesKey(), iv);
+			if (index !== dataChunkCount) {
+				throw new Error(`attachment chunk out of order: expected ${dataChunkCount}, got ${index}`);
+			}
+
+			const iv = deriveChunkIV(baseIV, index);
+			const decipher = createDecipheriv('aes-256-gcm', attachmentKey(), iv);
 			decipher.setAuthTag(tag);
 			const plain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
-			readable.push(plain);
-		} catch (err) {
-			finished = true;
-			fail(err as Error);
+			yield plain;
+			dataChunkCount++;
 		}
 	}
 
-	source.on('end', () => {
-		if (!headerRead) {
-			fail(new Error('attachment ciphertext header truncated'));
-		} else if (!finished) {
-			finished = true;
-			readable.push(null);
-		}
-	});
-
-	source.on('error', (err) => fail(err));
-
-	return Readable.toWeb(readable) as ReadableStream;
+	const nodeReadable = Readable.from(decryptChunks(), { objectMode: false });
+	nodeReadable.on('error', () => source.destroy());
+	return Readable.toWeb(nodeReadable) as ReadableStream<Uint8Array>;
 }
 
-function readExactly(stream: ReturnType<typeof createReadStream>, n: number, existing: Buffer = Buffer.alloc(0)): Promise<Buffer> {
+function readExactly(stream: ReturnType<typeof createReadStream>, n: number): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
-		let buf = existing;
+		let buf = Buffer.alloc(0);
 
 		function onData(data: Buffer) {
 			buf = Buffer.concat([buf, data]);
@@ -591,7 +719,7 @@ function readExactly(stream: ReturnType<typeof createReadStream>, n: number, exi
 }
 ```
 
-> **Note:** The `readExactly` helper must unshift excess bytes so chunk boundaries align. The implementing agent must verify that `decryptChunkedFileStream` correctly handles backpressure, errors, and stream cleanup.
+> **Note:** The `readExactly` helper unshifts excess bytes so chunk boundaries align. The async-generator approach avoids concurrent `_read` calls and backpressure issues. The implementing agent must verify stream cleanup when the client disconnects mid-download. The footer is treated as a normal chunk with a sentinel index so the same code paths authenticate it.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -630,7 +758,7 @@ import {
 	attachmentPath
 } from './attachmentStorage';
 
-async function streamToBuffer(stream: ReadableStream): Promise<Buffer> {
+async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
 	const chunks: Buffer[] = [];
 	const reader = stream.getReader();
 	while (true) {
@@ -651,31 +779,37 @@ describe('attachmentStorage', () => {
 		if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
 	});
 
-	function streamFromString(s: string) {
-		return Readable.from([Buffer.from(s)]) as unknown as ReadableStream;
+	function streamFromString(s: string): ReadableStream<Uint8Array> {
+		return new ReadableStream({
+			start(controller) {
+				controller.enqueue(new Uint8Array(Buffer.from(s)));
+				controller.close();
+			}
+		});
 	}
 
-	test('saveEncryptedAttachment returns a sharded uuid path', async () => {
-		const key = await saveEncryptedAttachment(streamFromString('hello'), dir);
-		expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-		const p = attachmentPath(key, dir);
+	test('saveEncryptedAttachment returns a sharded uuid path and byte count', async () => {
+		const result = await saveEncryptedAttachment(streamFromString('hello'), dir);
+		expect(result.storageKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+		expect(result.plaintextBytes).toBe(5);
+		const p = attachmentPath(result.storageKey, dir);
 		expect(existsSync(p)).toBe(true);
-		expect(p).toContain(path.join(key.slice(0, 2), key.slice(2, 4), key));
+		expect(p).toContain(path.join(result.storageKey.slice(0, 2), result.storageKey.slice(2, 4), result.storageKey));
 	});
 
 	test('readEncryptedAttachmentStream decrypts to a stream', async () => {
 		const plain = 'stored securely';
-		const key = await saveEncryptedAttachment(streamFromString(plain), dir);
-		const stream = await readEncryptedAttachmentStream(key, dir);
+		const { storageKey } = await saveEncryptedAttachment(streamFromString(plain), dir);
+		const stream = await readEncryptedAttachmentStream(storageKey, dir);
 		const out = await streamToBuffer(stream);
 		expect(out.toString('utf8')).toBe(plain);
 	});
 
 	test('deleteEncryptedAttachment removes the ciphertext file', async () => {
-		const key = await saveEncryptedAttachment(streamFromString('x'), dir);
-		const p = attachmentPath(key, dir);
+		const { storageKey } = await saveEncryptedAttachment(streamFromString('x'), dir);
+		const p = attachmentPath(storageKey, dir);
 		expect(existsSync(p)).toBe(true);
-		deleteEncryptedAttachment(key, dir);
+		deleteEncryptedAttachment(storageKey, dir);
 		expect(existsSync(p)).toBe(false);
 	});
 });
@@ -695,25 +829,30 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { existsSync, rmSync } from 'node:fs';
 import { encryptChunkedFile, decryptChunkedFileStream } from './attachmentCrypto';
+import type { EncryptResult } from './attachmentCrypto';
 
 export function attachmentPath(storageKey: string, baseDir: string): string {
 	return path.join(baseDir, storageKey.slice(0, 2), storageKey.slice(2, 4), storageKey);
 }
 
+export interface SaveResult extends EncryptResult {
+	storageKey: string;
+}
+
 export async function saveEncryptedAttachment(
-	input: ReadableStream,
+	input: ReadableStream<Uint8Array>,
 	baseDir: string
-): Promise<string> {
+): Promise<SaveResult> {
 	const storageKey = randomUUID();
 	const outPath = attachmentPath(storageKey, baseDir);
-	await encryptChunkedFile(input, outPath);
-	return storageKey;
+	const { plaintextBytes, chunkCount } = await encryptChunkedFile(input, outPath);
+	return { storageKey, plaintextBytes, chunkCount };
 }
 
 export async function readEncryptedAttachmentStream(
 	storageKey: string,
 	baseDir: string
-): Promise<ReadableStream> {
+): Promise<ReadableStream<Uint8Array>> {
 	return decryptChunkedFileStream(attachmentPath(storageKey, baseDir));
 }
 
@@ -772,7 +911,7 @@ export const attachments = table('attachments', {
 });
 ```
 
-Add `attachments` to the bottom export list.
+Add `attachments` to the schema export list immediately before `tripExpenseAttachments`, and ensure the `new Schema([...])` constructor lists `attachments` before `tripExpenseAttachments` so foreign-key creation order is consistent.
 
 - [ ] **Step 2: Update `trip_expense_attachments` to reference attachments**
 
@@ -806,43 +945,39 @@ export const tripExpenseAttachments = table('trip_expense_attachments', {
 
 - [ ] **Step 3: Write migration**
 
-Create `src/lib/server/db/mongrelMigrations/00XX_attachments_table.ts` (use next available number):
+Create `src/lib/server/db/mongrelMigrations/0013_attachments_table.ts`:
 
 ```ts
 import type { Migration } from '@visorcraft/mongreldb-kit';
+import { attachments, tripExpenseAttachments } from '../mongrelSchema';
 
-export default {
-	id: '00XX_attachments_table',
-	up: `
-		CREATE SEQUENCE IF NOT EXISTS attachments_id_seq;
-		CREATE TABLE attachments (
-			id BIGINT PRIMARY KEY DEFAULT nextval('attachments_id_seq'),
-			owner_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-			storage_key TEXT NOT NULL UNIQUE,
-			filename TEXT NOT NULL,
-			content_type TEXT NOT NULL,
-			size_bytes BIGINT NOT NULL DEFAULT 0,
-			context JSONB NOT NULL DEFAULT '{}',
-			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		);
-		CREATE INDEX attachments_owner_idx ON attachments(owner_id);
+const attachmentsTableMigration: Migration = {
+	version: 13,
+	name: 'attachments_table',
+	up: (ctx) => {
+		// The old trip_expense_attachments table stored attachment metadata inline.
+		// We are replacing it with a generic attachments table and a link table.
+		// Since Roamarr has no production users, dropping the old table is acceptable.
+		ctx.kit.sql('DROP TABLE IF EXISTS trip_expense_attachments');
+		ctx.ensureTable(attachments);
+		ctx.ensureTable(tripExpenseAttachments);
+	}
+};
 
-		CREATE SEQUENCE IF NOT EXISTS trip_expense_attachments_id_seq;
-		CREATE TABLE trip_expense_attachments (
-			id BIGINT PRIMARY KEY DEFAULT nextval('trip_expense_attachments_id_seq'),
-			expense_id BIGINT NOT NULL REFERENCES trip_expenses(id) ON DELETE CASCADE,
-			attachment_id BIGINT NOT NULL UNIQUE REFERENCES attachments(id) ON DELETE CASCADE,
-			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-		);
-		CREATE INDEX expense_attachments_expense_idx ON trip_expense_attachments(expense_id);
-	`,
-	down: `
-		DROP TABLE trip_expense_attachments;
-		DROP SEQUENCE trip_expense_attachments_id_seq;
-		DROP TABLE attachments;
-		DROP SEQUENCE attachments_id_seq;
-	`
-} satisfies Migration;
+export const migrations = [attachmentsTableMigration];
+```
+
+- [ ] **Step 3b: Register the migration**
+
+In `src/lib/server/db/mongrelMigrations/index.ts`, import and append the new migration:
+
+```ts
+import { migrations as migrations0013 } from './0013_attachments_table';
+
+export const migrations: Migration[] = [
+	// ... existing migrations ...,
+	...migrations0013
+];
 ```
 
 - [ ] **Step 4: Run type check**
@@ -1009,7 +1144,7 @@ function mapRow(row: Record<string, unknown>): AttachmentRecord {
 		filename: String(row.filename),
 		contentType: String(row.content_type),
 		sizeBytes: Number(row.size_bytes),
-		context: row.context ? JSON.parse(String(row.context)) : {},
+		context: typeof row.context === 'string' ? JSON.parse(row.context) : (row.context ?? {}),
 		createdAt: row.created_at as Date | string
 	};
 }
@@ -1026,8 +1161,7 @@ export function createAttachment(input: AttachmentInsert): AttachmentRecord {
 			size_bytes: BigInt(input.sizeBytes),
 			context: JSON.stringify(input.context)
 		})
-		.returningAll()
-		.executeSync()[0];
+		.executeSync();
 	return mapRow(row);
 }
 
@@ -1050,9 +1184,13 @@ Create `src/lib/server/attachments/attachmentService.ts`:
 
 ```ts
 import { error } from '@sveltejs/kit';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { getAttachmentsPath } from '../paths';
+import { encryptChunkedFile } from './attachmentCrypto';
 import {
-	saveEncryptedAttachment,
+	attachmentPath,
 	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment
 } from './attachmentStorage';
@@ -1079,16 +1217,44 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	}
 
 	const baseDir = getAttachmentsPath();
-	const storageKey = await saveEncryptedAttachment(file.stream() as ReadableStream, baseDir);
+	// Stage to a temp key so the ciphertext file is not orphaned if the DB insert fails.
+	const stagingKey = randomUUID();
+	const stagingPath = attachmentPath(stagingKey, baseDir);
+	const finalKey = randomUUID();
+
+	let plaintextBytes = 0;
+	try {
+		const result = await encryptChunkedFile(
+			file.stream() as ReadableStream<Uint8Array>,
+			stagingPath,
+			{ maxBytes: MAX_SIZE }
+		);
+		plaintextBytes = result.plaintextBytes;
+	} catch (e) {
+		try {
+			await fs.unlink(stagingPath);
+		} catch {
+			// ignore cleanup failure
+		}
+		if ((e as Error).message.includes('maximum allowed size')) {
+			throw error(400, 'File must be 10 MB or smaller');
+		}
+		throw e;
+	}
 
 	const row = repo.createAttachment({
 		ownerId,
-		storageKey,
+		storageKey: finalKey,
 		filename: file.name,
 		contentType: file.type,
-		sizeBytes: file.size,
+		sizeBytes: plaintextBytes,
 		context
 	});
+
+	// Move the staged ciphertext to its final storage key only after the DB row exists.
+	const finalPath = attachmentPath(finalKey, baseDir);
+	await fs.mkdir(path.dirname(finalPath), { recursive: true });
+	await fs.rename(stagingPath, finalPath);
 
 	logAudit(ownerId, 'create', 'attachment', row.id, {
 		filename: file.name,
@@ -1099,7 +1265,9 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	return row;
 }
 
-export async function readAttachmentStream(attachmentId: number): Promise<{ stream: ReadableStream; record: repo.AttachmentRecord }> {
+export async function readAttachmentStream(
+	attachmentId: number
+): Promise<{ stream: ReadableStream<Uint8Array>; record: repo.AttachmentRecord }> {
 	const row = repo.getAttachmentById(attachmentId);
 	if (!row) throw error(404, 'Attachment not found');
 
@@ -1151,8 +1319,13 @@ git commit -m "feat: generic encrypted attachment service without context-specif
 Add to `src/lib/server/repositories/expensesRepo.ts`:
 
 ```ts
-import { tripExpenseAttachments, attachments } from '../db/mongrelSchema';
-import { eq } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, joinEq } from '@visorcraft/mongreldb-kit';
+import { kit } from '$lib/server/db';
+import { tripExpenseAttachments, attachments } from '$lib/server/db/mongrelSchema';
+
+function toBigInt(id: number): bigint {
+	return BigInt(id);
+}
 
 export interface ExpenseAttachmentLink {
 	id: number;
@@ -1162,15 +1335,14 @@ export interface ExpenseAttachmentLink {
 }
 
 export function createExpenseAttachmentLink(expenseId: number, attachmentId: number): ExpenseAttachmentLink {
-	const db = getDb();
+	const db = kit;
 	const row = db
 		.insertInto(tripExpenseAttachments)
 		.values({
 			expense_id: BigInt(expenseId),
 			attachment_id: BigInt(attachmentId)
 		})
-		.returningAll()
-		.executeSync()[0];
+		.executeSync();
 	return {
 		id: Number(row.id),
 		expenseId: Number(row.expense_id),
@@ -1192,35 +1364,43 @@ export function getExpenseAttachmentLinkById(id: number): ExpenseAttachmentLink 
 }
 
 export interface AttachmentRow {
-	id: number;
+	id: number;          // trip_expense_attachments.id (matches URL parameter)
+	attachmentId: number;
 	filename: string;
 	contentType: string;
 	sizeBytes: number;
-	linkId: number;
+	createdAt: Date | string;
 }
 
 export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
-	const db = getDb();
-	const rows = db
+	const rows = kit
 		.selectFrom(tripExpenseAttachments)
-		.innerJoin(attachments, eq(attachments.id, tripExpenseAttachments.attachment_id))
-		.where(eq(tripExpenseAttachments.expense_id, BigInt(expenseId)))
-		.select([
-			attachments.id,
-			attachments.filename,
-			attachments.content_type,
-			attachments.size_bytes,
-			tripExpenseAttachments.id.as('link_id')
-		])
-		.orderBy(attachments.created_at)
+		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
+		.innerJoin(
+			attachments,
+			joinEq(
+				tripExpenseAttachments,
+				tripExpenseAttachments.attachment_id,
+				attachments,
+				attachments.id
+			)
+		)
 		.executeSync();
-	return rows.map((r) => ({
-		id: Number(r.id),
-		filename: r.filename,
-		contentType: r.content_type,
-		sizeBytes: Number(r.size_bytes),
-		linkId: Number(r.link_id)
-	}));
+
+	return rows
+		.map((r) => {
+			const link = r.trip_expense_attachments as Record<string, unknown>;
+			const att = r.attachments as Record<string, unknown>;
+			return {
+				id: Number(link.id),
+				attachmentId: Number(att.id),
+				filename: String(att.filename),
+				contentType: String(att.content_type),
+				sizeBytes: Number(att.size_bytes),
+				createdAt: att.created_at as Date | string
+			};
+		})
+		.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
 }
 
 export function deleteExpenseAttachmentLink(id: number): void {
@@ -1286,6 +1466,8 @@ export async function readAttachment(userId: number, linkId: number) {
 export async function deleteAttachment(userId: number, linkId: number) {
 	const { link, tripId } = getAttachmentLink(userId, linkId);
 	const attachment = await deleteGenericAttachment(link.attachmentId);
+	// The link row has ON DELETE CASCADE, but we delete it explicitly first
+	// so the audit log and any future constraints remain obvious.
 	expensesRepo.deleteExpenseAttachmentLink(link.id);
 	logAudit(userId, 'delete', 'trip_expense_attachment', linkId, {
 		expenseId: link.expenseId,
@@ -1313,6 +1495,82 @@ Expected: PASS.
 ```bash
 git add src/lib/server/tripExpenseAttachments.ts src/lib/server/tripExpenseAttachments.test.ts src/lib/server/repositories/expensesRepo.ts src/lib/server/tripDetail.ts
 git commit -m "refactor: expense attachments use generic encrypted attachment service"
+```
+
+---
+
+## Task 7b: Update attachment helpers and existing tests
+
+**Files:**
+- Modify: `tests/helpers.ts`
+- Modify: `src/lib/server/repositories/expensesRepo.test.ts`
+- Modify: `src/lib/server/tripExpenseAttachments.test.ts`
+
+- [ ] **Step 1: Update `makeAttachment` in `tests/helpers.ts`**
+
+Add `attachments` to the `tests/helpers.ts` import from `../src/lib/server/db/mongrelSchema`. Then change `makeAttachment` to insert into the generic `attachments` table and the `trip_expense_attachments` link table. Return the link row shape (`id` is the link id, `attachmentId` is the generic attachment id).
+
+```ts
+export function makeAttachment(
+	kit: KitDatabase,
+	over: Partial<Record<string, unknown>> = {}
+) {
+	const ownerId = BigInt((over.ownerId as number) ?? 0);
+	const expenseId = BigInt((over.expenseId as number) ?? 0);
+	const filename = (over.filename as string) ?? 'file.png';
+	const storageKey = (over.storageKey as string) ?? 'key';
+	const contentType = (over.contentType as string) ?? 'image/png';
+	const sizeBytes = BigInt((over.sizeBytes as number) ?? 0);
+
+	const att = kit.insertInto(attachments).values({
+		owner_id: ownerId,
+		storage_key: storageKey,
+		filename,
+		content_type: contentType,
+		size_bytes: sizeBytes,
+		context: '{}'
+	}).executeSync();
+
+	const link = kit.insertInto(tripExpenseAttachments).values({
+		expense_id: expenseId,
+		attachment_id: att.id
+	}).executeSync();
+
+	return {
+		id: Number(link.id),
+		attachmentId: Number(att.id),
+		expenseId: Number(link.expense_id),
+		filename,
+		storageKey,
+		contentType,
+		sizeBytes: Number(sizeBytes),
+		createdAt: link.created_at
+	};
+}
+```
+
+- [ ] **Step 2: Update `expensesRepo.test.ts` attachment CRUD test**
+
+Replace the old `expensesRepo.createAttachment/getAttachmentById/deleteAttachment` calls with the new `createExpenseAttachmentLink`, `listAttachmentsForExpense`, and `deleteExpenseAttachmentLink` helpers. The cascade test can use `makeAttachment` from `tests/helpers.ts` or the new helpers.
+
+- [ ] **Step 3: Update `tripExpenseAttachments.test.ts`**
+
+- Change imports: remove `getAttachmentWithPath`.
+- Update `addAttachment` assertions to expect `{ link, attachment }`.
+- Use `process.env.ATTACHMENTS_PATH` pointing to a temp dir and clean it in `afterEach` instead of hard-coded `./attachments`.
+- Replace `getAttachmentWithPath` usage with a call through `readAttachmentStream` and verify the decrypted bytes.
+- Update the max-size test to expect 10 MB.
+
+- [ ] **Step 4: Run tests**
+
+Run: `rtk npx vitest run src/lib/server/repositories/expensesRepo.test.ts src/lib/server/tripExpenseAttachments.test.ts`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add tests/helpers.ts src/lib/server/repositories/expensesRepo.test.ts src/lib/server/tripExpenseAttachments.test.ts
+git commit -m "test: update attachment helpers and tests for generic encrypted attachments"
 ```
 
 ---
@@ -1356,7 +1614,7 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 	return new Response(stream, {
 		headers: {
 			'Content-Type': record.contentType,
-			'Content-Disposition': `inline; filename="${safeFilename}"`,
+			'Content-Disposition': `attachment; filename="${safeFilename}"`,
 			'Content-Length': String(record.sizeBytes)
 		}
 	});
@@ -1401,11 +1659,11 @@ Expected: PASS.
 
 - [ ] **Step 1: Update data load to return attachments in new shape**
 
-In `+page.server.ts`, ensure expense attachments are loaded with `id`, `filename`, `contentType`, `sizeBytes`.
+In `+page.server.ts`, ensure expense attachments are loaded with `id`, `attachmentId`, `filename`, `contentType`, `sizeBytes`.
 
 - [ ] **Step 2: Update UI references**
 
-In `+page.svelte`, update the attachment display to use the new field names. The existing code references `a.filename` and `a.sizeBytes`; verify `contentType` is available if used.
+In `+page.svelte`, update the attachment display to use the new field names. The existing code references `a.filename` and `a.sizeBytes`; verify `contentType` is available if used. Note that `AttachmentRow.id` is now the expense-attachment **link id**, which matches the `[attachmentId]` route parameter, so attachment URLs should continue to use `a.id`.
 
 - [ ] **Step 3: Commit if changes are made**
 
@@ -1515,9 +1773,22 @@ git commit -a -m "fix: final encrypted attachment verification adjustments" || t
 - `tripExpenseAttachments.addAttachment` returns `{ link, attachment }`.
 - `readAttachment` returns the stream, record, plus `tripId`, `expenseId`, `linkId`.
 
-**Gaps:**
-- The exact MongrelDB Kit query syntax for `innerJoin` in `expensesRepo.listAttachmentsForExpense` may need adjustment based on the actual Kit API. The implementing agent must verify and fix.
-- `decryptChunkedFileStream` must be carefully tested for backpressure, chunk-boundary alignment, and stream cleanup.
+**Peer-review fixes applied:**
+- Added an authenticated footer chunk to detect truncation at chunk boundaries.
+- Replaced the hand-rolled `_read`/`readExactly` decryption implementation with an async generator wrapped in `Readable.from` for correct backpressure and concurrency.
+- `encryptChunkedFile` now counts actual plaintext bytes and accepts a `maxBytes` option so the size limit is enforced on the streamed bytes, not just `file.size`.
+- `createAttachment` stages ciphertext to a temp key and renames to the final key only after the DB row is inserted, eliminating orphan ciphertext on DB failures.
+- Fixed `AttachmentRow.id` to be the expense-attachment link id (matching the URL parameter) and added `attachmentId` for the generic attachment id.
+- Updated the Kit migration and schema ordering to match the real MongrelDB Kit API.
+- Removed `.returningAll()` calls and fixed `mapRow` JSON context parsing.
+- Aligned `getAttachmentsPath` between runtime and restore, with directory-vs-file detection.
+- Added explicit tasks to update `tests/helpers.ts`, `expensesRepo.test.ts`, and `tripExpenseAttachments.test.ts`.
+- Added `Content-Disposition: attachment` to make the E2E download test reliable.
+
+**Remaining risks to verify during implementation:**
+- The exact MongrelDB Kit query syntax for `innerJoin` and the shape of joined rows must be verified against the installed Kit version.
+- `decryptChunkedFileStream` must be exercised with large files, slow readers, and client disconnects to ensure cleanup and backpressure are correct.
+- SvelteKit/Node multipart parsing may spill uploaded file parts to temporary files before `file.stream()` is consumed. This is outside the attachment subsystem's control; verify behavior if the no-plaintext-temp guarantee must extend end-to-end.
 
 ---
 

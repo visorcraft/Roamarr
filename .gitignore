@@ -60,6 +60,7 @@ test-results/
 tests/e2e/.auth/
 roamarr-*.png
 attachments/
+!src/lib/server/attachments/
 roamarr.db
 
 # Local migration/alter notes (do not commit)

@@ -65,7 +65,7 @@
 						</li>
 						<li class="flex items-center gap-2 {statusClass(data.setupCheck?.encrypted)}">
 							<Icon name={data.setupCheck?.encrypted ? 'check' : 'empty'} class="w-5 h-5" />
-							<span>MongrelDB {data.setupCheck?.encrypted ? 'encrypted successfully' : 'not encrypted'}</span>
+							<span>Database encryption {data.setupCheck?.encrypted ? 'verified' : 'not verified'}</span>
 						</li>
 						<li class="flex items-center gap-2 {statusClass(data.setupCheck?.writable)}">
 							<Icon name={data.setupCheck?.writable ? 'check' : 'empty'} class="w-5 h-5" />

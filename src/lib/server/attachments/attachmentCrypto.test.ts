@@ -1,15 +1,18 @@
 import { test, expect, describe, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import {
 	encryptChunkedFile,
 	decryptChunkedFileStream,
+	readExactly,
 	CHUNK_SIZE,
 	INDEX_LENGTH,
 	LEN_LENGTH,
 	TAG_LENGTH,
-	HEADER_LENGTH
+	HEADER_LENGTH,
+	FOOTER_INDEX
 } from './attachmentCrypto';
 
 async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
@@ -143,6 +146,101 @@ describe('attachmentCrypto', () => {
 		expect(bytes[0]).toBe(2);
 		expect(bytes.length).toBeGreaterThan(1 + 4 + 12 + 4 + 4 + 16 + 1);
 	});
+
+	test('rejects truncated header', async () => {
+		const plain = 'secret';
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = readFileSync(cipherPath);
+		writeFileSync(cipherPath, bytes.subarray(0, HEADER_LENGTH - 1));
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/header truncated/
+		);
+	});
+
+	test('rejects unsupported version', async () => {
+		const plain = 'secret';
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = Buffer.from(readFileSync(cipherPath));
+		bytes[0] = 0x03;
+		writeFileSync(cipherPath, bytes);
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/unsupported attachment encryption version/
+		);
+	});
+
+	test('rejects missing footer / EOF before footer', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE * 2, 'z');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = readFileSync(cipherPath);
+		const offsets = getChunkOffsets(bytes);
+		expect(offsets.length).toBe(2);
+		writeFileSync(cipherPath, bytes.subarray(0, offsets[0] + INDEX_LENGTH + LEN_LENGTH + chunkCipherLength(bytes, offsets[0]) + TAG_LENGTH));
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/footer missing/
+		);
+	});
+
+	test('rejects footer chunk-count mismatch', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE * 2, 'z');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = readFileSync(cipherPath);
+		const offsets = getChunkOffsets(bytes);
+		expect(offsets.length).toBe(2);
+		const footerStart = findFooterStart(bytes);
+		expect(footerStart).toBeGreaterThan(0);
+		const chunk0 = bytes.subarray(offsets[0], offsets[1]);
+		const footer = bytes.subarray(footerStart);
+		const tampered = Buffer.concat([bytes.subarray(0, HEADER_LENGTH), chunk0, footer]);
+		writeFileSync(cipherPath, tampered);
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/chunk count mismatch/
+		);
+	});
+
+	test('rejects out-of-order chunk index', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE * 2, 'z');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = readFileSync(cipherPath);
+		const offsets = getChunkOffsets(bytes);
+		expect(offsets.length).toBe(2);
+		const footerStart = findFooterStart(bytes);
+		expect(footerStart).toBeGreaterThan(0);
+		const chunk0 = bytes.subarray(offsets[0], offsets[1]);
+		const chunk1 = bytes.subarray(offsets[1], footerStart);
+		const footer = bytes.subarray(footerStart);
+		const tampered = Buffer.concat([bytes.subarray(0, HEADER_LENGTH), chunk1, chunk0, footer]);
+		writeFileSync(cipherPath, tampered);
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/chunk out of order/
+		);
+	});
+
+	test('rejects chunk length exceeding CHUNK_SIZE', async () => {
+		const plain = Buffer.alloc(CHUNK_SIZE, 'z');
+		const cipherPath = path.join(dir, 'cipher');
+		await encryptChunkedFile(streamFromBuffer(plain), cipherPath);
+		const bytes = Buffer.from(readFileSync(cipherPath));
+		const offsets = getChunkOffsets(bytes);
+		expect(offsets.length).toBe(1);
+		bytes.writeUInt32BE(CHUNK_SIZE + 1, offsets[0] + INDEX_LENGTH);
+		writeFileSync(cipherPath, bytes);
+		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
+			/chunk length exceeds maximum/
+		);
+	});
+
+	test('readExactly unshifts excess bytes across calls', async () => {
+		const source = Readable.from([Buffer.from('hello world')]) as ReturnType<typeof createReadStream>;
+		const first = await readExactly(source, 5);
+		expect(first.toString('utf8')).toBe('hello');
+		const second = await readExactly(source, 6);
+		expect(second.toString('utf8')).toBe(' world');
+	});
 });
 
 function findFooterStart(bytes: Buffer): number {
@@ -156,9 +254,27 @@ function findFooterStart(bytes: Buffer): number {
 
 function findPreviousChunkStart(bytes: Buffer, footerStart: number): number {
 	let pos = footerStart;
+	// The current chunk starts at `pos`; its length is at pos + INDEX_LENGTH.
 	pos -= TAG_LENGTH + 8 + LEN_LENGTH + INDEX_LENGTH;
 	if (pos < HEADER_LENGTH) return HEADER_LENGTH;
-	const len = bytes.readUInt32BE(pos);
+	const len = bytes.readUInt32BE(pos + INDEX_LENGTH);
 	pos -= len + LEN_LENGTH + INDEX_LENGTH;
 	return Math.max(HEADER_LENGTH, pos);
+}
+
+function chunkCipherLength(bytes: Buffer, chunkStart: number): number {
+	return bytes.readUInt32BE(chunkStart + INDEX_LENGTH);
+}
+
+function getChunkOffsets(bytes: Buffer): number[] {
+	const offsets: number[] = [];
+	let pos = HEADER_LENGTH;
+	while (pos < bytes.length) {
+		const index = bytes.readUInt32BE(pos);
+		const len = bytes.readUInt32BE(pos + INDEX_LENGTH);
+		if (index === FOOTER_INDEX) break;
+		offsets.push(pos);
+		pos += INDEX_LENGTH + LEN_LENGTH + len + TAG_LENGTH;
+	}
+	return offsets;
 }

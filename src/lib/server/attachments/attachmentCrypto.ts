@@ -4,6 +4,28 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { aesKey } from '../crypto';
 
+/**
+ * Attachment chunked encryption file format (version 2):
+ *
+ *   [header]                        HEADER_LENGTH = 17 bytes
+ *     1 byte  - version (0x02)
+ *     4 bytes - chunk size (big-endian uint32)
+ *     12 bytes - base IV for GCM
+ *   [data chunk] * N
+ *     4 bytes - chunk index (big-endian uint32), starting at 0
+ *     4 bytes - ciphertext length (big-endian uint32)
+ *     N bytes - AES-256-GCM ciphertext
+ *     16 bytes - GCM authentication tag
+ *   [footer chunk]
+ *     4 bytes - footer index (0xffffffff)
+ *     4 bytes - ciphertext length (always 8)
+ *     8 bytes - total data chunk count (big-endian uint64)
+ *     16 bytes - GCM authentication tag
+ *
+ * Each chunk uses a unique IV derived from the base IV plus the chunk index.
+ * The footer index 0xffffffff is reserved and never used for data chunks.
+ */
+
 export const VERSION = 2;
 export const CHUNK_SIZE = 64 * 1024;
 export const IV_LENGTH = 12;
@@ -18,12 +40,19 @@ function attachmentKey(): Buffer {
 }
 
 function deriveChunkIV(baseIV: Buffer, index: number): Buffer {
-	if (index >= 2 ** 32) {
+	if (index >= FOOTER_INDEX) {
 		throw new Error('attachment chunk index overflow');
 	}
 	const iv = Buffer.from(baseIV);
 	const counter = iv.readUInt32BE(IV_LENGTH - 4);
 	iv.writeUInt32BE((counter + index) >>> 0, IV_LENGTH - 4);
+	return iv;
+}
+
+function deriveFooterIV(baseIV: Buffer): Buffer {
+	const iv = Buffer.from(baseIV);
+	const counter = iv.readUInt32BE(IV_LENGTH - 4);
+	iv.writeUInt32BE((counter + FOOTER_INDEX) >>> 0, IV_LENGTH - 4);
 	return iv;
 }
 
@@ -50,12 +79,12 @@ async function* chunkStream(input: ReadableStream<Uint8Array>, chunkSize: number
 
 async function writeChunk(
 	output: ReturnType<typeof createWriteStream>,
-	baseIV: Buffer,
+	key: Buffer,
+	iv: Buffer,
 	index: number,
 	plainChunk: Buffer
 ): Promise<void> {
-	const iv = deriveChunkIV(baseIV, index);
-	const cipher = createCipheriv('aes-256-gcm', attachmentKey(), iv);
+	const cipher = createCipheriv('aes-256-gcm', key, iv);
 	const cipherChunk = Buffer.concat([cipher.update(plainChunk), cipher.final()]);
 	const tag = cipher.getAuthTag();
 
@@ -88,6 +117,7 @@ export async function encryptChunkedFile(
 	options: EncryptOptions = {}
 ): Promise<EncryptResult> {
 	const { maxBytes = Number.MAX_SAFE_INTEGER } = options;
+	const key = attachmentKey();
 	const baseIV = randomBytes(IV_LENGTH);
 	const tempPath = `${outputPath}.tmp`;
 	await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -110,14 +140,16 @@ export async function encryptChunkedFile(
 			if (plaintextBytes > maxBytes) {
 				throw new Error('attachment exceeds maximum allowed size');
 			}
-			await writeChunk(output, baseIV, index, plainChunk);
+			const iv = deriveChunkIV(baseIV, index);
+			await writeChunk(output, key, iv, index, plainChunk);
 			index++;
 		}
 
 		// Footer authenticates total chunk count.
 		const footerPlain = Buffer.alloc(8);
 		footerPlain.writeBigUInt64BE(BigInt(index), 0);
-		await writeChunk(output, baseIV, FOOTER_INDEX, footerPlain);
+		const footerIV = deriveFooterIV(baseIV);
+		await writeChunk(output, key, footerIV, FOOTER_INDEX, footerPlain);
 
 		await new Promise<void>((resolve, reject) => {
 			output.on('finish', resolve);
@@ -146,6 +178,7 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 	const source = createReadStream(cipherPath);
 
 	async function* decryptChunks() {
+		const key = attachmentKey();
 		const header = await readExactly(source, HEADER_LENGTH);
 		if (header.length < HEADER_LENGTH) {
 			throw new Error('attachment ciphertext header truncated');
@@ -171,6 +204,9 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 				throw new Error('attachment chunk length truncated');
 			}
 			const chunkLen = lenBuf.readUInt32BE(0);
+			if (chunkLen > CHUNK_SIZE) {
+				throw new Error(`attachment chunk length exceeds maximum: ${chunkLen}`);
+			}
 
 			const cipherChunk = await readExactly(source, chunkLen);
 			if (cipherChunk.length < chunkLen) {
@@ -184,14 +220,15 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 
 			const index = idxBuf.readUInt32BE(0);
 			if (index === FOOTER_INDEX) {
-				const iv = deriveChunkIV(baseIV, FOOTER_INDEX);
-				const decipher = createDecipheriv('aes-256-gcm', attachmentKey(), iv);
+				const iv = deriveFooterIV(baseIV);
+				const decipher = createDecipheriv('aes-256-gcm', key, iv);
 				decipher.setAuthTag(tag);
 				const footerPlain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
 				const expectedCount = Number(footerPlain.readBigUInt64BE(0));
 				if (expectedCount !== dataChunkCount) {
 					throw new Error(`attachment chunk count mismatch: expected ${expectedCount}, got ${dataChunkCount}`);
 				}
+				source.destroy();
 				return;
 			}
 
@@ -200,7 +237,7 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 			}
 
 			const iv = deriveChunkIV(baseIV, index);
-			const decipher = createDecipheriv('aes-256-gcm', attachmentKey(), iv);
+			const decipher = createDecipheriv('aes-256-gcm', key, iv);
 			decipher.setAuthTag(tag);
 			const plain = Buffer.concat([decipher.update(cipherChunk), decipher.final()]);
 			yield plain;
@@ -210,11 +247,16 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 
 	const nodeReadable = Readable.from(decryptChunks(), { objectMode: false });
 	nodeReadable.on('error', () => source.destroy());
+	nodeReadable.on('close', () => source.destroy());
 	return Readable.toWeb(nodeReadable) as ReadableStream<Uint8Array>;
 }
 
-function readExactly(stream: ReturnType<typeof createReadStream>, n: number): Promise<Buffer> {
+export function readExactly(stream: ReturnType<typeof createReadStream>, n: number): Promise<Buffer> {
 	return new Promise((resolve, reject) => {
+		if (stream.readableEnded) {
+			return resolve(Buffer.alloc(0));
+		}
+
 		let buf = Buffer.alloc(0);
 
 		function onData(data: Buffer) {

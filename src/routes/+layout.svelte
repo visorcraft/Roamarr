@@ -111,6 +111,19 @@
 		}
 	});
 
+	$effect(() => {
+		if (!browser) return;
+		const path = page.url.pathname;
+		for (const section of visibleSections) {
+			if (section.items.some((item) => (item.href === '/' ? path === '/' : path.startsWith(item.href)))) {
+				if (!isExpanded(section.label)) {
+					expanded[section.label] = true;
+					writeStoredSections(expanded);
+				}
+			}
+		}
+	});
+
 	function goToSearch() {
 		const q = searchValue.trim();
 		if (q) {
@@ -156,8 +169,8 @@
 		searchInput.focus();
 	}
 
-	function setFirstNavLink(node: HTMLElement, index: number) {
-		if (index === 0) firstNavLink = node as HTMLAnchorElement;
+	function setFirstNavLink(node: HTMLElement, marker: number) {
+		if (marker === 0) firstNavLink = node as HTMLAnchorElement;
 		return {
 			destroy() {
 				if (firstNavLink === node) firstNavLink = null;
@@ -175,18 +188,30 @@
 
 	// Focus trap for the mobile navigation drawer: keep Tab cycling inside the dialog.
 	function handleSidebarKeydown(event: KeyboardEvent) {
-		if (!open || event.key !== 'Tab' || !sidebarEl) return;
-		const focusable = focusableIn(sidebarEl);
-		if (focusable.length === 0) return;
-		const first = focusable[0];
-		const last = focusable[focusable.length - 1];
-		const active = document.activeElement as HTMLElement | null;
-		if (event.shiftKey && active === first) {
-			event.preventDefault();
-			last.focus();
-		} else if (!event.shiftKey && active === last) {
-			event.preventDefault();
-			first.focus();
+		if (!open || !sidebarEl) return;
+		if (event.key === 'Tab') {
+			const focusable = focusableIn(sidebarEl);
+			if (focusable.length === 0) return;
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			if (event.shiftKey && active === first) {
+				event.preventDefault();
+				last.focus();
+			} else if (!event.shiftKey && active === last) {
+				event.preventDefault();
+				first.focus();
+			}
+		}
+		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+			const headers = Array.from(sidebarEl.querySelectorAll<HTMLElement>('.app-nav-section-header'));
+			const active = document.activeElement as HTMLElement | null;
+			const idx = headers.findIndex((h) => h === active);
+			if (idx !== -1) {
+				event.preventDefault();
+				const next = event.key === 'ArrowDown' ? headers[(idx + 1) % headers.length] : headers[(idx - 1 + headers.length) % headers.length];
+				next?.focus();
+			}
 		}
 	}
 

@@ -195,6 +195,20 @@ npm run dev
 
 Open `http://localhost:5173/setup` on first boot.
 
+#### Local dev container
+
+For a containerized dev environment that hot-reloads source edits without an
+image rebuild, use `compose.local.yml`:
+
+```bash
+export ROAMARR_SECRET="$(openssl rand -base64 32)"
+rtk podman compose -f compose.local.yml up -d
+```
+
+This bind-mounts the working tree and serves the Vite dev server on
+`http://127.0.0.1:3002`. It uses a separate `roamarr-dev-data` volume, so it will
+show the first-run setup page until you create the admin account.
+
 ### Production build
 
 ```bash

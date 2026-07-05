@@ -1004,7 +1004,7 @@ button.card:hover,
 		color: var(--theme-readable-muted);
 	}
 	.btn-ghost-danger {
-		@apply text-slate-400 hover:bg-red-500/10 hover:text-red-300;
+		@apply text-red-500 hover:bg-red-500/10 hover:text-red-300;
 	}
 	.btn-ghost-amber {
 		@apply text-slate-400 hover:bg-amber-500/10 hover:text-amber-300;

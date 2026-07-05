@@ -240,7 +240,7 @@
 					</div>
 					<form method="POST" action="?/revokeSession">
 						<input type="hidden" name="id" value={s.id} />
-						<button class="btn btn-ghost btn-ghost-danger">Revoke</button>
+						<button type="submit" class="btn btn-ghost btn-ghost-danger btn-sm">Revoke</button>
 					</form>
 				</li>
 			{/each}

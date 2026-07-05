@@ -118,34 +118,42 @@ test('attachment CRUD', () => {
 		baseAmount: 1200
 	});
 
-	const att = expensesRepo.createAttachment({
-		ownerId: Number(u.id),
-		expenseId: e.id,
+	const att = kit.insertInto(attachments).values({
+		owner_id: u.id,
+		storage_key: 'abc-123',
 		filename: 'receipt.pdf',
-		storageKey: 'abc-123',
-		contentType: 'application/pdf',
-		sizeBytes: 2048
-	});
-	expect(att.filename).toBe('receipt.pdf');
-	expect(att.expenseId).toBe(e.id);
+		content_type: 'application/pdf',
+		size_bytes: BigInt(2048),
+		context: '{}'
+	}).executeSync();
 
-	expect(expensesRepo.listAttachmentsForExpense(e.id)).toHaveLength(1);
-	expect(expensesRepo.getAttachmentById(att.id)?.storageKey).toBe('abc-123');
-	expect(expensesRepo.getAttachmentByStorageKey('abc-123')?.id).toBe(att.id);
+	const link = expensesRepo.createExpenseAttachmentLink(e.id, Number(att.id));
+	expect(link.expenseId).toBe(e.id);
+	expect(link.attachmentId).toBe(Number(att.id));
+
+	const rows = expensesRepo.listAttachmentsForExpense(e.id);
+	expect(rows).toHaveLength(1);
+	expect(rows[0].id).toBe(link.id);
+	expect(rows[0].attachmentId).toBe(Number(att.id));
+	expect(rows[0].filename).toBe('receipt.pdf');
+	expect(rows[0].contentType).toBe('application/pdf');
+	expect(rows[0].sizeBytes).toBe(2048);
+
+	expect(expensesRepo.getExpenseAttachmentLinkById(link.id)?.attachmentId).toBe(Number(att.id));
 
 	const stored = kit
 		.selectFrom(attachments)
-		.where(eq(attachments.id, BigInt(att.id)))
+		.where(eq(attachments.id, att.id))
 		.executeSync()[0];
 	expect(stored?.filename).toBe('receipt.pdf');
 
-	expect(expensesRepo.deleteAttachment(att.id)).toBe(true);
-	expect(expensesRepo.getAttachmentById(att.id)).toBeNull();
+	expect(expensesRepo.deleteExpenseAttachmentLink(link.id)).toBe(true);
+	expect(expensesRepo.getExpenseAttachmentLinkById(link.id)).toBeNull();
 	expect(expensesRepo.listAttachmentsForExpense(e.id)).toHaveLength(0);
 	expect(
 		kit
-			.selectFrom(attachments)
-			.where(eq(attachments.id, BigInt(att.id)))
+			.selectFrom(tripExpenseAttachments)
+			.where(eq(tripExpenseAttachments.id, BigInt(link.id)))
 			.executeSync()[0]
 	).toBeUndefined();
 });
@@ -209,14 +217,15 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 		exchangeRate: 10000,
 		baseAmount: 50000
 	});
-	const att = expensesRepo.createAttachment({
-		ownerId: Number(u.id),
-		expenseId: e.id,
+	const att = kit.insertInto(attachments).values({
+		owner_id: u.id,
+		storage_key: 'cascade-key',
 		filename: 'invoice.pdf',
-		storageKey: 'cascade-key',
-		contentType: 'application/pdf',
-		sizeBytes: 4096
-	});
+		content_type: 'application/pdf',
+		size_bytes: BigInt(4096),
+		context: '{}'
+	}).executeSync();
+	const link = expensesRepo.createExpenseAttachmentLink(e.id, Number(att.id));
 	const cat = expensesRepo.createBudgetCategory({
 		tripId: t.id,
 		category: 'lodging',
@@ -229,7 +238,7 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 	expect(expensesRepo.listExpensesForTrip(t.id)).toHaveLength(0);
 	expect(expensesRepo.getExpenseById(e.id)).toBeNull();
 	expect(expensesRepo.listAttachmentsForExpense(e.id)).toHaveLength(0);
-	expect(expensesRepo.getAttachmentById(att.id)).toBeNull();
+	expect(expensesRepo.getExpenseAttachmentLinkById(link.id)).toBeNull();
 	expect(expensesRepo.listBudgetCategoriesForTrip(t.id)).toHaveLength(0);
 	expect(expensesRepo.getBudgetCategoryById(cat.id)).toBeNull();
 
@@ -239,7 +248,7 @@ test('cascade delete removes expenses, attachments, and budget categories with t
 	expect(
 		kit
 			.selectFrom(tripExpenseAttachments)
-			.where(eq(tripExpenseAttachments.attachment_id, BigInt(att.id)))
+			.where(eq(tripExpenseAttachments.id, BigInt(link.id)))
 			.executeSync()[0]
 	).toBeUndefined();
 	expect(

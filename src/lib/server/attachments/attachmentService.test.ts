@@ -17,20 +17,9 @@ import {
 } from './attachmentService';
 import { attachments as attachmentsTable, auditLogs } from '../db/mongrelSchema';
 import { and, eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
-import { makeSyncedUser } from '../../../../tests/helpers';
+import { makeSyncedUser, streamToBuffer } from '../../../../tests/helpers';
 import * as attachmentStorage from './attachmentStorage';
 import * as repo from './attachmentRepo';
-
-async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-	const chunks: Buffer[] = [];
-	const reader = stream.getReader();
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		chunks.push(Buffer.from(value));
-	}
-	return Buffer.concat(chunks);
-}
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;

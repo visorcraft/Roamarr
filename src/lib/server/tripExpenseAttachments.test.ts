@@ -1,5 +1,6 @@
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
@@ -9,27 +10,24 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import {
-	addAttachment,
-	deleteAttachment,
-	getAttachmentWithPath,
-	listAttachments
-} from './tripExpenseAttachments';
+import { addAttachment, deleteAttachment, listAttachments, readAttachment } from './tripExpenseAttachments';
 import { tripExpenseAttachments, tripExpenses, users, trips } from './db/mongrelSchema';
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
-import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+import { makeSyncedUser, makeSyncedTrip, makeShare, streamToBuffer } from '../../../tests/helpers';
 import * as expensesRepo from './repositories/expensesRepo';
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
 }
 
-function attachmentsDir() {
-	return path.resolve('./attachments');
-}
+let baseDir: string;
+let originalAttachmentsPath: string | undefined;
 
 beforeEach(() => {
 	const kit = getKit();
+	originalAttachmentsPath = process.env.ATTACHMENTS_PATH;
+	baseDir = mkdtempSync(path.join(tmpdir(), 'roamarr-exp-att-'));
+	process.env.ATTACHMENTS_PATH = baseDir;
 	kit.deleteFrom(tripExpenseAttachments).executeSync();
 	kit.deleteFrom(tripExpenses).executeSync();
 	kit.deleteFrom(trips).executeSync();
@@ -37,8 +35,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	const dir = attachmentsDir();
-	if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+	if (existsSync(baseDir)) rmSync(baseDir, { recursive: true, force: true });
+	if (originalAttachmentsPath === undefined) {
+		delete process.env.ATTACHMENTS_PATH;
+	} else {
+		process.env.ATTACHMENTS_PATH = originalAttachmentsPath;
+	}
 });
 
 function seed() {
@@ -54,25 +56,23 @@ function seed() {
 	return { kit, u, t, e };
 }
 
-test('addAttachment writes the file and database row', async () => {
+test('addAttachment writes encrypted file and database rows', async () => {
 	const { kit, u, e } = seed();
 	const file = new File(['hello'], 'receipt.png', { type: 'image/png' });
 
-	const att = await addAttachment(u.id, e.id, file);
+	const { link, attachment } = await addAttachment(u.id, e.id, file);
 
-	expect(att.filename).toBe('receipt.png');
-	expect(att.contentType).toBe('image/png');
-	expect(att.sizeBytes).toBe(5);
-	expect(att.expenseId).toBe(e.id);
+	expect(attachment.filename).toBe('receipt.png');
+	expect(attachment.contentType).toBe('image/png');
+	expect(attachment.sizeBytes).toBe(5);
+	expect(link.expenseId).toBe(e.id);
+	expect(link.attachmentId).toBe(attachment.id);
 
 	const rows = kit
 		.selectFrom(tripExpenseAttachments)
 		.where(eq(tripExpenseAttachments.expense_id, BigInt(e.id)))
 		.executeSync();
 	expect(rows).toHaveLength(1);
-
-	const withPath = getAttachmentWithPath(u.id, att.id);
-	expect(existsSync(withPath.path)).toBe(true);
 });
 
 test('addAttachment rejects disallowed content types', async () => {
@@ -83,33 +83,44 @@ test('addAttachment rejects disallowed content types', async () => {
 
 test('addAttachment rejects oversized files', async () => {
 	const { u, e } = seed();
-	const file = new File(['x'.repeat(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' });
+	const file = new File(['x'.repeat(10 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' });
 	await expect(addAttachment(u.id, e.id, file)).rejects.toMatchObject({ status: 400 });
 });
 
 test('listAttachments returns rows ordered by creation time', async () => {
 	const { u, e } = seed();
-	const a = await addAttachment(u.id, e.id, new File(['a'], 'a.png', { type: 'image/png' }));
-	const b = await addAttachment(u.id, e.id, new File(['b'], 'b.png', { type: 'image/png' }));
+	const { link: a } = await addAttachment(u.id, e.id, new File(['a'], 'a.png', { type: 'image/png' }));
+	const { link: b } = await addAttachment(u.id, e.id, new File(['b'], 'b.png', { type: 'image/png' }));
 
 	const rows = listAttachments(e.id);
 	expect(rows.map((r) => r.id)).toEqual([a.id, b.id]);
 });
 
-test('deleteAttachment removes the row and file', async () => {
-	const { kit, u, e } = seed();
-	const att = await addAttachment(u.id, e.id, new File(['c'], 'c.png', { type: 'image/png' }));
-	const withPath = getAttachmentWithPath(u.id, att.id);
+test('readAttachment decrypts the uploaded file', async () => {
+	const { u, e } = seed();
+	const file = new File(['secret receipt'], 'receipt.png', { type: 'image/png' });
+	const { link } = await addAttachment(u.id, e.id, file);
 
-	deleteAttachment(u.id, att.id);
+	const { stream, record } = await readAttachment(u.id, link.id);
+	const out = await streamToBuffer(stream);
+
+	expect(record.filename).toBe('receipt.png');
+	expect(out.toString('utf8')).toBe('secret receipt');
+});
+
+test('deleteAttachment removes the link and ciphertext', async () => {
+	const { kit, u, e } = seed();
+	const { link } = await addAttachment(u.id, e.id, new File(['c'], 'c.png', { type: 'image/png' }));
+
+	await deleteAttachment(u.id, link.id);
 
 	expect(
 		kit
 			.selectFrom(tripExpenseAttachments)
-			.where(eq(tripExpenseAttachments.id, BigInt(att.id)))
+			.where(eq(tripExpenseAttachments.id, BigInt(link.id)))
 			.executeSync()[0]
 	).toBeUndefined();
-	expect(existsSync(withPath.path)).toBe(false);
+	await expect(readAttachment(u.id, link.id)).rejects.toMatchObject({ status: 404 });
 });
 
 test('non-editor cannot add or delete attachments', async () => {
@@ -120,6 +131,23 @@ test('non-editor cannot add or delete attachments', async () => {
 		addAttachment(other.id, e.id, new File(['x'], 'x.png', { type: 'image/png' }))
 	).rejects.toMatchObject({ status: 404 });
 
-	const att = await addAttachment(u.id, e.id, new File(['y'], 'y.png', { type: 'image/png' }));
-	expect(() => deleteAttachment(other.id, att.id)).toThrow();
+	const { link } = await addAttachment(u.id, e.id, new File(['y'], 'y.png', { type: 'image/png' }));
+	await expect(deleteAttachment(other.id, link.id)).rejects.toMatchObject({ status: 404 });
+});
+
+test('read-only viewer can read attachment they did not upload', async () => {
+	const { kit, u, t, e } = seed();
+	const viewer = makeSyncedUser(kit, {
+		email: 'viewer@x.c',
+		passwordHash: 'x',
+		displayName: 'V'
+	});
+	makeShare(kit, { tripId: t.id, sharedWithUserId: viewer.id, permission: 'read' });
+
+	const file = new File(['read-only content'], 'receipt.png', { type: 'image/png' });
+	const { link } = await addAttachment(u.id, e.id, file);
+
+	const { stream } = await readAttachment(viewer.id, link.id);
+	const out = await streamToBuffer(stream);
+	expect(out.toString('utf8')).toBe('read-only content');
 });

@@ -590,33 +590,52 @@ export function makeExpense(
 	};
 }
 
-export function makeAttachment(
+export function makeExpenseAttachmentLink(
 	kit: KitDatabase,
 	over: Partial<Record<string, unknown>> = {}
 ) {
 	const ownerId = BigInt((over.ownerId as number) ?? 0);
 	const expenseId = BigInt((over.expenseId as number) ?? 0);
-	const attachment = kit.insertInto(attachments).values({
+	const filename = (over.filename as string) ?? 'file.png';
+	const storageKey = (over.storageKey as string) ?? 'key';
+	const contentType = (over.contentType as string) ?? 'image/png';
+	const sizeBytes = BigInt((over.sizeBytes as number) ?? 0);
+	const att = kit.insertInto(attachments).values({
 		owner_id: ownerId,
-		storage_key: (over.storageKey as string) ?? 'key',
-		filename: (over.filename as string) ?? 'file.png',
-		content_type: (over.contentType as string) ?? 'image/png',
-		size_bytes: BigInt((over.sizeBytes as number) ?? 0),
+		storage_key: storageKey,
+		filename,
+		content_type: contentType,
+		size_bytes: sizeBytes,
 		context: '{}'
 	} as any).executeSync();
 	const link = kit.insertInto(tripExpenseAttachments).values({
 		expense_id: expenseId,
-		attachment_id: attachment.id
+		attachment_id: att.id
 	} as any).executeSync();
 	return {
-		id: Number(attachment.id),
+		id: Number(link.id),
+		attachmentId: Number(att.id),
 		expenseId: Number(link.expense_id),
-		filename: attachment.filename,
-		storageKey: attachment.storage_key,
-		contentType: attachment.content_type,
-		sizeBytes: Number(attachment.size_bytes),
-		createdAt: attachment.created_at
+		filename,
+		storageKey,
+		contentType,
+		sizeBytes: Number(sizeBytes),
+		createdAt: link.created_at
 	};
+}
+
+/** @deprecated Use `makeExpenseAttachmentLink` instead. */
+export const makeAttachment = makeExpenseAttachmentLink;
+
+export async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+	const chunks: Buffer[] = [];
+	const reader = stream.getReader();
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(Buffer.from(value));
+	}
+	return Buffer.concat(chunks);
 }
 
 // Scheduler runs

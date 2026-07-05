@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, asc } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, asc, joinEq } from '@visorcraft/mongreldb-kit';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
@@ -28,13 +28,13 @@ export interface ExpenseRow {
 }
 
 export interface AttachmentRow {
+	// id is the expense-attachment link id (matches the URL `[attachmentId]` parameter).
 	id: number;
-	expenseId: number;
+	attachmentId: number;
 	filename: string;
-	storageKey: string;
 	contentType: string;
 	sizeBytes: number;
-	createdAt: string;
+	createdAt: Date | string;
 }
 
 export interface BudgetCategoryRow {
@@ -55,13 +55,6 @@ export type CreateExpenseInput = Pick<ExpenseRow, 'tripId' | 'description' | 'am
 export type UpdateExpenseInput = Partial<
 	Omit<CreateExpenseInput, 'tripId'> & { splitAmong?: string }
 >;
-
-export type CreateAttachmentInput = Pick<
-	AttachmentRow,
-	'expenseId' | 'filename' | 'storageKey' | 'contentType' | 'sizeBytes'
-> & {
-	ownerId: number;
-};
 
 export type CreateBudgetCategoryInput = Pick<BudgetCategoryRow, 'tripId' | 'category' | 'amount'> &
 	Partial<Pick<BudgetCategoryRow, 'currency'>>;
@@ -101,31 +94,6 @@ export function toExpenseRow(row: KitExpense): ExpenseRow {
 		splitAmong: serializeSplitAmong(row.split_among),
 		createdAt: row.created_at
 	};
-}
-
-export function toAttachmentRow(
-	attachment: KitAttachment,
-	link: KitExpenseAttachmentLink
-): AttachmentRow {
-	return {
-		id: num(attachment.id),
-		expenseId: num(link.expense_id),
-		filename: attachment.filename,
-		storageKey: attachment.storage_key,
-		contentType: attachment.content_type,
-		sizeBytes: Number(attachment.size_bytes),
-		createdAt: attachment.created_at
-	};
-}
-
-function findExpenseAttachmentLink(
-	attachmentId: bigint
-): KitExpenseAttachmentLink | null {
-	const links = kit
-		.selectFrom(tripExpenseAttachments)
-		.where(kitEq(tripExpenseAttachments.attachment_id, attachmentId))
-		.executeSync();
-	return links[0] ?? null;
 }
 
 export function toBudgetCategoryRow(row: KitBudgetCategory): BudgetCategoryRow {
@@ -215,75 +183,90 @@ export function deleteExpense(id: number): boolean {
 
 // Attachments
 
+export interface ExpenseAttachmentLinkRow {
+	id: number;
+	expenseId: number;
+	attachmentId: number;
+	createdAt: Date | string;
+}
+
+function mapJoinedAttachmentRow(row: Record<string, Record<string, unknown> | null>): AttachmentRow {
+	const link = row.trip_expense_attachments;
+	const att = row.attachments;
+	if (!link || !att) {
+		throw new Error('Missing attachment join data');
+	}
+	return {
+		id: num(link.id as bigint),
+		attachmentId: num(att.id as bigint),
+		filename: String(att.filename),
+		contentType: String(att.content_type),
+		sizeBytes: Number(att.size_bytes),
+		createdAt: link.created_at as Date | string
+	};
+}
+
 export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
-	const links = kit
+	const orderedLinks = kit
 		.selectFrom(tripExpenseAttachments)
 		.where(kitEq(tripExpenseAttachments.expense_id, toBigInt(expenseId)))
-		.orderBy(asc(tripExpenseAttachments.created_at))
+		.orderBy(asc(tripExpenseAttachments.created_at));
+
+	const rows = kit
+		.with('trip_expense_attachments', orderedLinks)
+		.selectFrom('trip_expense_attachments')
+		.innerJoin(
+			attachments,
+			joinEq(
+				tripExpenseAttachments,
+				tripExpenseAttachments.attachment_id,
+				attachments,
+				attachments.id
+			)
+		)
 		.executeSync();
-	if (links.length === 0) return [];
-	// Fetch all attachments by iterating ids (MongrelDB Kit does not support IN).
-	const attachmentById = new Map<bigint, KitAttachment>();
-	for (const link of links) {
-		const rows = kit
-			.selectFrom(attachments)
-			.where(kitEq(attachments.id, link.attachment_id))
-			.executeSync();
-		if (rows[0]) attachmentById.set(link.attachment_id, rows[0]);
-	}
-	return links
-		.filter((l) => attachmentById.has(l.attachment_id))
-		.map((l) => toAttachmentRow(attachmentById.get(l.attachment_id)!, l));
+	return rows.map(mapJoinedAttachmentRow);
 }
 
-export function getAttachmentById(id: number): AttachmentRow | null {
-	const attachmentRows = kit
-		.selectFrom(attachments)
-		.where(kitEq(attachments.id, toBigInt(id)))
-		.executeSync();
-	const attachment = attachmentRows[0];
-	if (!attachment) return null;
-	const link = findExpenseAttachmentLink(attachment.id);
-	if (!link) return null;
-	return toAttachmentRow(attachment, link);
-}
-
-export function getAttachmentByStorageKey(storageKey: string): AttachmentRow | null {
-	const attachmentRows = kit
-		.selectFrom(attachments)
-		.where(kitEq(attachments.storage_key, storageKey))
-		.executeSync();
-	const attachment = attachmentRows[0];
-	if (!attachment) return null;
-	const link = findExpenseAttachmentLink(attachment.id);
-	if (!link) return null;
-	return toAttachmentRow(attachment, link);
-}
-
-export function createAttachment(input: CreateAttachmentInput): AttachmentRow {
-	const attachment = kit
-		.insertInto(attachments)
-		.values({
-			owner_id: toBigInt(input.ownerId),
-			storage_key: input.storageKey,
-			filename: input.filename,
-			content_type: input.contentType,
-			size_bytes: BigInt(input.sizeBytes),
-			context: '{}'
-		} as Insert<typeof attachments>)
-		.executeSync();
+export function createExpenseAttachmentLink(
+	expenseId: number,
+	attachmentId: number
+): ExpenseAttachmentLinkRow {
 	const link = kit
 		.insertInto(tripExpenseAttachments)
 		.values({
-			expense_id: toBigInt(input.expenseId),
-			attachment_id: attachment.id
+			expense_id: toBigInt(expenseId),
+			attachment_id: toBigInt(attachmentId)
 		} as Insert<typeof tripExpenseAttachments>)
 		.executeSync();
-	return toAttachmentRow(attachment, link);
+	return {
+		id: num(link.id),
+		expenseId: num(link.expense_id),
+		attachmentId: num(link.attachment_id),
+		createdAt: link.created_at
+	};
 }
 
-export function deleteAttachment(id: number): boolean {
-	const deleted = kit.deleteFrom(attachments).where(kitEq(attachments.id, toBigInt(id))).executeSync();
+export function getExpenseAttachmentLinkById(id: number): ExpenseAttachmentLinkRow | null {
+	const rows = kit
+		.selectFrom(tripExpenseAttachments)
+		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
+		.executeSync();
+	if (!rows[0]) return null;
+	const link = rows[0];
+	return {
+		id: num(link.id),
+		expenseId: num(link.expense_id),
+		attachmentId: num(link.attachment_id),
+		createdAt: link.created_at
+	};
+}
+
+export function deleteExpenseAttachmentLink(id: number): boolean {
+	const deleted = kit
+		.deleteFrom(tripExpenseAttachments)
+		.where(kitEq(tripExpenseAttachments.id, toBigInt(id)))
+		.executeSync();
 	return deleted > 0n;
 }
 
@@ -364,6 +347,5 @@ export function deleteBudgetCategory(id: number): boolean {
 		.deleteFrom(tripBudgetCategories)
 		.where(kitEq(tripBudgetCategories.id, toBigInt(id)))
 		.executeSync();
-		return deleted > 0n;
+	return deleted > 0n;
 }
-

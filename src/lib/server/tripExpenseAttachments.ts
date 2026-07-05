@@ -1,96 +1,93 @@
 import { error } from '@sveltejs/kit';
-import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
 import * as expensesRepo from './repositories/expensesRepo';
-import type { AttachmentRow } from './repositories/expensesRepo';
 import { requireEditableTrip } from './ownership';
+import { canView } from './sharing';
 import { logAudit } from './audit';
-import { getAttachmentsPath } from './paths';
+import {
+	createAttachment,
+	readAttachmentStream,
+	deleteAttachment as deleteGenericAttachment
+} from './attachments/attachmentService';
+import type { AttachmentRecord } from './attachments/attachmentRepo';
+import * as tripsRepo from './repositories/tripsRepo';
 
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-const MAX_SIZE = 5 * 1024 * 1024;
+type AttachmentLinkContext = {
+	link: expensesRepo.ExpenseAttachmentLinkRow;
+	tripId: number;
+};
 
-function attachmentsDir(): string {
-	return getAttachmentsPath();
+function requireAttachmentLinkForView(userId: number, linkId: number): AttachmentLinkContext {
+	const link = expensesRepo.getExpenseAttachmentLinkById(linkId);
+	if (!link) throw error(404, 'Attachment not found');
+	const expense = expensesRepo.getExpenseById(link.expenseId);
+	if (!expense) throw error(404, 'Expense not found');
+	const trip = tripsRepo.getTripById(expense.tripId);
+	if (!trip || !canView(userId, trip)) throw error(404, 'Not found');
+	return { link, tripId: trip.id };
 }
 
-function attachmentDirFor(storageKey: string): string {
-	return path.join(attachmentsDir(), storageKey.slice(0, 2), storageKey.slice(2, 4));
-}
-
-function attachmentPath(storageKey: string): string {
-	return path.join(attachmentDirFor(storageKey), storageKey);
-}
-
-function requireAttachment(userId: number, attachmentId: number) {
-	const attachment = expensesRepo.getAttachmentById(attachmentId);
-	if (!attachment) throw error(404, 'Attachment not found');
-	const expense = expensesRepo.getExpenseById(attachment.expenseId);
+function requireAttachmentLinkForEdit(userId: number, linkId: number): AttachmentLinkContext {
+	const link = expensesRepo.getExpenseAttachmentLinkById(linkId);
+	if (!link) throw error(404, 'Attachment not found');
+	const expense = expensesRepo.getExpenseById(link.expenseId);
 	if (!expense) throw error(404, 'Expense not found');
 	requireEditableTrip(userId, expense.tripId);
-	return { ...attachment, tripId: expense.tripId };
+	return { link, tripId: expense.tripId };
 }
 
 export async function addAttachment(
 	userId: number,
 	expenseId: number,
 	file: File
-): Promise<AttachmentRow> {
+): Promise<{ link: expensesRepo.ExpenseAttachmentLinkRow; attachment: AttachmentRecord }> {
 	const expense = expensesRepo.getExpenseById(expenseId);
 	if (!expense) throw error(404, 'Expense not found');
 	requireEditableTrip(userId, expense.tripId);
 
-	if (!ALLOWED_TYPES.includes(file.type)) {
-		throw error(400, 'Only JPEG, PNG, WebP, or PDF files are allowed');
-	}
-	if (file.size > MAX_SIZE) {
-		throw error(400, 'File must be 5 MB or smaller');
-	}
-
-	const storageKey = crypto.randomUUID();
-	const dir = attachmentDirFor(storageKey);
-	mkdirSync(dir, { recursive: true });
-	const bytes = Buffer.from(await file.arrayBuffer());
-	writeFileSync(attachmentPath(storageKey), bytes);
-
-	const inserted = expensesRepo.createAttachment({
+	const attachment = await createAttachment({
 		ownerId: userId,
-		expenseId,
-		filename: file.name,
-		storageKey,
-		contentType: file.type,
-		sizeBytes: file.size
+		file,
+		context: { kind: 'expense_receipt', expenseId, tripId: expense.tripId }
 	});
 
-	logAudit(userId, 'create', 'trip_expense_attachment', inserted.id, {
+	const link = expensesRepo.createExpenseAttachmentLink(expenseId, attachment.id);
+
+	logAudit(userId, 'create', 'trip_expense_attachment', link.id, {
 		expenseId,
+		attachmentId: attachment.id,
 		filename: file.name
 	});
-	return inserted;
+
+	return { link, attachment };
 }
 
-export function listAttachments(expenseId: number) {
+export function listAttachments(expenseId: number): expensesRepo.AttachmentRow[] {
 	return expensesRepo.listAttachmentsForExpense(expenseId);
 }
 
-export function getAttachmentWithPath(userId: number, attachmentId: number) {
-	const row = requireAttachment(userId, attachmentId);
-	const fullPath = attachmentPath(row.storageKey);
-	if (!existsSync(fullPath)) throw error(404, 'Attachment file missing');
-	return { ...row, path: fullPath };
+export async function readAttachment(
+	userId: number,
+	linkId: number
+): Promise<{
+	stream: ReadableStream<Uint8Array>;
+	record: AttachmentRecord;
+	tripId: number;
+	expenseId: number;
+	linkId: number;
+}> {
+	const { link, tripId } = requireAttachmentLinkForView(userId, linkId);
+	const { stream, record } = await readAttachmentStream(link.attachmentId);
+	return { stream, record, tripId, expenseId: link.expenseId, linkId };
 }
 
-export function deleteAttachment(userId: number, attachmentId: number) {
-	const row = requireAttachment(userId, attachmentId);
-	const fullPath = attachmentPath(row.storageKey);
-	try {
-		if (existsSync(fullPath)) unlinkSync(fullPath);
-	} catch {
-		// ignore
-	}
-	expensesRepo.deleteAttachment(attachmentId);
-	logAudit(userId, 'delete', 'trip_expense_attachment', attachmentId, {
-		expenseId: row.expenseId
+export async function deleteAttachment(userId: number, linkId: number): Promise<void> {
+	const { link } = requireAttachmentLinkForEdit(userId, linkId);
+	const attachmentId = link.attachmentId;
+	expensesRepo.deleteExpenseAttachmentLink(link.id);
+	const attachment = await deleteGenericAttachment(attachmentId);
+	logAudit(userId, 'delete', 'trip_expense_attachment', linkId, {
+		expenseId: link.expenseId,
+		attachmentId,
+		filename: attachment.filename
 	});
 }

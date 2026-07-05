@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { DEFAULT_DATABASE_PATH, getAttachmentsPath, getDatabasePath } from './paths';
 
@@ -47,6 +48,41 @@ describe('server paths', () => {
 	test('getAttachmentsPath falls back inside a database directory path', () => {
 		delete process.env.ATTACHMENTS_PATH;
 		process.env.DATABASE_PATH = '/data/roamarr-db';
+
+		expect(getAttachmentsPath()).toBe('/data/roamarr-db/attachments');
+	});
+
+	test('getAttachmentsPath handles trailing slash on database directory path', () => {
+		delete process.env.ATTACHMENTS_PATH;
+		process.env.DATABASE_PATH = '/data/roamarr-db/';
+
+		expect(getAttachmentsPath()).toBe('/data/roamarr-db/attachments');
+	});
+
+	test('getAttachmentsPath falls back beside a .db database file path', () => {
+		delete process.env.ATTACHMENTS_PATH;
+		process.env.DATABASE_PATH = '/data/db.db';
+
+		expect(getAttachmentsPath()).toBe('/data/attachments');
+	});
+
+	test('getAttachmentsPath falls back beside a .sqlite database file path', () => {
+		delete process.env.ATTACHMENTS_PATH;
+		process.env.DATABASE_PATH = '/data/db.sqlite';
+
+		expect(getAttachmentsPath()).toBe('/data/attachments');
+	});
+
+	test('getAttachmentsPath resolves relative ATTACHMENTS_PATH to absolute', () => {
+		process.env.DATABASE_PATH = '/data/roamarr-db';
+		process.env.ATTACHMENTS_PATH = 'relative/attachments';
+
+		expect(getAttachmentsPath()).toBe(path.resolve('relative/attachments'));
+	});
+
+	test('getAttachmentsPath ignores empty-string ATTACHMENTS_PATH and falls back', () => {
+		process.env.DATABASE_PATH = '/data/roamarr-db';
+		process.env.ATTACHMENTS_PATH = '';
 
 		expect(getAttachmentsPath()).toBe('/data/roamarr-db/attachments');
 	});

@@ -7,7 +7,7 @@ const DATABASE_FILE_EXTENSIONS = new Set(['.db', '.sqlite', '.kitdb']);
 
 export function getAttachmentsPath(dbPath: string = getDatabasePath()): string {
 	if (process.env.ATTACHMENTS_PATH) {
-		return process.env.ATTACHMENTS_PATH;
+		return path.resolve(process.env.ATTACHMENTS_PATH);
 	}
 
 	const ext = path.extname(dbPath).toLowerCase();

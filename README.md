@@ -268,6 +268,12 @@ npm run check
 # Run the Vitest suite once
 npm test
 
+# Run the Playwright end-to-end suite (resets the dev container)
+npm run test:e2e
+
+# Install/update Playwright browsers
+npm run test:e2e:install
+
 # Build the production app
 npm run build
 
@@ -280,6 +286,14 @@ npm run credits:generate
 
 Migrations are applied automatically during application boot before the
 scheduler starts.
+
+### End-to-end tests
+
+Roamarr uses Playwright for browser-level tests that exercise the real UI. The
+`test:e2e` script resets the local dev container (`compose.local.yml` on port
+3002), creates an admin account, and runs the specs in `tests/e2e/`. Install
+Chromium first with `npm run test:e2e:install`, then run the suite with
+`npm run test:e2e`.
 
 ### Application settings
 

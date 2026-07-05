@@ -60,6 +60,7 @@ pnpm-debug.log*
 .playwright-mcp/
 playwright-report/
 test-results/
+tests/e2e/.auth/
 roamarr-*.png
 attachments/
 roamarr.kitdb/

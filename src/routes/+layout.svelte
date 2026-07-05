@@ -188,8 +188,8 @@
 
 	// Focus trap for the mobile navigation drawer: keep Tab cycling inside the dialog.
 	function handleSidebarKeydown(event: KeyboardEvent) {
-		if (!open || !sidebarEl) return;
-		if (event.key === 'Tab') {
+		if (!sidebarEl) return;
+		if (event.key === 'Tab' && open) {
 			const focusable = focusableIn(sidebarEl);
 			if (focusable.length === 0) return;
 			const first = focusable[0];

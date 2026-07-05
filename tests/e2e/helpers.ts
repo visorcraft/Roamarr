@@ -12,12 +12,6 @@ export function getSectionItems(page: Page, label: string): Locator {
 	return page.locator(`section[data-section="${label}"] .app-nav-section-items`);
 }
 
-export async function expandSidebarSection(page: Page, label: string): Promise<void> {
-	const header = getSectionHeader(page, label);
-	const expanded = await header.getAttribute('aria-expanded');
-	if (expanded === 'false') await header.click();
-}
-
 export async function collapseSidebarSection(page: Page, label: string): Promise<void> {
 	const header = getSectionHeader(page, label);
 	const expanded = await header.getAttribute('aria-expanded');

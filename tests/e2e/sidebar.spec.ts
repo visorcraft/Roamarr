@@ -116,4 +116,58 @@ test.describe('mobile sidebar drawer', () => {
 			await expect(dialog.locator(`section[data-section="${label}"]`)).toBeVisible();
 		}
 	});
+
+	test('focus is trapped inside the mobile drawer', async ({ page }) => {
+		await page.setViewportSize({ width: 375, height: 667 });
+		await page.goto('/', { waitUntil: 'networkidle' });
+
+		await page.getByLabel('Open menu').click();
+		const dialog = page.locator('aside[role="dialog"]');
+		await expect(dialog).toBeVisible();
+
+		// Focus should start inside the drawer.
+		await expect(dialog.locator(':focus')).toHaveCount(1);
+
+		// Focus the first focusable element explicitly, then Shift+Tab should wrap to the last.
+		const first = dialog.locator('a, button').first();
+		await first.focus();
+		await page.keyboard.press('Shift+Tab');
+		const last = dialog.locator('a, button').last();
+		await expect(last).toBeFocused();
+
+		// Tab from the last element should wrap back to the first.
+		await last.focus();
+		await page.keyboard.press('Tab');
+		await expect(first).toBeFocused();
+	});
+
+	test('Escape closes the mobile drawer and returns focus to the hamburger', async ({ page }) => {
+		await page.setViewportSize({ width: 375, height: 667 });
+		await page.goto('/', { waitUntil: 'networkidle' });
+
+		const openButton = page.getByLabel('Open menu');
+		await openButton.click();
+		const dialog = page.locator('aside[role="dialog"]');
+		await expect(dialog).toBeVisible();
+
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(openButton).toBeFocused();
+	});
+
+	test('arrow keys move focus between section headers in mobile drawer', async ({ page }) => {
+		await page.setViewportSize({ width: 375, height: 667 });
+		await page.goto('/', { waitUntil: 'networkidle' });
+
+		await page.getByLabel('Open menu').click();
+		const firstHeader = getSectionHeader(page, 'Plan');
+		await firstHeader.focus();
+		await expect(firstHeader).toBeFocused();
+
+		await page.keyboard.press('ArrowDown');
+		await expect(getSectionHeader(page, 'Me')).toBeFocused();
+
+		await page.keyboard.press('ArrowUp');
+		await expect(firstHeader).toBeFocused();
+	});
 });

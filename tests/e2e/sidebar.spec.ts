@@ -35,11 +35,11 @@ test.describe('desktop sidebar', () => {
 
 		await header.click();
 		await expect(header).toHaveAttribute('aria-expanded', 'false');
-		await expect(items).toHaveCount(0);
+		await expect(items).toHaveClass(/hidden/);
 
 		await header.click();
 		await expect(header).toHaveAttribute('aria-expanded', 'true');
-		await expect(items).toBeVisible();
+		await expect(items).not.toHaveClass(/hidden/);
 	});
 
 	test('collapse state persists across reload', async ({ page }) => {
@@ -52,7 +52,7 @@ test.describe('desktop sidebar', () => {
 
 		await page.reload({ waitUntil: 'networkidle' });
 		await expect(getSectionHeader(page, 'Me')).toHaveAttribute('aria-expanded', 'false');
-		await expect(getSectionItems(page, 'Me')).toHaveCount(0);
+		await expect(getSectionItems(page, 'Me')).toHaveClass(/hidden/);
 	});
 
 	test('navigating to a route inside a collapsed section expands it automatically', async ({ page }) => {

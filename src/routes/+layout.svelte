@@ -16,7 +16,6 @@
 	let userMenuDetails = $state<HTMLDetailsElement | null>(null);
 	let hamburgerButton = $state<HTMLButtonElement | null>(null);
 	let sidebarEl = $state<HTMLElement | null>(null);
-	let firstNavLink = $state<HTMLAnchorElement | null>(null);
 	let searchInput = $state<HTMLInputElement | null>(null);
 	let searchValue = $state('');
 	let searchTimer = $state<ReturnType<typeof setTimeout> | null>(null);
@@ -43,6 +42,10 @@
 
 	function isExpanded(label: string) {
 		return expanded[label] ?? true;
+	}
+
+	function sectionId(label: string) {
+		return `nav-section-${label.toLowerCase().replace(/\s+/g, '-')}`;
 	}
 
 	function toggleSection(label: string) {
@@ -88,7 +91,11 @@
 		const isOpen = open;
 		if (isOpen && !wasOpen) {
 			document.body.classList.add('overflow-hidden');
-			queueMicrotask(() => firstNavLink?.focus());
+			queueMicrotask(() => {
+				if (!sidebarEl) return;
+				const focusable = focusableIn(sidebarEl);
+				focusable[0]?.focus();
+			});
 		} else if (!isOpen && wasOpen) {
 			document.body.classList.remove('overflow-hidden');
 			queueMicrotask(() => hamburgerButton?.focus());
@@ -167,15 +174,6 @@
 		if (isEditableElement(target)) return;
 		event.preventDefault();
 		searchInput.focus();
-	}
-
-	function setFirstNavLink(node: HTMLElement, marker: number) {
-		if (marker === 0) firstNavLink = node as HTMLAnchorElement;
-		return {
-			destroy() {
-				if (firstNavLink === node) firstNavLink = null;
-			}
-		};
 	}
 
 	function focusableIn(container: HTMLElement): HTMLElement[] {
@@ -393,11 +391,12 @@
 			<nav class="flex-1 space-y-4 overflow-y-auto px-3 py-2">
 				{#each visibleSections as section (section.label)}
 					{@const sectionExpanded = isExpanded(section.label)}
-					{@const hasActive = section.items.some((item) => isActive(item.href))}
+					{@const sectionItemsId = sectionId(section.label)}
 					<section class="app-nav-section" data-section={section.label}>
 						<button
 							type="button"
 							aria-expanded={sectionExpanded}
+							aria-controls={sectionItemsId}
 							class="app-nav-section-header flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide"
 							onclick={() => toggleSection(section.label)}
 						>
@@ -410,11 +409,10 @@
 								class="app-nav-chevron h-4 w-4 transition-transform {sectionExpanded ? 'rotate-180' : ''}"
 							/>
 						</button>
-						{#if sectionExpanded || hasActive}
-							<div class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
-								{#each section.items as item, i (item.href)}
+						{#if sectionExpanded}
+							<div id={sectionItemsId} class="app-nav-section-items space-y-1">
+								{#each section.items as item (item.href)}
 									<a
-										use:setFirstNavLink={section.label === 'Plan' && i === 0 ? 0 : -1}
 										href={item.href}
 										onclick={() => (open = false)}
 										aria-current={isActive(item.href) ? 'page' : undefined}

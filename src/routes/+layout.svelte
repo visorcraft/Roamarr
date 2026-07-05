@@ -20,6 +20,35 @@
 	let searchInput = $state<HTMLInputElement | null>(null);
 	let searchValue = $state('');
 	let searchTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+	let expanded = $state<Record<string, boolean>>({});
+
+	function readStoredSections(): Record<string, boolean> {
+		if (!browser) return {};
+		try {
+			const raw = localStorage.getItem(STORAGE_KEY);
+			return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+		} catch {
+			return {};
+		}
+	}
+
+	function writeStoredSections(state: Record<string, boolean>) {
+		if (!browser) return;
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+		} catch {
+			// ignore storage errors
+		}
+	}
+
+	function isExpanded(label: string) {
+		return expanded[label] ?? true;
+	}
+
+	function toggleSection(label: string) {
+		expanded[label] = !isExpanded(label);
+		writeStoredSections(expanded);
+	}
 
 	const toastMessage = $derived(
 		typeof data.flash === 'object' && data.flash !== null ? data.flash.message : (data.flash ?? '')
@@ -41,6 +70,7 @@
 			}
 		}
 		document.addEventListener('click', handleDocumentClick);
+		expanded = readStoredSections();
 		return () => {
 			document.removeEventListener('click', handleDocumentClick);
 			disconnectFieldA11y();
@@ -160,29 +190,50 @@
 		}
 	}
 
-	const NAV: { href: string; label: string; icon: IconName }[] = [
-		{ href: '/', label: 'Dashboard', icon: 'home' },
-		{ href: '/trips', label: 'Trips', icon: 'trips' },
-		{ href: '/profile/documents', label: 'Documents', icon: 'document' },
-		{ href: '/profile/reminders', label: 'Reminders', icon: 'reminder' },
-		{ href: '/profile/loyalty', label: 'Loyalty', icon: 'loyalty' },
-		{ href: '/profile/visited', label: 'Visited', icon: 'location' },
-		{ href: '/profile/notifications', label: 'SMTP', icon: 'notification' },
-		{ href: '/profile/security', label: 'Security', icon: 'star' },
-		{ href: '/cards', label: 'Cards', icon: 'card' },
-		{ href: '/insurance', label: 'Insurance', icon: 'insurance' },
-		{ href: '/groups', label: 'Groups', icon: 'group' },
-		{ href: '/notifications', label: 'Notifications', icon: 'notification' }
+	const SECTIONS: {
+		label: string;
+		admin?: boolean;
+		items: { href: string; label: string; icon: IconName }[];
+	}[] = [
+		{
+			label: 'Plan',
+			items: [
+				{ href: '/', label: 'Dashboard', icon: 'home' },
+				{ href: '/trips', label: 'Trips', icon: 'trips' },
+				{ href: '/notifications', label: 'Notifications', icon: 'notification' }
+			]
+		},
+		{
+			label: 'Me',
+			items: [
+				{ href: '/profile/documents', label: 'Documents', icon: 'document' },
+				{ href: '/profile/reminders', label: 'Reminders', icon: 'reminder' },
+				{ href: '/profile/loyalty', label: 'Loyalty', icon: 'loyalty' },
+				{ href: '/profile/visited', label: 'Visited', icon: 'location' },
+				{ href: '/profile/notifications', label: 'SMTP', icon: 'notification' },
+				{ href: '/profile/security', label: 'Security', icon: 'star' }
+			]
+		},
+		{
+			label: 'Organizer',
+			items: [
+				{ href: '/cards', label: 'Cards', icon: 'card' },
+				{ href: '/insurance', label: 'Insurance', icon: 'insurance' },
+				{ href: '/groups', label: 'Groups', icon: 'group' }
+			]
+		},
+		{
+			label: 'Admin',
+			admin: true,
+			items: [{ href: '/settings', label: 'Settings', icon: 'settings' }]
+		}
 	];
-	const SETTINGS: { href: string; label: string; icon: IconName } = {
-		href: '/settings',
-		label: 'Settings',
-		icon: 'settings'
-	};
+
+	const STORAGE_KEY = 'roamarr.sidebar.sections';
 
 	const path = $derived(page.url.pathname);
 	const standalone = $derived(!data.user || /^\/(login|setup|register|share)(\/|$)/.test(path));
-	const navItems = $derived(data.user?.role === 'admin' ? [...NAV, SETTINGS] : NAV);
+	const visibleSections = $derived(SECTIONS.filter((s) => !s.admin || data.user?.role === 'admin'));
 	const initials = $derived(
 		(data.user?.displayName ?? '?')
 			.split(/\s+/)
@@ -314,28 +365,51 @@
 				{@render brand('lg')}
 			</div>
 
-			<nav class="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-				{#each navItems as item, i (item.href)}
-					<a
-						use:setFirstNavLink={i}
-						href={item.href}
-						onclick={() => (open = false)}
-						aria-current={isActive(item.href) ? 'page' : undefined}
-						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {isActive(
-							item.href
-						)
-							? 'app-nav-item-active'
-							: 'app-nav-item'}"
-					>
-						<Icon
-							name={item.icon}
-							class="h-5 w-5 {isActive(item.href) ? 'app-nav-icon-active' : ''}"
-						/>
-						<span class="flex-1">{item.label}</span>
-						{#if item.href === '/notifications' && data.unreadCount > 0}
-							<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
+			<nav class="flex-1 space-y-4 overflow-y-auto px-3 py-2">
+				{#each visibleSections as section (section.label)}
+					{@const sectionExpanded = isExpanded(section.label)}
+					{@const hasActive = section.items.some((item) => isActive(item.href))}
+					<section class="app-nav-section" data-section={section.label}>
+						<button
+							type="button"
+							aria-expanded={sectionExpanded}
+							class="app-nav-section-header flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide"
+							onclick={() => toggleSection(section.label)}
+						>
+							<span class="flex-1">{section.label}</span>
+							{#if section.label === 'Plan' && data.unreadCount > 0 && !sectionExpanded}
+								<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
+							{/if}
+							<Icon
+								name="chevron-down"
+								class="app-nav-chevron h-4 w-4 transition-transform {sectionExpanded ? 'rotate-180' : ''}"
+							/>
+						</button>
+						{#if sectionExpanded || hasActive}
+							<div class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
+								{#each section.items as item, i (item.href)}
+									<a
+										use:setFirstNavLink={section.label === 'Plan' && i === 0 ? 0 : -1}
+										href={item.href}
+										onclick={() => (open = false)}
+										aria-current={isActive(item.href) ? 'page' : undefined}
+										class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {isActive(item.href)
+											? 'app-nav-item-active'
+											: 'app-nav-item'}"
+									>
+										<Icon
+											name={item.icon}
+											class="h-5 w-5 {isActive(item.href) ? 'app-nav-icon-active' : ''}"
+										/>
+										<span class="flex-1">{item.label}</span>
+										{#if item.href === '/notifications' && data.unreadCount > 0}
+											<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
+										{/if}
+									</a>
+								{/each}
+							</div>
 						{/if}
-					</a>
+					</section>
 				{/each}
 			</nav>
 

@@ -1025,7 +1025,7 @@
 					{/if}
 
 					{#if data.expenses?.length}
-						<ul class="space-y-2">
+						<ul class="space-y-2" data-testid="expense-list">
 							{#each data.expenses as e (e.id)}
 								<li class="list-item-compact flex items-center justify-between gap-3">
 									<div class="min-w-0">

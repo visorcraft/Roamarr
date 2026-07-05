@@ -41,13 +41,10 @@ compose.local.yml
 *.sqlite3
 *.sqlite3-wal
 *.sqlite3-shm
-*.kitdb
-*.kitdb-wal
-*.kitdb-shm
+# MongrelDB Kit data directories
+roamarr-db/
+roamarr-test-db/
 /data
-roamarr.kitdb
-roamarr.kitdb-wal
-roamarr.kitdb-shm
 
 # Logs and local QA artifacts
 *.log
@@ -63,7 +60,6 @@ test-results/
 tests/e2e/.auth/
 roamarr-*.png
 attachments/
-roamarr.kitdb/
 roamarr.db
 
 # Local migration/alter notes (do not commit)

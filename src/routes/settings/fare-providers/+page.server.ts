@@ -2,11 +2,9 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import {
 	listFareProvidersForUser,
-	createFareProvider,
-	updateFareProvider,
-	deleteFareProvider
+	createFareProvider
 } from '$lib/server/repositories/travelDataRepo';
-import { testProvider, registry } from '$lib/server/fareproviders';
+import { testProvider, registry, updateProvider, deleteProvider } from '$lib/server/fareproviders';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -39,19 +37,15 @@ export const actions: Actions = {
 		throw redirect(303, '/settings/fare-providers');
 	},
 	update: async ({ request, locals }) => {
-		requireUser(locals);
+		const u = requireUser(locals);
 		const f = await request.formData();
-		updateFareProvider(Number(f.get('id')), {
-			label: String(f.get('label') || ''),
-			apiKey: String(f.get('apiKey') || ''),
-			enabled: f.get('enabled') === 'on'
-		});
+		updateProvider(u.id, Number(f.get('id')), String(f.get('label') || ''), String(f.get('apiKey') || ''), f.get('enabled') === 'on');
 		throw redirect(303, '/settings/fare-providers');
 	},
 	delete: async ({ request, locals }) => {
-		requireUser(locals);
+		const u = requireUser(locals);
 		const f = await request.formData();
-		deleteFareProvider(Number(f.get('id')));
+		deleteProvider(u.id, Number(f.get('id')));
 		throw redirect(303, '/settings/fare-providers');
 	},
 	test: async ({ request, locals }) => {

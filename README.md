@@ -120,7 +120,7 @@ provider.
 ### One local database
 
 Roamarr stores application data with MongrelDB Kit. By default the database
-lives at `./roamarr.kitdb`, and receipt attachments are stored beside it in an
+lives at `./roamarr-db`, and receipt attachments are stored beside it in an
 `attachments/` directory. Move the database path, back it up, snapshot it, or
 keep it on persistent storage that fits your own setup.
 
@@ -177,7 +177,7 @@ Paste the generated secret into `.env`:
 
 ```env
 ROAMARR_SECRET=replace-with-output-from-openssl
-MONGREL_DATABASE_PATH=./roamarr.kitdb
+MONGREL_DATABASE_PATH=./roamarr-db
 PORT=3000
 ORIGIN=http://localhost:5173
 ```
@@ -232,8 +232,8 @@ source.
 | Variable | Required | Default | Notes |
 | -------- | -------- | ------- | ----- |
 | `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. Generate with `openssl rand -base64 32`. The setup page blocks admin creation until this is set. |
-| `MONGREL_DATABASE_PATH` | no | `./roamarr.kitdb` | MongrelDB Kit data directory or file path. Takes precedence over `DATABASE_PATH`. |
-| `DATABASE_PATH` | no | `./roamarr.kitdb` | Backwards-compatible path. If it looks like a directory (no `.db`/`.sqlite` extension) it is used as the kit data directory. |
+| `MONGREL_DATABASE_PATH` | no | `./roamarr-db` | MongrelDB Kit data directory or file path. Takes precedence over `DATABASE_PATH`. |
+| `DATABASE_PATH` | no | `./roamarr-db` | Backwards-compatible path. If it looks like a directory (no `.db`/`.sqlite` extension) it is used as the kit data directory. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
@@ -245,7 +245,7 @@ admin settings are configured inside the app after setup.
 
 | Data | Default path |
 | ---- | ------------ |
-| MongrelDB Kit database | `./roamarr.kitdb` |
+| MongrelDB Kit database | `./roamarr-db` |
 | Receipt attachments | `./attachments/` |
 | Production build output | `./build/` |
 | SvelteKit build cache | `./.svelte-kit/` |

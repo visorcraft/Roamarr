@@ -13,6 +13,11 @@ import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geona
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import type { PageServerLoad } from './$types';
 
+function userFacingError(e: unknown, fallback: string): string {
+	console.error(fallback, e);
+	return fallback;
+}
+
 export function _saveAdminSettings(
 	userId: number,
 	i: {
@@ -95,7 +100,7 @@ export const actions: Actions = {
 			await deliver(u.id, { title: 'Test notification', body: 'This is a test notification from Roamarr.', link: '/' });
 			setFlash(cookies, 'Test notification sent.');
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test notification' });
+			return fail(400, { error: userFacingError(e, 'Failed to send test notification') });
 		}
 		throw redirect(303, '/settings');
 	},
@@ -115,7 +120,7 @@ export const actions: Actions = {
 			logAudit(u.id, 'smtp_test', 'settings', 1, { delivered: ok });
 			setFlash(cookies, ok ? 'Test email sent.' : 'SMTP is not configured.');
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to send test email' });
+			return fail(400, { error: userFacingError(e, 'Failed to send test email') });
 		}
 		throw redirect(303, '/settings');
 	},
@@ -182,7 +187,7 @@ export const actions: Actions = {
 			];
 			setFlash(cookies, `Maps enabled (${parts.join(', ')}).`);
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to enable maps' });
+			return fail(400, { error: userFacingError(e, 'Failed to enable maps') });
 		}
 		throw redirect(303, '/settings');
 	},
@@ -200,7 +205,7 @@ export const actions: Actions = {
 			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'download', imported });
 			setFlash(cookies, `GeoNames cities re-imported (${imported.toLocaleString()} cities).`);
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import GeoNames data' });
+			return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
 		}
 		throw redirect(303, '/settings');
 	},
@@ -211,7 +216,7 @@ export const actions: Actions = {
 			logAudit(u.id, 'maps_texture_import', 'settings', 1, {});
 			setFlash(cookies, 'Earth texture re-imported.');
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import Earth texture' });
+			return fail(400, { error: userFacingError(e, 'Failed to import Earth texture') });
 		}
 		throw redirect(303, '/settings');
 	},
@@ -227,7 +232,7 @@ export const actions: Actions = {
 			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'upload', imported });
 			setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities).`);
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Failed to import GeoNames data' });
+			return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
 		}
 		throw redirect(303, '/settings');
 	}

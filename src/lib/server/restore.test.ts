@@ -35,7 +35,7 @@ afterEach(() => {
 	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
 });
 
-function makeDbDir(name = 'roamarr.kitdb'): string {
+function makeDbDir(name = 'roamarr-db'): string {
 	const dir = join(testRoot, name);
 	const kitInstance = KitDatabase.openSync(dir, kitSchema);
 	kitInstance.migrateSync(kitSchema, kitMigrations);
@@ -44,12 +44,12 @@ function makeDbDir(name = 'roamarr.kitdb'): string {
 }
 
 test('getAttachmentsPath defaults to a directory inside the database directory', () => {
-	const dbPath = join(testRoot, 'roamarr.kitdb');
+	const dbPath = join(testRoot, 'roamarr-db');
 	expect(getAttachmentsPath(dbPath)).toBe(join(dbPath, 'attachments'));
 });
 
 test('getAttachmentsPath respects ATTACHMENTS_PATH', () => {
-	const dbPath = join(testRoot, 'roamarr.kitdb');
+	const dbPath = join(testRoot, 'roamarr-db');
 	process.env.ATTACHMENTS_PATH = join(testRoot, 'custom-attachments');
 	expect(getAttachmentsPath(dbPath)).toBe(join(testRoot, 'custom-attachments'));
 });
@@ -60,7 +60,7 @@ test('validateRestoredDirectory accepts a valid migrated MongrelDB directory', (
 });
 
 test('validateRestoredDirectory rejects a missing settings table', () => {
-	const dir = join(testRoot, 'empty.kitdb');
+	const dir = join(testRoot, 'empty-db');
 	const db = NativeDatabaseClass.withPath(dir);
 	db.createTable('other_table', {
 		columns: [{ id: 1, name: 'x', ty: 5, primaryKey: true, nullable: false }],
@@ -71,8 +71,8 @@ test('validateRestoredDirectory rejects a missing settings table', () => {
 });
 
 test('write and read restore marker', () => {
-	const dbPath = join(testRoot, 'roamarr.kitdb');
-	const extractedDb = join(testRoot, 'extracted.kitdb');
+	const dbPath = join(testRoot, 'roamarr-db');
+	const extractedDb = join(testRoot, 'extracted-db');
 	const extractedAttachments = join(testRoot, 'extracted-attachments');
 	writeRestoreMarker(extractedDb, extractedAttachments, dbPath);
 
@@ -85,8 +85,8 @@ test('write and read restore marker', () => {
 });
 
 test('applyPendingRestore replaces the current database directory', () => {
-	const currentDb = makeDbDir('current.kitdb');
-	const restoredDb = makeDbDir('restored.kitdb');
+	const currentDb = makeDbDir('current-db');
+	const restoredDb = makeDbDir('restored-db');
 
 	writeFileSync(join(restoredDb, 'marker.txt'), 'restored');
 	writeRestoreMarker(restoredDb, undefined, currentDb);
@@ -98,13 +98,13 @@ test('applyPendingRestore replaces the current database directory', () => {
 });
 
 test('applyPendingRestore also replaces the attachments directory', () => {
-	const currentDb = makeDbDir('current.kitdb');
+	const currentDb = makeDbDir('current-db');
 	const currentAttachments = join(testRoot, 'current-attachments');
 	process.env.ATTACHMENTS_PATH = currentAttachments;
 	mkdirSync(currentAttachments, { recursive: true });
 	writeFileSync(join(currentAttachments, 'old.txt'), 'old');
 
-	const restoredDb = makeDbDir('restored.kitdb');
+	const restoredDb = makeDbDir('restored-db');
 	const restoredAttachments = join(testRoot, 'restored-attachments');
 	mkdirSync(restoredAttachments, { recursive: true });
 	writeFileSync(join(restoredAttachments, 'new.txt'), 'new');
@@ -117,7 +117,7 @@ test('applyPendingRestore also replaces the attachments directory', () => {
 });
 
 test('findMongrelDbDirectory locates the database inside an extracted root', () => {
-	const dbDir = makeDbDir('roamarr.kitdb');
+	const dbDir = makeDbDir('roamarr-db');
 	const found = findMongrelDbDirectory(testRoot);
 	expect(found).toBe(dbDir);
 });

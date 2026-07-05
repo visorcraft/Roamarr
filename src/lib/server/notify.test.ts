@@ -18,7 +18,7 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 	return new Response('ok', { status: 200 });
 });
 
-import { deliver } from './notify';
+import { deliver, isAllowedWebhookUrl } from './notify';
 import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
@@ -134,4 +134,26 @@ test('a disabled override falls back to admin SMTP', async () => {
 	await deliver(Number(u.id), { title: 'T', body: 'B' });
 	expect(sent.length).toBe(1);
 	expect(sent[0].from).toBe('admin@x.c');
+});
+
+test('webhook URL validation blocks internal and non-HTTP targets', () => {
+	expect(isAllowedWebhookUrl('https://hooks.example.com/roamarr')).toBe(true);
+	expect(isAllowedWebhookUrl('http://hooks.example.com/roamarr')).toBe(true);
+	expect(isAllowedWebhookUrl('ftp://hooks.example.com/roamarr')).toBe(false);
+	expect(isAllowedWebhookUrl('https://localhost/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://127.0.0.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://10.0.0.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://192.168.1.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://172.16.0.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://169.254.1.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('https://user:pass@example.com/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('not-a-url')).toBe(false);
+});
+
+test('skips webhook when webhookUrl points to a disallowed target', async () => {
+	const u = makeUser({ email: 'd@x.c', display_name: 'D' });
+	const before = fetches.length;
+	updateSettings({ webhookUrl: 'http://localhost/admin' });
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
+	expect(fetches.length).toBe(before);
 });

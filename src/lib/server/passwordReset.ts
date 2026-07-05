@@ -1,7 +1,7 @@
 import { randomBytes, createHash } from 'node:crypto';
 import { DateTime } from 'luxon';
 import * as usersRepo from './repositories/usersRepo';
-import { hashPassword } from './auth';
+import { hashPassword, invalidateAllSessions } from './auth';
 import { nowIso } from './tz';
 
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
@@ -38,5 +38,6 @@ export async function consumePasswordResetToken(token: string, newPassword: stri
 		must_reset_password: false
 	});
 	usersRepo.deletePasswordResetTokensByUserId(userId);
+	invalidateAllSessions(userId);
 	return true;
 }

@@ -24,7 +24,8 @@ import {
 	consumePasswordResetToken
 } from './passwordReset';
 import { users, passwordResetTokens } from './db/mongrelSchema';
-import { verifyPassword } from './auth';
+import { verifyPassword, createSession } from './auth';
+import { sessions } from './db/mongrelSchema';
 
 type UserInsert = {
 	email?: string;
@@ -106,4 +107,16 @@ test('consume updates password and deletes tokens', async () => {
 test('consume rejects invalid token', async () => {
 	const ok = await consumePasswordResetToken('not-a-token', 'newpassword');
 	expect(ok).toBe(false);
+});
+
+test('consume invalidates existing sessions', async () => {
+	const u = makeKitUser({ email: 'a@b.c' });
+	createSession(Number(u.id));
+	createSession(Number(u.id));
+	expect(ctx.kit.selectFrom(sessions).executeSync()).toHaveLength(2);
+
+	const token = createPasswordResetToken(Number(u.id));
+	const ok = await consumePasswordResetToken(token, 'newpassword');
+	expect(ok).toBe(true);
+	expect(ctx.kit.selectFrom(sessions).executeSync()).toHaveLength(0);
 });

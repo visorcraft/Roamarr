@@ -16,8 +16,8 @@ describe('server paths', () => {
 		delete process.env.DATABASE_PATH;
 		delete process.env.MONGREL_DATABASE_PATH;
 
-		expect(DEFAULT_DATABASE_PATH).toBe('./roamarr.kitdb');
-		expect(getDatabasePath()).toBe('./roamarr.kitdb');
+		expect(DEFAULT_DATABASE_PATH).toBe('./roamarr-db');
+		expect(getDatabasePath()).toBe('./roamarr-db');
 		expect(getAttachmentsPath()).toBe('attachments');
 	});
 
@@ -41,6 +41,6 @@ describe('server paths', () => {
 		delete process.env.MONGREL_DATABASE_PATH;
 		process.env.DATABASE_PATH = '/srv/roamarr/app.db';
 
-		expect(getDatabasePath()).toBe('./roamarr.kitdb');
+		expect(getDatabasePath()).toBe('./roamarr-db');
 	});
 });

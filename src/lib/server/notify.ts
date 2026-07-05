@@ -6,6 +6,35 @@ import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
 import { resolveSmtpTransport } from './smtpConfig';
 
+function isPrivateOrLocalHostname(hostname: string): boolean {
+	const lower = hostname.toLowerCase();
+	if (lower === 'localhost') return true;
+	// IPv4 loopback and private ranges
+	if (lower.startsWith('127.')) return true;
+	if (lower.startsWith('10.')) return true;
+	if (lower.startsWith('192.168.')) return true;
+	if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(lower)) return true;
+	if (lower.startsWith('169.254.')) return true; // link-local
+	// IPv6 loopback / link-local / unique local
+	if (lower === '::1') return true;
+	if (lower.startsWith('fe80:')) return true;
+	if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+	return false;
+}
+
+export function isAllowedWebhookUrl(urlString: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(urlString);
+	} catch {
+		return false;
+	}
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+	if (url.username || url.password) return false;
+	if (isPrivateOrLocalHostname(url.hostname)) return false;
+	return true;
+}
+
 type NotificationMessage = { title: string; body: string; link?: string };
 
 interface Channel {
@@ -57,7 +86,7 @@ const webhookChannel: Channel = {
 		const prefs = getUserPreferences(userId);
 		if (!prefs.webhook) return;
 		const s = getSettings();
-		if (!s.webhookUrl) return;
+		if (!s.webhookUrl || !isAllowedWebhookUrl(s.webhookUrl)) return;
 		const body = JSON.stringify({ title: msg.title, body: msg.body, link: msg.link ?? null });
 		const { signature, timestamp } = signWebhookBody(body);
 		await fetch(s.webhookUrl, {

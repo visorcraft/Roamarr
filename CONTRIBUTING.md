@@ -67,7 +67,7 @@ Roamarr requires Node.js 22.12 or newer.
 ```sh
 npm ci
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export MONGREL_DATABASE_PATH="./roamarr.kitdb"
+export MONGREL_DATABASE_PATH="./roamarr-db"
 npm run dev
 ```
 

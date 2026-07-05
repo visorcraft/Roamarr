@@ -1,4 +1,4 @@
-export const DEFAULT_KIT_DATABASE_PATH = './roamarr.kitdb';
+export const DEFAULT_KIT_DATABASE_PATH = './roamarr-db';
 
 function looksLikeDatabaseDirectory(p: string): boolean {
 	return !/\.(db|sqlite3|sqlite)$/i.test(p);

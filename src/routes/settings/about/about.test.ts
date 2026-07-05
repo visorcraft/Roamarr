@@ -74,6 +74,6 @@ test('load includes instance stats for admins', () => {
 	};
 
 	expect(result.isAdmin).toBe(true);
-	expect(result.databasePath).toBe('./roamarr-test.kitdb');
+	expect(result.databasePath).toBe('./roamarr-test-db');
 	expect(result.stats).toMatchObject({ users: 1, trips: 1, segments: 1 });
 });

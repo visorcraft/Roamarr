@@ -25,7 +25,7 @@ let testRoot: string;
 let originalMongrelDatabasePath: string | undefined;
 
 function makeDbDir(): string {
-	const dir = join(testRoot, `roamarr-${Date.now()}.kitdb`);
+	const dir = join(testRoot, `roamarr-${Date.now()}-db`);
 	const kitInstance = KitDatabase.openSync(dir, kitSchema);
 	kitInstance.migrateSync(kitSchema, kitMigrations);
 	kitInstance.close();
@@ -132,7 +132,7 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 
 	const targetRoot = join(testRoot, 'target');
 	mkdirSync(targetRoot, { recursive: true });
-	const targetDbDir = join(targetRoot, 'roamarr.kitdb');
+	const targetDbDir = join(targetRoot, 'roamarr-db');
 	process.env.MONGREL_DATABASE_PATH = targetDbDir;
 
 	const archivePath = await createBackupArchive(sourceDbDir);

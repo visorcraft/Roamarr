@@ -8,9 +8,44 @@ import type { RequestHandler } from '@sveltejs/kit';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
+const transportLastUsed = new Map<string, number>();
+const MAX_MCP_SESSIONS = 1_000;
+const MCP_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 function randomSessionId(): string {
 	return randomBytes(16).toString('base64url');
+}
+
+function recordTransportUse(sessionId: string) {
+	transportLastUsed.set(sessionId, Date.now());
+}
+
+function pruneStaleTransports() {
+	const cutoff = Date.now() - MCP_SESSION_TTL_MS;
+	for (const [sessionId, lastUsed] of transportLastUsed) {
+		if (lastUsed < cutoff) {
+			transports.delete(sessionId);
+			transportLastUsed.delete(sessionId);
+		}
+	}
+}
+
+function registerTransport(sessionId: string, transport: WebStandardStreamableHTTPServerTransport) {
+	pruneStaleTransports();
+	while (transports.size >= MAX_MCP_SESSIONS) {
+		const oldest = transportLastUsed.keys().next().value;
+		if (!oldest) break;
+		transports.delete(oldest);
+		transportLastUsed.delete(oldest);
+	}
+	transports.set(sessionId, transport);
+	recordTransportUse(sessionId);
+}
+
+function getTransport(sessionId: string): WebStandardStreamableHTTPServerTransport | undefined {
+	const t = transports.get(sessionId);
+	if (t) recordTransportUse(sessionId);
+	return t;
 }
 
 function extractBearer(request: Request): string | null {
@@ -55,7 +90,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	const sessionId = request.headers.get('mcp-session-id');
 	if (sessionId) {
-		const transport = transports.get(sessionId);
+		const transport = getTransport(sessionId);
 		if (!transport) {
 			return jsonRpcError('Session not found', 404);
 		}
@@ -81,13 +116,16 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		// Store the transport by session ID once initialization completes so
 		// subsequent POST/GET/DELETE requests can reuse it.
 		onsessioninitialized: (sid) => {
-			transports.set(sid, transport);
+			registerTransport(sid, transport);
 		}
 	});
 
 	transport.onclose = () => {
 		const sid = transport.sessionId;
-		if (sid) transports.delete(sid);
+		if (sid) {
+			transports.delete(sid);
+			transportLastUsed.delete(sid);
+		}
 	};
 
 	const server = createMcpServer(token.userId, token.scopes);
@@ -119,7 +157,7 @@ export const GET: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!sessionId) {
 		return jsonRpcError('Bad Request: mcp-session-id header required', 400);
 	}
-	const transport = transports.get(sessionId);
+	const transport = getTransport(sessionId);
 	if (!transport) {
 		return jsonRpcError('Session not found', 404);
 	}
@@ -150,7 +188,7 @@ export const DELETE: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!sessionId) {
 		return jsonRpcError('Bad Request: mcp-session-id header required', 400);
 	}
-	const transport = transports.get(sessionId);
+	const transport = getTransport(sessionId);
 	if (!transport) {
 		return jsonRpcError('Session not found', 404);
 	}

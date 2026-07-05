@@ -24,7 +24,8 @@ import { load, actions } from './+page.server';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import {
 	createFareProvider,
-	listFareProvidersForUser
+	listFareProvidersForUser,
+	getFareProviderById
 } from '$lib/server/repositories/travelDataRepo';
 import { fareProviders, users } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
@@ -104,6 +105,10 @@ test('update action edits an owned account', async () => {
 	hijack.set('label', 'Hijacked');
 	hijack.set('apiKey', 'X');
 	await expect(actions.update(event({ id: Number(other.id) }, hijack))).rejects.toThrow();
+
+	const afterHijack = getFareProviderById(Number(p.id));
+	expect(afterHijack?.label).toBe('New');
+	expect(afterHijack?.apiKey).toBe('NEW-SECRET');
 });
 
 test('delete action removes an owned account', async () => {
@@ -120,6 +125,7 @@ test('delete action removes an owned account', async () => {
 	const hijack = new FormData();
 	hijack.set('id', String(p.id));
 	await expect(actions.delete(event({ id: Number(other.id) }, hijack))).rejects.toThrow();
+	expect(getFareProviderById(Number(p.id))).toBeTruthy();
 
 	const body = new FormData();
 	body.set('id', String(p.id));

@@ -62,7 +62,7 @@ test('health does not leak sensitive data', async () => {
 	(globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler = true;
 	const res = await healthGet(healthEvent());
 	const text = await res.text();
-	expect(text).not.toContain('roamarr.kitdb');
+	expect(text).not.toContain('roamarr-db');
 	expect(text).not.toContain('secret');
 	expect(text).toMatch(/^\{["']ok["']/);
 });
@@ -91,7 +91,7 @@ test('deep health masks internal error messages on integrity failure', async () 
 	(globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler = true;
 	// Point the database path at an empty directory so the native open succeeds
 	// but the integrity check fails. The error detail must NOT surface raw.
-	const bogusDir = join(tmpdir(), `roamarr-health-bogus-${Date.now()}.kitdb`);
+	const bogusDir = join(tmpdir(), `roamarr-health-bogus-${Date.now()}-db`);
 	mkdirSync(bogusDir, { recursive: true });
 	const original = process.env.MONGREL_DATABASE_PATH;
 	process.env.MONGREL_DATABASE_PATH = bogusDir;

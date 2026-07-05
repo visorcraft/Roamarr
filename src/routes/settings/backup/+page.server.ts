@@ -16,6 +16,11 @@ import {
 } from '$lib/server/restore';
 import tar from 'tar-fs';
 
+function userFacingError(e: unknown, fallback: string): string {
+	console.error(fallback, e);
+	return fallback;
+}
+
 const ALLOWED_BACKUP_EXTENSIONS = ['.mongreldb.tar.gz', '.tar.gz'];
 
 function isBackupFilename(name: string): boolean {
@@ -52,8 +57,10 @@ export const actions: Actions = {
 		try {
 			validateRestoredDirectory(restoredDbPath);
 		} catch (e) {
+			const original = e instanceof Error ? e.message : String(e);
+			console.error('Backup integrity check failed:', original);
 			return fail(400, {
-				error: e instanceof Error ? e.message : 'Backup integrity check failed'
+				error: userFacingError(e, 'Backup integrity check failed')
 			});
 		}
 
@@ -66,7 +73,9 @@ export const actions: Actions = {
 		throw redirect(303, '/settings/backup');
 	} catch (e) {
 		if (e && typeof e === 'object' && 'status' in e) throw e;
-		return fail(400, { error: e instanceof Error ? e.message : 'Restore failed' });
+		const original = e instanceof Error ? e.message : String(e);
+		console.error('Restore failed:', original);
+		return fail(400, { error: userFacingError(e, 'Restore failed') });
 	} finally {
 		try {
 			unlinkSync(archivePath);

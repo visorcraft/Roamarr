@@ -51,9 +51,15 @@ test('setup action returns 429 when rate limited', async () => {
 	expect(result.data.retryAfter).toBeGreaterThan(0);
 });
 
-test('setup load exposes missing-secret flag', () => {
-	expect((load as any)({ locals: {} }).missingSecret).toBe(false);
-	expect((load as any)({ locals: { missingSecret: true } }).missingSecret).toBe(true);
+test('setup load exposes missing-secret flag and db check', async () => {
+	const ok = await (load as any)({ locals: {} });
+	expect(ok.missingSecret).toBe(false);
+	expect(ok.setupCheck.secretPresent).toBe(true);
+	expect(ok.setupCheck.writable).toBe(true);
+
+	const missing = await (load as any)({ locals: { missingSecret: true } });
+	expect(missing.missingSecret).toBe(true);
+	expect(missing.setupCheck.secretPresent).toBe(true);
 });
 
 test('setup action rejects when ROAMARR_SECRET is missing', async () => {

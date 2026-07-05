@@ -1,5 +1,6 @@
 import { fail, redirect, type Actions, type ServerLoad } from '@sveltejs/kit';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
+import { validateSetupDb } from '$lib/server/setupValidation';
 import { users } from '$lib/server/db/mongrelSchema';
 import { getSettings, updateSettings } from '$lib/server/settings';
 import { checkRateLimit } from '$lib/server/rateLimit';
@@ -42,16 +43,21 @@ export function _createAdmin(
 	};
 }
 
-export const load: ServerLoad = ({ locals }) => {
-	return { missingSecret: locals.missingSecret ?? false };
+export const load: ServerLoad = async ({ locals }) => {
+	const setupCheck = await validateSetupDb();
+	return {
+		missingSecret: locals.missingSecret ?? false,
+		bootError: locals.bootError,
+		setupCheck
+	};
 };
 
 export const actions: Actions = {
 	default: async ({ request, cookies, getClientAddress, locals }) => {
-		if (locals.missingSecret) {
+		if (locals.missingSecret || locals.bootError) {
 			return fail(400, {
 				error:
-					'ROAMARR_SECRET is not set. Generate one with `openssl rand -base64 32`, set it in your environment or .env file, and restart Roamarr before creating the admin account.'
+					'ROAMARR_SECRET or the database is not ready. Fix the issue shown on the setup page before creating the admin account.'
 			});
 		}
 
@@ -64,11 +70,14 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const email = String(f.get('email') ?? ''),
 			password = String(f.get('password') ?? '');
+		const confirmPassword = String(f.get('confirmPassword') ?? '');
 		const displayName = String(f.get('displayName') ?? ''),
 			instanceName = String(f.get('instanceName') ?? 'Roamarr');
 		const timezone = String(f.get('timezone') ?? 'UTC');
 		if (!email || password.length < 8 || !displayName)
 			return fail(400, { error: 'All fields required; password ≥ 8 chars.' });
+		if (password !== confirmPassword)
+			return fail(400, { error: 'Passwords do not match.' });
 		let user;
 		try {
 			user = _createAdmin(

@@ -5,7 +5,7 @@ import { DEFAULT_THEME_ID, themeForId } from '$lib/themes';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = ({ locals }) => {
-	if (locals.missingSecret) {
+	if (locals.missingSecret || locals.bootError) {
 		const theme = themeForId(DEFAULT_THEME_ID);
 		return {
 			user: null,

@@ -2,15 +2,14 @@ import { redirect, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
-import { bootApp, isMissingSecret } from '$lib/server/boot';
+import { bootApp, isMissingSecret, getBootError } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
 import type { ToastVariant } from '$lib/toast';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
-// start: adapter-node imports this module on `node build`, so a failed migration fails
-// process startup rather than on the first HTTP request. A missing ROAMARR_SECRET is
-// recorded so the setup page can render with instructions; the handle hook below blocks
-// every other route and the setup action.
+// start. A failed migration or missing ROAMARR_SECRET is recorded so the setup page
+// can render diagnostics instead of crashing the process. The handle hook below blocks
+// every other route and the setup action when boot did not complete.
 // Idempotent; safe under Vite HMR (the `booted` flag short-circuits re-runs) and build
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
@@ -39,7 +38,7 @@ function contentSecurityPolicy() {
 		.join('; ');
 }
 
-function isAllowedDuringMissingSecret(path: string) {
+function isAllowedDuringSetupIssue(path: string) {
 	return (
 		path === '/setup' ||
 		path.startsWith('/_app/') ||
@@ -64,11 +63,13 @@ function applySecurityHeaders(response: Response) {
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
+	const bootError = getBootError();
 
-	if (isMissingSecret()) {
+	if (isMissingSecret() || bootError) {
 		event.locals.user = null;
-		event.locals.missingSecret = true;
-		if (!isAllowedDuringMissingSecret(path)) {
+		event.locals.missingSecret = isMissingSecret();
+		event.locals.bootError = bootError;
+		if (!isAllowedDuringSetupIssue(path)) {
 			throw redirect(307, '/setup');
 		}
 		return applySecurityHeaders(await resolve(event));

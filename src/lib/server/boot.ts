@@ -9,9 +9,14 @@ export function requireSecret(secret: string | undefined) {
 
 let booted = false;
 let missingSecret = false;
+let bootError: string | undefined;
 
 export function isMissingSecret() {
 	return missingSecret;
+}
+
+export function getBootError() {
+	return bootError;
 }
 
 /**
@@ -21,9 +26,9 @@ export function isMissingSecret() {
  * Migrations always run before the scheduler ticks (global constraint:
  * "Migrations run on boot before the scheduler starts").
  *
- * If ROAMARR_SECRET is not set, the app records the missing secret state and
- * returns early. This lets the setup page render with instructions, while the
- * request handler blocks every other route and the setup action.
+ * If ROAMARR_SECRET is not set or the database cannot be opened, the app
+ * records the state and returns early so the setup page can render diagnostics.
+ * The request handler blocks every other route and the setup action.
  */
 export function bootApp() {
 	if (booted) return;
@@ -33,17 +38,21 @@ export function bootApp() {
 		return;
 	}
 
-	// Apply a pending restore before opening the database so the replacement
-	// directory is used on this boot.
-	applyPendingRestore();
+	try {
+		// Apply a pending restore before opening the database so the replacement
+		// directory is used on this boot.
+		applyPendingRestore();
 
-	// Trigger lazy open/migrate of the MongrelDB Kit singleton.
-	kit.tableNames();
+		// Trigger lazy open/migrate of the MongrelDB Kit singleton.
+		kit.tableNames();
 
-	// Pending restore is complete; remove the old database directory if one was
-	// kept as a backup.
-	cleanupRestoreOldDirectories();
+		// Pending restore is complete; remove the old database directory if one was
+		// kept as a backup.
+		cleanupRestoreOldDirectories();
 
-	ensureDefaultBenefitTemplates();
-	startScheduler();
+		ensureDefaultBenefitTemplates();
+		startScheduler();
+	} catch (e) {
+		bootError = e instanceof Error ? e.message : String(e);
+	}
 }

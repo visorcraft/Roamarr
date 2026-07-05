@@ -7,6 +7,7 @@ declare global {
 			user: import('$lib/server/auth').AppUser | null;
 			flash?: string | { message: string; variant?: ToastVariant };
 			missingSecret?: boolean;
+			bootError?: string;
 		}
 		interface PageData {}
 		interface PageState {}

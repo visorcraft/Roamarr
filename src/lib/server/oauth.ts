@@ -138,15 +138,6 @@ export function validateScopes(requested: string[], allowed: Scope[]): Scope[] {
 	return requested.filter((s) => set.has(s)) as Scope[];
 }
 
-export interface AuthorizationCode {
-	clientId: string;
-	userId: number;
-	scopes: Scope[];
-	codeChallenge: string;
-	codeChallengeMethod: string;
-	redirectUri: string;
-}
-
 export function createAuthorizationCode(params: {
 	userId: number;
 	clientId: string;

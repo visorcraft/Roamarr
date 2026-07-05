@@ -78,10 +78,6 @@ export function resetTables(kit: KitDatabase, ...tables: { tableName: string }[]
 	}
 }
 
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
 function nullableFk(id: bigint | null | undefined): number | null {
 	if (id == null || id === 0n) return null;
 	return Number(id);

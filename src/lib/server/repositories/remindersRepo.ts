@@ -347,8 +347,6 @@ export function deleteOldNotifications(before: string): bigint {
 
 // Scheduler runs
 
-type CreateSchedulerRunInput = Pick<SchedulerRunRow, 'startedAt' | 'success' | 'errorMessage' | 'finishedAt'>;
-
 type UpdateSchedulerRunInput = Partial<Omit<SchedulerRunRow, 'id'>>;
 
 export function startSchedulerRun(_kind?: string): SchedulerRunRow {

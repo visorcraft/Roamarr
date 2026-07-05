@@ -1,7 +1,7 @@
 import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { tripPolls, tripPollOptions, tripPollVotes } from '$lib/server/db/mongrelSchema';
-import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import type { Row, Insert } from '@visorcraft/mongreldb-kit';
 
 export type KitPoll = Row<typeof tripPolls>;
 export type KitPollOption = Row<typeof tripPollOptions>;
@@ -152,7 +152,7 @@ export function createPoll(tripId: number, question: string, options: string[]):
 	const pollId = idFromBigInt(row.id);
 
 	for (let i = 0; i < options.length; i++) {
-		const optionRow = kit
+		kit
 			.insertInto(tripPollOptions)
 			.values({
 				poll_id: toBigInt(pollId),

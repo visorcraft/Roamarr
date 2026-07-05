@@ -1,4 +1,4 @@
-import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { test, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

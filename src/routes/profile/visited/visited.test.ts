@@ -187,7 +187,7 @@ test('load includes country visit summaries', () => {
 		visited_on: '2023-06-01',
 		source: 'manual'
 	}).executeSync();
-	const t = makeTrip(kitDb(), u.id, {
+	makeTrip(kitDb(), u.id, {
 		destinationCountryCode: 'FR',
 		startDate: '2024-02-10',
 		endDate: '2024-02-20',

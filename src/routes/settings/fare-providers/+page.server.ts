@@ -39,7 +39,7 @@ export const actions: Actions = {
 		throw redirect(303, '/settings/fare-providers');
 	},
 	update: async ({ request, locals }) => {
-		const u = requireUser(locals);
+		requireUser(locals);
 		const f = await request.formData();
 		updateFareProvider(Number(f.get('id')), {
 			label: String(f.get('label') || ''),
@@ -49,7 +49,7 @@ export const actions: Actions = {
 		throw redirect(303, '/settings/fare-providers');
 	},
 	delete: async ({ request, locals }) => {
-		const u = requireUser(locals);
+		requireUser(locals);
 		const f = await request.formData();
 		deleteFareProvider(Number(f.get('id')));
 		throw redirect(303, '/settings/fare-providers');

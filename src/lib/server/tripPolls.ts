@@ -6,7 +6,7 @@ import { requireEditableTrip, requireCompanionOnTrip } from './ownership';
 import { Validator } from './validation';
 import { bumpTripUpdatedAt } from './tz';
 
-export type { Poll, PollOption, PollVote } from './repositories/pollsRepo';
+export type { Poll } from './repositories/pollsRepo';
 
 export function listPollsWithVotes(tripId: number): pollsRepo.Poll[] {
 	return pollsRepo.listPollsForTrip(tripId);

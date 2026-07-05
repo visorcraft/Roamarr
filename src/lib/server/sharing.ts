@@ -65,25 +65,6 @@ export function canViewDetails(userId: number, trip: Trip) {
 	return viaGroup?.showDetails ?? false;
 }
 
-function toSegmentProjection(row: Record<string, unknown>, includeDetails = false) {
-	const base = {
-		type: row.type as string,
-		title: row.title as string,
-		startAt: row.start_at as string,
-		endAt: (row.end_at as string | null) ?? null,
-		status: row.status as string,
-		location: (row.location as string | null) ?? null,
-		meetingPoint: (row.meeting_point as string | null) ?? null,
-		meetingAt: (row.meeting_at as string | null) ?? null
-	};
-	if (!includeDetails) return base;
-	return {
-		...base,
-		confirmationNumber: (row.confirmation_number as string | null) ?? null,
-		detailsJson: (row.details_json as string | null) ?? null
-	};
-}
-
 export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = false) {
 	return {
 		id: trip.id,

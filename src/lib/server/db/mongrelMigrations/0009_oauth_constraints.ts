@@ -9,7 +9,7 @@ import {
 	encodeRowGuardKey,
 	parentExists
 } from '@visorcraft/mongreldb-kit';
-import { oauthClients, oauthTokens, users } from '../mongrelSchema';
+import { oauthClients } from '../mongrelSchema';
 
 function isoNow(): string {
 	return new Date().toISOString();

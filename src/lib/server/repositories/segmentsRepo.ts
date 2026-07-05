@@ -27,10 +27,6 @@ function toBigInt(id: number): bigint {
 	return BigInt(id);
 }
 
-function numberOrNull(id: bigint | null | undefined): number | null {
-	return id == null ? null : Number(id);
-}
-
 function nullableIntToNumber(id: bigint | null | undefined): number | null {
 	if (id == null || id === 0n) return null;
 	return Number(id);

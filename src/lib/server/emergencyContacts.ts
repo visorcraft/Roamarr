@@ -5,7 +5,6 @@ import { logAudit } from './audit';
 import { requireOwnedTrip } from './ownership';
 import { sendMail } from './notify';
 import {
-	listEmergencyContacts as listRepo,
 	createEmergencyContact as createRepo,
 	updateEmergencyContact as updateRepo,
 	deleteEmergencyContact as deleteRepo,

@@ -4,7 +4,6 @@ import * as usersRepo from './repositories/usersRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import * as profileRepo from './repositories/profileRepo';
 import {
-	createReminder,
 	upsertReminderBySource,
 	deleteReminder,
 	deleteRemindersForRef,

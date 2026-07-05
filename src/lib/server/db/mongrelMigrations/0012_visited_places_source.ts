@@ -1,5 +1,5 @@
 import type { Migration } from '@visorcraft/mongreldb-kit';
-import { eq as kitEq, and as kitAnd } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { visitedCountries, visitedUsStates } from '../mongrelSchema';
 
 /**
@@ -32,7 +32,7 @@ const visitedPlacesSourceMigration: Migration = {
 			byUser.set(userId, map);
 		}
 
-		for (const [userId, codes] of byUser) {
+		for (const [, codes] of byUser) {
 			for (const [code, id] of codes) {
 				if (code.startsWith('US-')) continue;
 				const normalized = `US-${code.toUpperCase()}`;

@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripTemplates,

@@ -1,4 +1,4 @@
-import { eq as kitEq, asc, desc, type OrderBy, type TableSpec, type Row, type Insert } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, desc, type OrderBy, type TableSpec, type Row, type Insert } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { logAudit } from './audit';
 import { requireEditableTrip, requireOwnedTripRow } from './ownership';

@@ -17,7 +17,7 @@ import {
 	updateBenefitTemplate,
 	deleteBenefitTemplate
 } from './settingsRepo';
-import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
+import { settings } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 
 test('getSettings returns the singleton row with defaults', () => {

@@ -1,6 +1,5 @@
 import {
 	listLoyaltyPrograms as listRepo,
-	createLoyaltyProgram as createRepo,
 	updateLoyaltyProgram as updateRepo,
 	deleteLoyaltyProgram as deleteRepo
 } from './repositories/profileRepo';

@@ -16,7 +16,6 @@ import {
 	makeShare,
 	makeInsurancePolicy,
 	makeFareProvider,
-	makeFareWatch,
 	makeExpense
 } from '../../../../tests/helpers';
 

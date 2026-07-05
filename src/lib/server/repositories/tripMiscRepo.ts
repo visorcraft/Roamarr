@@ -1,6 +1,5 @@
 import {
 	eq,
-	and,
 	or,
 	isNull,
 	inList,
@@ -20,9 +19,7 @@ import {
 	tripMedications,
 	tripEntryRequirements,
 	tripImportantItems,
-	trips,
-	tripCompanions,
-	users
+	tripCompanions
 } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
 
@@ -49,10 +46,6 @@ function nullableDate(value: string | null | undefined): string | null {
 function nullableInt(value: number | null | undefined): bigint | null {
 	if (value == null) return null;
 	return BigInt(value);
-}
-
-function nullIntPredicate(column: typeof tripChecklistItems.assigned_to_companion_id) {
-	return or(isNull(column), eq(column, 0n));
 }
 
 // ============================================================================

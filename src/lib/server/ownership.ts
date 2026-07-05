@@ -6,7 +6,6 @@ import {
 	cards,
 	fareProviders,
 	segments,
-	travelDocuments,
 	tripCompanions,
 	users
 } from './db/mongrelSchema';

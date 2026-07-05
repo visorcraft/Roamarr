@@ -1,5 +1,4 @@
 import { test, expect, vi, beforeEach } from 'vitest';
-import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {

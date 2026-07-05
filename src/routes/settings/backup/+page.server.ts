@@ -9,7 +9,6 @@ import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { getDatabasePath } from '$lib/server/db/paths';
 import {
-	getAttachmentsPath,
 	findMongrelDbDirectory,
 	findAttachmentsDirectory,
 	validateRestoredDirectory,

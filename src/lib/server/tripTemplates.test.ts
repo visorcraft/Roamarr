@@ -116,7 +116,7 @@ test('listTripTemplates returns only the users templates', () => {
 });
 
 test('saveTripTemplate rejects non-owner', () => {
-	const { u, t } = seed();
+	const { t } = seed();
 	const other = usersRepo.createUser({
 		email: 'no@x.c',
 		password_hash: 'x',

@@ -12,7 +12,7 @@ const TEMPLATE_NAME_MAX = 100;
 const ITEM_LABEL_MAX = 200;
 const ITEM_CATEGORY_MAX = 50;
 
-export type { PackingTemplate, PackingTemplateItem } from './repositories/templatesRepo';
+export type { PackingTemplate } from './repositories/templatesRepo';
 
 function requireTemplateOwner(userId: number, templateId: number) {
 	const template = templatesRepo.getPackingTemplateById(templateId);

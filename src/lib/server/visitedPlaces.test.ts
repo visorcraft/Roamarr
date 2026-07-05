@@ -142,7 +142,7 @@ describe('visitedPlaces', () => {
 
 	test('autoMarkFromAllTrips aggregates across owned trips', () => {
 		const t1 = makeTrip(ctx.kit, userId, { destinationCountryCode: 'FR', status: 'completed' });
-		const t2 = makeTrip(ctx.kit, userId, { destinationCountryCode: 'PT', status: 'completed' });
+		makeTrip(ctx.kit, userId, { destinationCountryCode: 'PT', status: 'completed' });
 		makeSegment(ctx.kit, t1.id, { countryCode: 'DE', startAt: '2020-01-01T00:00:00.000Z' });
 		const added = autoMarkFromAllTrips(userId);
 		expect(added.countries.sort()).toEqual(['DE', 'FR', 'PT']);
@@ -186,13 +186,14 @@ describe('visitedPlaces', () => {
 			endDate: '2023-05-10',
 			status: 'completed'
 		});
-		const t2 = makeTrip(ctx.kit, userId, {
+
+		makeSegment(ctx.kit, t1.id, { countryCode: 'JP', startAt: '2023-05-02T00:00:00.000Z' });
+		makeTrip(ctx.kit, userId, {
 			destinationCountryCode: 'FR',
 			startDate: '2024-01-01',
 			endDate: '2024-01-05',
 			status: 'completed'
 		});
-		makeSegment(ctx.kit, t1.id, { countryCode: 'JP', startAt: '2023-05-02T00:00:00.000Z' });
 		const summaries = countryVisitSummaries(userId);
 		const jp = summaries.find((s) => s.code === 'JP');
 		const fr = summaries.find((s) => s.code === 'FR');

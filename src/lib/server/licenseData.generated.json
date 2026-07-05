@@ -2,8 +2,8 @@
 	"schemaVersion": 1,
 	"source": {
 		"packageName": "roamarr",
-		"packageVersion": "0.9.1",
-		"lockfileSha256": "6c002d221093ba30971f34cc4a60681c2b4b6f0c1987224a63fb4f570edbf157"
+		"packageVersion": "0.10.1",
+		"lockfileSha256": "772fc46418c0b560ee24de450f542a6aa34aa9faa73de475b20ea0aaaf3eede0"
 	},
 	"projectLicense": {
 		"title": "Roamarr License",
@@ -2309,7 +2309,7 @@
 			"license": "MIT",
 			"scope": "production",
 			"url": "https://github.com/nodejs/readable-stream",
-			"packagePath": "node_modules/duplexer2/node_modules/readable-stream"
+			"packagePath": "node_modules/readable-stream"
 		},
 		{
 			"name": "readdirp",
@@ -2405,7 +2405,7 @@
 			"license": "MIT",
 			"scope": "production",
 			"url": "https://github.com/feross/safe-buffer",
-			"packagePath": "node_modules/duplexer2/node_modules/safe-buffer"
+			"packagePath": "node_modules/safe-buffer"
 		},
 		{
 			"name": "safer-buffer",
@@ -2573,7 +2573,7 @@
 			"license": "MIT",
 			"scope": "production",
 			"url": "https://github.com/nodejs/string_decoder",
-			"packagePath": "node_modules/duplexer2/node_modules/string_decoder"
+			"packagePath": "node_modules/string_decoder"
 		},
 		{
 			"name": "string-width",

@@ -4,7 +4,7 @@ import {
 	generateAuthenticationOptions,
 	verifyAuthenticationResponse
 } from '@simplewebauthn/server';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { eq as kitEq, lt as kitLt, and as kitAnd } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { passkeys, webauthnChallenges } from './db/mongrelSchema';

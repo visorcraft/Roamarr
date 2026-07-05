@@ -24,8 +24,7 @@ import { load, actions } from './+page.server';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import {
 	createFareProvider,
-	listFareProvidersForUser,
-	type FareProviderAccount
+	listFareProvidersForUser
 } from '$lib/server/repositories/travelDataRepo';
 import { fareProviders, users } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';

@@ -79,8 +79,8 @@ marketing dashboard.
 Roamarr can:
 
 - Track trips, itinerary segments, dates, timezones, booking status, notes,
-  tags, favorites, archives, comments, printable itineraries, and trip-page maps
-  of the next upcoming city.
+  tags, favorites, archives, comments, printable itineraries, visited places,
+  weather forecasts, and trip-page maps of the next upcoming city.
 - Manage flights, hotels, trains, rental cars, rideshares, shuttles, boats,
   food plans, events, parking, directions, points of interest, todos, and free
   form notes.
@@ -96,8 +96,12 @@ Roamarr can:
   attachments, splits, settlements, budgets, and payment due dates.
 - Import and export trip data as JSON or CSV, including dry-run previews before
   importing.
-- Send reminders and operational notifications in app, by SMTP, or through
-  signed webhooks.
+- Send reminders and operational notifications in app, by SMTP, per-user SMTP
+  overrides, or through signed webhooks.
+- Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
+  codes, and active session review.
+- Connect external clients via OAuth and expose an MCP/AI integration endpoint
+  for tool access.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
   jobs, backups, restores, demo data, instance stats, health checks, database
   maintenance (integrity check, compaction, flush, and doctor), and map
@@ -123,9 +127,10 @@ keep it on persistent storage that fits your own setup.
 ### Private by default
 
 The app requires a `ROAMARR_SECRET` before boot. Sensitive fields such as travel
-document numbers, fare-provider API keys, and the SMTP password are encrypted at
-rest with AES-256-GCM. Passwords use argon2id, session cookies contain random
-tokens, and the database stores only token hashes.
+document numbers, fare-provider API keys, SMTP passwords, TOTP secrets, and
+per-user SMTP passwords are encrypted at rest with AES-256-GCM. Passwords use
+argon2id, session cookies contain random tokens, and the database stores only
+token hashes.
 
 Public share links and calendar feeds use reduced viewer data instead of
 dumping every private field attached to a trip. Roamarr is built around the
@@ -150,7 +155,7 @@ integration.
 
 - Node.js 22.12 or newer.
 - npm, using the checked-in `package-lock.json`.
-- A built MongrelDB Kit native package available at the path declared in `package.json`.
+- MongrelDB and MongrelDB Kit npm packages installed by `npm ci`.
 - A persistent database path for local app data.
 - `ROAMARR_SECRET`, generated with `openssl rand -base64 32`.
 
@@ -272,14 +277,20 @@ After the first setup flow, use Settings for:
 Use Profile for:
 
 - Password changes, email changes, and active session management.
+- Security settings: TOTP authenticator setup, backup codes, and WebAuthn
+  passkey management.
 - Calendar feed token management.
 - Per-user theme selection, including High Contrast.
+- OAuth client management (for users creating connected clients).
 
 ## Architecture
 
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
 `@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB Kit, Luxon,
-Nodemailer, MapLibre GL JS, and Vitest.
+Nodemailer, MapLibre GL JS, and Vitest. Recent additions include WebAuthn
+(`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
+(`@modelcontextprotocol/sdk`), 3D globe rendering (`three`), and tar streaming
+(`tar-fs`).
 
 Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies
 migrations, ensures default settings and benefit templates exist, then starts a

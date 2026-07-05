@@ -15,9 +15,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { countNotifications } from './remindersRepo';
 import { countSegments } from './segmentsRepo';
-import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
-
-type KitAuditLog = Row<typeof kitAuditLogs>;
+import type { Row, Insert } from '@visorcraft/mongreldb-kit';
 
 interface AuditMeta {
 	[key: string]: unknown;
@@ -77,7 +75,7 @@ export function logAudit(
 	entityId: number,
 	meta: AuditMeta = {}
 ) {
-	const row = kit
+	kit
 		.insertInto(kitAuditLogs)
 		.values({
 			user_id: toBigInt(userId),

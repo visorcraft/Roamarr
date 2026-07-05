@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, and, inList, asc, ne as kitNe } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, and, inList, asc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	users as usersTable,

@@ -16,7 +16,6 @@ import {
 	deleteBenefitTemplate
 } from './benefitTemplates';
 import { benefitTemplates } from './db/mongrelSchema';
-import { eq } from '@visorcraft/mongreldb-kit';
 
 test('default templates are seeded by migrations', () => {
 	const templates = listBenefitTemplates();

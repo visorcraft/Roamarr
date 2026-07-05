@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, existsSync, unlinkSync } from 'node:fs';
+import { createReadStream, createWriteStream, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { createGzip } from 'node:zlib';

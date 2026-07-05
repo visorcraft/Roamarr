@@ -11,7 +11,6 @@ import {
 	updateFareWatch,
 	deleteFareWatch,
 	listActiveFareWatches,
-	touchFareWatch,
 	type FareWatch,
 	type FareProviderAccount
 } from '../repositories/travelDataRepo';

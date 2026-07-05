@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.10.0",
+	"version": "0.10.1",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -55,9 +55,6 @@
 		"unzipper": "^0.12.5"
 	},
 	"overrides": {
-		"cookie": "^0.7.0",
-		"@esbuild-kit/core-utils": {
-			"esbuild": "^0.25.0"
-		}
+		"cookie": "^0.7.0"
 	}
 }

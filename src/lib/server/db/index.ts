@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { KitDatabase, migrateSync } from '@visorcraft/mongreldb-kit';
+import { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { schema } from './mongrelSchema';
 import { migrations } from './mongrelMigrations';
 import { getDatabasePath } from './paths';

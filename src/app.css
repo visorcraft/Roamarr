@@ -576,6 +576,19 @@
 	.app-search-input::placeholder {
 		color: var(--theme-readable-faint);
 	}
+	.app-nav-section-header {
+		color: var(--theme-readable-muted);
+	}
+	.app-nav-section-header:hover {
+		background: var(--theme-control-hover);
+		color: var(--theme-strong);
+	}
+	.app-nav-section-items a {
+		padding-left: 2.25rem;
+	}
+	.app-nav-chevron {
+		color: var(--theme-readable-faint);
+	}
 	.app-nav-item {
 		color: color-mix(in oklab, var(--theme-muted) 86%, var(--theme-ink));
 	}

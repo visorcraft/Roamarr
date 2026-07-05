@@ -182,6 +182,11 @@ PORT=3000
 ORIGIN=http://localhost:5173
 ```
 
+> **Important:** `ROAMARR_SECRET` is mandatory. Roamarr uses it to encrypt the Kit
+> database and other sensitive fields at rest. If it is not set, the first-boot
+> setup page will refuse to create the admin account and will show instructions
+> for generating and setting the secret.
+
 Then start the development server:
 
 ```bash
@@ -212,7 +217,7 @@ source.
 
 | Variable | Required | Default | Notes |
 | -------- | -------- | ------- | ----- |
-| `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. The app refuses to boot if unset. |
+| `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. Generate with `openssl rand -base64 32`. The setup page blocks admin creation until this is set. |
 | `MONGREL_DATABASE_PATH` | no | `./roamarr.kitdb` | MongrelDB Kit data directory or file path. Takes precedence over `DATABASE_PATH`. |
 | `DATABASE_PATH` | no | `./roamarr.kitdb` | Backwards-compatible path. If it looks like a directory (no `.db`/`.sqlite` extension) it is used as the kit data directory. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |

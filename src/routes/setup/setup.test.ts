@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { _createAdmin as createAdmin, actions } from './+page.server';
+import { _createAdmin as createAdmin, actions, load } from './+page.server';
 import { users } from '$lib/server/db/mongrelSchema';
 import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
@@ -43,9 +43,26 @@ test('setup action returns 429 when rate limited', async () => {
 	const result = (await actions.default({
 		request: { formData: async () => new Map() },
 		getClientAddress: () => ip,
-		cookies: { set: vi.fn() }
+		cookies: { set: vi.fn() },
+		locals: {}
 	} as any)) as { status: number; data: { error: string; retryAfter?: number } };
 	expect(result.status).toBe(429);
 	expect(result.data.error).toMatch(/too many/i);
 	expect(result.data.retryAfter).toBeGreaterThan(0);
+});
+
+test('setup load exposes missing-secret flag', () => {
+	expect((load as any)({ locals: {} }).missingSecret).toBe(false);
+	expect((load as any)({ locals: { missingSecret: true } }).missingSecret).toBe(true);
+});
+
+test('setup action rejects when ROAMARR_SECRET is missing', async () => {
+	const result = (await actions.default({
+		request: { formData: async () => new Map() },
+		getClientAddress: () => '1.2.3.4',
+		cookies: { set: vi.fn() },
+		locals: { missingSecret: true }
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/ROAMARR_SECRET/);
 });

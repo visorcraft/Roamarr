@@ -8,6 +8,11 @@ export function requireSecret(secret: string | undefined) {
 }
 
 let booted = false;
+let missingSecret = false;
+
+export function isMissingSecret() {
+	return missingSecret;
+}
 
 /**
  * Idempotent one-time boot: enforce secret, apply any pending restore from a
@@ -15,11 +20,18 @@ let booted = false;
  * singleton, then start the scheduler.
  * Migrations always run before the scheduler ticks (global constraint:
  * "Migrations run on boot before the scheduler starts").
+ *
+ * If ROAMARR_SECRET is not set, the app records the missing secret state and
+ * returns early. This lets the setup page render with instructions, while the
+ * request handler blocks every other route and the setup action.
  */
 export function bootApp() {
 	if (booted) return;
 	booted = true;
-	requireSecret(process.env.ROAMARR_SECRET);
+	if (!process.env.ROAMARR_SECRET) {
+		missingSecret = true;
+		return;
+	}
 
 	// Apply a pending restore before opening the database so the replacement
 	// directory is used on this boot.

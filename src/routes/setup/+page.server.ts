@@ -1,4 +1,4 @@
-import { fail, redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions, type ServerLoad } from '@sveltejs/kit';
 import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
 import { users } from '$lib/server/db/mongrelSchema';
 import { getSettings, updateSettings } from '$lib/server/settings';
@@ -42,8 +42,19 @@ export function _createAdmin(
 	};
 }
 
+export const load: ServerLoad = ({ locals }) => {
+	return { missingSecret: locals.missingSecret ?? false };
+};
+
 export const actions: Actions = {
-	default: async ({ request, cookies, getClientAddress }) => {
+	default: async ({ request, cookies, getClientAddress, locals }) => {
+		if (locals.missingSecret) {
+			return fail(400, {
+				error:
+					'ROAMARR_SECRET is not set. Generate one with `openssl rand -base64 32`, set it in your environment or .env file, and restart Roamarr before creating the admin account.'
+			});
+		}
+
 		const limit = checkRateLimit(getClientAddress(), 'setup');
 		if (!limit.allowed)
 			return fail(429, {

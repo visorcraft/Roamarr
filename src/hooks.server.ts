@@ -2,13 +2,15 @@ import { redirect, type Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
-import { bootApp } from '$lib/server/boot';
+import { bootApp, isMissingSecret } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
 import type { ToastVariant } from '$lib/toast';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
-// start: adapter-node imports this module on `node build`, so a missing ROAMARR_SECRET
-// or a failed migration fails process startup rather than on the first HTTP request.
+// start: adapter-node imports this module on `node build`, so a failed migration fails
+// process startup rather than on the first HTTP request. A missing ROAMARR_SECRET is
+// recorded so the setup page can render with instructions; the handle hook below blocks
+// every other route and the setup action.
 // Idempotent; safe under Vite HMR (the `booted` flag short-circuits re-runs) and build
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
@@ -37,7 +39,41 @@ function contentSecurityPolicy() {
 		.join('; ');
 }
 
+function isAllowedDuringMissingSecret(path: string) {
+	return (
+		path === '/setup' ||
+		path.startsWith('/_app/') ||
+		path.startsWith('/static/') ||
+		path.startsWith('/maps/') ||
+		path === '/favicon.ico' ||
+		path === '/manifest.json' ||
+		path.startsWith('/icon-') ||
+		path === '/apple-touch-icon.png' ||
+		path === '/logo-transparent.png' ||
+		path === '/alt-logo-transparent.png'
+	);
+}
+
+function applySecurityHeaders(response: Response) {
+	response.headers.set('X-Frame-Options', 'DENY');
+	response.headers.set('X-Content-Type-Options', 'nosniff');
+	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+	response.headers.set('Content-Security-Policy', contentSecurityPolicy());
+	return response;
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
+	const path = event.url.pathname;
+
+	if (isMissingSecret()) {
+		event.locals.user = null;
+		event.locals.missingSecret = true;
+		if (!isAllowedDuringMissingSecret(path)) {
+			throw redirect(307, '/setup');
+		}
+		return applySecurityHeaders(await resolve(event));
+	}
+
 	const sessionToken = event.cookies.get('session');
 	event.locals.user = await validateSession(sessionToken);
 	if (sessionToken && event.locals.user) {
@@ -66,8 +102,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 		event.cookies.set('flash', '', { path: '/', maxAge: 0 });
 	}
 
-	const path = event.url.pathname;
-
 	if (!isSetupComplete() && path !== '/setup' && path !== '/health' && path !== '/health/deep') throw redirect(302, '/setup');
 	if (isSetupComplete() && path === '/setup') throw redirect(302, '/login');
 
@@ -79,10 +113,5 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (!allowed) throw redirect(302, '/profile/change-password');
 	}
 
-	const response = await resolve(event);
-	response.headers.set('X-Frame-Options', 'DENY');
-	response.headers.set('X-Content-Type-Options', 'nosniff');
-	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set('Content-Security-Policy', contentSecurityPolicy());
-	return response;
+	return applySecurityHeaders(await resolve(event));
 };

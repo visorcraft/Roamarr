@@ -117,6 +117,19 @@ test.describe('mobile sidebar drawer', () => {
 		}
 	});
 
+	test('tapping a link closes the mobile drawer', async ({ page }) => {
+		await page.setViewportSize({ width: 375, height: 667 });
+		await page.goto('/', { waitUntil: 'networkidle' });
+
+		const dialog = page.locator('aside[role="dialog"]');
+		await page.getByLabel('Open menu').click();
+		await expect(dialog).toBeVisible();
+
+		await dialog.getByRole('link', { name: 'Trips', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(page).toHaveURL('/trips');
+	});
+
 	test('focus is trapped inside the mobile drawer', async ({ page }) => {
 		await page.setViewportSize({ width: 375, height: 667 });
 		await page.goto('/', { waitUntil: 'networkidle' });

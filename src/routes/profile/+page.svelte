@@ -228,14 +228,14 @@
 		<ul class="mt-4 list-stack">
 			{#each data.sessions as s (s.id)}
 				<li class="list-item flex flex-wrap items-center justify-between gap-3">
-					<div class="text-sm">
-						<p class="font-medium text-white">
+					<div class="min-w-0 flex-1">
+						<p class="list-title">
 							{s.current ? 'This session' : `Session ${s.id}`}
 							{#if s.current}<span class="badge badge-brand ml-2">Current</span>{/if}
 						</p>
-						<p class="text-slate-400">
+						<p class="meta mt-0.5">
 							Created {formatDateTime(s.createdAt)} · Expires {formatDateTime(s.expiresAt)}
-							{#if s.lastIp || s.userAgent}<span class="block text-xs text-slate-500">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
+							{#if s.lastIp || s.userAgent}<span class="block text-xs">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
 						</p>
 					</div>
 					<form method="POST" action="?/revokeSession">

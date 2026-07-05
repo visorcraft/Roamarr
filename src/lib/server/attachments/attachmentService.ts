@@ -1,11 +1,7 @@
 import { error } from '@sveltejs/kit';
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import { getAttachmentsPath } from '../paths';
-import { encryptChunkedFile } from './attachmentCrypto';
 import {
-	attachmentPath,
+	saveEncryptedAttachment,
 	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment
 } from './attachmentStorage';
@@ -32,32 +28,20 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	}
 
 	const baseDir = getAttachmentsPath();
-	const storageKey = randomUUID();
-	const finalPath = attachmentPath(storageKey, baseDir);
-	const tempPath = `${finalPath}.tmp`;
-
-	let plaintextBytes = 0;
+	let saveResult: Awaited<ReturnType<typeof saveEncryptedAttachment>>;
 	try {
-		const result = await encryptChunkedFile(
+		saveResult = await saveEncryptedAttachment(
 			file.stream() as ReadableStream<Uint8Array>,
-			tempPath,
+			baseDir,
 			{ maxBytes: MAX_SIZE }
 		);
-		plaintextBytes = result.plaintextBytes;
 	} catch (e) {
-		try {
-			await fs.unlink(tempPath);
-		} catch {
-			// ignore cleanup failure
-		}
 		if ((e as Error).message.includes('maximum allowed size')) {
 			throw error(400, 'File must be 10 MB or smaller');
 		}
 		throw e;
 	}
-
-	await fs.mkdir(path.dirname(finalPath), { recursive: true });
-	await fs.rename(tempPath, finalPath);
+	const { storageKey, plaintextBytes } = saveResult;
 
 	let row: repo.AttachmentRecord;
 	try {
@@ -70,11 +54,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 			context
 		});
 	} catch (e) {
-		try {
-			await fs.unlink(finalPath);
-		} catch {
-			// ignore cleanup failure
-		}
+		deleteEncryptedAttachment(storageKey, baseDir);
 		throw e;
 	}
 

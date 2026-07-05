@@ -17,13 +17,18 @@ export interface SaveResult extends EncryptResult {
 	storageKey: string;
 }
 
+export interface SaveOptions {
+	maxBytes?: number;
+}
+
 export async function saveEncryptedAttachment(
 	input: ReadableStream<Uint8Array>,
-	baseDir: string
+	baseDir: string,
+	options: SaveOptions = {}
 ): Promise<SaveResult> {
 	const storageKey = randomUUID();
 	const outPath = attachmentPath(storageKey, baseDir);
-	const { plaintextBytes, chunkCount } = await encryptChunkedFile(input, outPath);
+	const { plaintextBytes, chunkCount } = await encryptChunkedFile(input, outPath, options);
 	return { storageKey, plaintextBytes, chunkCount };
 }
 

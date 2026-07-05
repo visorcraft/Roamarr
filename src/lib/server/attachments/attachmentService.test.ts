@@ -18,7 +18,7 @@ import {
 import { attachments as attachmentsTable, auditLogs } from '../db/mongrelSchema';
 import { and, eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser } from '../../../../tests/helpers';
-import { attachmentPath } from './attachmentStorage';
+import * as attachmentStorage from './attachmentStorage';
 import * as repo from './attachmentRepo';
 
 async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
@@ -110,7 +110,7 @@ describe('attachmentService', () => {
 	test('deleteAttachment removes the ciphertext file from disk', async () => {
 		const file = fileFromString('disk test', 'disk.pdf', 'application/pdf');
 		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
-		const cipherPath = attachmentPath(att.storageKey, baseDir);
+		const cipherPath = attachmentStorage.attachmentPath(att.storageKey, baseDir);
 		expect(existsSync(cipherPath)).toBe(true);
 
 		await deleteAttachment(att.id);
@@ -169,11 +169,30 @@ describe('attachmentService', () => {
 		vi.spyOn(repo, 'createAttachment').mockImplementationOnce(() => {
 			throw new Error('db boom');
 		});
+		const deleteSpy = vi.spyOn(attachmentStorage, 'deleteEncryptedAttachment');
 
 		const file = fileFromString('staging', 'staging.pdf', 'application/pdf');
 		await expect(
 			createAttachment({ ownerId: userId, file, context: { kind: 'test' } })
 		).rejects.toThrow('db boom');
+
+		expect(deleteSpy).toHaveBeenCalledTimes(1);
+		expect(countFilesRecursively(baseDir)).toBe(0);
+	});
+
+	test('cleans up temp ciphertext when encryption fails', async () => {
+		const file = new File(['x'], 'big.png', { type: 'image/png' });
+		const largeStream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+			pull(controller) {
+				controller.enqueue(new Uint8Array(Buffer.alloc(11 * 1024 * 1024, 0x78)));
+				controller.close();
+			}
+		});
+		file.stream = () => largeStream;
+
+		await expect(
+			createAttachment({ ownerId: userId, file, context: {} })
+		).rejects.toMatchObject({ status: 400 });
 
 		expect(countFilesRecursively(baseDir)).toBe(0);
 	});

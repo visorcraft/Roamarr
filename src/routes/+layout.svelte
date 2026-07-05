@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -123,7 +123,9 @@
 		const path = page.url.pathname;
 		for (const section of visibleSections) {
 			if (section.items.some((item) => (item.href === '/' ? path === '/' : path.startsWith(item.href)))) {
-				if (!isExpanded(section.label)) {
+				// Read expansion state without tracking it; this effect should only
+				// react to route changes, not to manual toggles.
+				if (!untrack(() => isExpanded(section.label))) {
 					expanded[section.label] = true;
 					writeStoredSections(expanded);
 				}

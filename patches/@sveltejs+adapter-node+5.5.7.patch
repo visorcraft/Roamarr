@@ -1,0 +1,17 @@
+diff --git a/node_modules/@sveltejs/adapter-node/index.js b/node_modules/@sveltejs/adapter-node/index.js
+index 3d0c375..501d325 100644
+--- a/node_modules/@sveltejs/adapter-node/index.js
++++ b/node_modules/@sveltejs/adapter-node/index.js
+@@ -72,6 +72,12 @@ export default function (opts = {}) {
+ 			// will get included in the bundled code
+ 			const bundle = await rollup({
+ 				input,
++				onwarn(warning, defaultHandler) {
++					if (warning.code === 'EMPTY_BUNDLE' && /chunks\/env\.js/.test(warning.message)) {
++						return;
++					}
++					defaultHandler(warning);
++				},
+ 				external: [
+ 					// dependencies could have deep exports, so we need a regex
+ 					...Object.keys(pkg.dependencies || {}).map((d) => new RegExp(`^${d}(\\/.*)?$`))

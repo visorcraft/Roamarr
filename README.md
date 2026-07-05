@@ -177,7 +177,7 @@ Paste the generated secret into `.env`:
 
 ```env
 ROAMARR_SECRET=replace-with-output-from-openssl
-MONGREL_DATABASE_PATH=./roamarr-db
+DATABASE_PATH=./roamarr-db
 PORT=3000
 ORIGIN=http://localhost:5173
 ```
@@ -232,8 +232,7 @@ source.
 | Variable | Required | Default | Notes |
 | -------- | -------- | ------- | ----- |
 | `ROAMARR_SECRET` | yes | none | Base64 32-byte key used for encryption. Generate with `openssl rand -base64 32`. The setup page blocks admin creation until this is set. |
-| `MONGREL_DATABASE_PATH` | no | `./roamarr-db` | MongrelDB Kit data directory or file path. Takes precedence over `DATABASE_PATH`. |
-| `DATABASE_PATH` | no | `./roamarr-db` | Backwards-compatible path. If the value looks like a directory it is used as the kit data directory; file-style values fall back to the default. |
+| `DATABASE_PATH` | no | `./roamarr-db` | MongrelDB Kit data directory or file path. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |

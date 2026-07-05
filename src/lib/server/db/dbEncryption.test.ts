@@ -7,15 +7,15 @@ import { users } from './mongrelSchema';
 import { makeUser } from '../../../../tests/helpers';
 
 describe('getDb encryption', () => {
-	const originalPath = process.env.MONGREL_DATABASE_PATH;
+	const originalPath = process.env.DATABASE_PATH;
 	const dirs: string[] = [];
 
 	beforeEach(() => {
-		process.env.MONGREL_DATABASE_PATH = originalPath;
+		process.env.DATABASE_PATH = originalPath;
 	});
 
 	afterEach(() => {
-		process.env.MONGREL_DATABASE_PATH = originalPath;
+		process.env.DATABASE_PATH = originalPath;
 		for (const dir of dirs.splice(0)) {
 			rmSync(dir, { recursive: true, force: true });
 		}
@@ -34,7 +34,7 @@ describe('getDb encryption', () => {
 		}
 
 		const path = tempDbPath();
-		process.env.MONGREL_DATABASE_PATH = path;
+		process.env.DATABASE_PATH = path;
 
 		// First boot: the singleton must create an encrypted database.
 		const { getDb: getDb1 } = await import('./index');

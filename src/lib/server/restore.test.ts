@@ -21,18 +21,18 @@ import {
 } from './restore';
 
 let testRoot: string;
-let originalMongrelDatabasePath: string | undefined;
+let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
 	testRoot = join(tmpdir(), `roamarr-restore-test-${Date.now()}`);
 	mkdirSync(testRoot, { recursive: true });
-	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
+	originalDatabasePath = process.env.DATABASE_PATH;
 });
 
 afterEach(() => {
 	rmSync(testRoot, { recursive: true, force: true });
-	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
-	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
+	else process.env.DATABASE_PATH = originalDatabasePath;
 });
 
 function makeDbDir(name = 'roamarr-db'): string {

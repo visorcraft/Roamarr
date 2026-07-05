@@ -13,13 +13,13 @@ used to encrypt sensitive fields at rest.
 
 ```sh
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export MONGREL_DATABASE_PATH="./roamarr-db"   # data location
+export DATABASE_PATH="./roamarr-db"   # data location
 export ORIGIN="https://roamarr.example.com"       # public URL behind a proxy
 ```
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `ROAMARR_SECRET` | yes | Encryption key. **Reuse across rebuilds** or data is lost. |
-| `MONGREL_DATABASE_PATH` | no | Database directory/file (default `./roamarr-db`). |
+| `DATABASE_PATH` | no | MongrelDB Kit data directory or file path (default `./roamarr-db`). |
 | `ORIGIN` | no | Public origin for cookies/redirects behind a proxy. |
 | `PORT` / `ATTACHMENTS_PATH` | no | Listen port (3000) / receipt attachment dir. |
 

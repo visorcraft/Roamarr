@@ -8,20 +8,20 @@ import { GET as deepHealthGet } from './deep/+server';
 import { getDb, closeDb } from '$lib/server/db/index';
 
 let dbDir: string;
-let originalMongrelDatabasePath: string | undefined;
+let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
 	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-test-'));
-	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
-	process.env.MONGREL_DATABASE_PATH = dbDir;
+	originalDatabasePath = process.env.DATABASE_PATH;
+	process.env.DATABASE_PATH = dbDir;
 	getDb();
 });
 
 afterEach(() => {
 	closeDb();
 	rmSync(dbDir, { recursive: true, force: true });
-	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
-	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
+	else process.env.DATABASE_PATH = originalDatabasePath;
 	delete (globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler;
 });
 
@@ -93,8 +93,8 @@ test('deep health masks internal error messages on integrity failure', async () 
 	// but the integrity check fails. The error detail must NOT surface raw.
 	const bogusDir = join(tmpdir(), `roamarr-health-bogus-${Date.now()}-db`);
 	mkdirSync(bogusDir, { recursive: true });
-	const original = process.env.MONGREL_DATABASE_PATH;
-	process.env.MONGREL_DATABASE_PATH = bogusDir;
+	const original = process.env.DATABASE_PATH;
+	process.env.DATABASE_PATH = bogusDir;
 	try {
 		const res = await deepHealthGet(deepHealthEvent());
 		expect(res.status).toBe(503);
@@ -105,7 +105,7 @@ test('deep health masks internal error messages on integrity failure', async () 
 		expect(body.error).toBe('deep-health-check-failed');
 		expect(JSON.stringify(body)).not.toContain(bogusDir);
 	} finally {
-		process.env.MONGREL_DATABASE_PATH = original;
+		process.env.DATABASE_PATH = original;
 		rmSync(bogusDir, { recursive: true, force: true });
 	}
 });

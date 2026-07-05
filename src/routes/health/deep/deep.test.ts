@@ -10,20 +10,20 @@ import { isSchedulerRunning } from '$lib/server/scheduler';
 import { getDb, closeDb } from '$lib/server/db/index';
 
 let dbDir: string;
-let originalMongrelDatabasePath: string | undefined;
+let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
 	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-deep-test-'));
-	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
-	process.env.MONGREL_DATABASE_PATH = dbDir;
+	originalDatabasePath = process.env.DATABASE_PATH;
+	process.env.DATABASE_PATH = dbDir;
 	getDb();
 });
 
 afterEach(() => {
 	closeDb();
 	rmSync(dbDir, { recursive: true, force: true });
-	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
-	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
+	else process.env.DATABASE_PATH = originalDatabasePath;
 });
 
 test('deep health returns 200 when db and scheduler are healthy', async () => {
@@ -58,8 +58,8 @@ test('deep health reports sqlDiagnostic ok false when kit singleton is not open'
 test('deep health masks internal error messages on integrity failure', async () => {
 	(isSchedulerRunning as any).mockReturnValue(true);
 	const bogusDir = mkdtempSync(join(tmpdir(), 'roamarr-health-bogus-'));
-	const original = process.env.MONGREL_DATABASE_PATH;
-	process.env.MONGREL_DATABASE_PATH = bogusDir;
+	const original = process.env.DATABASE_PATH;
+	process.env.DATABASE_PATH = bogusDir;
 	try {
 		const res = await GET({} as any);
 		expect(res.status).toBe(503);
@@ -68,7 +68,7 @@ test('deep health masks internal error messages on integrity failure', async () 
 		expect(body.error).toBe('deep-health-check-failed');
 		expect(JSON.stringify(body)).not.toContain(bogusDir);
 	} finally {
-		process.env.MONGREL_DATABASE_PATH = original;
+		process.env.DATABASE_PATH = original;
 		rmSync(bogusDir, { recursive: true, force: true });
 	}
 });

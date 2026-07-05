@@ -22,7 +22,7 @@ import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { applyPendingRestore, getRestoreMarkerPath } from '$lib/server/restore';
 
 let testRoot: string;
-let originalMongrelDatabasePath: string | undefined;
+let originalDatabasePath: string | undefined;
 
 function makeDbDir(): string {
 	const dir = join(testRoot, `roamarr-${Date.now()}-db`);
@@ -77,18 +77,18 @@ async function extractArchive(archivePath: string, extractDir: string): Promise<
 beforeEach(() => {
 	testRoot = join(tmpdir(), `roamarr-backup-test-${Date.now()}`);
 	mkdirSync(testRoot, { recursive: true });
-	originalMongrelDatabasePath = process.env.MONGREL_DATABASE_PATH;
+	originalDatabasePath = process.env.DATABASE_PATH;
 });
 
 afterEach(() => {
 	rmSync(testRoot, { recursive: true, force: true });
-	if (originalMongrelDatabasePath === undefined) delete process.env.MONGREL_DATABASE_PATH;
-	else process.env.MONGREL_DATABASE_PATH = originalMongrelDatabasePath;
+	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
+	else process.env.DATABASE_PATH = originalDatabasePath;
 });
 
 test('backup downloads a tar.gz archive of the database directory and attachments', async () => {
 	const dbDir = makeDbDir();
-	process.env.MONGREL_DATABASE_PATH = dbDir;
+	process.env.DATABASE_PATH = dbDir;
 
 	const attachmentsDir = join(dbDir, 'attachments');
 	mkdirSync(attachmentsDir, { recursive: true });
@@ -112,7 +112,7 @@ test('backup downloads a tar.gz archive of the database directory and attachment
 
 test('restore rejects an invalid archive', async () => {
 	const dbDir = makeDbDir();
-	process.env.MONGREL_DATABASE_PATH = dbDir;
+	process.env.DATABASE_PATH = dbDir;
 
 	const invalid = new File([Buffer.from('not a valid tar.gz')], 'bad.mongreldb.tar.gz', {
 		type: 'application/gzip'
@@ -133,7 +133,7 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 	const targetRoot = join(testRoot, 'target');
 	mkdirSync(targetRoot, { recursive: true });
 	const targetDbDir = join(targetRoot, 'roamarr-db');
-	process.env.MONGREL_DATABASE_PATH = targetDbDir;
+	process.env.DATABASE_PATH = targetDbDir;
 
 	const archivePath = await createBackupArchive(sourceDbDir);
 

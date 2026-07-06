@@ -54,12 +54,12 @@
 				{#if n.readAt}
 					<form method="POST" action="?/markUnread" class="shrink-0">
 						<input type="hidden" name="id" value={n.id} />
-						<button class="btn btn-ghost">Mark unread</button>
+						<button class="btn btn-primary">Mark unread</button>
 					</form>
 				{:else}
 					<form method="POST" action="?/markRead" class="shrink-0">
 						<input type="hidden" name="id" value={n.id} />
-						<button class="btn btn-ghost">Mark read</button>
+						<button class="btn btn-primary">Mark read</button>
 					</form>
 				{/if}
 			</li>

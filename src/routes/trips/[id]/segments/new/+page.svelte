@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { ADD_SEGMENT_WIZARD_TYPES, SEG } from '$lib/segmentLabels';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -15,7 +17,7 @@
 		<h1 class="page-title">Add segment</h1>
 		<p class="page-subtitle">Choose what you are adding to this trip.</p>
 	</div>
-	<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>
+	<CancelButton dirty={false} onConfirm={() => goto(`/trips/${data.trip.id}`)}>Cancel</CancelButton>
 </header>
 
 <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

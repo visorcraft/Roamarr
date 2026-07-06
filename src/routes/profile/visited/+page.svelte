@@ -13,6 +13,10 @@
 	let query = $state('');
 	const today = new Date().toISOString().slice(0, 10);
 
+	function isTab(value: 'country' | 'state') {
+		return tab === value;
+	}
+
 	const filteredCountries = $derived(
 		query.trim()
 			? COUNTRIES.filter(
@@ -49,23 +53,22 @@
 	</div>
 	<div class="ml-auto flex items-center gap-4">
 		<form method="POST" action="?/toggleAutoMark">
-			<button class="btn btn-ghost btn-sm {data.autoMarkVisited ? 'text-brand' : ''}">
+			<button class="btn btn-ghost {data.autoMarkVisited ? 'text-brand' : ''}">
 				Auto-mark: {data.autoMarkVisited ? 'ON' : 'OFF'}
 			</button>
 		</form>
 		<form method="POST" action="?/autoMark">
-			<button class="btn btn-ghost">Mark from past trips</button>
+			<button class="btn btn-primary">Mark from past trips</button>
 		</form>
 	</div>
 </header>
 
-<div class="tab-list mt-4">
-	<button class="tab-link {tab === 'country' ? 'tab-link-active' : ''}" onclick={() => (tab = 'country')}>Countries</button>
-	<button class="tab-link {tab === 'state' ? 'tab-link-active' : ''}" onclick={() => (tab = 'state')}>U.S. States</button>
-</div>
-
 {#if tab === 'country'}
 	<section class="card mt-4 p-5">
+		<div class="tab-list mb-5">
+			<button class="tab-link {isTab('country') ? 'tab-link-active' : ''}" onclick={() => (tab = 'country')}>Countries</button>
+			<button class="tab-link {isTab('state') ? 'tab-link-active' : ''}" onclick={() => (tab = 'state')}>U.S. States</button>
+		</div>
 		<form method="POST" action="?/mark" class="mb-5 flex flex-wrap items-end gap-3">
 			<input type="hidden" name="kind" value="country" />
 			<label class="flex flex-col gap-1">
@@ -112,7 +115,7 @@
 								<input type="hidden" name="code" value={c.code} />
 								<button
 									type="submit"
-									class="badge badge-brand badge-compact w-full justify-start rounded-md text-left transition hover:opacity-80"
+									class="badge badge-brand badge-compact w-full cursor-pointer justify-start rounded-md text-left transition hover:opacity-80"
 									aria-pressed="true"
 								>
 									<span class="font-mono text-[10px] opacity-70">{c.code}</span>
@@ -125,7 +128,7 @@
 								<input type="hidden" name="code" value={c.code} />
 								<button
 									type="submit"
-									class="badge badge-slate badge-compact w-full justify-start rounded-md text-left font-normal transition hover:opacity-80"
+									class="badge badge-slate badge-compact w-full cursor-pointer justify-start rounded-md text-left font-normal transition hover:opacity-80"
 									aria-pressed="false"
 								>
 									<span class="font-mono text-[10px] opacity-70">{c.code}</span>
@@ -168,6 +171,10 @@
 	</section>
 {:else}
 	<section class="card mt-4 p-5">
+		<div class="tab-list mb-5">
+			<button class="tab-link {isTab('country') ? 'tab-link-active' : ''}" onclick={() => (tab = 'country')}>Countries</button>
+			<button class="tab-link {isTab('state') ? 'tab-link-active' : ''}" onclick={() => (tab = 'state')}>U.S. States</button>
+		</div>
 		<form method="POST" action="?/mark" class="mb-5 flex flex-wrap items-end gap-3">
 			<input type="hidden" name="kind" value="state" />
 			<label class="flex flex-col gap-1">
@@ -204,7 +211,7 @@
 						<input type="hidden" name="code" value={s.code} />
 						<button
 							type="submit"
-							class="badge badge-brand badge-compact w-full justify-center rounded-md transition hover:opacity-80"
+							class="badge badge-brand badge-compact w-full cursor-pointer justify-center rounded-md transition hover:opacity-80"
 							aria-pressed="true"
 							title={s.name}
 						>
@@ -217,7 +224,7 @@
 						<input type="hidden" name="code" value={s.code} />
 						<button
 							type="submit"
-							class="badge badge-slate badge-compact w-full justify-center rounded-md font-normal transition hover:opacity-80"
+							class="badge badge-slate badge-compact w-full cursor-pointer justify-center rounded-md font-normal transition hover:opacity-80"
 							aria-pressed="false"
 							title={s.name}
 						>

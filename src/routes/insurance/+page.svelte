@@ -1,10 +1,12 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
+	let dirtyIds = $state<Record<number, boolean>>({});
 
 	const tripName: Record<number, string> = $derived(
 		Object.fromEntries(data.trips.map((t) => [t.id, t.name]))
@@ -25,12 +27,9 @@
 		<h2 class="section-title mb-3">Your policies</h2>
 		<ul class="list-stack">
 			{#each data.policies as p (p.id)}
-				<li class="list-item flex items-start gap-3">
-					<span class="list-icon">
-						<Icon name="insurance" class="h-4.5 w-4.5" />
-					</span>
+				<li class="list-item">
 					{#if editingId === p.id}
-						<form method="POST" action="?/update" class="min-w-0 flex-1">
+						<form method="POST" action="?/update" class="min-w-0" oninput={() => (dirtyIds[p.id] = true)}>
 							<input type="hidden" name="id" value={p.id} />
 							<div class="grid gap-4 sm:grid-cols-2">
 								<div class="field">
@@ -72,30 +71,37 @@
 								</div>
 							</div>
 							<div class="mt-3 flex gap-2">
-								<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+								<CancelButton dirty={dirtyIds[p.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Update</button>
 							</div>
 						</form>
 					{:else}
-						<div class="min-w-0 flex-1">
-							<div class="flex items-center gap-2">
-								<span class="list-title">{p.provider}</span>
-								{#if p.tripId != null}<span class="badge badge-brand">{tripName[p.tripId] ?? `Trip ${p.tripId}`}</span>{/if}
+						<div class="flex items-start justify-between gap-3">
+							<div class="flex items-start gap-3 min-w-0 flex-1">
+								<span class="list-icon">
+									<Icon name="insurance" class="h-4.5 w-4.5" />
+								</span>
+								<div class="min-w-0 flex-1">
+									<div class="flex items-center gap-2">
+										<span class="list-title">{p.provider}</span>
+										{#if p.tripId != null}<span class="badge badge-brand">{tripName[p.tripId] ?? `Trip ${p.tripId}`}</span>{/if}
+									</div>
+									{#if p.coverageSummary}<div class="mt-1 text-sm text-slate-400">{p.coverageSummary}</div>{/if}
+									<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
+										{#if p.policyNumber}<span class="meta-strong">{p.policyNumber}</span>{/if}
+										{#if p.coverageAmount != null}<span>Coverage <span class="font-mono text-slate-300">{p.coverageAmount} {p.currency}</span></span>{/if}
+										{#if p.startDate || p.endDate}<span class="meta-strong">{p.startDate || '—'} → {p.endDate || '—'}</span>{/if}
+									</div>
+									{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
+								</div>
 							</div>
-							{#if p.coverageSummary}<div class="mt-1 text-sm text-slate-400">{p.coverageSummary}</div>{/if}
-							<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
-								{#if p.policyNumber}<span class="meta-strong">{p.policyNumber}</span>{/if}
-								{#if p.coverageAmount != null}<span>Coverage <span class="font-mono text-slate-300">{p.coverageAmount} {p.currency}</span></span>{/if}
-								{#if p.startDate || p.endDate}<span class="meta-strong">{p.startDate || '—'} → {p.endDate || '—'}</span>{/if}
+							<div class="action-row gap-1">
+								<button type="button" class="btn btn-primary" onclick={() => { editingId = p.id; dirtyIds[p.id] = false; }}>Edit</button>
+								<form method="POST" action="?/delete">
+									<input type="hidden" name="id" value={p.id} />
+									<ConfirmButton class="btn btn-danger" message="Delete this insurance policy?">Delete</ConfirmButton>
+								</form>
 							</div>
-							{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
-						</div>
-						<div class="flex gap-1">
-							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingId = p.id)}>Edit</button>
-							<form method="POST" action="?/delete">
-								<input type="hidden" name="id" value={p.id} />
-								<ConfirmButton class="btn btn-danger" message="Delete this insurance policy?">Delete</ConfirmButton>
-							</form>
 						</div>
 					{/if}
 				</li>

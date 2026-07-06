@@ -5,6 +5,7 @@
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 
 	let { data, form } = $props();
 	let selectedThemeId = $state('system');
@@ -14,6 +15,7 @@
 	let submittingCalendar = $state(false);
 	let submittingEmergency = $state(false);
 	let editingContactId = $state<number | null>(null);
+	let dirtyContactIds = $state<Record<number, boolean>>({});
 
 	function applyThemePreview(themeId: string) {
 		if (!browser) return;
@@ -235,7 +237,7 @@
 						</p>
 						<p class="meta mt-0.5">
 							Created {formatDateTime(s.createdAt)} · Expires {formatDateTime(s.expiresAt)}
-							{#if s.lastIp || s.userAgent}<span class="block text-xs">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
+							{#if s.lastIp || s.userAgent}<span class="block">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
 						</p>
 					</div>
 					<form method="POST" action="?/revokeSession">
@@ -259,7 +261,7 @@
 			<CopyButton text={data.feedUrl} class="btn btn-ghost shrink-0" label="Copy" />
 		</div>
 		{#if data.calendarTokenExpiresAt}
-			<p class="mt-2 text-xs text-muted">
+			<p class="meta mt-2">
 				Expires {formatDateTime(data.calendarTokenExpiresAt)}
 			</p>
 		{/if}
@@ -324,6 +326,7 @@
 								};
 							}}
 							class="grid gap-3 sm:grid-cols-2"
+							oninput={() => (dirtyContactIds[contact.id] = true)}
 						>
 							<input type="hidden" name="id" value={contact.id} />
 							<div class="field">
@@ -352,9 +355,7 @@
 								<button class="btn btn-primary btn-sm" class:btn-loading={submittingEmergency} disabled={submittingEmergency}>
 									Save
 								</button>
-								<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingContactId = null)}>
-									Cancel
-								</button>
+								<CancelButton class="btn btn-ghost btn-sm" dirty={dirtyContactIds[contact.id] ?? false} onConfirm={() => (editingContactId = null)}>Cancel</CancelButton>
 							</div>
 						</form>
 					{:else}
@@ -364,7 +365,7 @@
 									{contact.name}
 									{#if contact.isPrimary}<span class="badge badge-brand">Primary</span>{/if}
 								</p>
-								{#if contact.relationship}<p class="text-sm text-muted">{contact.relationship}</p>{/if}
+								{#if contact.relationship}<p class="text-sm muted">{contact.relationship}</p>{/if}
 								{#if contact.phone || contact.email}
 									<p class="meta mt-1">
 										{#if contact.phone}{contact.phone}{/if}
@@ -374,7 +375,7 @@
 								{/if}
 							</div>
 							<div class="flex items-center gap-2">
-								<button type="button" class="icon-button" onclick={() => (editingContactId = contact.id)} aria-label={`Edit ${contact.name}`}>
+								<button type="button" class="icon-button" onclick={() => { editingContactId = contact.id; dirtyContactIds[contact.id] = false; }} aria-label={`Edit ${contact.name}`}>
 									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
 								</button>
 								<form method="POST" action="?/deleteEmergencyContact" class="inline">

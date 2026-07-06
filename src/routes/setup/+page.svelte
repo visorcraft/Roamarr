@@ -80,7 +80,7 @@
 				</div>
 
 				<div class="flex gap-3">
-					<button type="button" class="btn btn-secondary flex-1" onclick={() => location.reload()}>Re-check</button>
+					<button type="button" class="btn btn-primary flex-1" onclick={() => location.reload()}>Re-check</button>
 					<button type="button" class="btn btn-primary flex-1" disabled={!canContinue} onclick={() => step = 2}>Continue</button>
 				</div>
 			</div>

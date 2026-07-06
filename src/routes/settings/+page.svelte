@@ -162,14 +162,14 @@
 
 		<section class="card p-5 sm:p-6">
 			<h2 class="section-title">Maps</h2>
-			<p class="mt-1 text-sm text-slate-400">
+			<p class="mt-1 text-sm muted">
 				Show a 2D map of the next upcoming city on each trip page, plus a 3D globe you can open
 				from it. City data comes from GeoNames; the Earth texture from NASA; borders from Natural Earth.
 			</p>
 
 			{#if m.mapsEnabled}
 				<p class="notice notice-success mt-4">Maps are enabled.</p>
-				<ul class="mt-3 space-y-1 text-sm text-slate-400">
+				<ul class="mt-3 space-y-1 text-sm muted">
 					<li>
 						City database: {m.cityCount.toLocaleString()} cities
 						{#if m.mapsGeonamesImportedAt}(imported {new Date(m.mapsGeonamesImportedAt).toLocaleString()}){/if}
@@ -185,8 +185,8 @@
 					<li>Country borders: bundled (Natural Earth, public domain)</li>
 				</ul>
 				<div class="mt-4 flex flex-wrap gap-3">
-					<button class="btn btn-secondary" type="submit" formaction="?/reimportCities">Re-import city database</button>
-					<button class="btn btn-secondary" type="submit" formaction="?/reimportTexture">Re-import textures</button>
+					<button class="btn btn-primary" type="submit" formaction="?/reimportCities">Re-import city database</button>
+					<button class="btn btn-primary" type="submit" formaction="?/reimportTexture">Re-import textures</button>
 					<button class="btn btn-secondary" type="submit" formaction="?/disableMaps">Disable Maps</button>
 				</div>
 			{:else}
@@ -199,7 +199,7 @@
 					{/if}
 				</p>
 				<button class="btn btn-primary mt-4" type="submit" formaction="?/enableMaps">Enable Maps</button>
-				<p class="mt-4 text-sm text-slate-400">
+				<p class="mt-4 text-sm muted">
 					Automatic download not working? Download
 					<a
 						class="link"
@@ -213,10 +213,10 @@
 						<label class="label" for="cities1000">cities1000.zip</label>
 						<input id="cities1000" name="cities1000" type="file" accept=".zip" class="input" />
 					</div>
-					<button class="btn btn-secondary" type="submit" formaction="?/importGeonames">Import from file</button>
+					<button class="btn btn-primary" type="submit" formaction="?/importGeonames">Import from file</button>
 				</div>
 			{/if}
-			<p class="mt-4 text-xs text-slate-500">
+			<p class="mt-4 text-xs text-readable-faint">
 				Map data © <a class="underline" href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames.org</a>, CC-BY 4.0.
 				Tile provider attribution is shown on each map.
 			</p>
@@ -374,7 +374,7 @@
 
 		<section class="card p-5 sm:p-6">
 			<h2 class="section-title">OAuth clients</h2>
-			<p class="mt-1 text-sm text-slate-400">
+			<p class="mt-1 text-sm muted">
 				When the allow-list is empty, users can register and authorize any OAuth client. When it
 				contains one or more client IDs, only those clients may be authorized.
 			</p>
@@ -403,9 +403,9 @@
 	<aside class="space-y-8">
 		<div class="trip-sidebar-card">
 			<h2 class="subsection-title mb-3">Notification channels</h2>
-			<p class="text-sm text-slate-400">Send a test notification to yourself to verify SMTP/webhook configuration.</p>
+			<p class="text-sm muted">Send a test notification to yourself to verify SMTP/webhook configuration.</p>
 			<button class="btn btn-primary mt-4" type="submit" formaction="?/testNotification">Send test notification</button>
-			<p class="text-sm text-slate-400 mt-4">Send only a test email to verify SMTP delivery (bypasses webhooks and in-app).</p>
+			<p class="text-sm muted mt-4">Send only a test email to verify SMTP delivery (bypasses webhooks and in-app).</p>
 			<button class="btn btn-ghost mt-2" type="submit" formaction="?/testEmail">Send test email</button>
 		</div>
 
@@ -419,15 +419,15 @@
 						<li class="list-item text-sm">
 							<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 								<span class="font-medium text-white">{log.action}</span>
-								<span class="text-slate-400">{log.entityType}:{log.entityId}</span>
-								<span class="text-xs text-slate-500">{new Date(log.createdAt).toLocaleString()}</span>
+								<span class="muted">{log.entityType}:{log.entityId}</span>
+								<span class="text-xs text-readable-faint">{new Date(log.createdAt).toLocaleString()}</span>
 							</div>
-							<p class="mt-1 text-slate-400">{log.user.displayName ?? log.user.email}</p>
+							<p class="mt-1 muted">{log.user.displayName ?? log.user.email}</p>
 						</li>
 					{/each}
 				</ul>
 				<div class="mt-4">
-					<a href="/settings/audit-logs" class="btn btn-secondary">View full audit log</a>
+					<a href="/settings/audit-logs" class="btn btn-primary">View full audit log</a>
 				</div>
 			{/if}
 		</div>

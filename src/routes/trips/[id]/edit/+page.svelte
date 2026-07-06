@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 	import { COUNTRIES } from '$lib/countries';
@@ -10,6 +12,7 @@
 	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 	let destinationCountryCode = $state('');
+	let isDirty = $state(false);
 	$effect(() => {
 		destinationCountryCode = data.trip.destinationCountryCode ?? '';
 	});
@@ -40,7 +43,7 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="POST" action="?/save" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
+	<form method="POST" action="?/save" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting} oninput={() => (isDirty = true)}>
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
 		<TextField name="name" label="Trip name" value={data.trip.name} required disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
@@ -86,7 +89,7 @@
 		<TextField name="tags" label="Tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="baseCurrency" label="Base currency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" disabled={submitting} errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
-			<a href={`/trips/${data.trip.id}`} class="btn btn-ghost">Cancel</a>
+			<CancelButton dirty={isDirty} onConfirm={() => goto(`/trips/${data.trip.id}`)}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Save changes</button>
 		</div>
 	</form>

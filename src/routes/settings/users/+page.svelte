@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 
 	let { data, form } = $props();
 	let editingId = $state<number | null>(null);
 	let creating = $state(false);
+	let dirtyIds = $state<Record<number, boolean>>({});
 </script>
 
 <header>
@@ -112,13 +114,11 @@
 						<td class="text-slate-400">{user.createdAt}</td>
 						<td class="text-right">
 							<div class="flex items-center justify-end gap-2">
-								<button
-									type="button"
-									class="btn btn-ghost btn-ghost-indigo"
-									onclick={() => (editingId = editingId === user.id ? null : user.id)}
-								>
-									{editingId === user.id ? 'Cancel' : 'Edit'}
-								</button>
+								{#if editingId === user.id}
+									<CancelButton dirty={dirtyIds[user.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
+								{:else}
+									<button type="button" class="btn btn-primary" onclick={() => { editingId = user.id; dirtyIds[user.id] = false; }}>Edit</button>
+								{/if}
 								<form
 									method="POST"
 									action="?/delete"
@@ -148,6 +148,7 @@
 										};
 									}}
 									class="grid gap-6"
+								oninput={() => (dirtyIds[user.id] = true)}
 								>
 									<input type="hidden" name="userId" value={user.id} />
 
@@ -246,9 +247,7 @@
 									</div>
 
 									<div class="flex flex-wrap gap-2 border-t border-white/5 pt-4">
-										<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>
-											Cancel
-										</button>
+										<CancelButton dirty={dirtyIds[user.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 										<button class="btn btn-primary">Save changes</button>
 									</div>
 								</form>
@@ -258,7 +257,7 @@
 								<p class="field-help">
 									Send a one-hour password reset link to {user.email}.
 								</p>
-								<button class="btn btn-ghost btn-ghost-indigo mt-3">Send password reset email</button>
+								<button class="btn btn-primary mt-3">Send password reset email</button>
 							</form>
 
 							{#if user.twoFactorEnabled}

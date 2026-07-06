@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -6,6 +7,7 @@
 	let { data, form } = $props();
 
 	let editingId = $state<number | null>(null);
+	let dirtyIds = $state<Record<number, boolean>>({});
 
 	const typeLabel: Record<string, string> = {
 		passport: 'Passport',
@@ -37,7 +39,7 @@
 			{#each data.documents as d (d.id)}
 				<li class="list-item">
 					{#if editingId === d.id}
-						<form method="POST" action="?/update" class="grid gap-3 sm:grid-cols-2">
+						<form method="POST" action="?/update" class="grid gap-3 sm:grid-cols-2" oninput={() => (dirtyIds[d.id] = true)}>
 							<input type="hidden" name="id" value={d.id} />
 							<div class="field">
 								<label class="label" for="type-{d.id}">Type</label>
@@ -74,7 +76,7 @@
 								<input id="notes-{d.id}" name="notes" value={d.notes ?? ''} placeholder="Optional notes" class="input" />
 							</div>
 							<div class="flex items-center gap-2 sm:col-span-2">
-								<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+								<CancelButton dirty={dirtyIds[d.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Save</button>
 							</div>
 						</form>
@@ -100,7 +102,7 @@
 								</div>
 							</div>
 							<div class="flex gap-1">
-								<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = d.id)}>Edit</button>
+								<button type="button" class="btn btn-primary" onclick={() => { editingId = d.id; dirtyIds[d.id] = false; }}>Edit</button>
 								<form method="POST" action="?/delete">
 									<input type="hidden" name="id" value={d.id} />
 									<ConfirmButton class="btn btn-danger" message="Delete this travel document?">Delete</ConfirmButton>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import SelectField from '$lib/components/SelectField.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
@@ -41,9 +42,11 @@
 	} = $props();
 
 	const fid = (k: string) => `${k}-${s.id ?? ''}`;
+
+	let isDirty = $state(false);
 </script>
 
-<form method="POST" action={`/trips/${tripId}/segments?/update`} class="trip-timeline-card grid gap-4 sm:grid-cols-2">
+<form method="POST" action={`/trips/${tripId}/segments?/update`} class="trip-timeline-card grid gap-4 sm:grid-cols-2" oninput={() => (isDirty = true)}>
 	<input type="hidden" name="segmentId" value={s.id} />
 	<TextField name="title" id={fid('title')} label="Title" value={s.title} required {errors} />
 	<TextField name="localStart" id={fid('localStart')} label="Starts" type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} required {errors} />
@@ -85,7 +88,7 @@
 		<CardSelect {cards} name="cardId" value={s.cardId} {errors} />
 	{/if}
 	<div class="flex gap-2 sm:col-span-2">
-		<button type="button" class="btn btn-ghost" onclick={onCancel}>Cancel</button>
+		<CancelButton dirty={isDirty} onConfirm={onCancel}>Cancel</CancelButton>
 		<button class="btn btn-primary">Save</button>
 	</div>
 </form>

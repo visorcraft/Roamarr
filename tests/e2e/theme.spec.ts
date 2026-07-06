@@ -9,4 +9,11 @@ test('change user theme', async ({ page }) => {
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.locator('.theme-root[data-theme="high-contrast"]')).toBeVisible();
+
+	// Reset to the default so later test runs / local browsing start from Follow system.
+	await page.locator('label:has-text("Follow system")').click();
+	await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+	await page.waitForLoadState('networkidle');
+
+	await expect(page.locator('.theme-root[data-theme="system"]')).toBeVisible();
 });

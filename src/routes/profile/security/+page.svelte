@@ -112,11 +112,11 @@
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Passkeys</h2>
 	<p class="meta">Sign in passwordlessly with a passkey (Face ID, Touch ID, security key).</p>
-	<a href="/profile/security/passkeys" class="btn btn-ghost mt-3 inline-block">Manage passkeys</a>
+	<a href="/profile/security/passkeys" class="btn btn-primary mt-3 inline-block">Manage passkeys</a>
 </section>
 
 <section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">API connections</h2>
 	<p class="meta">Connect AI assistants and integrations via OAuth 2.1.</p>
-	<a href="/profile/security/connections" class="btn btn-ghost mt-3 inline-block">Manage connections</a>
+	<a href="/profile/security/connections" class="btn btn-primary mt-3 inline-block">Manage connections</a>
 </section>

@@ -1,15 +1,18 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { COUNTRIES } from '$lib/countries';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 	let selectedTemplateId = $state('');
 	let destinationCountryCode = $state('');
+	let isDirty = $state(false);
 
 	function applyTemplate() {
 		const template = data.tripTemplates.find((t) => String(t.id) === selectedTemplateId);
@@ -47,6 +50,7 @@
 			}
 			if (notesInput && !notesInput.value.trim()) notesInput.value = snapshot.notes ?? '';
 			if (tagsInput && !tagsInput.value.trim()) tagsInput.value = (snapshot.tags ?? []).join(', ');
+			isDirty = true;
 		} catch {
 			// ignore
 		}
@@ -61,7 +65,7 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="POST" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting}>
+	<form method="POST" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting} oninput={() => (isDirty = true)}>
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
 		{#if data.tripTemplates.length}
@@ -117,7 +121,7 @@
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="tags" label="Tags" placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap gap-2 sm:col-span-2">
-			<a href="/trips" class="btn btn-ghost">Cancel</a>
+			<CancelButton dirty={isDirty} onConfirm={() => goto('/trips')}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Create trip</button>
 		</div>
 	</form>

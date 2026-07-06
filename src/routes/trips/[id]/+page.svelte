@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll, replaceState } from '$app/navigation';
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
@@ -34,6 +35,7 @@
 	let globeOpen = $state(false);
 	let editingId = $state<number | null>(null);
 	let editingCompanionId = $state<number | null>(null);
+	let dirtyCompanionIds = $state<Record<number, boolean>>({});
 	let showCompanionNotesId = $state<number | null>(null);
 	let showAddCompanionNotes = $state(false);
 	let activeTab = $state<TripTab>('itinerary');
@@ -822,10 +824,10 @@
 												{/if}
 																												{#if isEditor && s.id}
 																	<div class="flex w-full flex-wrap items-center gap-1 lg:basis-full lg:pl-20">
-																<button type="button" class="btn btn-ghost btn-ghost-muted" onclick={() => (editingId = s.id ?? null)}>Edit</button>
+																<button type="button" class="btn btn-primary" onclick={() => (editingId = s.id ?? null)}>Edit</button>
 													<form method="POST" action="?/duplicateSegment">
 														<input type="hidden" name="segmentId" value={s.id} />
-														<button class="btn btn-ghost btn-ghost-muted">Duplicate</button>
+														<button class="btn btn-primary">Duplicate</button>
 													</form>
 																<form method="POST" action={`/trips/${trip.id}/segments?/delete`}>
 																	<input type="hidden" name="segmentId" value={s.id} />
@@ -838,7 +840,7 @@
 																			<option value={offset.minutes}>{offset.shortLabel}</option>
 																		{/each}
 																	</select>
-																	<button class="btn btn-ghost btn-sm">Remind</button>
+																	<button class="btn btn-primary btn-sm">Remind</button>
 																</form>
 																{#if data.providers?.length}
 																	<form method="POST" action={`/trips/${trip.id}/fare-watch?/enable`} class="flex items-center gap-1">
@@ -848,7 +850,7 @@
 																			<option value={p.id}>{p.label || p.providerKey}</option>
 																		{/each}
 																		</select>
-																		<button class="btn btn-ghost btn-sm">Watch</button>
+																		<button class="btn btn-primary btn-sm">Watch</button>
 																	</form>
 																{/if}
 														{#if data.companions?.length}
@@ -907,11 +909,11 @@
 							{#if isEditor && data.checklist?.items?.length}
 								<form method="POST" action="?/setAllChecklistItems">
 									<input type="hidden" name="packed" value="true" />
-									<button class="btn btn-ghost btn-xs" type="submit">Pack all</button>
+									<button class="btn btn-primary btn-xs" type="submit">Pack all</button>
 								</form>
 								<form method="POST" action="?/setAllChecklistItems">
 									<input type="hidden" name="packed" value="false" />
-									<button class="btn btn-ghost btn-xs" type="submit">Unpack all</button>
+									<button class="btn btn-primary btn-xs" type="submit">Unpack all</button>
 								</form>
 							{/if}
 							{#if data.checklist?.items?.length}
@@ -966,7 +968,7 @@
 						<form method="POST" action="?/saveChecklistTemplate" class="mt-4 flex flex-wrap items-end gap-2 border-t border-white/5 pt-4">
 							<input name="name" class="input min-w-0 flex-1 text-sm" placeholder="Template name" required maxlength="100" />
 							<input type="hidden" name="fromTripId" value={trip.id} />
-							<button class="btn btn-ghost btn-sm">Save template</button>
+							<button class="btn btn-primary btn-sm">Save template</button>
 						</form>
 					{/if}
 					{#if data.packingTemplates?.length}
@@ -1099,7 +1101,7 @@
 									<input type="hidden" name="expenseId" value={data.expenses[0].id} />
 									<span class="text-xs text-slate-400">Attach receipt to first expense</span>
 									<input type="file" name="file" accept="image/*,application/pdf" class="input text-sm w-auto" required />
-									<button class="btn btn-ghost btn-sm">Upload</button>
+									<button class="btn btn-primary btn-sm">Upload</button>
 								</form>
 							{/if}
 					{/if}
@@ -1348,7 +1350,7 @@
 										<option value={p.id}>{p.label || p.providerKey}</option>
 									{/each}
 								</select>
-								<button class="btn btn-ghost">Enable</button>
+								<button class="btn btn-primary">Enable</button>
 							</form>
 						{/if}
 					</div>
@@ -1373,7 +1375,7 @@
 									<div class="action-row gap-1">
 										<form method="POST" action={`/trips/${trip.id}/fare-watch?/check`}>
 											<input type="hidden" name="watchId" value={w.id} />
-											<button class="btn btn-ghost">Check now</button>
+											<button class="btn btn-primary">Check now</button>
 										</form>
 										{#if w.status === 'active'}
 											<form method="POST" action={`/trips/${trip.id}/fare-watch?/pause`}>
@@ -1735,7 +1737,7 @@
 							{#each data.companions as c (c.id)}
 							<li class="list-item-compact text-sm">
 							{#if editingCompanionId === c.id}
-								<form method="POST" action="?/updateCompanion" class="flex flex-col gap-2">
+								<form method="POST" action="?/updateCompanion" class="flex flex-col gap-2" oninput={() => (dirtyCompanionIds[c.id] = true)}>
 									<input type="hidden" name="companionId" value={c.id} />
 									<input name="name" class="input text-sm" value={c.name} placeholder="Name" required />
 									<div class="flex gap-2">
@@ -1785,13 +1787,13 @@
 										<input name="roomNotes" class="input text-sm" placeholder="Room notes (optional)" value={c.roomNotes ?? ''} />
 										<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
 									{/if}
-									<button
-										type="button"
+									<CancelButton
 										class="btn btn-ghost btn-xs self-start"
-										onclick={() => (editingCompanionId = null)}
+										dirty={dirtyCompanionIds[c.id] ?? false}
+										onConfirm={() => (editingCompanionId = null)}
 									>
 										Cancel
-									</button>
+									</CancelButton>
 								</form>
 							{:else}
 								<div class="flex items-center justify-between gap-2">
@@ -1803,7 +1805,7 @@
 												type="button"
 												class="icon-button icon-button-sm"
 												aria-label="Edit companion"
-												onclick={() => (editingCompanionId = c.id)}
+												onclick={() => { editingCompanionId = c.id; dirtyCompanionIds[c.id] = false; }}
 											>
 												<Icon name="edit" class="h-3.5 w-3.5" />
 											</button>
@@ -1945,7 +1947,7 @@
 									<option value={offset.minutes}>{offset.label}</option>
 								{/each}
 							</select>
-							<button class="btn btn-ghost btn-sm">Set reminder</button>
+							<button class="btn btn-primary btn-sm">Set reminder</button>
 						</form>
 					</div>
 				{/if}

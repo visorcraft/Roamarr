@@ -26,7 +26,7 @@
 			<input id="file" name="file" type="file" accept=".json,.csv" class="input" required />
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<button type="submit" name="dryRun" value="true" class="btn btn-ghost">Preview</button>
+			<button type="submit" name="dryRun" value="true" class="btn btn-primary">Preview</button>
 			<button type="submit" name="dryRun" value="false" class="btn btn-primary">Import</button>
 		</div>
 	</form>

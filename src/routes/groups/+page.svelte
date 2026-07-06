@@ -64,7 +64,7 @@
 						<label class="label" for={`email-${g.id}`}>Add member</label>
 						<input id={`email-${g.id}`} name="email" type="email" placeholder="member@example.com" class="input" />
 					</div>
-					<button class="btn btn-ghost">Add</button>
+					<button class="btn btn-primary">Add</button>
 				</form>
 
 				<form method="POST" action="?/deleteGroup" class="mt-2 flex justify-end">

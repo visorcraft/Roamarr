@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -7,6 +8,8 @@
 	let editingCardId = $state<number | null>(null);
 	let editingBenefitId = $state<number | null>(null);
 	let selectedTemplateId = $state('');
+	let dirtyCards = $state<Record<number, boolean>>({});
+	let dirtyBenefits = $state<Record<number, boolean>>({});
 
 	const networkLabel: Record<string, string> = {
 		visa: 'Visa',
@@ -47,10 +50,10 @@
 							<span class="truncate font-semibold text-white">{c.nickname}</span>
 							<span class="badge badge-slate">{networkLabel[c.network] ?? c.network}</span>
 						</div>
-						{#if c.last4}<div class="mt-1 font-mono text-xs text-slate-400">…{c.last4}</div>{/if}
+						{#if c.last4}<div class="mt-1 font-mono text-sm text-muted">…{c.last4}</div>{/if}
 					</div>
 					<div class="action-row gap-1">
-						<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingCardId = c.id)}>Edit</button>
+						<button type="button" class="btn btn-primary" onclick={() => { editingCardId = c.id; dirtyCards[c.id] = false; }}>Edit</button>
 						<form method="POST" action="?/deleteCard">
 							<input type="hidden" name="id" value={c.id} />
 							<ConfirmButton class="btn btn-danger" message="Delete this card and all its benefits?">Delete</ConfirmButton>
@@ -59,7 +62,7 @@
 				</div>
 
 				{#if editingCardId === c.id}
-					<form method="POST" action="?/updateCard" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2">
+					<form method="POST" action="?/updateCard" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2" oninput={() => (dirtyCards[c.id] = true)}>
 						<input type="hidden" name="id" value={c.id} />
 						<div class="field">
 							<label class="label" for={`nickname-${c.id}`}>Nickname</label>
@@ -84,7 +87,7 @@
 							<input id={`notes-${c.id}`} name="notes" value={c.notes ?? ''} placeholder="Optional notes" class="input" />
 						</div>
 						<div class="flex gap-2 sm:col-span-2">
-							<button type="button" class="btn btn-ghost" onclick={() => (editingCardId = null)}>Cancel</button>
+							<CancelButton dirty={dirtyCards[c.id] ?? false} onConfirm={() => (editingCardId = null)}>Cancel</CancelButton>
 							<button class="btn btn-primary">Update card</button>
 						</div>
 					</form>
@@ -95,7 +98,7 @@
 						{#each c.benefits as b (b.id)}
 							<li class="list-item-compact flex items-center justify-between gap-3">
 								{#if editingBenefitId === b.id}
-									<form method="POST" action="?/updateBenefit" class="flex flex-1 flex-wrap items-end gap-3">
+									<form method="POST" action="?/updateBenefit" class="flex flex-1 flex-wrap items-end gap-3" oninput={() => (dirtyBenefits[b.id] = true)}>
 										<input type="hidden" name="id" value={b.id} />
 										<input type="hidden" name="cardId" value={c.id} />
 										<div class="field">
@@ -120,16 +123,16 @@
 											<input id={`benefitNotes-${b.id}`} name="notes" value={b.notes ?? ''} placeholder="Optional" class="input" />
 										</div>
 										<div class="action-row">
-											<button type="button" class="btn btn-ghost" onclick={() => (editingBenefitId = null)}>Cancel</button>
+											<CancelButton dirty={dirtyBenefits[b.id] ?? false} onConfirm={() => (editingBenefitId = null)}>Cancel</CancelButton>
 											<button class="btn btn-primary">Update</button>
 										</div>
 									</form>
 								{:else}
 									<span class="text-sm text-slate-300">{benefitLabel[b.benefitType] ?? b.benefitType}</span>
 									<div class="flex items-center gap-3">
-										<span class="font-mono text-xs text-slate-400">{b.coverageAmount ?? '—'} {b.currency}</span>
+										<span class="font-mono text-sm text-muted">{b.coverageAmount ?? '—'} {b.currency}</span>
 										<div class="action-row gap-1">
-											<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingBenefitId = b.id)}>Edit</button>
+											<button type="button" class="btn btn-primary" onclick={() => { editingBenefitId = b.id; dirtyBenefits[b.id] = false; }}>Edit</button>
 											<form method="POST" action="?/deleteBenefit">
 												<input type="hidden" name="id" value={b.id} />
 												<input type="hidden" name="cardId" value={c.id} />
@@ -142,7 +145,7 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="mt-3 text-xs text-slate-500">No benefits added yet.</p>
+					<p class="mt-3 text-sm text-muted">No benefits added yet.</p>
 				{/if}
 
 				<form method="POST" action="?/addBenefit" class="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
@@ -172,7 +175,7 @@
 						<label class="label" for={`coverageAmount-${c.id}`}>Coverage (cents)</label>
 						<input id={`coverageAmount-${c.id}`} name="coverageAmount" type="number" placeholder="0" class="input" disabled={!!selectedTemplate} />
 					</div>
-					<button class="btn btn-ghost">Add benefit</button>
+					<button class="btn btn-primary">Add benefit</button>
 				</form>
 			</section>
 		{/each}

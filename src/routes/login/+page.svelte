@@ -54,7 +54,7 @@
 
 	{#if data.passkeyAvailable}
 		<div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
-			<button class="btn btn-ghost w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
+			<button class="btn btn-primary w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
 				{passkeyBusy ? 'Waiting…' : 'Sign in with a passkey'}
 			</button>
 		</div>

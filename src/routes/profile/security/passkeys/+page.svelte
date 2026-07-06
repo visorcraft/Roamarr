@@ -1,4 +1,5 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { startRegistration as webauthnRegister } from '@simplewebauthn/browser';
 	import { page } from '$app/state';
@@ -40,6 +41,7 @@
 	}
 
 	let editingId = $state<number | null>(null);
+	let dirtyIds = $state<Record<number, boolean>>({});
 </script>
 
 <header class="page-header">
@@ -80,11 +82,11 @@
 				<li class="list-item flex items-center gap-3">
 					<div class="min-w-0 flex-1">
 						{#if editingId === pk.id}
-							<form method="POST" action="?/rename" class="flex items-center gap-2">
+							<form method="POST" action="?/rename" class="flex items-center gap-2" oninput={() => (dirtyIds[pk.id] = true)}>
 								<input type="hidden" name="id" value={pk.id} />
 								<input name="name" value={pk.name ?? ''} class="input" placeholder="Name" />
 								<button class="btn btn-primary btn-sm">Save</button>
-								<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingId = null)}>Cancel</button>
+								<CancelButton class="btn btn-ghost btn-sm" dirty={dirtyIds[pk.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 							</form>
 						{:else}
 							<div class="list-title">{pk.name ?? 'Unnamed passkey'}</div>
@@ -96,7 +98,7 @@
 					</div>
 					{#if editingId !== pk.id}
 						<div class="flex gap-1">
-							<button type="button" class="btn btn-ghost btn-ghost-indigo btn-sm" onclick={() => (editingId = pk.id)}>Rename</button>
+							<button type="button" class="btn btn-primary btn-sm" onclick={() => { editingId = pk.id; dirtyIds[pk.id] = false; }}>Rename</button>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={pk.id} />
 								<ConfirmButton class="btn btn-danger btn-sm" message="Delete this passkey?">Delete</ConfirmButton>

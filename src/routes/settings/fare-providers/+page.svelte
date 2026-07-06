@@ -1,8 +1,10 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
 	let { data, form }: { data: import('./$types').PageData; form?: { testResult?: string } } = $props();
 	let editingId = $state<number | null>(null);
+	let dirtyIds = $state<Record<number, boolean>>({});
 
 	const providerLabel = $derived(
 		new Map(data.providers.map((p) => [p.key, p.label]))
@@ -34,10 +36,10 @@
 							</div>
 						</div>
 						<div class="action-row gap-1">
-							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => editingId = s.id}>Edit</button>
+							<button type="button" class="btn btn-primary" onclick={() => { editingId = s.id; dirtyIds[s.id] = false; }}>Edit</button>
 							<form method="POST" action="?/test">
 								<input type="hidden" name="id" value={s.id} />
-								<button class="btn btn-ghost">Test</button>
+								<button class="btn btn-primary">Test</button>
 							</form>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={s.id} />
@@ -46,7 +48,7 @@
 						</div>
 					</div>
 					{#if editingId === s.id}
-						<form method="POST" action="?/update" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2">
+						<form method="POST" action="?/update" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2" oninput={() => (dirtyIds[s.id] = true)}>
 							<input type="hidden" name="id" value={s.id} />
 							<div class="field">
 								<label class="label" for={`label-${s.id}`}>Label</label>
@@ -73,7 +75,7 @@
 								/>
 							</div>
 							<div class="flex gap-2 sm:col-span-2">
-								<button type="button" class="btn btn-ghost" onclick={() => editingId = null}>Cancel</button>
+								<CancelButton dirty={dirtyIds[s.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Save</button>
 							</div>
 						</form>

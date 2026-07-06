@@ -88,7 +88,7 @@
 			<option value="desc">Descending</option>
 		</select>
 	</label>
-	<button type="submit" class="btn btn-ghost">Apply</button>
+	<button type="submit" class="btn btn-primary">Apply</button>
 </form>
 
 <div class="mt-4 flex gap-2">
@@ -119,11 +119,11 @@
 		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 			<div class="flex flex-wrap gap-2">
 				{#if bulkMode}
-					<button type="button" class="btn btn-ghost" onclick={() => (bulkMode = false)}>Done</button>
-					<button formaction="?/favorite" class="btn btn-ghost">Favorite</button>
-					<button formaction="?/archive" class="btn btn-ghost">Archive</button>
-					<button formaction="?/unfavorite" class="btn btn-ghost">Unfavorite</button>
-					<button formaction="?/unarchive" class="btn btn-ghost">Unarchive</button>
+					<button type="button" class="btn btn-primary" onclick={() => (bulkMode = false)}>Done</button>
+					<button formaction="?/favorite" class="btn btn-primary">Favorite</button>
+					<button formaction="?/archive" class="btn btn-primary">Archive</button>
+					<button formaction="?/unfavorite" class="btn btn-primary">Unfavorite</button>
+					<button formaction="?/unarchive" class="btn btn-primary">Unarchive</button>
 					<button formaction="?/delete" class="btn btn-danger">Delete</button>
 				{:else}
 					<button type="button" class="btn btn-ghost" onclick={() => (bulkMode = true)}>

@@ -4,6 +4,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	server: {
+		watch: {
+			ignored: ['test-results/**', 'data/**', 'build/**', 'roamarr-test-db/**']
+		}
+	},
 	ssr: {
 		external: ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit']
 	},

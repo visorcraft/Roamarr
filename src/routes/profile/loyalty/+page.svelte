@@ -1,10 +1,12 @@
 <script lang="ts">
+	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
 	let editingId = $state<number | null>(null);
+	let dirtyIds = $state<Record<number, boolean>>({});
 </script>
 
 <header class="page-header">
@@ -21,12 +23,9 @@
 		<h2 class="section-title mb-3">Your programs</h2>
 		<ul class="list-stack">
 			{#each data.programs as p (p.id)}
-				<li class="list-item flex items-start gap-3">
-					<span class="list-icon">
-						<Icon name="star" class="h-4.5 w-4.5" />
-					</span>
+				<li class="list-item">
 					{#if editingId === p.id}
-						<form method="POST" action="?/update" class="min-w-0 flex-1">
+						<form method="POST" action="?/update" class="min-w-0" oninput={() => (dirtyIds[p.id] = true)}>
 							<input type="hidden" name="id" value={p.id} />
 							<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
 								<div class="field">
@@ -47,25 +46,32 @@
 								<input id={`notes-${p.id}`} name="notes" value={p.notes ?? ''} class="input" />
 							</div>
 							<div class="mt-3 flex gap-2">
-								<button type="button" class="btn btn-ghost" onclick={() => (editingId = null)}>Cancel</button>
+								<CancelButton dirty={dirtyIds[p.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Update</button>
 							</div>
 						</form>
 					{:else}
-						<div class="min-w-0 flex-1">
-							<div class="list-title">{p.programName}</div>
-							<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
-								<span class="meta-strong">{p.membershipNumber || '—'}</span>
-								{#if p.balance != null}<span>Balance <span class="font-mono text-slate-300">{p.balance.toLocaleString()}</span></span>{/if}
+						<div class="flex items-start justify-between gap-3">
+							<div class="flex items-start gap-3 min-w-0 flex-1">
+								<span class="list-icon">
+									<Icon name="star" class="h-4.5 w-4.5" />
+								</span>
+								<div class="min-w-0 flex-1">
+									<div class="list-title">{p.programName}</div>
+									<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
+										<span class="meta-strong">{p.membershipNumber || '—'}</span>
+										{#if p.balance != null}<span>Balance <span class="font-mono text-slate-300">{p.balance.toLocaleString()}</span></span>{/if}
+									</div>
+									{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
+								</div>
 							</div>
-							{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
-						</div>
-						<div class="flex gap-1">
-							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingId = p.id)}>Edit</button>
-							<form method="POST" action="?/delete">
-								<input type="hidden" name="id" value={p.id} />
-								<ConfirmButton class="btn btn-danger" message="Delete this loyalty program?">Delete</ConfirmButton>
-							</form>
+							<div class="action-row gap-1">
+								<button type="button" class="btn btn-primary" onclick={() => { editingId = p.id; dirtyIds[p.id] = false; }}>Edit</button>
+								<form method="POST" action="?/delete">
+									<input type="hidden" name="id" value={p.id} />
+									<ConfirmButton class="btn btn-danger" message="Delete this loyalty program?">Delete</ConfirmButton>
+								</form>
+							</div>
 						</div>
 					{/if}
 				</li>

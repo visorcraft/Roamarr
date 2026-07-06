@@ -811,6 +811,27 @@ button.card:hover,
 		0 24px 54px color-mix(in oklab, var(--theme-shadow) 30%, transparent),
 			inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 26%, var(--theme-line));
 	}
+	:where(.theme-root)[data-theme='high-contrast'] a.card:hover,
+	:where(.theme-root)[data-theme='high-contrast'] button.card:hover,
+	:where(.theme-root)[data-theme='high-contrast'] .card.group:hover {
+		background: var(--theme-subtle-hover);
+		box-shadow:
+			0 24px 54px color-mix(in oklab, var(--theme-shadow) 30%, transparent),
+			inset 0 0 0 1px var(--theme-brand);
+	}
+	.modal-panel {
+		background: var(--theme-panel);
+		box-shadow:
+			0 24px 60px color-mix(in oklab, var(--theme-shadow) 42%, transparent),
+			inset 0 0 0 1px var(--theme-line);
+	}
+	:where(.theme-root)[data-theme='high-contrast'] .modal-panel {
+		outline: 2px solid var(--theme-line);
+		outline-offset: 2px;
+		box-shadow:
+			0 24px 60px color-mix(in oklab, var(--theme-shadow) 42%, transparent),
+			inset 0 0 0 2px var(--theme-line);
+	}
 	.section-title {
 		@apply font-display text-lg leading-tight font-semibold text-ink;
 		color: var(--theme-strong);
@@ -822,6 +843,12 @@ button.card:hover,
 	.muted {
 		@apply text-muted;
 		color: var(--theme-readable-muted);
+	}
+	.text-readable {
+		color: var(--theme-readable-muted);
+	}
+	.text-readable-faint {
+		color: var(--theme-readable-faint);
 	}
 	.metric-card {
 		@apply rounded-lg bg-surface/80 p-4 ring-1 ring-white/10 shadow-xl shadow-black/25 backdrop-blur-sm;
@@ -927,7 +954,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.meta {
-		@apply text-xs text-slate-500;
+		@apply text-sm text-slate-500;
 		color: var(--theme-readable-faint);
 	}
 	.meta-strong {
@@ -1416,59 +1443,6 @@ button.card:hover,
 		background: var(--theme-subtle);
 		box-shadow: inset 0 0 0 1px var(--theme-line);
 		color: var(--theme-ink);
-	}
-
-	:where(
-			.card,
-			.metric-card,
-			.list-item,
-			.list-item-compact,
-			.empty-state,
-			.trip-sidebar-card,
-			.trip-timeline-card,
-			.theme-option
-		)
-		:where(.text-white) {
-		color: var(--theme-strong);
-	}
-	:where(
-			.card,
-			.metric-card,
-			.list-item,
-			.list-item-compact,
-			.empty-state,
-			.trip-sidebar-card,
-			.trip-timeline-card,
-			.theme-option
-		)
-		:where(.text-slate-200, .text-slate-300) {
-		color: var(--theme-ink);
-	}
-	:where(
-			.card,
-			.metric-card,
-			.list-item,
-			.list-item-compact,
-			.empty-state,
-			.trip-sidebar-card,
-			.trip-timeline-card,
-			.theme-option
-		)
-		:where(.text-slate-400, .text-muted) {
-		color: var(--theme-readable-muted);
-	}
-	:where(
-			.card,
-			.metric-card,
-			.list-item,
-			.list-item-compact,
-			.empty-state,
-			.trip-sidebar-card,
-			.trip-timeline-card,
-			.theme-option
-		)
-		:where(.text-slate-500) {
-		color: var(--theme-readable-faint);
 	}
 
 	/* Data tables */
@@ -1976,5 +1950,24 @@ button.card:hover,
 
 	.trip-detail :where(.badge-red) {
 		color: var(--trip-readable-danger);
+	}
+
+	/* Theme-aware text colors inside themed surfaces.
+	   Placed in the utilities layer so these overrides win over Tailwind utilities. */
+	:is(.card, .metric-card, .list-item, .list-item-compact, .empty-state, .trip-sidebar-card, .trip-timeline-card, .theme-option)
+		.text-white {
+		color: var(--theme-strong);
+	}
+	:is(.card, .metric-card, .list-item, .list-item-compact, .empty-state, .trip-sidebar-card, .trip-timeline-card, .theme-option)
+		:is(.text-slate-200, .text-slate-300) {
+		color: var(--theme-ink);
+	}
+	:is(.card, .metric-card, .list-item, .list-item-compact, .empty-state, .trip-sidebar-card, .trip-timeline-card, .theme-option)
+		:is(.text-slate-400, .text-muted) {
+		color: var(--theme-readable-muted);
+	}
+	:is(.card, .metric-card, .list-item, .list-item-compact, .empty-state, .trip-sidebar-card, .trip-timeline-card, .theme-option)
+		:is(.text-slate-500) {
+		color: var(--theme-readable-faint);
 	}
 }

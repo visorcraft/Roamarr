@@ -30,9 +30,10 @@ test('load returns the users reminders', async () => {
 		fire_at: '2026-01-02T00:00:00Z'
 	}).executeSync();
 
-	const data = (await load({ locals: { user: u } } as any)) as { reminders: { userId: number }[] };
+	const data = (await load({ locals: { user: u } } as any)) as { reminders: { userId: number }[]; timezone: string };
 	expect(data.reminders).toHaveLength(1);
 	expect(data.reminders[0].userId).toBe(Number(u.id));
+	expect(data.timezone).toBe(u.timezone);
 });
 
 test('cancel action deletes the users own reminder', async () => {

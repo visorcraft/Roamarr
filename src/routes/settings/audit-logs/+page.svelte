@@ -60,7 +60,7 @@
 			<span class="label">To</span>
 			<input type="date" name="to" value={data.filters.to ?? ''} class="input" />
 		</label>
-		<button type="submit" class="btn btn-ghost">Filter</button>
+		<button type="submit" class="btn btn-primary">Filter</button>
 		<a href="/settings/audit-logs" class="btn btn-ghost">Reset</a>
 	</form>
 </section>

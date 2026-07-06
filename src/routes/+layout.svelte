@@ -20,6 +20,7 @@
 	let searchValue = $state('');
 	let searchTimer = $state<ReturnType<typeof setTimeout> | null>(null);
 	let expanded = $state<Record<string, boolean>>({});
+	let expandedItems = $state<Record<string, boolean>>({});
 
 	function readStoredSections(): Record<string, boolean> {
 		if (!browser) return {};
@@ -40,12 +41,46 @@
 		}
 	}
 
+	const ITEMS_STORAGE_KEY = 'roamarr.sidebar.items';
+
+	function readStoredItems(): Record<string, boolean> {
+		if (!browser) return {};
+		try {
+			const raw = localStorage.getItem(ITEMS_STORAGE_KEY);
+			return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+		} catch {
+			return {};
+		}
+	}
+
+	function writeStoredItems(state: Record<string, boolean>) {
+		if (!browser) return;
+		try {
+			localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(state));
+		} catch {
+			// ignore storage errors
+		}
+	}
+
+	function isItemExpanded(label: string) {
+		return expandedItems[label] ?? false;
+	}
+
+	function toggleItem(label: string) {
+		expandedItems[label] = !isItemExpanded(label);
+		writeStoredItems(expandedItems);
+	}
+
 	function isExpanded(label: string) {
 		return expanded[label] ?? true;
 	}
 
 	function sectionId(label: string) {
 		return `nav-section-${label.toLowerCase().replace(/\s+/g, '-')}`;
+	}
+
+	function itemChildrenId(label: string) {
+		return `nav-item-children-${label.toLowerCase().replace(/\s+/g, '-')}`;
 	}
 
 	function toggleSection(label: string) {
@@ -78,6 +113,7 @@
 		}
 		document.addEventListener('click', handleDocumentClick);
 		expanded = readStoredSections();
+		expandedItems = readStoredItems();
 		return () => {
 			document.removeEventListener('click', handleDocumentClick);
 			disconnectFieldA11y();
@@ -132,6 +168,14 @@
 				if (!untrack(() => isExpanded(section.label))) {
 					expanded[section.label] = true;
 					writeStoredSections(expanded);
+				}
+			}
+			for (const item of section.items) {
+				if (item.children?.some((child) => isActive(child.href))) {
+					if (!untrack(() => isItemExpanded(item.label))) {
+						expandedItems[item.label] = true;
+						writeStoredItems(expandedItems);
+					}
 				}
 			}
 		}
@@ -429,25 +473,40 @@
 						<div id={sectionItemsId} class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
 							{#each section.items as item (item.href)}
 								{@const active = itemActive(item)}
-									<a
-										href={item.href}
-										onclick={() => (open = false)}
-										aria-current={active && !item.children ? 'page' : undefined}
-										class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {active
-											? 'app-nav-item-active'
-											: 'app-nav-item'}"
-									>
-										<Icon
-											name={item.icon}
-											class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
-										/>
-										<span class="flex-1">{item.label}</span>
-										{#if item.href === '/notifications' && data.unreadCount > 0}
-											<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
-										{/if}
-									</a>
-									{#if item.children}
-										<div class="ml-8 space-y-1">
+								{#if item.children}
+									{@const itemExpanded = isItemExpanded(item.label)}
+									{@const childrenId = itemChildrenId(item.label)}
+									<div class="flex items-center gap-1">
+										<a
+											href={item.href}
+											onclick={() => (open = false)}
+											aria-current={active ? 'page' : undefined}
+											class="flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {active
+												? 'app-nav-item-active'
+												: 'app-nav-item'}"
+										>
+											<Icon
+												name={item.icon}
+												class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
+											/>
+											<span class="flex-1">{item.label}</span>
+										</a>
+										<button
+											type="button"
+											onclick={() => toggleItem(item.label)}
+											aria-expanded={itemExpanded}
+											aria-controls={childrenId}
+											aria-label="Toggle {item.label}"
+											class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink/70 transition hover:bg-surface2"
+										>
+											<Icon
+												name="chevron-down"
+												class="h-4 w-4 transition-transform {itemExpanded ? 'rotate-180' : ''}"
+											/>
+										</button>
+									</div>
+									{#if itemExpanded}
+										<div id={childrenId} class="ml-8 space-y-1">
 											{#each item.children as child (child.href)}
 												<a
 													href={child.href}
@@ -462,7 +521,26 @@
 											{/each}
 										</div>
 									{/if}
-								{/each}
+								{:else}
+									<a
+										href={item.href}
+										onclick={() => (open = false)}
+										aria-current={active ? 'page' : undefined}
+										class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {active
+											? 'app-nav-item-active'
+											: 'app-nav-item'}"
+									>
+										<Icon
+											name={item.icon}
+											class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
+										/>
+										<span class="flex-1">{item.label}</span>
+										{#if item.href === '/notifications' && data.unreadCount > 0}
+											<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
+										{/if}
+									</a>
+								{/if}
+							{/each}
 						</div>
 					</section>
 				{/each}

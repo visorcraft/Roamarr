@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.17.2",
+	"version": "0.17.3",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -21,7 +21,8 @@
 		"test:e2e": "node tests/e2e/prepare.mjs && playwright test",
 		"test:e2e:ui": "node tests/e2e/prepare.mjs && playwright test --ui",
 		"test:e2e:install": "playwright install chromium",
-		"credits:generate": "node scripts/generate-license-data.mjs"
+		"credits:generate": "node scripts/generate-license-data.mjs",
+		"db:seed": "node --env-file-if-exists=.env --experimental-strip-types --import ./scripts/seed-alias-loader.mjs scripts/seed-database.mjs"
 	},
 	"devDependencies": {
 		"@playwright/test": "^1.61.1",

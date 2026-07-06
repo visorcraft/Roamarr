@@ -8,7 +8,7 @@ import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import { nowIso } from '$lib/server/tz';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
-import { TRIP_STATUSES } from '$lib/server/sharing';
+import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
 import { serializeTags } from '$lib/tags';
 import { findCity } from '$lib/server/cities';
 import type { PageServerLoad } from './$types';
@@ -81,6 +81,11 @@ export const actions: Actions = {
 			typeof statusRaw === 'string' && statusRaw
 				? v.enumValue(statusRaw, TRIP_STATUSES, 'status')
 				: undefined;
+		const defaultVisibilityRaw = String(f.get('defaultVisibility') || '').trim();
+		const defaultVisibility =
+			defaultVisibilityRaw && VISIBILITIES.includes(defaultVisibilityRaw as never)
+				? (defaultVisibilityRaw as tripsRepo.Visibility)
+				: undefined;
 		const baseCurrencyRaw = String(f.get('baseCurrency') || 'USD').trim().toUpperCase();
 		if (!baseCurrencyRaw || baseCurrencyRaw.length > 3) {
 			v.addError('baseCurrency', 'Base currency must be 1-3 letters');
@@ -102,9 +107,10 @@ export const actions: Actions = {
 			tags: serializeTags(tags),
 			baseCurrency: baseCurrencyRaw,
 			...(status && { status }),
+			...(defaultVisibility && { defaultVisibility }),
 			updatedAt: nowIso()
 		});
-		logAudit(u.id, 'trip_update', 'trip', tripId, { status });
+		logAudit(u.id, 'trip_update', 'trip', tripId, { status, defaultVisibility });
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	delete: async ({ locals, params }) => {

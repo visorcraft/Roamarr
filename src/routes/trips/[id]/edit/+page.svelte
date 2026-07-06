@@ -8,8 +8,9 @@
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
+	import type { Visibility } from '$lib/server/repositories/tripsRepo';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string; defaultVisibility: Visibility }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 	let destinationCountryCode = $state('');
 	let isDirty = $state(false);
@@ -46,7 +47,16 @@
 	<form method="POST" action="?/save" class="grid gap-4 sm:grid-cols-2" use:enhance={() => { submitting = true; return async ({ update }) => { await update(); submitting = false; }; }} aria-busy={submitting} oninput={() => (isDirty = true)}>
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
-		<TextField name="name" label="Trip name" value={data.trip.name} required disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
+		<TextField name="name" label="Trip name" value={data.trip.name} required disabled={submitting} errors={form?.errors ?? {}} />
+		<div class="field">
+			<label class="label" for="defaultVisibility">Default visibility</label>
+			<select id="defaultVisibility" name="defaultVisibility" class="select {form?.errors?.defaultVisibility ? 'input-error' : ''}" disabled={submitting}>
+				<option value="private" selected={data.trip.defaultVisibility === 'private'}>Private</option>
+				<option value="groups" selected={data.trip.defaultVisibility === 'groups'}>Groups</option>
+				<option value="public" selected={data.trip.defaultVisibility === 'public'}>Public</option>
+			</select>
+			{#if form?.errors?.defaultVisibility}<p class="field-error">{form.errors.defaultVisibility}</p>{/if}
+		</div>
 		<div class="field">
 			<label class="label" for="destinationCountryCode">Destination country</label>
 			<select

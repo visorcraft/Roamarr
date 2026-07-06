@@ -7,6 +7,8 @@ import type { Trip } from './repositories/tripsRepo';
 export { TRIP_STATUSES } from '../tripStatus';
 import type { TripStatus } from '../tripStatus';
 
+export { VISIBILITIES } from './db/mongrelSchema';
+
 export { listGroupsForUser } from './repositories/tripsRepo';
 
 type Segment = {

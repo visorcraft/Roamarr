@@ -3,7 +3,6 @@
 	import { COUNTRIES } from '$lib/countries';
 	import { US_STATES, usStateDisplayCode } from '$lib/usStates';
 	import { countryContinent, continentSortKey } from '$lib/countryContinents';
-	import { page } from '$app/state';
 
 	let { data } = $props();
 
@@ -62,6 +61,11 @@
 		</form>
 	</div>
 </header>
+
+<p class="meta mt-4">
+	Tip: use <strong>Mark from past trips</strong> to automatically add places you've already
+	visited based on your trip history.
+</p>
 
 {#if tab === 'country'}
 	<section class="card mt-4 p-5">
@@ -235,11 +239,4 @@
 			{/each}
 		</div>
 	</section>
-{/if}
-
-{#if page.status === 200 && data.countries.length === 0 && data.usStates.length === 0}
-	<p class="meta mt-6">
-		Tip: use <strong>Mark from past trips</strong> to automatically add countries you've already
-		visited based on your trip history.
-	</p>
 {/if}

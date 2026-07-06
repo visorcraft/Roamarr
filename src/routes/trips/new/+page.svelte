@@ -79,7 +79,16 @@
 				</select>
 			</div>
 		{/if}
-		<TextField name="name" label="Trip name" placeholder="Summer in Lisbon" required disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
+		<TextField name="name" label="Trip name" placeholder="Summer in Lisbon" required disabled={submitting} errors={form?.errors ?? {}} />
+		<div class="field">
+			<label class="label" for="defaultVisibility">Default visibility</label>
+			<select id="defaultVisibility" name="defaultVisibility" class="select {form?.errors?.defaultVisibility ? 'input-error' : ''}" disabled={submitting}>
+				<option value="private">Private</option>
+				<option value="groups">Groups</option>
+				<option value="public">Public</option>
+			</select>
+			{#if form?.errors?.defaultVisibility}<p class="field-error">{form.errors.defaultVisibility}</p>{/if}
+		</div>
 		<div class="field">
 			<label class="label" for="destinationCountryCode">Destination country</label>
 			<select
@@ -109,15 +118,6 @@
 		</div>
 		<TextField name="startDate" label="Start date" type="date" disabled={submitting} errors={form?.errors ?? {}} />
 		<TextField name="endDate" label="End date" type="date" disabled={submitting} errors={form?.errors ?? {}} />
-		<div class="field sm:col-span-2">
-			<label class="label" for="defaultVisibility">Default visibility</label>
-			<select id="defaultVisibility" name="defaultVisibility" class="select {form?.errors?.defaultVisibility ? 'input-error' : ''}" disabled={submitting}>
-				<option value="private">Private</option>
-				<option value="groups">Groups</option>
-				<option value="public">Public</option>
-			</select>
-			{#if form?.errors?.defaultVisibility}<p class="field-error">{form.errors.defaultVisibility}</p>{/if}
-		</div>
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="tags" label="Tags" placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap gap-2 sm:col-span-2">

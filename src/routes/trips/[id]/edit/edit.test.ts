@@ -220,7 +220,8 @@ test('edit trip form highlights invalid fields and shows per-field errors', () =
 		notes: null,
 		tags: '[]',
 		status: 'booked' as const,
-		baseCurrency: 'USD'
+		baseCurrency: 'USD',
+		defaultVisibility: 'private' as const
 		};
 	const { body } = render(EditTripPage, {
 		props: { data: { trip, owner: true }, form: { errors: { name: 'name is required' } } }

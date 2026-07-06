@@ -8,7 +8,7 @@
 	import CancelButton from '$lib/components/CancelButton.svelte';
 
 	let { data, form } = $props();
-	let selectedThemeId = $state('system');
+	let selectedThemeId = $state<string | null>(null);
 	let submittingProfile = $state(false);
 	let submittingPassword = $state(false);
 	let submittingEmail = $state(false);
@@ -24,14 +24,16 @@
 		if (theme) document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute('content', theme.themeColor);
 	}
 
+	const activeThemeId = $derived(selectedThemeId ?? data.user.themeId);
+
 	$effect(() => {
-		applyThemePreview(selectedThemeId);
+		applyThemePreview(activeThemeId);
 	});
 
 	onDestroy(() => applyThemePreview(data.user.themeId));
 
 	const selectedThemeName = $derived(
-		data.themes.find((theme) => theme.id === selectedThemeId)?.name ?? 'Midnight Travels'
+		data.themes.find((theme) => theme.id === activeThemeId)?.name ?? 'Midnight Travels'
 	);
 
 	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
@@ -114,7 +116,7 @@
 							type="radio"
 							name="themeId"
 							value={theme.id}
-							checked={selectedThemeId === theme.id}
+							checked={activeThemeId === theme.id}
 							onchange={() => (selectedThemeId = theme.id)}
 						/>
 						<span class="theme-option-preview theme-preview" data-theme={theme.id} aria-hidden="true">

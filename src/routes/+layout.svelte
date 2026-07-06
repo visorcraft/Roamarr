@@ -53,6 +53,10 @@
 		writeStoredSections(expanded);
 	}
 
+	function closeUserMenu() {
+		if (userMenuDetails) userMenuDetails.open = false;
+	}
+
 	const toastMessage = $derived(
 		typeof data.flash === 'object' && data.flash !== null ? data.flash.message : (data.flash ?? '')
 	);
@@ -322,18 +326,18 @@
 				</div>
 			</div>
 			<div class="p-2">
-				<a href="/profile" class="app-user-menu-item">
+				<a href="/profile" class="app-user-menu-item" onclick={closeUserMenu}>
 					<Icon name="user" class="h-4.5 w-4.5" />
 					<span>Profile</span>
 				</a>
 				{#if data.user?.role === 'admin'}
-					<a href="/settings" class="app-user-menu-item">
+					<a href="/settings" class="app-user-menu-item" onclick={closeUserMenu}>
 						<Icon name="settings" class="h-4.5 w-4.5" />
 						<span>Settings</span>
 					</a>
 				{/if}
 				<form method="POST" action="/logout">
-					<button class="app-user-menu-item app-user-menu-button w-full" type="submit">
+					<button class="app-user-menu-item app-user-menu-button w-full" type="submit" onclick={closeUserMenu}>
 						<Icon name="logout" class="h-4.5 w-4.5" />
 						<span>Sign Out</span>
 					</button>

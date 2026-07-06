@@ -76,5 +76,9 @@
 		{/each}
 	</ul>
 {:else}
-	<EmptyState message="No reminders scheduled." />
+	<EmptyState
+		message="No reminders scheduled. Reminders are created from a trip's Tools tab."
+		actionHref="/trips"
+		actionLabel="Browse trips"
+	/>
 {/if}

@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 @theme {
-	--font-sans: 'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
-	--font-display: 'Bricolage Grotesque', 'Hanken Grotesk', ui-sans-serif, sans-serif;
+	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+	--font-display: 'Bricolage Grotesque', 'Inter', ui-sans-serif, sans-serif;
 	--font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace;
 
 	--color-canvas: var(--theme-canvas);
@@ -52,12 +52,6 @@
 		--theme-brand-readable: #a5b4fc;
 		--theme-brand-2: #e688f4;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #4f46e5;
-		--theme-primary-bottom-override: #3730a3;
-		--theme-primary-hover-top-override: #5b55e8;
-		--theme-primary-hover-bottom-override: #4338ca;
-		--theme-primary-shadow-override: color-mix(in oklab, #3730a3 30%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #a5b4fc 18%, transparent);
 		--theme-danger-top: #ef4444;
 		--theme-danger-bottom: #dc2626;
 		--theme-danger-hover-top: #dc2626;
@@ -82,12 +76,6 @@
 		--theme-brand-readable: #a8d2ff;
 		--theme-brand-2: #96caff;
 		--theme-accent-text: #0a1628;
-		--theme-primary-top-override: #a8d2ff;
-		--theme-primary-bottom-override: #80bcff;
-		--theme-primary-hover-top-override: #bfdfff;
-		--theme-primary-hover-bottom-override: #8fc8ff;
-		--theme-primary-shadow-override: color-mix(in oklab, #80bcff 16%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #a8d2ff 28%, transparent);
 		--theme-danger-top: #ef4444;
 		--theme-danger-bottom: #dc2626;
 		--theme-danger-hover-top: #dc2626;
@@ -111,12 +99,6 @@
 		--theme-brand-readable: #0a3c78;
 		--theme-brand-2: #17438d;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #0b4690;
-		--theme-primary-bottom-override: #0a3c78;
-		--theme-primary-hover-top-override: #0c4a9a;
-		--theme-primary-hover-bottom-override: #08356d;
-		--theme-primary-shadow-override: color-mix(in oklab, #0a3c78 18%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #0a3c78 24%, transparent);
 		--theme-danger-top: #dc2626;
 		--theme-danger-bottom: #b91c1c;
 		--theme-danger-hover-top: #b91c1c;
@@ -141,12 +123,6 @@
 			--theme-brand-readable: #0f3a7a;
 			--theme-brand-2: #2a477a;
 			--theme-accent-text: #ffffff;
-			--theme-primary-top-override: #236fd6;
-			--theme-primary-bottom-override: #0f3a7a;
-			--theme-primary-hover-top-override: #276ed0;
-			--theme-primary-hover-bottom-override: #1b56a8;
-			--theme-primary-shadow-override: color-mix(in oklab, #0f3a7a 18%, transparent);
-			--theme-primary-border-override: color-mix(in oklab, #0f3a7a 24%, transparent);
 		--theme-danger-top: #dc2626;
 		--theme-danger-bottom: #b91c1c;
 		--theme-danger-hover-top: #b91c1c;
@@ -171,13 +147,6 @@
 		--theme-brand-readable: #9ecbff;
 		--theme-brand-2: #33b5ff;
 		--theme-accent-text: #000000;
-		--theme-primary-text-override: #ffffff;
-		--theme-primary-top-override: #005799;
-		--theme-primary-bottom-override: #003f73;
-		--theme-primary-hover-top-override: #00589f;
-		--theme-primary-hover-bottom-override: #004a85;
-		--theme-primary-shadow-override: transparent;
-		--theme-primary-border-override: #ffffff;
 		--theme-danger-top: #ff0000;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff1a1a;
@@ -205,12 +174,6 @@
 		--theme-brand-readable: #8db7ff;
 		--theme-brand-2: #7aa7ff;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #0f4c9a;
-		--theme-primary-bottom-override: #0b3f86;
-		--theme-primary-hover-top-override: #165cad;
-		--theme-primary-hover-bottom-override: #0f4c9a;
-		--theme-primary-shadow-override: color-mix(in oklab, #0b3f86 22%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ffffff 12%, transparent);
 		--theme-danger-top: #ff3333;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff4d4d;
@@ -234,12 +197,6 @@
 		--theme-brand-readable: #46f0a5;
 		--theme-brand-2: #00ff7f;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #0d7f4c;
-		--theme-primary-bottom-override: #005f3a;
-		--theme-primary-hover-top-override: #0a8650;
-		--theme-primary-hover-bottom-override: #006d42;
-		--theme-primary-shadow-override: color-mix(in oklab, #005f3a 30%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #46f0a5 22%, transparent);
 		--theme-danger-top: #ff4d4d;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff6666;
@@ -263,12 +220,6 @@
 		--theme-brand-readable: #9fd6ff;
 		--theme-brand-2: #8ecdff;
 		--theme-accent-text: #ffffff;
-		--theme-primary-top-override: #005ea8;
-		--theme-primary-bottom-override: #003f73;
-		--theme-primary-hover-top-override: #006bbf;
-		--theme-primary-hover-bottom-override: #004a85;
-		--theme-primary-shadow-override: color-mix(in oklab, #003f73 30%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #9fd6ff 18%, transparent);
 		--theme-danger-top: #ef4444;
 		--theme-danger-bottom: #dc2626;
 		--theme-danger-hover-top: #dc2626;
@@ -292,13 +243,6 @@
 		--theme-brand-readable: #ffffff;
 		--theme-brand-2: #e0f3fb;
 		--theme-accent-text: #1a2d34;
-		--theme-primary-text-override: #f4fbff;
-		--theme-primary-top-override: #2f6674;
-		--theme-primary-bottom-override: #254f5d;
-		--theme-primary-hover-top-override: #387383;
-		--theme-primary-hover-bottom-override: #2d5b67;
-		--theme-primary-shadow-override: color-mix(in oklab, #254f5d 26%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ffffff 22%, transparent);
 		--theme-danger-top: #ff5a5a;
 		--theme-danger-bottom: #d92626;
 		--theme-danger-hover-top: #ff7070;
@@ -322,13 +266,6 @@
 		--theme-brand-readable: #ff70b8;
 		--theme-brand-2: #ff65b8;
 		--theme-accent-text: #ffffff;
-		--theme-primary-text-override: #fff5fb;
-		--theme-primary-top-override: #8f2466;
-		--theme-primary-bottom-override: #64194f;
-		--theme-primary-hover-top-override: #a02a73;
-		--theme-primary-hover-bottom-override: #75205b;
-		--theme-primary-shadow-override: color-mix(in oklab, #64194f 28%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ff70b8 24%, transparent);
 		--theme-danger-top: #ff4d6d;
 		--theme-danger-bottom: #d9264a;
 		--theme-danger-hover-top: #ff6b85;
@@ -352,13 +289,6 @@
 		--theme-brand-readable: #d4d4ff;
 		--theme-brand-2: #d0d0ff;
 		--theme-accent-text: #17173a;
-		--theme-primary-text-override: #f8f8ff;
-		--theme-primary-top-override: #5f5fb1;
-		--theme-primary-bottom-override: #44448c;
-		--theme-primary-hover-top-override: #6464b8;
-		--theme-primary-hover-bottom-override: #5050a0;
-		--theme-primary-shadow-override: color-mix(in oklab, #44448c 28%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #d4d4ff 24%, transparent);
 		--theme-danger-top: #ff4d4d;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff6666;
@@ -382,13 +312,6 @@
 		--theme-brand-readable: #ff9696;
 		--theme-brand-2: #ff9494;
 		--theme-accent-text: #ffffff;
-		--theme-primary-text-override: #fff7f7;
-		--theme-primary-top-override: #9e2828;
-		--theme-primary-bottom-override: #6f1b1b;
-		--theme-primary-hover-top-override: #b13232;
-		--theme-primary-hover-bottom-override: #832222;
-		--theme-primary-shadow-override: color-mix(in oklab, #6f1b1b 28%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ff9696 22%, transparent);
 		--theme-danger-top: #ff4d4d;
 		--theme-danger-bottom: #e60000;
 		--theme-danger-hover-top: #ff6666;
@@ -412,13 +335,6 @@
 		--theme-brand-readable: #f0c9ec;
 		--theme-brand-2: #e8b5e3;
 		--theme-accent-text: #241338;
-		--theme-primary-text-override: #fff6ff;
-		--theme-primary-top-override: #80507e;
-		--theme-primary-bottom-override: #5e335f;
-		--theme-primary-hover-top-override: #905c8e;
-		--theme-primary-hover-bottom-override: #6c3c6d;
-		--theme-primary-shadow-override: color-mix(in oklab, #5e335f 28%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #f0c9ec 24%, transparent);
 		--theme-danger-top: #ff5c5c;
 		--theme-danger-bottom: #d92626;
 		--theme-danger-hover-top: #ff7575;
@@ -442,13 +358,6 @@
 		--theme-brand-readable: #ffd1e0;
 		--theme-brand-2: #ffc2d4;
 		--theme-accent-text: #ffffff;
-		--theme-primary-text-override: #fff7fb;
-		--theme-primary-top-override: #b83b68;
-		--theme-primary-bottom-override: #81264f;
-		--theme-primary-hover-top-override: #be406d;
-		--theme-primary-hover-bottom-override: #97305d;
-		--theme-primary-shadow-override: color-mix(in oklab, #81264f 28%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ffd1e0 22%, transparent);
 		--theme-danger-top: #ff4d4d;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff6666;
@@ -472,13 +381,6 @@
 		--theme-brand-readable: #ffcc00;
 		--theme-brand-2: #ff99f0;
 		--theme-accent-text: #111111;
-		--theme-primary-text-override: #fff8d6;
-		--theme-primary-top-override: #7d6200;
-		--theme-primary-bottom-override: #5e4a00;
-		--theme-primary-hover-top-override: #886b00;
-		--theme-primary-hover-bottom-override: #6f5800;
-		--theme-primary-shadow-override: color-mix(in oklab, #5e4a00 30%, transparent);
-		--theme-primary-border-override: color-mix(in oklab, #ffcc00 30%, transparent);
 		--theme-danger-top: #ff4d4d;
 		--theme-danger-bottom: #cc0000;
 		--theme-danger-hover-top: #ff6666;
@@ -519,28 +421,6 @@
 		--theme-option-selected: var(--theme-active-strong);
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 70%, var(--theme-ink));
 		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-ink));
-		--theme-primary-top: var(
-			--theme-primary-top-override,
-			color-mix(in oklab, var(--theme-brand) 76%, var(--theme-strong))
-		);
-		--theme-primary-bottom: var(--theme-primary-bottom-override, var(--theme-brand));
-		--theme-primary-hover-top: var(
-			--theme-primary-hover-top-override,
-			color-mix(in oklab, var(--theme-brand) 64%, var(--theme-strong))
-		);
-		--theme-primary-hover-bottom: var(
-			--theme-primary-hover-bottom-override,
-			color-mix(in oklab, var(--theme-brand) 86%, var(--theme-brand-2))
-		);
-		--theme-primary-shadow: var(
-			--theme-primary-shadow-override,
-			color-mix(in oklab, var(--theme-brand) 34%, transparent)
-		);
-		--theme-primary-border: var(
-			--theme-primary-border-override,
-			color-mix(in oklab, var(--theme-strong) 18%, transparent)
-		);
-		--theme-primary-text: var(--theme-primary-text-override, var(--theme-accent-text));
 		min-height: 100dvh;
 		background-color: var(--theme-canvas);
 		background-image: linear-gradient(180deg, var(--theme-wash), transparent 18rem);
@@ -1093,17 +973,52 @@ button.card:hover,
 		@apply min-h-7 gap-1 px-2 py-1 text-xs leading-tight;
 	}
 	.btn-primary {
-		@apply bg-gradient-to-b from-indigo-500 to-indigo-600 text-white shadow-lg shadow-indigo-900/40 hover:from-indigo-400 hover:to-indigo-500 active:translate-y-px;
-		background-color: var(--theme-primary-bottom);
-		background-image: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
-		box-shadow:
-			0 6px 12px var(--theme-primary-shadow),
-			inset 0 0 0 1px var(--theme-primary-border);
-		color: var(--theme-primary-text);
+		@apply active:translate-y-px;
+		background: var(--theme-brand);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 85%, black);
+		color: var(--theme-accent-text);
 	}
 	.btn-primary:hover {
-		background-color: var(--theme-primary-hover-bottom);
-		background-image: linear-gradient(180deg, var(--theme-primary-hover-top), var(--theme-primary-hover-bottom));
+		background: color-mix(in oklab, var(--theme-brand) 82%, black);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 70%, black);
+	}
+	/* Themes where the solid brand background drops contrast: use the badge-brand
+	   recipe (translucent active tint + themed strong text) instead. */
+	[data-theme='midnight-travels'] .btn-primary,
+	[data-theme='light'] .btn-primary,
+	[data-theme='high-contrast'] .btn-primary,
+	[data-theme='dark'] .btn-primary,
+	[data-theme='oled-black'] .btn-primary,
+	[data-theme='gentle-gecko'] .btn-primary,
+	[data-theme='black-knight'] .btn-primary,
+	[data-theme='diamond'] .btn-primary,
+	[data-theme='dreams'] .btn-primary,
+	[data-theme='paranoid'] .btn-primary,
+	[data-theme='red-velvet'] .btn-primary,
+	[data-theme='tiefling'] .btn-primary {
+		background: var(--theme-active);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 30%, transparent);
+		color: var(--theme-strong);
+	}
+	[data-theme='midnight-travels'] .btn-primary:hover,
+	[data-theme='light'] .btn-primary:hover,
+	[data-theme='high-contrast'] .btn-primary:hover,
+	[data-theme='dark'] .btn-primary:hover,
+	[data-theme='oled-black'] .btn-primary:hover,
+	[data-theme='gentle-gecko'] .btn-primary:hover,
+	[data-theme='black-knight'] .btn-primary:hover,
+	[data-theme='diamond'] .btn-primary:hover,
+	[data-theme='dreams'] .btn-primary:hover,
+	[data-theme='paranoid'] .btn-primary:hover,
+	[data-theme='red-velvet'] .btn-primary:hover,
+	[data-theme='tiefling'] .btn-primary:hover {
+		background: var(--theme-active-strong);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 45%, transparent);
+	}
+	[data-theme='subspace'] .btn-primary:hover,
+	[data-theme='vibes'] .btn-primary:hover {
+		background: var(--theme-active);
+		color: var(--theme-strong);
 	}
 	.btn-secondary {
 		@apply bg-slate-200/10 text-slate-100 ring-1 ring-white/15 ring-inset hover:bg-slate-200/15 hover:text-white active:translate-y-px;
@@ -1125,14 +1040,17 @@ button.card:hover,
 	}
 	.btn-danger {
 		@apply text-white active:translate-y-px;
-		background-image: linear-gradient(180deg, var(--theme-danger-top), var(--theme-danger-bottom));
-		box-shadow:
-			0 3px 6px color-mix(in oklab, var(--theme-danger-shadow) 30%, transparent),
-			inset 0 0 0 1px color-mix(in oklab, var(--theme-danger-border) 30%, transparent);
+		background: var(--theme-danger-bottom);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-danger-border) 30%, transparent);
 		color: var(--theme-danger-text);
 	}
 	.btn-danger:hover {
-		background-image: linear-gradient(180deg, var(--theme-danger-hover-top), var(--theme-danger-hover-bottom));
+		background: #4a0f18;
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-strong) 80%, transparent);
+	}
+	[data-theme='light'] .btn-danger:hover {
+		background: #991b1b;
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, #7f1d1d 58%, transparent);
 	}
 	.btn-ghost-muted {
 		@apply text-slate-400 hover:bg-white/5 hover:text-slate-200;
@@ -1251,6 +1169,7 @@ button.card:hover,
 	select.input,
 	select.select {
 		appearance: none;
+		cursor: pointer;
 		padding-right: 2.75rem;
 		color-scheme: var(--theme-color-scheme);
 		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -1886,16 +1805,6 @@ button.card:hover,
 
 	.trip-detail :where(.trip-tab-link-active) {
 		color: var(--trip-readable-strong);
-	}
-
-	.trip-detail :where(.btn-primary) {
-		background-color: var(--theme-primary-bottom);
-		background-image: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
-		color: var(--theme-primary-text);
-	}
-
-	.trip-detail :where(.btn-primary *) {
-		color: var(--theme-primary-text);
 	}
 
 	.trip-detail

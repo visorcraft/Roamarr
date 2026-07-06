@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from './auth';
 import { normalizeEmail } from './users';
+import { updateSettings } from './settings';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
@@ -24,6 +25,7 @@ export interface SeederOptions {
 	now?: Date;
 	baseCurrency?: string;
 	timezone?: string;
+	role?: 'admin' | 'user';
 }
 
 interface TripDef extends CreateTripInput {
@@ -36,6 +38,7 @@ export class DatabaseSeeder {
 	private dates: SeedDateBuilder;
 	private baseCurrency: string;
 	private timezone: string;
+	private role: 'admin' | 'user';
 	private userId!: number;
 
 	constructor(opts: SeederOptions) {
@@ -44,10 +47,16 @@ export class DatabaseSeeder {
 		this.dates = new SeedDateBuilder(opts.now);
 		this.baseCurrency = opts.baseCurrency ?? 'USD';
 		this.timezone = opts.timezone ?? 'UTC';
+		this.role = opts.role ?? 'admin';
 	}
 
 	async run() {
 		await this.ensureCleanUser();
+		updateSettings({
+			setupComplete: true,
+			instanceName: 'Roamarr Seeded',
+			defaultTimezone: this.timezone
+		});
 		this.seedProfile();
 		await this.seedTrips();
 		this.createNotifications();
@@ -63,7 +72,7 @@ export class DatabaseSeeder {
 			email: this.email,
 			password_hash: await hashPassword(this.password),
 			display_name: 'Ciamos',
-			role: 'user',
+			role: this.role,
 			timezone: this.timezone,
 			default_currency: this.baseCurrency,
 			calendar_token: null,

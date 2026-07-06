@@ -58,6 +58,13 @@
 		--theme-primary-hover-bottom-override: #4338ca;
 		--theme-primary-shadow-override: color-mix(in oklab, #3730a3 30%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #a5b4fc 18%, transparent);
+		--theme-danger-top: #ef4444;
+		--theme-danger-bottom: #dc2626;
+		--theme-danger-hover-top: #dc2626;
+		--theme-danger-hover-bottom: #b91c1c;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #f87171;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 255, 255, 0.035);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='system'],
@@ -81,6 +88,13 @@
 		--theme-primary-hover-bottom-override: #8fc8ff;
 		--theme-primary-shadow-override: color-mix(in oklab, #80bcff 16%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #a8d2ff 28%, transparent);
+		--theme-danger-top: #ef4444;
+		--theme-danger-bottom: #dc2626;
+		--theme-danger-hover-top: #dc2626;
+		--theme-danger-hover-bottom: #b91c1c;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #f87171;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 255, 255, 0.03);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='light'] {
@@ -103,6 +117,13 @@
 		--theme-primary-hover-bottom-override: #08356d;
 		--theme-primary-shadow-override: color-mix(in oklab, #0a3c78 18%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #0a3c78 24%, transparent);
+		--theme-danger-top: #dc2626;
+		--theme-danger-bottom: #b91c1c;
+		--theme-danger-hover-top: #b91c1c;
+		--theme-danger-hover-bottom: #991b1b;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #fca5a5;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(0, 0, 0, 0.035);
 	}
 	@media (prefers-color-scheme: light) {
@@ -126,6 +147,13 @@
 			--theme-primary-hover-bottom-override: #1b56a8;
 			--theme-primary-shadow-override: color-mix(in oklab, #0f3a7a 18%, transparent);
 			--theme-primary-border-override: color-mix(in oklab, #0f3a7a 24%, transparent);
+		--theme-danger-top: #dc2626;
+		--theme-danger-bottom: #b91c1c;
+		--theme-danger-hover-top: #b91c1c;
+		--theme-danger-hover-bottom: #991b1b;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #fca5a5;
+		--theme-danger-text: #ffffff;
 			--theme-wash: rgba(0, 0, 0, 0.035);
 		}
 	}
@@ -150,6 +178,13 @@
 		--theme-primary-hover-bottom-override: #004a85;
 		--theme-primary-shadow-override: transparent;
 		--theme-primary-border-override: #ffffff;
+		--theme-danger-top: #ff0000;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff1a1a;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: transparent;
+		--theme-danger-border: #ffffff;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(114, 169, 255, 0.12);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='high-contrast'] :focus-visible {
@@ -176,6 +211,13 @@
 		--theme-primary-hover-bottom-override: #0f4c9a;
 		--theme-primary-shadow-override: color-mix(in oklab, #0b3f86 22%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ffffff 12%, transparent);
+		--theme-danger-top: #ff3333;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff4d4d;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff6666;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 255, 255, 0.025);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='gentle-gecko'] {
@@ -198,6 +240,13 @@
 		--theme-primary-hover-bottom-override: #006d42;
 		--theme-primary-shadow-override: color-mix(in oklab, #005f3a 30%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #46f0a5 22%, transparent);
+		--theme-danger-top: #ff4d4d;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff6666;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff9999;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(0, 184, 107, 0.075);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='black-knight'] {
@@ -220,6 +269,13 @@
 		--theme-primary-hover-bottom-override: #004a85;
 		--theme-primary-shadow-override: color-mix(in oklab, #003f73 30%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #9fd6ff 18%, transparent);
+		--theme-danger-top: #ef4444;
+		--theme-danger-bottom: #dc2626;
+		--theme-danger-hover-top: #dc2626;
+		--theme-danger-hover-bottom: #b91c1c;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #f87171;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(0, 120, 212, 0.08);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='diamond'] {
@@ -243,6 +299,13 @@
 		--theme-primary-hover-bottom-override: #2d5b67;
 		--theme-primary-shadow-override: color-mix(in oklab, #254f5d 26%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ffffff 22%, transparent);
+		--theme-danger-top: #ff5a5a;
+		--theme-danger-bottom: #d92626;
+		--theme-danger-hover-top: #ff7070;
+		--theme-danger-hover-bottom: #b91c1c;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ffb3b3;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 255, 255, 0.045);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='dreams'] {
@@ -266,6 +329,13 @@
 		--theme-primary-hover-bottom-override: #75205b;
 		--theme-primary-shadow-override: color-mix(in oklab, #64194f 28%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ff70b8 24%, transparent);
+		--theme-danger-top: #ff4d6d;
+		--theme-danger-bottom: #d9264a;
+		--theme-danger-hover-top: #ff6b85;
+		--theme-danger-hover-bottom: #bf1f3d;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ffb3c1;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(181, 48, 126, 0.12);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='paranoid'] {
@@ -289,6 +359,13 @@
 		--theme-primary-hover-bottom-override: #5050a0;
 		--theme-primary-shadow-override: color-mix(in oklab, #44448c 28%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #d4d4ff 24%, transparent);
+		--theme-danger-top: #ff4d4d;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff6666;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff9999;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(154, 154, 224, 0.09);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='red-velvet'] {
@@ -312,6 +389,13 @@
 		--theme-primary-hover-bottom-override: #832222;
 		--theme-primary-shadow-override: color-mix(in oklab, #6f1b1b 28%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ff9696 22%, transparent);
+		--theme-danger-top: #ff4d4d;
+		--theme-danger-bottom: #e60000;
+		--theme-danger-hover-top: #ff6666;
+		--theme-danger-hover-bottom: #ff1a1a;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff9999;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(220, 60, 60, 0.1);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='subspace'] {
@@ -335,6 +419,13 @@
 		--theme-primary-hover-bottom-override: #6c3c6d;
 		--theme-primary-shadow-override: color-mix(in oklab, #5e335f 28%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #f0c9ec 24%, transparent);
+		--theme-danger-top: #ff5c5c;
+		--theme-danger-bottom: #d92626;
+		--theme-danger-hover-top: #ff7575;
+		--theme-danger-hover-bottom: #b91c1c;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ffb3b3;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(183, 123, 180, 0.09);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='tiefling'] {
@@ -358,6 +449,13 @@
 		--theme-primary-hover-bottom-override: #97305d;
 		--theme-primary-shadow-override: color-mix(in oklab, #81264f 28%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ffd1e0 22%, transparent);
+		--theme-danger-top: #ff4d4d;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff6666;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff9999;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 92, 138, 0.1);
 	}
 	:where(.theme-root, .theme-preview)[data-theme='vibes'] {
@@ -381,6 +479,13 @@
 		--theme-primary-hover-bottom-override: #6f5800;
 		--theme-primary-shadow-override: color-mix(in oklab, #5e4a00 30%, transparent);
 		--theme-primary-border-override: color-mix(in oklab, #ffcc00 30%, transparent);
+		--theme-danger-top: #ff4d4d;
+		--theme-danger-bottom: #cc0000;
+		--theme-danger-hover-top: #ff6666;
+		--theme-danger-hover-bottom: #e60000;
+		--theme-danger-shadow: #7f1d1d;
+		--theme-danger-border: #ff9999;
+		--theme-danger-text: #ffffff;
 		--theme-wash: rgba(255, 204, 0, 0.08);
 	}
 
@@ -992,15 +1097,15 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.btn-danger {
-		@apply bg-gradient-to-b from-red-500 to-red-600 text-white shadow-lg shadow-red-900/40 active:translate-y-px;
-		background-image: linear-gradient(180deg, #ef4444, #dc2626);
+		@apply text-white active:translate-y-px;
+		background-image: linear-gradient(180deg, var(--theme-danger-top), var(--theme-danger-bottom));
 		box-shadow:
-			0 6px 12px color-mix(in oklab, #7f1d1d 30%, transparent),
-			inset 0 0 0 1px color-mix(in oklab, #f87171 30%, transparent);
-		color: #ffffff;
+			0 6px 12px color-mix(in oklab, var(--theme-danger-shadow) 30%, transparent),
+			inset 0 0 0 1px color-mix(in oklab, var(--theme-danger-border) 30%, transparent);
+		color: var(--theme-danger-text);
 	}
 	.btn-danger:hover {
-		background-image: linear-gradient(180deg, #dc2626, #b91c1c);
+		background-image: linear-gradient(180deg, var(--theme-danger-hover-top), var(--theme-danger-hover-bottom));
 	}
 	.btn-ghost-muted {
 		@apply text-slate-400 hover:bg-white/5 hover:text-slate-200;

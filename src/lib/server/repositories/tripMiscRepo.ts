@@ -35,11 +35,7 @@ function num(id: bigint): number {
 	return Number(id);
 }
 
-function nullableTimestamp(value: string | null | undefined): string | null {
-	return value == null || value === '' ? null : value;
-}
-
-function nullableDate(value: string | null | undefined): string | null {
+function nullableText(value: string | null | undefined): string | null {
 	return value == null || value === '' ? null : value;
 }
 
@@ -163,9 +159,6 @@ export type UpdateChecklistItemInput = Partial<
 >;
 
 export function createChecklistItem(input: CreateChecklistItemInput): ChecklistItem {
-	if (input.assignedToCompanionId != null) {
-		(input.assignedToCompanionId);
-	}
 	const row = kit
 		.insertInto(tripChecklistItems)
 		.values({
@@ -266,7 +259,6 @@ export function getJournalEntryById(id: number): JournalEntry | null {
 }
 
 export function createJournalEntry(input: CreateJournalEntryInput): JournalEntry {
-	(input.tripId);
 	const row = kit
 		.insertInto(tripJournalEntries)
 		.values({
@@ -359,7 +351,6 @@ export function getDocumentLinkById(id: number): DocumentLink | null {
 }
 
 export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink {
-	(input.tripId);
 	const row = kit
 		.insertInto(tripDocumentLinks)
 		.values({
@@ -427,7 +418,7 @@ function toHomeTask(row: Row<typeof tripHomeTasks>): HomeTask {
 		id: num(row.id),
 		tripId: num(row.trip_id),
 		text: row.text,
-		dueDate: nullableDate(row.due_date),
+		dueDate: nullableText(row.due_date),
 		done: row.done,
 		sortOrder: Number(row.sort_order),
 		createdAt: row.created_at
@@ -454,13 +445,12 @@ export function getHomeTaskById(id: number): HomeTask | null {
 }
 
 export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
-	(input.tripId);
 	const row = kit
 		.insertInto(tripHomeTasks)
 		.values({
 			trip_id: kitId(input.tripId),
 			text: input.text,
-			due_date: nullableDate(input.dueDate),
+			due_date: nullableText(input.dueDate),
 			done: false,
 			sort_order: 0n
 		} as Insert<typeof tripHomeTasks>)
@@ -471,7 +461,7 @@ export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
 export function updateHomeTask(id: number, patch: UpdateHomeTaskInput): HomeTask | null {
 	const set: Update<typeof tripHomeTasks> = {};
 	if (patch.text !== undefined) set.text = patch.text;
-	if (patch.dueDate !== undefined) set.due_date = nullableDate(patch.dueDate);
+	if (patch.dueDate !== undefined) set.due_date = nullableText(patch.dueDate);
 	if (patch.done !== undefined) set.done = patch.done;
 	if (patch.sortOrder !== undefined) set.sort_order = BigInt(patch.sortOrder);
 	const updated = kit
@@ -531,8 +521,8 @@ function toMedication(row: Row<typeof tripMedications>, companionName: string | 
 		name: row.name,
 		dosage: row.dosage,
 		schedule: row.schedule,
-		startsAt: nullableTimestamp(row.starts_at),
-		endsAt: nullableTimestamp(row.ends_at),
+		startsAt: nullableText(row.starts_at),
+		endsAt: nullableText(row.ends_at),
 		notes: row.notes,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
@@ -591,8 +581,6 @@ export function getMedicationById(id: number): Medication | null {
 }
 
 export function createMedication(input: CreateMedicationInput): Medication {
-	(input.tripId);
-	if (input.companionId != null) (input.companionId);
 	const row = kit
 		.insertInto(tripMedications)
 		.values({
@@ -601,8 +589,8 @@ export function createMedication(input: CreateMedicationInput): Medication {
 			name: input.name,
 			dosage: input.dosage ?? null,
 			schedule: input.schedule ?? null,
-			starts_at: nullableTimestamp(input.startsAt),
-			ends_at: nullableTimestamp(input.endsAt),
+			starts_at: nullableText(input.startsAt),
+			ends_at: nullableText(input.endsAt),
 			notes: input.notes ?? null
 		} as Insert<typeof tripMedications>)
 		.executeSync();
@@ -656,7 +644,7 @@ function toEntryRequirement(row: Row<typeof tripEntryRequirements>): EntryRequir
 		country: row.country,
 		requirementType: row.requirement_type as EntryRequirementType,
 		status: row.status as EntryRequirementStatus,
-		dueDate: nullableDate(row.due_date),
+		dueDate: nullableText(row.due_date),
 		notes: row.notes,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
@@ -683,7 +671,6 @@ export function getEntryRequirementById(id: number): EntryRequirement | null {
 }
 
 export function createEntryRequirement(input: CreateEntryRequirementInput): EntryRequirement {
-	(input.tripId);
 	const row = kit
 		.insertInto(tripEntryRequirements)
 		.values({
@@ -691,7 +678,7 @@ export function createEntryRequirement(input: CreateEntryRequirementInput): Entr
 			country: input.country,
 			requirement_type: input.requirementType,
 			status: input.status ?? 'needed',
-			due_date: nullableDate(input.dueDate),
+			due_date: nullableText(input.dueDate),
 			notes: input.notes ?? null
 		} as Insert<typeof tripEntryRequirements>)
 		.executeSync();
@@ -704,7 +691,7 @@ export function updateEntryRequirement(
 ): EntryRequirement | null {
 	const set: Update<typeof tripEntryRequirements> = {};
 	if (patch.status !== undefined) set.status = patch.status;
-	if (patch.dueDate !== undefined) set.due_date = nullableDate(patch.dueDate);
+	if (patch.dueDate !== undefined) set.due_date = nullableText(patch.dueDate);
 	if (patch.notes !== undefined) set.notes = patch.notes ?? null;
 	set.updated_at = nowIso();
 	const updated = kit
@@ -822,8 +809,6 @@ export function getImportantItemById(id: number): ImportantItem | null {
 }
 
 export function createImportantItem(input: CreateImportantItemInput): ImportantItem {
-	(input.tripId);
-	if (input.companionId != null) (input.companionId);
 	const row = kit
 		.insertInto(tripImportantItems)
 		.values({

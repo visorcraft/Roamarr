@@ -164,6 +164,19 @@ function upsertCache(locationKeyStr: string, forDate: string, payload: string): 
 	}
 }
 
+function singleDayPayload(daily: OpenMeteoDaily, i: number): string {
+	return JSON.stringify({
+		daily: {
+			time: [daily.time[i]],
+			temperature_2m_max: [daily.temperature_2m_max[i]],
+			temperature_2m_min: [daily.temperature_2m_min[i]],
+			precipitation_probability_max: [daily.precipitation_probability_max[i]],
+			wind_speed_10m_max: [daily.wind_speed_10m_max[i]],
+			weather_code: [daily.weather_code[i]]
+		}
+	});
+}
+
 /**
  * Prefetch and cache forecasts for trips starting within the forecast horizon.
  * Each unique destination coordinate is fetched once; failures for one location
@@ -198,17 +211,7 @@ export async function refreshWeatherCache(now: Date = new Date()): Promise<void>
 			if (!response.daily) continue;
 			const daily = response.daily;
 			for (let i = 0; i < daily.time.length; i++) {
-				const dayPayload = JSON.stringify({
-					daily: {
-						time: [daily.time[i]],
-						temperature_2m_max: [daily.temperature_2m_max[i]],
-						temperature_2m_min: [daily.temperature_2m_min[i]],
-						precipitation_probability_max: [daily.precipitation_probability_max[i]],
-						wind_speed_10m_max: [daily.wind_speed_10m_max[i]],
-						weather_code: [daily.weather_code[i]]
-					}
-				});
-				upsertCache(key, daily.time[i], dayPayload);
+				upsertCache(key, daily.time[i], singleDayPayload(daily, i));
 			}
 		} catch (e) {
 			console.error('[weather] refresh cache failed for', key, e);
@@ -234,17 +237,7 @@ export async function getCachedForecast(
 			if (!response.daily) return null;
 			daily = response.daily;
 			for (let i = 0; i < daily.time.length; i++) {
-				const dayPayload = JSON.stringify({
-					daily: {
-						time: [daily.time[i]],
-						temperature_2m_max: [daily.temperature_2m_max[i]],
-						temperature_2m_min: [daily.temperature_2m_min[i]],
-						precipitation_probability_max: [daily.precipitation_probability_max[i]],
-						wind_speed_10m_max: [daily.wind_speed_10m_max[i]],
-						weather_code: [daily.weather_code[i]]
-					}
-				});
-				upsertCache(key, daily.time[i], dayPayload);
+				upsertCache(key, daily.time[i], singleDayPayload(daily, i));
 			}
 		} catch {
 			if (!stale) return null;

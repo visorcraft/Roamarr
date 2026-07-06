@@ -27,9 +27,9 @@ For each category you want to cap:
 2. Enter an **amount** and **currency** for each category.
 3. Save.
 
-Amounts must be positive whole numbers in the chosen currency. Each category
-can use a different currency; Roamarr normalizes them into the trip's base
-currency for comparison against spending.
+Amounts must be positive values with up to two decimal places (e.g.
+`1234.56`). Each category can use a different currency; Roamarr normalizes them
+into the trip's base currency for comparison against spending.
 
 ## Spent vs budgeted
 

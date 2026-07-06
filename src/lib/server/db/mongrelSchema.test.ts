@@ -62,7 +62,7 @@ describe('mongrelSchema', () => {
 		expect(table.primaryKey).toEqual(expectedPk);
 	});
 
-	describe('getKitDatabase', () => {
+	describe('openKitDatabase', () => {
 		let tmpDir: string;
 		let kit: Awaited<ReturnType<typeof openKitDatabase>>;
 

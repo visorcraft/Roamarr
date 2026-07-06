@@ -16,6 +16,7 @@ import {
 	staticDefault,
 	sequenceDefault
 } from '@visorcraft/mongreldb-kit';
+import { SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
 
 const ROLES = ['admin', 'user'] as const;
 const VISIBILITIES = ['private', 'groups', 'public'] as const;
@@ -37,23 +38,6 @@ const MAPS_TILE_PROVIDERS = [
 	'jawg',
 	'protomaps',
 	'custom'
-] as const;
-const SEGMENT_TYPES = [
-	'flight',
-	'event',
-	'hotel',
-	'rental_car',
-	'note',
-	'todo',
-	'parking',
-	'boat',
-	'train',
-	'directions',
-	'food',
-	'poi',
-	'meetup',
-	'rideshare',
-	'shuttle'
 ] as const;
 const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
@@ -93,11 +77,11 @@ export {
 	ENTRY_REQUIREMENT_STATUSES
 };
 
-export type SegmentType = (typeof SEGMENT_TYPES)[number];
 export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 export type SegmentAttendeeStatus = (typeof SEGMENT_ATTENDEE_STATUSES)[number];
 export type TravelDocumentType = (typeof TRAVEL_DOCUMENT_TYPES)[number];
 export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
+export type { SegmentType };
 
 export const schedulerRuns = table('scheduler_runs', {
 	columns: [

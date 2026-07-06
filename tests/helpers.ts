@@ -624,9 +624,6 @@ export function makeExpenseAttachmentLink(
 	};
 }
 
-/** @deprecated Use `makeExpenseAttachmentLink` instead. */
-export const makeAttachment = makeExpenseAttachmentLink;
-
 export async function streamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
 	const chunks: Buffer[] = [];
 	const reader = stream.getReader();

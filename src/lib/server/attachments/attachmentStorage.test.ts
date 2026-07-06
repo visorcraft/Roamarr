@@ -3,7 +3,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-	saveEncryptedAttachment,
+	stageEncryptedAttachment,
+	commitAttachment,
 	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment,
 	attachmentPath
@@ -28,8 +29,14 @@ describe('attachmentStorage', () => {
 		});
 	}
 
-	test('saveEncryptedAttachment returns a sharded uuid path and byte count', async () => {
-		const result = await saveEncryptedAttachment(streamFromString('hello'), dir);
+	async function save(input: ReadableStream<Uint8Array>) {
+		const staged = await stageEncryptedAttachment(input, dir);
+		await commitAttachment(staged.stagingPath, staged.finalPath);
+		return staged;
+	}
+
+	test('stageEncryptedAttachment returns a sharded uuid path and byte count', async () => {
+		const result = await save(streamFromString('hello'));
 		expect(result.storageKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 		expect(result.plaintextBytes).toBe(5);
 		const p = attachmentPath(result.storageKey, dir);
@@ -39,14 +46,14 @@ describe('attachmentStorage', () => {
 
 	test('readEncryptedAttachmentStream decrypts to a stream', async () => {
 		const plain = 'stored securely';
-		const { storageKey } = await saveEncryptedAttachment(streamFromString(plain), dir);
+		const { storageKey } = await save(streamFromString(plain));
 		const stream = await readEncryptedAttachmentStream(storageKey, dir);
 		const out = await streamToBuffer(stream);
 		expect(out.toString('utf8')).toBe(plain);
 	});
 
 	test('deleteEncryptedAttachment removes the ciphertext file', async () => {
-		const { storageKey } = await saveEncryptedAttachment(streamFromString('x'), dir);
+		const { storageKey } = await save(streamFromString('x'));
 		const p = attachmentPath(storageKey, dir);
 		expect(existsSync(p)).toBe(true);
 		await deleteEncryptedAttachment(storageKey, dir);

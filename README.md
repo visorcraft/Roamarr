@@ -19,7 +19,7 @@
   <a href="https://github.com/visorcraft/Roamarr/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/Roamarr?sort=semver" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only" /></a>
   <img src="https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 2" />
-  <img src="https://img.shields.io/badge/storage-MongrelDB%20Kit-003b57" alt="MongrelDB Kit storage" />
+  <img src="https://img.shields.io/badge/storage-MongrelDB-003b57" alt="MongrelDB storage" />
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22.12-339933?logo=node.js&amp;logoColor=white" alt="Node.js 22.12 or newer" />
   <img src="https://img.shields.io/badge/container-Docker%20%2F%20Podman-892ca0?logo=podman&amp;logoColor=white" alt="Docker or Podman container" />
 </p>
@@ -72,7 +72,7 @@
 ## What is Roamarr?
 
 Roamarr is a TripIt-style travel organizer you run yourself. It is built as a
-single Node.js application with a MongrelDB Kit database, server-rendered SvelteKit
+single Node.js application with a MongrelDB database, server-rendered SvelteKit
 pages, and a practical app shell designed for repeated use rather than a
 marketing dashboard.
 
@@ -119,7 +119,7 @@ provider.
 
 ### One local database
 
-Roamarr stores application data with MongrelDB Kit. By default the database
+Roamarr stores application data with MongrelDB. By default the database
 lives at `./roamarr-db`, and receipt attachments are stored beside it in an
 `attachments/` directory. Move the database path, back it up, snapshot it, or
 keep it on persistent storage that fits your own setup.
@@ -155,7 +155,7 @@ integration.
 
 - Node.js 22.12 or newer.
 - npm, using the checked-in `package-lock.json`.
-- MongrelDB and MongrelDB Kit npm packages installed by `npm ci`.
+- MongrelDB (with the MongrelDB Kit toolkit) installed by `npm ci`.
 - A persistent database path for local app data.
 - `ROAMARR_SECRET`, generated with `openssl rand -base64 32`.
 
@@ -234,7 +234,7 @@ source.
 | Variable | Required | Default | Notes |
 | -------- | -------- | ------- | ----- |
 | `ROAMARR_SECRET` | yes | none | Base64-encoded 32-byte AES key. Generate with `openssl rand -base64 32`; other lengths are rejected at boot. The setup page blocks admin creation until a valid secret is set. |
-| `DATABASE_PATH` | no | `./roamarr-db` | MongrelDB Kit data directory or file path. |
+| `DATABASE_PATH` | no | `./roamarr-db` | MongrelDB data directory or file path. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
@@ -246,7 +246,7 @@ admin settings are configured inside the app after setup.
 
 | Data | Default path |
 | ---- | ------------ |
-| MongrelDB Kit database | `./roamarr-db` |
+| MongrelDB database | `./roamarr-db` |
 | Receipt attachments | `./attachments/` |
 | Production build output | `./build/` |
 | SvelteKit build cache | `./.svelte-kit/` |
@@ -320,9 +320,9 @@ Use Profile for:
 ## Architecture
 
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
-`@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB Kit, Luxon,
+`@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB (via MongrelDB Kit), Luxon,
 Nodemailer, MapLibre GL JS, and Vitest. Recent additions include WebAuthn
-(`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
+(`@simplewebauthin/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
 (`@modelcontextprotocol/sdk`), 3D globe rendering (`three`), and tar streaming
 (`tar-fs`).
 

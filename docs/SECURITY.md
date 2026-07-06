@@ -64,7 +64,7 @@ without an explicit design decision and an opt-in privacy model.
 Do not commit or publish:
 
 - real `.env` files or deployment env files,
-- MongrelDB Kit data directories, transaction logs, backups, or attachment directories,
+- MongrelDB data directories, transaction logs, backups, or attachment directories,
 - logs, screenshots, Playwright output, build output, dependencies, or local QA
   artifacts,
 - SMTP credentials, webhook secrets, API keys, generated session data, or test
@@ -78,7 +78,7 @@ Use `.env.example` as the public configuration template.
   stored values unreadable unless a migration plan is used.
 - Set `ORIGIN` to the public URL when Roamarr runs behind a reverse proxy so
   cookies and redirects are generated correctly.
-- Use persistent storage for the MongrelDB Kit data directory and attachments.
+- Use persistent storage for the MongrelDB data directory and attachments.
 - Restrict filesystem permissions on the database directory, attachment directory,
   backups, and environment files to the service operator.
 - Keep Node.js and npm dependencies patched.

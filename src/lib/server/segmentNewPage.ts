@@ -3,7 +3,6 @@ import { ADD_SEGMENT_WIZARD_TYPES, SEG, type SegmentType } from '$lib/segmentLab
 import { requireUser } from '$lib/server/auth';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { submitAddSegment } from '$lib/server/segmentAdd';
-import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import * as profileRepo from '$lib/server/repositories/profileRepo';
 
 const WIZARD_TYPES = new Set<SegmentType>(ADD_SEGMENT_WIZARD_TYPES.map((entry) => entry.type));
@@ -16,9 +15,7 @@ export function loadNewSegmentPicker(event: RequestEvent) {
 	const u = requireUser(event.locals);
 	const tripId = Number(event.params.id);
 	if (!Number.isFinite(tripId)) throw error(404, 'Not found');
-	requireEditableTrip(u.id, tripId);
-	const trip = tripsRepo.getTripById(tripId);
-	if (!trip) throw error(404, 'Not found');
+	const trip = requireEditableTrip(u.id, tripId);
 	return { trip: { id: trip.id, name: trip.name } };
 }
 

@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, requireOwnedTripRow } from './ownership';
+import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs } from './ownership';
 import { users, trips, tripHomeTasks, cards } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
@@ -50,14 +50,4 @@ test('requireOwnedUser returns the user row or throws', () => {
 	const a = makeTestUser({ email: 'u@x.c' });
 	expect(Number(requireOwnedUser(a.id).id)).toBe(a.id);
 	expect(() => requireOwnedUser(999999)).toThrow();
-});
-
-test('requireOwnedTripRow returns row owned by trip or throws 404', () => {
-	const a = makeTestUser({ email: 'row@x.c' });
-	const t1 = createTrip(a.id, { name: 'T1' });
-	const t2 = createTrip(a.id, { name: 'T2' });
-	const row = ctx.kit.insertInto(tripHomeTasks).values({ trip_id: BigInt(t1.id), text: 'A' } as never).executeSync();
-	expect(Number(requireOwnedTripRow(tripHomeTasks, t1.id, Number(row.id)).id)).toBe(Number(row.id));
-	expect(() => requireOwnedTripRow(tripHomeTasks, t2.id, Number(row.id))).toThrow();
-	expect(() => requireOwnedTripRow(tripHomeTasks, t1.id, 999999)).toThrow();
 });

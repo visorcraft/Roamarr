@@ -37,6 +37,7 @@ export type IconName =
 	| 'copy'
 	| 'dietary'
 	| 'allergies'
+	| 'warning'
 	| 'medical'
 	| 'poll'
 	| 'budget'
@@ -103,6 +104,8 @@ export const ICON_PATHS: Record<IconName, string> = {
 		'<path d="M6 2v6a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V2"/><path d="M10 2v12"/><path d="M20 10V2v0a4 4 0 0 0-4 4v4a2 2 0 0 0 2 2h2Zm0 0v10"/>',
 	allergies:
 		'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/>',
+	warning:
+		'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
 	medical: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
 	poll: '<path d="M3 3v18h18"/><path d="M7 16v-4"/><path d="M11 16V8"/><path d="M15 16v-6"/><path d="M19 16v-2"/>',
 	budget:

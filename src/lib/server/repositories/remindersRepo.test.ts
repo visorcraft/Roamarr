@@ -206,17 +206,6 @@ test('listNotificationsForUser respects includeRead and limit', () => {
 	expect(repo.listNotificationsForUser(Number(u.id), { limit: 1 })).toHaveLength(1);
 });
 
-test('deleteOldNotifications removes old rows', () => {
-	const u = makeUser('notif-old@x.c');
-	repo.createNotification({ userId: Number(u.id), title: 'Old', body: 'x' });
-
-	const before = kitDb().selectFrom(notifications).selectCount().executeSync();
-	expect(before).toBeGreaterThan(0n);
-
-	repo.deleteOldNotifications('2099-01-01T00:00:00Z');
-	expect(repo.listNotificationsForUser(Number(u.id))).toHaveLength(0);
-});
-
 // Scheduler runs
 
 test('start/finish/list/prune scheduler runs', () => {

@@ -26,6 +26,13 @@ function normalizeMeetingAt(i: {
 	return { meetingPoint, meetingAt: localToUtc(i.meetingAt, tz) };
 }
 
+function requireSegmentOnTrip(userId: number, tripId: number, segId: number) {
+	requireEditableTrip(userId, tripId);
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	return existing;
+}
+
 export function addSegment(
 	userId: number,
 	tripId: number,
@@ -103,9 +110,7 @@ export function hasOverlappingSegment(
 }
 
 export function deleteSegment(userId: number, tripId: number, segId: number) {
-	requireEditableTrip(userId, tripId);
-	const existing = getSegmentById(segId);
-	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	requireSegmentOnTrip(userId, tripId, segId);
 	deleteSegmentRepo(segId);
 	cancelRemindersFor('segment', segId);
 }
@@ -147,9 +152,7 @@ export function updateSegment(
 		paymentDueDate?: string | null;
 	}
 ) {
-	requireEditableTrip(userId, tripId);
-	const existing = getSegmentById(segId);
-	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	requireSegmentOnTrip(userId, tripId, segId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
@@ -183,9 +186,7 @@ export function updateSegment(
 }
 
 export function moveSegmentToDate(userId: number, tripId: number, segId: number, targetDate: string) {
-	requireEditableTrip(userId, tripId);
-	const existing = getSegmentById(segId);
-	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	const existing = requireSegmentOnTrip(userId, tripId, segId);
 
 	const start = DateTime.fromISO(existing.startAt, { zone: 'utc' });
 	const startLocal = start.setZone(existing.startTz || 'UTC');
@@ -228,9 +229,7 @@ function shiftUtcBy24h(iso: string | null) {
 }
 
 export function duplicateSegment(userId: number, tripId: number, segId: number) {
-	requireEditableTrip(userId, tripId);
-	const existing = getSegmentById(segId);
-	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	const existing = requireSegmentOnTrip(userId, tripId, segId);
 	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
 
 	const copy = createSegment({
@@ -275,9 +274,7 @@ export function setSegmentStatus(
 	segmentId: number,
 	status: SegmentStatus
 ) {
-	requireEditableTrip(userId, tripId);
-	const existing = getSegmentById(segmentId);
-	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	requireSegmentOnTrip(userId, tripId, segmentId);
 	const seg = updateSegmentStatus(segmentId, status);
 	logAudit(userId, 'update_status', 'segment', segmentId, { status });
 	return seg;

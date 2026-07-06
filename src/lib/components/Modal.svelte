@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { browser } from '$app/environment';
-	import { portal } from '$lib/actions/portal';
 
 	interface Props {
 		open: boolean;
@@ -12,90 +11,97 @@
 	}
 
 	let { open = $bindable(false), title, children, actions, onclose }: Props = $props();
-	let dialogRef = $state<HTMLDivElement | null>(null);
-	let previouslyFocused = $state<HTMLElement | null>(null);
+	let dialogEl = $state<HTMLDialogElement | null>(null);
 
 	$effect(() => {
 		if (!browser) return;
-		if (open) {
-			previouslyFocused = document.activeElement as HTMLElement;
-			const firstFocusable = dialogRef?.querySelector<HTMLElement>(
-				'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-			);
-			firstFocusable?.focus();
-			document.body.classList.add('overflow-hidden');
-		} else {
-			document.body.classList.remove('overflow-hidden');
-			previouslyFocused?.focus();
+		const d = dialogEl;
+		if (!d) return;
+		if (open && !d.open) {
+			d.showModal();
+		} else if (!open && d.open) {
+			d.close();
 		}
-		return () => {
-			document.body.classList.remove('overflow-hidden');
-		};
 	});
 
-	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			onclose?.();
-		}
-		if (event.key === 'Tab' && dialogRef) {
-			const focusable = Array.from(
-				dialogRef.querySelectorAll<HTMLElement>(
-					'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-				)
-			).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
-			if (focusable.length === 0) return;
-			const first = focusable[0];
-			const last = focusable[focusable.length - 1];
-			if (event.shiftKey && document.activeElement === first) {
-				event.preventDefault();
-				last.focus();
-			} else if (!event.shiftKey && document.activeElement === last) {
-				event.preventDefault();
-				first.focus();
-			}
-		}
+	function handleClose() {
+		open = false;
+		onclose?.();
 	}
 
 	function handleBackdropClick(event: MouseEvent) {
-		if (event.target === event.currentTarget) {
-			onclose?.();
+		if (event.target === dialogEl) {
+			dialogEl?.close();
 		}
 	}
 </script>
 
-{#if open}
-	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-	<div
-		class="fixed inset-0 z-[9999] grid place-items-center p-4"
-		role="dialog"
-		aria-modal="true"
-		aria-labelledby={title ? 'modal-title' : undefined}
-		tabindex="-1"
-		use:portal
-		onclick={handleBackdropClick}
-		onkeydown={handleKeydown}
-	>
-		<div class="fixed inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true"></div>
-		<div
-			bind:this={dialogRef}
-			class="modal-panel relative z-10 w-full max-w-md overflow-hidden rounded-xl shadow-2xl"
-		>
-			{#if title}
-				<div class="border-b px-5 py-4" style="border-color: var(--theme-line);">
-					<h2 id="modal-title" class="font-display text-lg font-semibold" style="color: var(--theme-strong);">
-						{title}
-					</h2>
-				</div>
-			{/if}
-			<div class="px-5 py-4" style="color: var(--theme-ink);">
-				{@render children()}
+<dialog
+	bind:this={dialogEl}
+	class="modal-dialog"
+	onclose={handleClose}
+	onclick={handleBackdropClick}
+>
+	<div class="modal-panel">
+		{#if title}
+			<div class="modal-head">
+				<h2 class="modal-title">{title}</h2>
 			</div>
-			{#if actions}
-				<div class="flex flex-wrap justify-end gap-2 border-t px-5 py-4" style="border-color: var(--theme-line);">
-					{@render actions()}
-				</div>
-			{/if}
+		{/if}
+		<div class="modal-body">
+			{@render children()}
 		</div>
+		{#if actions}
+			<div class="modal-foot">
+				{@render actions()}
+			</div>
+		{/if}
 	</div>
-{/if}
+</dialog>
+
+<style>
+	.modal-dialog {
+		position: fixed;
+		inset: 0;
+		margin: auto;
+		width: 100%;
+		max-width: 28rem;
+		padding: 0;
+		border: none;
+		background: transparent;
+		overflow: visible;
+	}
+	.modal-dialog::backdrop {
+		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(2px);
+	}
+	.modal-panel {
+		position: relative;
+		overflow: hidden;
+		border-radius: 0.75rem;
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+		background: var(--theme-surface, #fff);
+		color: var(--theme-ink, inherit);
+	}
+	.modal-head {
+		padding: 1rem 1.25rem;
+		border-bottom: 1px solid var(--theme-line);
+	}
+	.modal-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--theme-strong);
+	}
+	.modal-body {
+		padding: 1rem 1.25rem;
+		color: var(--theme-ink);
+	}
+	.modal-foot {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		padding: 1rem 1.25rem;
+		border-top: 1px solid var(--theme-line);
+	}
+</style>

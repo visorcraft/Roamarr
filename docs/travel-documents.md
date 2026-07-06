@@ -12,7 +12,7 @@ From **Profile → Documents**, add a document with:
 
 | Field | Notes |
 | --- | --- |
-| Type | Passport, visa, or other. |
+| Type | Passport, driver's license, Global Entry, or visa. |
 | Number | Document number; sensitive and private. |
 | Issuing authority | Country or agency that issued it. |
 | Expires on | Date the document expires. Drives reminders. |

@@ -101,17 +101,8 @@ export function listPollsForTrip(tripId: number): Poll[] {
 		: [];
 	const votes = voteRows.map(toVote);
 
-	const optionsByPoll = new Map<number, PollOption[]>();
-	for (const option of options) {
-		const list = optionsByPoll.get(option.id) ?? [];
-		optionsByPoll.set(option.id, list);
-	}
-	const votesByPoll = new Map<number, PollVote[]>();
 	const voteCountByOption = new Map<number, number>();
 	for (const vote of votes) {
-		const list = votesByPoll.get(vote.optionId) ?? [];
-		list.push(vote);
-		votesByPoll.set(vote.optionId, list);
 		voteCountByOption.set(vote.optionId, (voteCountByOption.get(vote.optionId) ?? 0) + 1);
 	}
 

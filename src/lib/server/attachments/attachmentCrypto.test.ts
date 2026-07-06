@@ -5,7 +5,6 @@ import path from 'node:path';
 import {
 	encryptChunkedFile,
 	decryptChunkedFileStream,
-	readExactly,
 	CHUNK_SIZE,
 	INDEX_LENGTH,
 	LEN_LENGTH,
@@ -241,18 +240,6 @@ describe('attachmentCrypto', () => {
 		await expect(streamToBuffer(await decryptChunkedFileStream(cipherPath))).rejects.toThrow(
 			/chunk length exceeds stored maximum/
 		);
-	});
-
-	test('readExactly reads first n bytes from a stream', async () => {
-		const stream = streamFromBuffer('hello world');
-		const result = await readExactly(stream, 5);
-		expect(result.toString('utf8')).toBe('hello');
-	});
-
-	test('readExactly handles truncated streams', async () => {
-		const stream = streamFromBuffer('hi');
-		const result = await readExactly(stream, 5);
-		expect(result.toString('utf8')).toBe('hi');
 	});
 });
 

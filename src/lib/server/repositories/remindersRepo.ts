@@ -338,13 +338,6 @@ export function deleteNotification(id: number): boolean {
 	return deleted > 0n;
 }
 
-export function deleteOldNotifications(before: string): bigint {
-	return kit
-		.deleteFrom(kitNotifications)
-		.where(kitLt(kitNotifications.created_at, before))
-		.executeSync();
-}
-
 // Scheduler runs
 
 type UpdateSchedulerRunInput = Partial<Omit<SchedulerRunRow, 'id'>>;

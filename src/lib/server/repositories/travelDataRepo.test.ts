@@ -234,22 +234,6 @@ test('createFareWatch and updateFareWatch persist status', () => {
 	).toBe('paused');
 });
 
-test('touchFareWatch updates lastCheckedAt', () => {
-	const u = makeKitUser({ email: 'fw-touch@x.c' });
-	const trip = createTrip(Number(u.id), { name: 'T' });
-	const provider = repo.createFareProvider({
-		userId: Number(u.id),
-		providerKey: 'stub',
-		label: 'P',
-		apiKey: null,
-		enabled: true
-	});
-	const watch = repo.createFareWatch({ tripId: trip.id, providerId: provider.id });
-
-	const touched = repo.touchFareWatch(watch.id);
-	expect(touched?.lastCheckedAt).not.toBeNull();
-});
-
 test('deleteFareWatch removes the row', () => {
 	const u = makeKitUser({ email: 'fw-del@x.c' });
 	const trip = createTrip(Number(u.id), { name: 'T' });

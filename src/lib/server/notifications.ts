@@ -1,7 +1,6 @@
 import { error } from '@sveltejs/kit';
 import {
 	listNotificationsForUser,
-	countUnreadNotificationsForUser,
 	getNotificationById,
 	markNotificationRead,
 	markNotificationUnread
@@ -10,10 +9,6 @@ import { nowIso } from './tz';
 
 export function listNotifications(userId: number) {
 	return listNotificationsForUser(userId);
-}
-
-export function unreadCount(userId: number): number {
-	return countUnreadNotificationsForUser(userId);
 }
 
 function requireOwnedNotification(userId: number, id: number) {

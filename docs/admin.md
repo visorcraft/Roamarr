@@ -20,6 +20,9 @@ The main **Settings** page holds instance-wide configuration:
 - **Webhook** — outbound URL with **Send test notification** (fans out to all
   enabled channels).
 - **Notification channels / recent activity** — per-account toggles and log.
+- **OAuth clients** — server-side allow-list of permitted client IDs for the
+  [MCP / AI integration](./mcp-ai.md). When the allow-list is empty, users can
+  authorize any client; populated lists restrict authorization to listed IDs.
 
 ## User management — Settings → Users
 
@@ -36,7 +39,7 @@ action or user; entries include the actor, entity type/id, and metadata JSON.
 
 ## Backups — Settings → Backup
 
-Snapshot the MongrelDB Kit database via the kit backup API; download or restore
+Snapshot the MongrelDB database via the kit backup API; download or restore
 a previous snapshot. Capture `ROAMARR_SECRET` alongside any backup — encrypted
 fields are unreadable without it.
 
@@ -53,7 +56,19 @@ fresh install — handy for trying features without manual data entry.
 ## Fare providers — Settings → Fare providers
 
 Register fare-watch providers and their (encrypted) API keys. See
-[Import / Export](./import-export.md).
+[Fare providers](./fare-providers.md).
+
+## Maintenance — Settings → Maintenance
+
+Run low-level MongrelDB operations against the live database:
+
+- **Integrity check** — verifies database file structure.
+- **Garbage collect** — reclaims unused space.
+- **Flush** — forces pending writes to disk.
+- **Doctor** — runs diagnostics and reports anomalies.
+
+Each action returns its raw output for inspection. Prefer the **Backup** page
+before running maintenance against a production database.
 
 ## GeoNames import — Settings → Maps
 

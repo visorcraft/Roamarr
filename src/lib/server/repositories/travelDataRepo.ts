@@ -232,18 +232,10 @@ export function getFareProviderByIdAndUser(id: number, userId: number): FareProv
 	return rows[0] ? toFareProviderAccount(rows[0]) : null;
 }
 
-function nextFareProviderId(): bigint {
-	const rows = kit.selectFrom(fareProviders).orderBy(desc(fareProviders.id)).limit(1).executeSync();
-	return rows[0] ? rows[0].id + 1n : 1n;
-}
-
 export function createFareProvider(input: CreateFareProviderInput): FareProviderAccount {
 	const row = kit
 		.insertInto(fareProviders)
-		.values({
-			id: nextFareProviderId(),
-			...toKitFareProviderInput(input)
-		} as unknown as Insert<typeof fareProviders>)
+		.values(toKitFareProviderInput(input) as unknown as Insert<typeof fareProviders>)
 		.executeSync();
 	return toFareProviderAccount(row);
 }
@@ -413,18 +405,10 @@ export function listActiveFareWatches(): FareWatchWithProvider[] {
 		.map((w) => ({ ...w, provider: providerMap.get(w.providerId)! }));
 }
 
-function nextFareWatchId(): bigint {
-	const rows = kit.selectFrom(fareWatches).orderBy(desc(fareWatches.id)).limit(1).executeSync();
-	return rows[0] ? rows[0].id + 1n : 1n;
-}
-
 export function createFareWatch(input: CreateFareWatchInput): FareWatch {
 	const row = kit
 		.insertInto(fareWatches)
-		.values({
-			id: nextFareWatchId(),
-			...toKitFareWatchInput(input)
-		} as unknown as Insert<typeof fareWatches>)
+		.values(toKitFareWatchInput(input) as unknown as Insert<typeof fareWatches>)
 		.executeSync();
 	return toFareWatch(row);
 }
@@ -451,8 +435,4 @@ export function deleteFareWatch(id: number): boolean {
 	if (!existing) return false;
 	kit.deleteFrom(fareWatches).where(eq(fareWatches.id, BigInt(id))).executeSync();
 	return true;
-}
-
-export function touchFareWatch(id: number): FareWatch | null {
-	return updateFareWatch(id, { lastCheckedAt: nowIso() });
 }

@@ -92,10 +92,6 @@ export async function importCitiesFromReadable(readable: Readable): Promise<{ im
 	}
 }
 
-export async function importCitiesFromPath(zipPath: string): Promise<{ imported: number }> {
-	return importCitiesFromZipFile(zipPath);
-}
-
 const IMPORT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export async function importCitiesFromUrl(url = GEONAMES_DOWNLOAD_URL): Promise<{ imported: number }> {

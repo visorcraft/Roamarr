@@ -260,64 +260,44 @@ export function deleteTrip(id: number): number {
 }
 
 export function listEditableTripIdsForUser(userId: number): number[] {
-	const owned = listTripsForUser(userId).map((t) => t.id);
-
-	const directShares = kit
-		.selectFrom(tripShares)
-		.where(
-			kitAnd(
-				kitEq(tripShares.shared_with_user_id, kitId(userId)),
-				kitEq(tripShares.permission, 'edit')
-			)
-		)
-		.executeSync();
-	const directIds = directShares.map((s) => num(s.trip_id));
-
-	const memberships = kit
-		.selectFrom(groupMembers)
-		.where(kitEq(groupMembers.user_id, kitId(userId)))
-		.executeSync();
-	const groupIds = memberships.map((m) => num(m.group_id));
-
-	let groupIdsResult: number[] = [];
-	if (groupIds.length) {
-		const groupShares = kit
-			.selectFrom(tripShares)
-			.where(
-				kitAnd(
-					inList(tripShares.shared_with_group_id, groupIds.map(kitId)),
-					kitEq(tripShares.permission, 'edit')
-				)
-			)
-			.executeSync();
-		groupIdsResult = groupShares.map((s) => num(s.trip_id));
-	}
-
-	return Array.from(new Set([...owned, ...directIds, ...groupIdsResult]));
+	return listTripIdsForUser(userId, { editOnly: true });
 }
 
 export function listViewableTripIdsForUser(userId: number): number[] {
+	return listTripIdsForUser(userId, { editOnly: false });
+}
+
+function listTripIdsForUser(userId: number, options: { editOnly: boolean }): number[] {
 	const owned = listTripsForUser(userId).map((t) => t.id);
 
-	const directShares = kit
+	const directWhere = options.editOnly
+		? kitAnd(kitEq(tripShares.shared_with_user_id, kitId(userId)), kitEq(tripShares.permission, 'edit'))
+		: kitEq(tripShares.shared_with_user_id, kitId(userId));
+	const directIds = kit
 		.selectFrom(tripShares)
-		.where(kitEq(tripShares.shared_with_user_id, kitId(userId)))
-		.executeSync();
-	const directIds = directShares.map((s) => num(s.trip_id));
+		.where(directWhere)
+		.executeSync()
+		.map((s) => num(s.trip_id));
 
-	const memberships = kit
+	const groupIds = kit
 		.selectFrom(groupMembers)
 		.where(kitEq(groupMembers.user_id, kitId(userId)))
-		.executeSync();
-	const groupIds = memberships.map((m) => num(m.group_id));
+		.executeSync()
+		.map((m) => num(m.group_id));
 
 	let groupIdsResult: number[] = [];
 	if (groupIds.length) {
-		const groupShares = kit
+		const groupWhere = options.editOnly
+			? kitAnd(
+					inList(tripShares.shared_with_group_id, groupIds.map(kitId)),
+					kitEq(tripShares.permission, 'edit')
+				)
+			: inList(tripShares.shared_with_group_id, groupIds.map(kitId));
+		groupIdsResult = kit
 			.selectFrom(tripShares)
-			.where(inList(tripShares.shared_with_group_id, groupIds.map(kitId)))
-			.executeSync();
-		groupIdsResult = groupShares.map((s) => num(s.trip_id));
+			.where(groupWhere)
+			.executeSync()
+			.map((s) => num(s.trip_id));
 	}
 
 	return Array.from(new Set([...owned, ...directIds, ...groupIdsResult]));

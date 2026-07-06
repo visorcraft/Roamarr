@@ -312,7 +312,6 @@ export function updateLoyaltyProgram(
 		)
 		.executeSync();
 	const updated = rows[0] ? toLoyaltyProgram(rows[0]) : null;
-	if (updated) (updated);
 	logAudit(userId, 'update', 'loyalty_program', id);
 	return updated;
 }
@@ -409,7 +408,6 @@ export function updateCard(id: number, userId: number, input: CardInput): Card |
 		.where(and(eq(cards.id, toBigInt(id)), eq(cards.user_id, toBigInt(userId))))
 		.executeSync();
 	const updated = rows[0] ? toCard(rows[0]) : null;
-	if (updated) (updated);
 	return updated;
 }
 
@@ -540,7 +538,6 @@ export function updateCardBenefit(
 		)
 		.executeSync();
 	const updated = rows[0] ? toCardBenefit(rows[0]) : null;
-	if (updated) (updated);
 	return updated;
 }
 
@@ -714,7 +711,6 @@ export function attachInsurancePolicyToTrip(userId: number, policyId: number, tr
 		.set({ trip_id: toBigInt(tripId) })
 		.where(eq(insurancePolicies.id, toBigInt(policyId)))
 		.executeSync();
-	({ ...existing, tripId });
 }
 
 export function detachInsurancePolicyFromTrip(userId: number, policyId: number) {
@@ -731,7 +727,6 @@ export function detachInsurancePolicyFromTrip(userId: number, policyId: number) 
 		)
 		.executeSync()[0]!;
 	kitReinsertWithId(insurancePolicies, existingRow, { trip_id: null });
-	({ ...existing, tripId: null });
 }
 
 // ============================================================================
@@ -871,7 +866,6 @@ export function updateEmergencyContact(
 		)
 		.executeSync();
 	const updated = rows[0] ? toEmergencyContact(rows[0]) : null;
-	if (updated) (updated);
 	logAudit(userId, 'emergency_contact_update', 'emergency_contact', id, { name, isPrimary });
 	return updated;
 }

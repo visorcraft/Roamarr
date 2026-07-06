@@ -2,6 +2,8 @@
 	import Icon from './Icon.svelte';
 	import { parseTags } from '$lib/tags';
 	import { formatDestination } from '$lib/tripDestination';
+	import { tripStatusBadge } from '$lib/tripStatus';
+	import { visibilityBadgeClass } from '$lib/visibility';
 	import type { TripStatus } from '$lib/tripStatus';
 
 	let {
@@ -31,25 +33,8 @@
 		formatDestination(trip.destinationCityName, trip.destinationCountryCode)
 	);
 
-	const visBadge: Record<string, string> = {
-		private: 'badge-slate',
-		groups: 'badge-brand',
-		public: 'badge-green'
-	};
-
-	const statusBadge: Record<TripStatus, string> = {
-		planning: 'badge-slate',
-		booked: 'badge-brand',
-		active: 'badge-green',
-		completed: 'badge-amber'
-	};
-
-	const statusLabel: Record<TripStatus, string> = {
-		planning: 'Planning',
-		booked: 'Booked',
-		active: 'Active',
-		completed: 'Completed'
-	};
+	const status = $derived(tripStatusBadge(trip.status));
+	const visClass = $derived(visibilityBadgeClass(trip.defaultVisibility ?? 'private'));
 </script>
 
 <div class="card group relative flex flex-col gap-3 p-5">
@@ -75,12 +60,11 @@
 				{trip.name}
 			</h2>
 			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
-				<span class="badge {statusBadge[trip.status]} capitalize">{statusLabel[trip.status]}</span>
+				<span class="badge {status.class} capitalize">{status.label}</span>
 				{#if trip.isShared}
 					<span class="badge badge-brand">Shared</span>
 				{:else}
-					{@const badgeClass = trip.defaultVisibility ? visBadge[trip.defaultVisibility] ?? 'badge-slate' : 'badge-slate'}
-					<span class="badge {badgeClass} capitalize">{trip.defaultVisibility || 'private'}</span>
+					<span class="badge {visClass} capitalize">{trip.defaultVisibility || 'private'}</span>
 				{/if}
 			</div>
 		</div>

@@ -19,6 +19,12 @@ import { setFlash } from './flash';
 import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
 
+function parseOffsetMinutes(formData: FormData): number {
+	const offset = Number(formData.get('offsetMinutes') ?? 60);
+	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
+	return offset;
+}
+
 export async function regenerateCalendarFeed(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);
 	requireOwnedTrip(user.id, tripId);
@@ -58,8 +64,7 @@ export async function toggleFavorite(event: RequestEvent) {
 export async function customReminder(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);
 	const t = requireOwnedTrip(user.id, tripId);
-	const offset = Number(formData.get('offsetMinutes') ?? 60);
-	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
+	const offset = parseOffsetMinutes(formData);
 	if (!t.startDate) throw error(400, 'Trip has no start date');
 	const startAt = `${t.startDate}T09:00:00Z`;
 	upsertCustomReminder(user.id, 'trip', tripId, startAt, offset);
@@ -71,8 +76,7 @@ export async function segmentReminder(event: RequestEvent) {
 	requireEditableTrip(user.id, tripId);
 	const segmentIdResult = positiveIdFromForm(formData.get('segmentId'), 'segmentId');
 	if (!segmentIdResult.ok) throw error(400, segmentIdResult.error);
-	const offset = Number(formData.get('offsetMinutes') ?? 60);
-	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
+	const offset = parseOffsetMinutes(formData);
 	const seg = getSegmentById(segmentIdResult.value);
 	if (!seg || seg.tripId !== tripId) throw error(404, 'Segment not found');
 	upsertCustomReminder(user.id, 'segment', segmentIdResult.value, seg.startAt, offset);

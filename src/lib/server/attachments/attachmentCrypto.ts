@@ -328,22 +328,3 @@ export async function decryptChunkedFileStream(cipherPath: string): Promise<Read
 		}
 	});
 }
-
-export async function readExactly(stream: ReadableStream<Uint8Array>, n: number): Promise<Buffer> {
-	const reader = stream.getReader();
-	try {
-		const chunks: Buffer[] = [];
-		let total = 0;
-		while (total < n) {
-			const { done, value } = await reader.read();
-			if (value && value.length > 0) {
-				chunks.push(Buffer.from(value));
-				total += value.length;
-			}
-			if (done) break;
-		}
-		return Buffer.concat(chunks).subarray(0, n);
-	} finally {
-		reader.releaseLock();
-	}
-}

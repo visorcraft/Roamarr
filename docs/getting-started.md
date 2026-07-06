@@ -19,7 +19,7 @@ export ORIGIN="https://roamarr.example.com"       # public URL behind a proxy
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `ROAMARR_SECRET` | yes | Encryption key. **Reuse across rebuilds** or data is lost. |
-| `DATABASE_PATH` | no | MongrelDB Kit data directory or file path (default `./roamarr-db`). |
+| `DATABASE_PATH` | no | MongrelDB data directory or file path (default `./roamarr-db`). |
 | `ORIGIN` | no | Public origin for cookies/redirects behind a proxy. |
 | `PORT` / `ATTACHMENTS_PATH` | no | Listen port (3000) / receipt attachment dir. |
 

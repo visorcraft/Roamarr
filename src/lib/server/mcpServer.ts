@@ -5,7 +5,8 @@ import {
 	ListPromptsRequestSchema,
 	GetPromptRequestSchema,
 	ListResourcesRequestSchema,
-	ReadResourceRequestSchema
+	ReadResourceRequestSchema,
+	ListResourceTemplatesRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
@@ -53,6 +54,212 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 	const messages = Object.values(v.errors);
 	return { ok: false, error: messages.join('; ') };
 }
+
+// ---------------------------------------------------------------------------
+// Prompt registry
+//
+// Each prompt is self-describing: the metadata (name, description, arguments,
+// required scope, whether it needs a trip context) is declared once and the
+// handler reads the same metadata.  This keeps prompts/list and prompts/get
+// in sync and lets MCP clients render the right UI for arguments.
+// ---------------------------------------------------------------------------
+
+type PromptScope = Scope;
+
+interface PromptArgument {
+	name: string;
+	description?: string;
+	required?: boolean;
+}
+
+interface PromptEntry {
+	name: string;
+	description: string;
+	arguments?: PromptArgument[];
+	scope: PromptScope;
+	/** When true, the prompt resolves a trip view (and enforces trips:read IDOR) before building output. */
+	requiresTrip?: boolean;
+	/** When true the prompt may run without a tripId (e.g. listings across all trips). */
+	requiresTripArgument?: boolean;
+	build(ctx: PromptBuildContext): Promise<PromptOutput> | PromptOutput;
+}
+
+interface PromptBuildContext {
+	userId: number;
+	tripId: number;
+	trip: Record<string, unknown> | null;
+}
+
+interface PromptOutput {
+	description: string;
+	text: string;
+}
+
+const TRIP_ID_ARG: PromptArgument = {
+	name: 'tripId',
+	description: 'Numeric trip ID',
+	required: true
+};
+
+function makePromptMessage(description: string, text: string) {
+	return {
+		description,
+		messages: [{ role: 'user' as const, content: { type: 'text' as const, text } }]
+	};
+}
+
+function errorPrompt(message: string) {
+	return makePromptMessage('Error', message);
+}
+
+function textOut(description: string, body: unknown): PromptOutput {
+	return { description, text: JSON.stringify(body, null, 2) };
+}
+
+const PROMPTS: readonly PromptEntry[] = [
+	{
+		name: 'trip-summary',
+		description: 'Brief summary of all upcoming trips.',
+		scope: 'trips:read',
+		build({ userId }) {
+			const all = tripsRepo.listTripsForUser(userId);
+			const today = new Date().toISOString().slice(0, 10);
+			const upcoming = all
+				.filter((t) => t.startDate && t.startDate >= today && !t.archived)
+				.slice(0, 5)
+				.map((t) => ({
+					name: t.name,
+					destination: t.destination,
+					startDate: t.startDate,
+					endDate: t.endDate
+				}));
+			return textOut('Trip summary', upcoming);
+		}
+	},
+	{
+		name: 'places-visited',
+		description: 'Countries and U.S. states you have visited.',
+		scope: 'places:read',
+		build({ userId }) {
+			return textOut('Places visited', listVisited(userId));
+		}
+	},
+	{
+		name: 'documents-checklist',
+		description: 'Travel documents and expiry summaries.',
+		scope: 'profile:read',
+		async build({ userId }) {
+			const { listTravelDocuments } = await import('./repositories/profileRepo');
+			const docs = listTravelDocuments(userId).map((d) => ({ type: d.type, expiresOn: d.expiresOn }));
+			return textOut('Documents checklist', docs);
+		}
+	},
+	{
+		name: 'trip-details',
+		description: 'Detailed overview of a specific trip including segments.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		build({ trip }) {
+			return textOut('Trip details', { trip });
+		}
+	},
+	{
+		name: 'itinerary',
+		description: 'Day-by-day itinerary for a trip.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		build({ trip }) {
+			return textOut('Itinerary', trip);
+		}
+	},
+	{
+		name: 'flight-info',
+		description: 'Flight segments for a trip.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		build({ trip }) {
+			const segments = segmentList(trip, 'flight');
+			return textOut('Flight info', segments);
+		}
+	},
+	{
+		name: 'hotel-info',
+		description: 'Hotel/lodging segments for a trip.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		build({ trip }) {
+			const segments = segmentList(trip, 'hotel');
+			return textOut('Hotel info', segments);
+		}
+	},
+	{
+		name: 'packing-check',
+		description: 'Packing checklist status for a trip.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		build({ tripId }) {
+			const items = loadChecklist(tripId).items.map((i) => ({ text: i.text, packed: i.packed }));
+			return textOut('Packing check', items);
+		}
+	},
+	{
+		name: 'budget-overview',
+		description: 'Budget categories and spending for a trip.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		async build({ tripId }) {
+			const { listExpensesForTrip } = await import('./repositories/expensesRepo');
+			const budgets = listBudgetsWithSpent(tripId, listExpensesForTrip(tripId));
+			return textOut('Budget overview', budgets);
+		}
+	},
+	{
+		name: 'weather-overview',
+		description: 'Weather forecast for a trip destination.',
+		arguments: [TRIP_ID_ARG],
+		scope: 'trips:read',
+		requiresTrip: true,
+		requiresTripArgument: true,
+		async build({ userId, tripId }) {
+			const { tripWeatherOverview } = await import('./weather');
+			const weather = await tripWeatherOverview(tripId, userId);
+			return textOut('Weather overview', weather);
+		}
+	}
+];
+
+function segmentList(trip: Record<string, unknown> | null, type: string): unknown[] {
+	if (!trip) return [];
+	const segments = Array.isArray(trip.segments) ? (trip.segments as unknown[]) : [];
+	return segments.filter((s) => {
+		if (!s || typeof s !== 'object') return false;
+		return (s as { type?: unknown }).type === type;
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Resource registry
+//
+// Trips are exposed as `trip://<id>` resources.  `resources/list` enumerates
+// the concrete trips the token can read (so MCP clients can populate a
+// picker), and `resources/templates/list` advertises the URI template so a
+// client can construct a resource URI directly when it already knows the ID.
+// ---------------------------------------------------------------------------
+
+const TRIP_RESOURCE_TEMPLATE = 'trip://{tripId}';
+const TRIP_RESOURCE_URI_RE = /^trip:\/\/(\d+)$/;
 
 export function createMcpServer(userId: number, scopes: Scope[]): Server {
 	const server = new Server(
@@ -389,118 +596,79 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		}
 	});
 
-	const PROMPTS = [
-		{ name: 'trip-details', description: 'Detailed overview of a specific trip including segments.' },
-		{ name: 'trip-summary', description: 'Brief summary of all upcoming trips.' },
-		{ name: 'itinerary', description: 'Day-by-day itinerary for a trip.' },
-		{ name: 'flight-info', description: 'Flight segments for a trip.' },
-		{ name: 'hotel-info', description: 'Hotel/lodging segments for a trip.' },
-		{ name: 'packing-check', description: 'Packing checklist status for a trip.' },
-		{ name: 'budget-overview', description: 'Budget categories and spending for a trip.' },
-		{ name: 'documents-checklist', description: 'Travel documents and expiry summaries.' },
-		{ name: 'weather-overview', description: 'Weather forecast for a trip destination.' },
-		{ name: 'places-visited', description: 'Countries and U.S. states you have visited.' }
-	];
-
 	server.setRequestHandler(ListPromptsRequestSchema, async () => ({
-		prompts: PROMPTS
+		prompts: PROMPTS.map((p) => ({
+			name: p.name,
+			description: p.description,
+			arguments: p.arguments
+		}))
 	}));
 
 	server.setRequestHandler(GetPromptRequestSchema, async (request) => {
 		const promptName = request.params.name;
-		const tripIdArg = (request.params.arguments as Record<string, string> | undefined)?.tripId;
-		const tripId = tripIdArg ? Number(tripIdArg) : 0;
-
-		function tripContext(tid: number) {
-			if (!tid || !hasScope(scopes, 'trips:read')) return null;
-			try {
-				return safeTripProjection(tid, userId);
-			} catch {
-				return null;
-			}
+		const entry = PROMPTS.find((p) => p.name === promptName);
+		if (!entry) return errorPrompt(`Unknown prompt: ${promptName}`);
+		if (!hasScope(scopes, entry.scope)) {
+			return errorPrompt(`Missing required scope: ${entry.scope}`);
 		}
 
-		function makePrompt(title: string, body: string) {
-			return { description: title, messages: [{ role: 'user' as const, content: { type: 'text' as const, text: body } }] };
+		const args = (request.params.arguments ?? {}) as Record<string, string>;
+		const tripId = args.tripId ? Number(args.tripId) : 0;
+		if (entry.requiresTripArgument && !tripId) {
+			return errorPrompt('tripId argument required');
 		}
 
-		switch (promptName) {
-			case 'trip-summary': {
-				if (!hasScope(scopes, 'trips:read')) return makePrompt('Error', 'Missing scope: trips:read');
-				const all = tripsRepo.listTripsForUser(userId);
-				const today = new Date().toISOString().slice(0, 10);
-				const upcoming = all.filter((t) => t.startDate && t.startDate >= today && !t.archived).slice(0, 5);
-				return makePrompt('Trip summary', JSON.stringify(upcoming.map((t) => ({
-					name: t.name, destination: t.destination, startDate: t.startDate, endDate: t.endDate
-				})), null, 2));
-			}
-			case 'places-visited': {
-				if (!hasScope(scopes, 'places:read')) return makePrompt('Error', 'Missing scope: places:read');
-				return makePrompt('Places visited', JSON.stringify(listVisited(userId)));
-			}
-			case 'weather-overview': {
-				if (!hasScope(scopes, 'trips:read')) return makePrompt('Error', 'Missing scope: trips:read');
-				if (!tripId) return makePrompt('Error', 'tripId argument required');
-				// Authorize before leaking destination/lat-lng/dates for an arbitrary trip id.
-				if (!tripContext(tripId)) return makePrompt('Error', 'Trip not found or inaccessible.');
-				const { tripWeatherOverview } = await import('./weather');
-				const weather = await tripWeatherOverview(tripId, userId);
-				return makePrompt('Weather overview', JSON.stringify(weather));
-			}
-			case 'documents-checklist': {
-				if (!hasScope(scopes, 'profile:read')) return makePrompt('Error', 'Missing scope: profile:read');
-				const { listTravelDocuments } = await import('./repositories/profileRepo');
-				const docs = listTravelDocuments(userId);
-				return makePrompt('Documents checklist', JSON.stringify(docs.map((d) => ({
-					type: d.type, expiresOn: d.expiresOn
-				}))));
-			}
-			default: {
-				const projected = tripContext(tripId);
-				if (!projected) return makePrompt('Error', 'Trip not found or inaccessible.');
-				const t = projected as Record<string, unknown>;
-				const allSegs: any[] = Array.isArray(t.segments) ? t.segments : [];
-				switch (promptName) {
-					case 'trip-details':
-						return makePrompt('Trip details', JSON.stringify({ trip: t }));
-					case 'itinerary':
-						return makePrompt('Itinerary', JSON.stringify(t));
-					case 'flight-info': {
-						const segs = allSegs.filter((s: any) => s.type === 'flight');
-						return makePrompt('Flight info', JSON.stringify(segs));
-					}
-					case 'hotel-info': {
-						const segs = allSegs.filter((s: any) => s.type === 'hotel');
-						return makePrompt('Hotel info', JSON.stringify(segs));
-					}
-					case 'packing-check': {
-						const { loadChecklist } = await import('./tripChecklists');
-						const checklist = loadChecklist(tripId);
-						return makePrompt('Packing check', JSON.stringify(checklist.items.map((i) => ({ text: i.text, packed: i.packed }))));
-					}
-					case 'budget-overview': {
-						const { listExpensesForTrip } = await import('./repositories/expensesRepo');
-						const budgets = listBudgetsWithSpent(tripId, listExpensesForTrip(tripId));
-						return makePrompt('Budget overview', JSON.stringify(budgets));
-					}
-					default:
-						return makePrompt('Error', `Unknown prompt: ${promptName}`);
-				}
-			}
-		}
+ 		let trip: Record<string, unknown> | null = null;
+ 		if (entry.requiresTrip && tripId) {
+ 			try {
+ 				trip = safeTripProjection(tripId, userId) as Record<string, unknown>;
+ 			} catch {
+ 				return errorPrompt('Trip not found or inaccessible.');
+ 			}
+ 		}
+
+		const output = await entry.build({ userId, tripId, trip });
+		return makePromptMessage(output.description, output.text);
 	});
 
-	server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-		resources: []
+	server.setRequestHandler(ListResourceTemplatesRequestSchema, async () => ({
+		resourceTemplates: hasScope(scopes, 'trips:read')
+			? [
+					{
+						name: 'trip',
+						title: 'Trip',
+						uriTemplate: TRIP_RESOURCE_TEMPLATE,
+						description: 'A single trip with its itinerary and metadata.',
+						mimeType: 'application/json'
+					}
+				]
+			: []
 	}));
+
+	server.setRequestHandler(ListResourcesRequestSchema, async () => {
+		if (!hasScope(scopes, 'trips:read')) return { resources: [] };
+		const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
+		const trips = tripIds
+			.map((id) => tripsRepo.getTripById(id))
+			.filter((t): t is NonNullable<typeof t> => t !== null && !t.archived);
+		return {
+			resources: trips.map((t) => ({
+				uri: `trip://${t.id}`,
+				name: t.name,
+				title: t.name,
+				description: t.destination || `Trip ${t.id}`,
+				mimeType: 'application/json'
+			}))
+		};
+	});
 
 	server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
 		const uri = request.params.uri;
-		const match = /^trip:\/\/(\d+)$/.exec(uri);
+		const match = TRIP_RESOURCE_URI_RE.exec(uri);
 		if (!match) throw new Error(`Unknown resource URI: ${uri}`);
-		const tid = Number(match[1]);
+		const tripId = Number(match[1]);
 		if (!hasScope(scopes, 'trips:read')) throw new Error('Missing scope: trips:read');
-		const projected = safeTripProjection(tid, userId);
+		const projected = safeTripProjection(tripId, userId);
 		return {
 			contents: [{
 				uri,

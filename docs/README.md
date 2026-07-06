@@ -60,3 +60,7 @@ segments, sharing, reminders, documents, and more.
 - Markdown only; link from the main `README.md` Documentation section.
 - Keep examples runnable against the current UI.
 - Each feature PR includes/updates its own doc page.
+
+## Policies
+
+- [Security](./SECURITY.md) — security policy, scope, and disclosure process.

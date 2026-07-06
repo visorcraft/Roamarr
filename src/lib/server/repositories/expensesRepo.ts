@@ -17,8 +17,6 @@ import {
 } from '$lib/server/db/mongrelSchema';
 
 export type KitExpense = Row<typeof tripExpenses>;
-export type KitAttachment = Row<typeof attachments>;
-export type KitExpenseAttachmentLink = Row<typeof tripExpenseAttachments>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
 
 export interface ExpenseRow {

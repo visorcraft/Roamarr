@@ -23,9 +23,7 @@ export function listTripTemplates(userId: number) {
 }
 
 export function saveTripTemplate(userId: number, sourceTripId: number, name: string) {
-	requireOwnedTrip(userId, sourceTripId);
-	const trip = tripsRepo.getTripById(sourceTripId);
-	if (!trip) throw error(404, 'Trip not found');
+	const trip = requireOwnedTrip(userId, sourceTripId);
 	const segs = listSegmentsForTrip(sourceTripId).map((s) => ({
 		type: s.type,
 		title: s.title,

@@ -9,7 +9,7 @@ benefits. Cards are **profile-level** — they belong to you, not to a single tr
 
 ## Managing cards
 
-From **Profile → Cards** (or the **Cards** page in the sidebar), add a card with:
+From the **Cards** page in the sidebar (under Organizer), add a card with:
 
 | Field | Notes |
 | --- | --- |

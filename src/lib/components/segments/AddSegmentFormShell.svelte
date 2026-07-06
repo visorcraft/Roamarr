@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let {
 		trip,
@@ -20,7 +21,7 @@
 <header class="page-header">
 	<div>
 		<a href={`/trips/${trip.id}`} class="back-link">
-			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+			<Icon name="back" class="h-4 w-4" />
 			Back to {trip.name}
 		</a>
 		<h1 class="page-title">Add {label.toLowerCase()}</h1>

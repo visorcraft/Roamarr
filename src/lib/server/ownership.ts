@@ -1,5 +1,4 @@
 import { eq as kitEq, and, inList } from '@visorcraft/mongreldb-kit';
-import type { TableSpec, Row } from '@visorcraft/mongreldb-kit';
 import { error } from '@sveltejs/kit';
 import { kit } from './db';
 import {
@@ -34,34 +33,6 @@ export function requireOwnedGroup(userId: number, groupId: number) {
 	const g = tripsRepo.getGroupById(groupId);
 	if (!g || g.ownerId !== userId) throw error(404, 'Not found');
 	return g;
-}
-
-export function requireOwnedTripRow<TTable extends TableSpec & { id: unknown; trip_id: unknown }>(
-	table: TTable,
-	tripId: number,
-	id: number,
-	notFoundMessage = 'Not found'
-): Row<TTable> {
-	const row = kit
-		.selectFrom(table)
-		.where(and(kitEq(table.id as any, BigInt(id)), kitEq(table.trip_id as any, BigInt(tripId))))
-		.executeSync()[0];
-	if (!row) throw error(404, notFoundMessage);
-	return row as Row<TTable>;
-}
-
-export function requireOwnedUserRow<TTable extends TableSpec & { id: unknown; user_id: unknown }>(
-	table: TTable,
-	userId: number,
-	id: number,
-	notFoundMessage = 'Not found'
-): Row<TTable> {
-	const row = kit
-		.selectFrom(table)
-		.where(and(kitEq(table.id as any, BigInt(id)), kitEq(table.user_id as any, BigInt(userId))))
-		.executeSync()[0];
-	if (!row) throw error(404, notFoundMessage);
-	return row as Row<TTable>;
 }
 
 export function requireCompanionOnTrip(companionId: number | null | undefined, tripId: number) {

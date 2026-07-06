@@ -22,7 +22,7 @@ setup('create admin account', async ({ page, baseURL }) => {
 
 	// Step 1
 	await page.fill('input#instanceName', 'Roamarr E2E');
-	await page.fill('input#timezone', 'UTC');
+	await page.selectOption('select#timezone', 'UTC');
 	await expect(page.locator('li:has-text("ROAMARR_SECRET is set")')).toBeVisible();
 	await expect(page.locator('li:has-text("Database encryption verified")')).toBeVisible();
 	await expect(page.locator('li:has-text("Database writable")')).toBeVisible();

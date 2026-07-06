@@ -23,6 +23,8 @@ AGENTS.md
 GEMINI.md
 PLAN.md
 /.claude/
+/docs/specs/
+/docs/superpowers/
 
 # Vite
 vite.config.js.timestamp-*

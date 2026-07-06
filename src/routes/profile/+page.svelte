@@ -239,7 +239,7 @@
 							{#if s.lastIp || s.userAgent}<span class="block">{s.userAgent || ''}{#if s.lastIp && s.userAgent} · {/if}{s.lastIp || ''}</span>{/if}
 						</p>
 					</div>
-					<form method="POST" action="?/revokeSession">
+						<form method="POST" action="?/revokeSession" class="ml-auto flex justify-end">
 						<input type="hidden" name="id" value={s.id} />
 						<button type="submit" class="btn btn-danger">Revoke</button>
 					</form>

@@ -113,6 +113,11 @@ function licenseExpression(pkg) {
 	return 'UNKNOWN';
 }
 
+function packageNameFromPath(packagePath) {
+	const parts = packagePath.split('/node_modules/');
+	return parts[parts.length - 1].replace(/^node_modules\//, '');
+}
+
 function findProjectLicense(rootPackage) {
 	for (const name of PROJECT_LICENSE_NAMES) {
 		const candidate = path.join(root, name);
@@ -173,24 +178,25 @@ function packageRows(lock) {
 	for (const [packagePath, meta] of Object.entries(lock.packages)) {
 		if (!packagePath.startsWith('node_modules/')) continue;
 		const packageJsonPath = path.join(root, packagePath, 'package.json');
-		if (!existsSync(packageJsonPath)) continue;
-
-		const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+		const installed = existsSync(packageJsonPath);
+		const pkg = installed ? JSON.parse(readFileSync(packageJsonPath, 'utf8')) : meta;
 		const name = pkg.name ?? packagePath.replace(/^node_modules\//, '');
+		const displayName = name.includes('/node_modules/') ? packageNameFromPath(packagePath) : name;
 		const version = pkg.version ?? meta.version ?? '0.0.0';
-		const key = `${name}@${version}`;
+		const key = `${displayName}@${version}`;
 		const scope = meta.dev ? 'development' : 'production';
-		const licenseFiles = findLicenseFiles(path.dirname(packageJsonPath));
+		const licenseFiles = installed ? findLicenseFiles(path.dirname(packageJsonPath)) : [];
 		const licenseText = readLicenseText(licenseFiles);
 		const row = {
-			name,
+			name: displayName,
 			version,
 			license: licenseExpression(pkg),
 			scope,
 			url: normalizeRepository(pkg.repository, pkg.homepage, pkg.bugs),
 			packagePath,
 			licenseFiles: licenseFiles.map((file) => path.relative(path.dirname(packageJsonPath), file)),
-			licenseText
+			licenseText,
+			installed
 		};
 
 		const existing = seen.get(key);
@@ -218,9 +224,15 @@ function buildThirdPartyText(packages) {
 	const packageList = packages.map((pkg) => `- ${pkg.name} ${pkg.version} (${pkg.scope}) - ${pkg.license}`).join('\n');
 	const sections = packages
 		.map((pkg) => {
-			const fileLine = pkg.licenseFiles.length ? pkg.licenseFiles.join(', ') : 'No license file found in installed package.';
+			const fileLine = pkg.licenseFiles.length
+				? pkg.licenseFiles.join(', ')
+				: pkg.installed
+					? 'No license file found in installed package.'
+					: 'Package is lockfile-only on this platform; no installed license file was available.';
 			const source = pkg.url || 'No repository URL declared.';
-			const body = pkg.licenseText || `No license text was found in the installed package. Declared license: ${pkg.license}.`;
+			const body =
+				pkg.licenseText ||
+				`No license text was found ${pkg.installed ? 'in the installed package' : 'because this package was not installed on the generation host'}. Declared license: ${pkg.license}.`;
 			return `## ${pkg.name} ${pkg.version}
 
 Scope: ${pkg.scope}

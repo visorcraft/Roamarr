@@ -79,8 +79,9 @@ marketing dashboard.
 Roamarr can:
 
 - Track trips, itinerary segments, dates, timezones, booking status, notes,
-  tags, favorites, archives, comments, printable itineraries, visited places,
-  weather forecasts, and trip-page maps of the next upcoming city.
+  tags, favorites, archives, comments, printable itineraries, searchable visited
+  country/U.S. state lists, weather forecasts, and trip-page maps of the next
+  upcoming city.
 - Manage flights, hotels, trains, rental cars, rideshares, shuttles, boats,
   food plans, events, parking, directions, points of interest, todos, and free
   form notes.
@@ -311,6 +312,8 @@ After the first setup flow, use Settings for:
 Use Profile for:
 
 - Password changes, email changes, and active session management.
+- Visited Countries and U.S. States, with visit-date editing and quick
+  country/state list toggles.
 - Security settings: TOTP authenticator setup, backup codes, and WebAuthn
   passkey management.
 - Calendar feed token management.
@@ -322,7 +325,7 @@ Use Profile for:
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
 `@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB (via MongrelDB Kit), Luxon,
 Nodemailer, MapLibre GL JS, and Vitest. Recent additions include WebAuthn
-(`@simplewebauthin/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
+(`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
 (`@modelcontextprotocol/sdk`), 3D globe rendering (`three`), and tar streaming
 (`tar-fs`).
 
@@ -364,7 +367,9 @@ npm run build
 ```
 
 Before opening a pull request, include focused tests for behavior changes,
-update relevant docs, and regenerate license data after dependency changes.
+update relevant docs, and run `npm run credits:generate` after dependency
+changes so Credits/Acknowledgements and Third-party Licenses match
+`package-lock.json`.
 
 ## Documentation
 

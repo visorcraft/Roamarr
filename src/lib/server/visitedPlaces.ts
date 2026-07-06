@@ -16,6 +16,8 @@ export type KitVisitedUsState = Row<typeof visitedUsStates>;
 export interface VisitedPlace {
 	code: string;
 	visitedOn: string | null;
+	firstVisitedOn: string | null;
+	lastVisitedOn: string | null;
 	source: string;
 	createdAt: string;
 }
@@ -29,6 +31,8 @@ function toPlaceCountry(row: KitVisitedCountry): VisitedPlace {
 	return {
 		code: row.country_code,
 		visitedOn: row.visited_on,
+		firstVisitedOn: row.first_visited_on ?? row.visited_on,
+		lastVisitedOn: row.last_visited_on ?? row.visited_on,
 		source: row.source,
 		createdAt: row.created_at
 	};
@@ -38,6 +42,8 @@ function toPlaceState(row: KitVisitedUsState): VisitedPlace {
 	return {
 		code: row.state_code,
 		visitedOn: row.visited_on,
+		firstVisitedOn: row.first_visited_on ?? row.visited_on,
+		lastVisitedOn: row.last_visited_on ?? row.visited_on,
 		source: row.source,
 		createdAt: row.created_at
 	};
@@ -78,7 +84,7 @@ export function countryVisitSummaries(userId: number): CountryVisitSummary[] {
 
 	const stats = new Map<string, { first: string | null; last: string | null; trips: Set<number> }>();
 	for (const v of visited) {
-		stats.set(v.code, { first: v.visitedOn, last: v.visitedOn, trips: new Set<number>() });
+		stats.set(v.code, { first: v.firstVisitedOn, last: v.lastVisitedOn, trips: new Set<number>() });
 	}
 
 	function touch(code: string, first: string | null, last: string | null, tripId?: number) {
@@ -154,6 +160,8 @@ export function markCountryVisited(
 			user_id: uid(userId),
 			country_code: normalized,
 			visited_on: opts.visitedOn ?? null,
+			first_visited_on: opts.visitedOn ?? null,
+			last_visited_on: opts.visitedOn ?? null,
 			source: opts.source ?? 'manual'
 		})
 		.executeSync();
@@ -182,6 +190,8 @@ export function markStateVisited(
 			user_id: uid(userId),
 			state_code: normalized,
 			visited_on: opts.visitedOn ?? null,
+			first_visited_on: opts.visitedOn ?? null,
+			last_visited_on: opts.visitedOn ?? null,
 			source: opts.source ?? 'manual'
 		})
 		.executeSync();
@@ -191,6 +201,49 @@ export function markStateVisited(
 		source: opts.source ?? 'manual'
 	});
 	return { created: true };
+}
+
+export function updateVisitedDates(
+	userId: number,
+	kind: PlaceKind,
+	code: string,
+	dates: { firstVisitedOn: string | null; lastVisitedOn: string | null }
+): { updated: boolean } {
+	if (kind === 'country') {
+		const normalized = validateCountry(code);
+		const updated = kit
+			.updateTable(visitedCountries)
+			.set({
+				first_visited_on: dates.firstVisitedOn,
+				last_visited_on: dates.lastVisitedOn,
+				visited_on: dates.firstVisitedOn
+			})
+			.where(kitAnd(kitEq(visitedCountries.user_id, uid(userId)), kitEq(visitedCountries.country_code, normalized)))
+			.executeSync();
+		if (updated.length === 0) return { updated: false };
+		logAudit(userId, 'places_visit_update', 'visited_country', Number(updated[0].id), {
+			kind,
+			code: normalized
+		});
+		return { updated: true };
+	}
+
+	const normalized = validateState(code);
+	const updated = kit
+		.updateTable(visitedUsStates)
+		.set({
+			first_visited_on: dates.firstVisitedOn,
+			last_visited_on: dates.lastVisitedOn,
+			visited_on: dates.firstVisitedOn
+		})
+		.where(kitAnd(kitEq(visitedUsStates.user_id, uid(userId)), kitEq(visitedUsStates.state_code, normalized)))
+		.executeSync();
+	if (updated.length === 0) return { updated: false };
+	logAudit(userId, 'places_visit_update', 'visited_state', Number(updated[0].id), {
+		kind,
+		code: normalized
+	});
+	return { updated: true };
 }
 
 export function markVisited(

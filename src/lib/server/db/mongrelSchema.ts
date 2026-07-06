@@ -1227,6 +1227,8 @@ export const visitedCountries = table('visited_countries', {
 		int('user_id'),
 		text('country_code'),
 		date('visited_on', { nullable: true }),
+		date('first_visited_on', { nullable: true }),
+		date('last_visited_on', { nullable: true }),
 		text('source', { default: staticDefault('manual') }),
 		timestamp('created_at', { default: nowDefault() })
 	],
@@ -1255,6 +1257,8 @@ export const visitedUsStates = table('visited_us_states', {
 		int('user_id'),
 		text('state_code'),
 		date('visited_on', { nullable: true }),
+		date('first_visited_on', { nullable: true }),
+		date('last_visited_on', { nullable: true }),
 		text('source', { default: staticDefault('manual') }),
 		timestamp('created_at', { default: nowDefault() })
 	],

@@ -126,7 +126,7 @@
 		if (!browser) return;
 		const path = page.url.pathname;
 		for (const section of visibleSections) {
-			if (section.items.some((item) => (item.href === '/' ? path === '/' : path.startsWith(item.href)))) {
+			if (section.items.some((item) => itemActive(item))) {
 				// Read expansion state without tracking it; this effect should only
 				// react to route changes, not to manual toggles.
 				if (!untrack(() => isExpanded(section.label))) {
@@ -219,10 +219,12 @@
 		}
 	}
 
+	type NavItem = { href: string; label: string; icon: IconName; children?: { href: string; label: string }[] };
+
 	const SECTIONS: {
 		label: string;
 		admin?: boolean;
-		items: { href: string; label: string; icon: IconName }[];
+		items: NavItem[];
 	}[] = [
 		{
 			label: 'Plan',
@@ -238,7 +240,15 @@
 				{ href: '/profile/documents', label: 'Documents', icon: 'document' },
 				{ href: '/profile/reminders', label: 'Reminders', icon: 'reminder' },
 				{ href: '/profile/loyalty', label: 'Loyalty', icon: 'loyalty' },
-				{ href: '/profile/visited', label: 'Visited', icon: 'location' },
+				{
+					href: '/profile/visited',
+					label: 'Visited',
+					icon: 'location',
+					children: [
+						{ href: '/profile/visited/countries', label: 'Countries' },
+						{ href: '/profile/visited/states', label: 'U.S. States' }
+					]
+				},
 				{ href: '/profile/notifications', label: 'SMTP', icon: 'notification' },
 				{ href: '/profile/security', label: 'Security', icon: 'star' }
 			]
@@ -272,6 +282,7 @@
 			.toUpperCase()
 	);
 	const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+	const itemActive = (item: NavItem) => isActive(item.href) || !!item.children?.some((child) => isActive(child.href));
 </script>
 
 {#snippet brand(size: 'sm' | 'lg')}
@@ -417,23 +428,40 @@
 						</button>
 						<div id={sectionItemsId} class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
 							{#each section.items as item (item.href)}
+								{@const active = itemActive(item)}
 									<a
 										href={item.href}
 										onclick={() => (open = false)}
-										aria-current={isActive(item.href) ? 'page' : undefined}
-										class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {isActive(item.href)
+										aria-current={active && !item.children ? 'page' : undefined}
+										class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {active
 											? 'app-nav-item-active'
 											: 'app-nav-item'}"
 									>
 										<Icon
 											name={item.icon}
-											class="h-5 w-5 {isActive(item.href) ? 'app-nav-icon-active' : ''}"
+											class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
 										/>
 										<span class="flex-1">{item.label}</span>
 										{#if item.href === '/notifications' && data.unreadCount > 0}
 											<span class="app-unread-count grid h-5 min-w-[1.25rem] place-items-center rounded-full px-1.5 text-xs font-bold">{data.unreadCount}</span>
 										{/if}
 									</a>
+									{#if item.children}
+										<div class="ml-8 space-y-1">
+											{#each item.children as child (child.href)}
+												<a
+													href={child.href}
+													onclick={() => (open = false)}
+													aria-current={isActive(child.href) ? 'page' : undefined}
+													class="flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition {isActive(child.href)
+														? 'app-nav-item-active'
+														: 'app-nav-item'}"
+												>
+													{child.label}
+												</a>
+											{/each}
+										</div>
+									{/if}
 								{/each}
 						</div>
 					</section>

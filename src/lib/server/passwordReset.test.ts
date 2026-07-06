@@ -57,7 +57,7 @@ function makeKitUser(over: UserInsert = {}) {
 		document_expiry_lead_days: over.document_expiry_lead_days ?? 90n,
 		email_notifications: over.email_notifications ?? true,
 		webhook_notifications: over.webhook_notifications ?? true,
-		theme_id: over.theme_id ?? 'midnight-travels',
+		theme_id: over.theme_id ?? 'system',
 		default_currency: over.default_currency ?? 'USD',
 		calendar_token: over.calendar_token ?? null,
 		calendar_token_expires_at: over.calendar_token_expires_at ?? null

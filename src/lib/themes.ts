@@ -1,4 +1,4 @@
-export const DEFAULT_THEME_ID = 'midnight-travels';
+export const DEFAULT_THEME_ID = 'system';
 
 export const THEMES = [
 	{

@@ -28,7 +28,7 @@ export function _createAdmin(
 		document_expiry_lead_days: BigInt(s.defaultDocumentExpiryLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
-		theme_id: 'midnight-travels',
+		theme_id: 'system',
 		default_currency: s.defaultCurrency,
 		calendar_token: null,
 		calendar_token_expires_at: null

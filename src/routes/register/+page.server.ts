@@ -32,7 +32,7 @@ export async function _registerUser(email: string, password: string, displayName
 		document_expiry_lead_days: BigInt(defaults.defaultDocumentExpiryLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
-		theme_id: 'midnight-travels',
+		theme_id: 'system',
 		default_currency: defaults.defaultCurrency,
 		calendar_token: null,
 		calendar_token_expires_at: null

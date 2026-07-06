@@ -7,7 +7,7 @@
 	import { formatDateTime } from '$lib/dateFormat';
 
 	let { data, form } = $props();
-	let selectedThemeId = $state('midnight-travels');
+	let selectedThemeId = $state('system');
 	let submittingProfile = $state(false);
 	let submittingPassword = $state(false);
 	let submittingEmail = $state(false);

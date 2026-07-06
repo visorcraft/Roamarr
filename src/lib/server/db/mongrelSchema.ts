@@ -126,7 +126,7 @@ export const users = table('users', {
 		bool('email_notifications', { default: staticDefault(true) }),
 		bool('webhook_notifications', { default: staticDefault(true) }),
 		bool('auto_mark_visited', { default: staticDefault(false) }),
-		text('theme_id', { default: staticDefault('midnight-travels') }),
+		text('theme_id', { default: staticDefault('system') }),
 		text('default_currency', { default: staticDefault('USD') }),
 		text('calendar_token', { nullable: true }),
 		timestamp('calendar_token_expires_at', { nullable: true }),

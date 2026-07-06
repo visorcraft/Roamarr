@@ -83,7 +83,7 @@
 						<label class="label" for="disableTotp">TOTP code or backup code</label>
 						<input id="disableTotp" name="totpCode" type="text" class="input" placeholder="123456 or abcd-ef12" autocomplete="one-time-code" required />
 					</div>
-					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Disable two-factor authentication?">Disable 2FA</ConfirmButton>
+					<ConfirmButton class="btn btn-danger" message="Disable two-factor authentication?">Disable 2FA</ConfirmButton>
 				</form>
 			</details>
 		</div>

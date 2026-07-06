@@ -53,7 +53,7 @@
 						<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingCardId = c.id)}>Edit</button>
 						<form method="POST" action="?/deleteCard">
 							<input type="hidden" name="id" value={c.id} />
-							<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this card and all its benefits?">Delete</ConfirmButton>
+							<ConfirmButton class="btn btn-danger" message="Delete this card and all its benefits?">Delete</ConfirmButton>
 						</form>
 					</div>
 				</div>
@@ -133,7 +133,7 @@
 											<form method="POST" action="?/deleteBenefit">
 												<input type="hidden" name="id" value={b.id} />
 												<input type="hidden" name="cardId" value={c.id} />
-												<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this benefit?">Delete</ConfirmButton>
+												<ConfirmButton class="btn btn-danger" message="Delete this benefit?">Delete</ConfirmButton>
 											</form>
 										</div>
 									</div>

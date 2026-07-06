@@ -103,7 +103,7 @@
 					</div>
 					<form method="POST" action="?/delete">
 						<input type="hidden" name="clientId" value={c.clientId} />
-						<ConfirmButton class="btn btn-ghost btn-ghost-danger btn-sm" message="Delete this client and revoke all its tokens?">Delete</ConfirmButton>
+						<ConfirmButton class="btn btn-danger btn-sm" message="Delete this client and revoke all its tokens?">Delete</ConfirmButton>
 					</form>
 				</li>
 			{/each}
@@ -127,7 +127,7 @@
 					</div>
 					<form method="POST" action="?/revoke">
 						<input type="hidden" name="tokenId" value={t.id} />
-						<ConfirmButton class="btn btn-ghost btn-ghost-danger btn-sm" message="Revoke this token?">Revoke</ConfirmButton>
+						<ConfirmButton class="btn btn-danger btn-sm" message="Revoke this token?">Revoke</ConfirmButton>
 					</form>
 				</li>
 			{/each}

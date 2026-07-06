@@ -94,7 +94,7 @@
 							<button type="button" class="btn btn-ghost btn-ghost-indigo" onclick={() => (editingId = p.id)}>Edit</button>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={p.id} />
-								<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this insurance policy?">Delete</ConfirmButton>
+								<ConfirmButton class="btn btn-danger" message="Delete this insurance policy?">Delete</ConfirmButton>
 							</form>
 						</div>
 					{/if}

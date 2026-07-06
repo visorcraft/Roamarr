@@ -41,7 +41,7 @@
 							</form>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={s.id} />
-								<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
+								<ConfirmButton class="btn btn-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
 							</form>
 						</div>
 					</div>

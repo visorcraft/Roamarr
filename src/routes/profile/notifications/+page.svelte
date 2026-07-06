@@ -106,7 +106,7 @@
 
 	{#if o}
 		<form method="POST" action="?/disable" class="mt-4">
-			<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Remove your SMTP override entirely?">
+			<ConfirmButton class="btn btn-danger" message="Remove your SMTP override entirely?">
 				Remove override
 			</ConfirmButton>
 		</form>

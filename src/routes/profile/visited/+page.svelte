@@ -94,7 +94,7 @@
 			{#if visitedCountryCodes.size > 0}
 				<form method="POST" action="?/clear" class="ml-auto">
 					<input type="hidden" name="kind" value="country" />
-					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Clear all visited countries?">
+					<ConfirmButton class="btn btn-danger" message="Clear all visited countries?">
 						Clear all
 					</ConfirmButton>
 				</form>
@@ -190,7 +190,7 @@
 			{#if visitedStateCodes.size > 0}
 				<form method="POST" action="?/clear" class="ml-auto">
 					<input type="hidden" name="kind" value="state" />
-					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Clear all visited states?">
+					<ConfirmButton class="btn btn-danger" message="Clear all visited states?">
 						Clear all
 					</ConfirmButton>
 				</form>

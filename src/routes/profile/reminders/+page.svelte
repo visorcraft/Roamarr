@@ -32,7 +32,7 @@
 				{#if r.status === 'pending'}
 					<form method="POST" action="?/cancel">
 						<input type="hidden" name="id" value={r.id} />
-						<button class="btn btn-ghost btn-ghost-danger">Cancel</button>
+						<button class="btn btn-danger">Cancel</button>
 					</form>
 				{/if}
 			</li>

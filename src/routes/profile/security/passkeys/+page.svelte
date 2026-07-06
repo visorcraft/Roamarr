@@ -99,7 +99,7 @@
 							<button type="button" class="btn btn-ghost btn-ghost-indigo btn-sm" onclick={() => (editingId = pk.id)}>Rename</button>
 							<form method="POST" action="?/delete">
 								<input type="hidden" name="id" value={pk.id} />
-								<ConfirmButton class="btn btn-ghost btn-ghost-danger btn-sm" message="Delete this passkey?">Delete</ConfirmButton>
+								<ConfirmButton class="btn btn-danger btn-sm" message="Delete this passkey?">Delete</ConfirmButton>
 							</form>
 						</div>
 					{/if}

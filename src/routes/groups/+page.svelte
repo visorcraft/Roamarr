@@ -69,7 +69,7 @@
 
 				<form method="POST" action="?/deleteGroup" class="mt-2 flex justify-end">
 					<input type="hidden" name="groupId" value={g.id} />
-					<ConfirmButton class="btn btn-ghost btn-ghost-danger" message="Delete this group? This cannot be undone.">Delete group</ConfirmButton>
+					<ConfirmButton class="btn btn-danger" message="Delete this group? This cannot be undone.">Delete group</ConfirmButton>
 				</form>
 			</section>
 		{/each}

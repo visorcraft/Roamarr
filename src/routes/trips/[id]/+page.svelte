@@ -655,7 +655,7 @@
 								</label>
 								{#if selectedSegmentIds.size}
 									<button
-										class="btn btn-ghost btn-ghost-danger btn-xs"
+										class="btn btn-danger btn-xs"
 										type="submit"
 										onclick={(e) => { if (!confirm(`Delete ${selectedSegmentIds.size} selected segment(s)?`)) e.preventDefault(); }}
 									>
@@ -829,7 +829,7 @@
 													</form>
 																<form method="POST" action={`/trips/${trip.id}/segments?/delete`}>
 																	<input type="hidden" name="segmentId" value={s.id} />
-																	<button class="btn btn-ghost btn-ghost-danger">Delete</button>
+																	<button class="btn btn-danger">Delete</button>
 																</form>
 																<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="flex items-center gap-1">
 																	<input type="hidden" name="segmentId" value={s.id} />
@@ -1215,7 +1215,7 @@
 									{#if isEditor}
 										<form method="POST" action="?/deleteJournalEntry" class="mt-2">
 											<input type="hidden" name="entryId" value={entry.id} />
-											<button class="btn btn-ghost btn-ghost-danger btn-xs">Delete</button>
+											<button class="btn btn-danger btn-xs">Delete</button>
 										</form>
 									{/if}
 								</li>
@@ -1388,7 +1388,7 @@
 										{/if}
 										<form method="POST" action={`/trips/${trip.id}/fare-watch?/delete`}>
 											<input type="hidden" name="watchId" value={w.id} />
-											<button class="btn btn-ghost btn-ghost-danger">Delete</button>
+											<button class="btn btn-danger">Delete</button>
 										</form>
 									</div>
 								</li>
@@ -1606,7 +1606,7 @@
 								{#if c.userId === data.user?.id}
 									<form method="POST" action="?/deleteComment" class="mt-2">
 										<input type="hidden" name="commentId" value={c.id} />
-										<button class="btn btn-ghost btn-ghost-danger btn-sm">Delete</button>
+										<button class="btn btn-danger btn-sm">Delete</button>
 									</form>
 								{/if}
 							</li>
@@ -1993,7 +1993,7 @@
 									{#if isEditor}
 										<form method="POST" action="?/deleteDocumentLink" class="mt-1">
 											<input type="hidden" name="linkId" value={link.id} />
-											<button class="btn btn-ghost btn-ghost-danger btn-xs">Remove</button>
+											<button class="btn btn-danger btn-xs">Remove</button>
 										</form>
 									{/if}
 								</li>
@@ -2027,7 +2027,7 @@
 									{#if data.owner === true}
 										<form method="POST" action="?/detachPolicy" class="mt-2">
 											<input type="hidden" name="policyId" value={p.id} />
-											<button class="btn btn-ghost btn-ghost-danger btn-sm">Detach</button>
+											<button class="btn btn-danger btn-sm">Detach</button>
 										</form>
 									{/if}
 								</li>

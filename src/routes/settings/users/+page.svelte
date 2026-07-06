@@ -130,7 +130,7 @@
 									}}
 								>
 									<input type="hidden" name="userId" value={user.id} />
-									<button type="submit" class="btn btn-ghost btn-ghost-danger">Delete</button>
+									<button type="submit" class="btn btn-danger">Delete</button>
 								</form>
 							</div>
 						</td>
@@ -265,7 +265,7 @@
 								<form method="POST" action="?/disableTwoFactor" class="mt-3">
 									<input type="hidden" name="userId" value={user.id} />
 									<p class="field-help">Two-factor authentication is enabled for this user.</p>
-									<button class="btn btn-ghost btn-ghost-danger mt-2">Disable user 2FA (admin reset)</button>
+									<button class="btn btn-danger mt-2">Disable user 2FA (admin reset)</button>
 								</form>
 							{/if}
 							</td>

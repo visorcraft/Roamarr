@@ -992,7 +992,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.btn-danger {
-		@apply bg-gradient-to-b from-red-500 to-red-600 text-white shadow-lg shadow-red-900/40 hover:from-red-400 hover:to-red-500 active:translate-y-px;
+		@apply bg-gradient-to-b from-red-500 to-red-600 text-white shadow-lg shadow-red-900/40 active:translate-y-px;
 		background-image: linear-gradient(180deg, #ef4444, #dc2626);
 		box-shadow:
 			0 12px 24px color-mix(in oklab, #7f1d1d 40%, transparent),
@@ -1000,7 +1000,7 @@ button.card:hover,
 		color: #ffffff;
 	}
 	.btn-danger:hover {
-		background-image: linear-gradient(180deg, #f87171, #ef4444);
+		background-image: linear-gradient(180deg, #dc2626, #b91c1c);
 	}
 	.btn-ghost-muted {
 		@apply text-slate-400 hover:bg-white/5 hover:text-slate-200;

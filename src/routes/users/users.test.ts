@@ -2,7 +2,7 @@ import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
@@ -16,8 +16,8 @@ import { users } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import { beforeEach } from 'vitest';
 import { deliver } from '$lib/server/notify';
-import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
-import { makeKitUser } from '../../../../tests/kitHelpers';
+import { makeAdminLocals, makeUserLocals } from '../../../tests/eventHelpers';
+import { makeKitUser } from '../../../tests/kitHelpers';
 import * as OTPAuth from 'otpauth';
 import { generateSecret, enableTwoFactor, isTwoFactorEnabled } from '$lib/server/twoFactor';
 
@@ -178,7 +178,7 @@ test('sendReset delivers a reset link', async () => {
 			request: { formData: async () => form },
 			locals: admin,
 			cookies: { set: vi.fn() },
-			url: new URL('https://roamarr.test/settings/users')
+			url: new URL('https://roamarr.test/users')
 		} as any);
 	} catch (e: any) {
 		expect(e.status).toBe(303);
@@ -305,7 +305,7 @@ test('disableTwoFactor removes 2FA for another user', async () => {
 		expect.fail('should have redirected');
 	} catch (e: any) {
 		expect(e.status).toBe(303);
-		expect(e.location).toBe('/settings/users');
+		expect(e.location).toBe('/users');
 	}
 
 	expect(isTwoFactorEnabled(Number(target.id))).toBe(false);

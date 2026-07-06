@@ -10,7 +10,7 @@ export const actions: Actions = {
 	runNow: async ({ locals }) => {
 		requireAdmin(locals);
 		await runTick(new Date());
-		throw redirect(303, '/settings/jobs');
+		throw redirect(303, '/jobs');
 	}
 };
 

@@ -110,7 +110,7 @@
 		runtime components.
 	</p>
 	<div class="mt-5 grid gap-3 sm:grid-cols-2">
-		<a class="choice-card" href="/settings/about/licenses">
+		<a class="choice-card" href="/about/licenses">
 			<span class="choice-icon">
 				<Icon name="document" class="h-5 w-5" />
 			</span>
@@ -120,7 +120,7 @@
 			</span>
 			<Icon name="arrow-right" class="h-4 w-4" />
 		</a>
-		<a class="choice-card" href="/settings/about/credits">
+		<a class="choice-card" href="/about/credits">
 			<span class="choice-icon">
 				<Icon name="info" class="h-5 w-5" />
 			</span>

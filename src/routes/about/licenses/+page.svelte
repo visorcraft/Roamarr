@@ -37,7 +37,7 @@
 		<h1 class="page-title">Licenses</h1>
 		<p class="page-subtitle">Bundled license and attribution documents for Roamarr.</p>
 	</div>
-	<a class="btn btn-secondary" href="/settings/about/credits">Credits</a>
+	<a class="btn btn-secondary" href="/about/credits">Credits</a>
 </header>
 
 <nav class="tab-list mt-6" aria-label="License documents">

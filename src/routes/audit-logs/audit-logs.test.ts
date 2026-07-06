@@ -2,7 +2,7 @@ import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
@@ -38,7 +38,7 @@ test('load returns recent audit logs for admin', () => {
 
 	const result = load({
 		locals: { user: { id: Number(admin.id), role: 'admin' } },
-		url: new URL('http://localhost/settings/audit-logs')
+		url: new URL('http://localhost/audit-logs')
 	} as any) as {
 		logs: Array<{ action: string; user: { email: string } }>;
 	};
@@ -62,7 +62,7 @@ test('load returns empty logs when no events exist', () => {
 	const admin = makeUser('admin-empty@x.c', 'Admin', 'admin');
 	const result = load({
 		locals: { user: { id: Number(admin.id), role: 'admin' } },
-		url: new URL('http://localhost/settings/audit-logs')
+		url: new URL('http://localhost/audit-logs')
 	} as any) as {
 		logs: unknown[];
 	};
@@ -75,7 +75,7 @@ test('load returns CSV export when export=csv', () => {
 
 	const result = load({
 		locals: { user: { id: Number(admin.id), role: 'admin' } },
-		url: new URL('http://localhost/settings/audit-logs?export=csv')
+		url: new URL('http://localhost/audit-logs?export=csv')
 	} as any) as Response;
 
 	expect(result instanceof Response).toBe(true);

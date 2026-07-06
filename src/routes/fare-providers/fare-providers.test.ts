@@ -5,7 +5,7 @@ const ctx = vi.hoisted(() => ({
 	close: null as unknown as () => void
 }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	const { kit, close } = freshDb();
 	Object.assign(ctx, { kit, close });
 	return { kit, getDb: () => kit };
@@ -21,7 +21,7 @@ afterAll(() => {
 });
 
 import { load, actions } from './+page.server';
-import { makeKitUser } from '../../../../tests/kitHelpers';
+import { makeKitUser } from '../../../tests/kitHelpers';
 import {
 	createFareProvider,
 	listFareProvidersForUser,

@@ -2,7 +2,7 @@ import { test, expect, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
@@ -11,8 +11,8 @@ import { load, actions } from './+page.server';
 import { schedulerRuns, users } from '$lib/server/db/mongrelSchema';
 
 import { beforeEach } from 'vitest';
-import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
-import { makeSchedulerRun } from '../../../../tests/helpers';
+import { makeAdminLocals, makeUserLocals } from '../../../tests/eventHelpers';
+import { makeSchedulerRun } from '../../../tests/helpers';
 
 beforeEach(() => {
 	(ctx as any).kit.deleteFrom(schedulerRuns).executeSync();
@@ -75,7 +75,7 @@ test('runNow action triggers a scheduler tick and redirects', async () => {
 	const before = kit.selectFrom(schedulerRuns).selectCount().executeSync();
 	await expect(actions.runNow({ locals: admin } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/settings/jobs'
+		location: '/jobs'
 	});
 	const after = kit.selectFrom(schedulerRuns).selectCount().executeSync();
 	expect(after).toBeGreaterThan(before);

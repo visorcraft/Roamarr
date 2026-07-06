@@ -11,7 +11,7 @@ import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/00
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
@@ -119,7 +119,7 @@ test('restore rejects an invalid archive', async () => {
 	});
 	const form = new FormData();
 	form.append('file', invalid);
-	const request = new Request('http://localhost/settings/backup', { method: 'POST', body: form });
+	const request = new Request('http://localhost/backup', { method: 'POST', body: form });
 	const result = await actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any);
 	expect(result?.status).toBe(400);
 });
@@ -139,10 +139,10 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 
 	const form = new FormData();
 	form.append('file', fileFrom(archivePath, 'backup.mongreldb.tar.gz'));
-	const request = new Request('http://localhost/settings/backup', { method: 'POST', body: form });
+	const request = new Request('http://localhost/backup', { method: 'POST', body: form });
 	await expect(
 		actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any)
-	).rejects.toMatchObject({ status: 303, location: '/settings/backup' });
+	).rejects.toMatchObject({ status: 303, location: '/backup' });
 
 	const markerPath = getRestoreMarkerPath(targetDbDir);
 	expect(existsSync(markerPath)).toBe(true);

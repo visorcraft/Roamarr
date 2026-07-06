@@ -4,13 +4,13 @@ import { resetRateLimit } from '$lib/server/rateLimit';
 
 const ctx = vi.hoisted(() => ({ kit: null as never as KitDatabase }));
 vi.mock('$lib/server/db', async () => {
-	const { freshDb } = await import('../../../../tests/helpers');
+	const { freshDb } = await import('../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
 
 import { load, actions } from './+page.server';
-import { makeUser, makeAdmin } from '../../../../tests/helpers';
+import { makeUser, makeAdmin } from '../../../tests/helpers';
 import { auditLogs, users } from '$lib/server/db/mongrelSchema';
 
 type MaintenanceAction = 'check' | 'gc' | 'flush' | 'doctor';
@@ -27,7 +27,7 @@ function makeLocals(role: 'admin' | 'user') {
 function makeRequest(action: MaintenanceAction, confirm = false) {
 	const form = new FormData();
 	if (confirm) form.set('confirmMaintenance', action);
-	return new Request('http://localhost/settings/maintenance', { method: 'POST', body: form });
+	return new Request('http://localhost/maintenance', { method: 'POST', body: form });
 }
 
 function makeEvent(
@@ -140,7 +140,7 @@ for (const action of ['gc', 'flush', 'doctor'] as MaintenanceAction[]) {
 		const fn = actions[action] as (event: any) => Promise<unknown>;
 		const result = (await fn({
 			locals: makeLocals('admin'),
-			request: new Request('http://localhost/settings/maintenance', { method: 'POST', body: form }),
+			request: new Request('http://localhost/maintenance', { method: 'POST', body: form }),
 			getClientAddress: () => '127.0.0.1'
 		} as any)) as any;
 		expect(result.status).toBe(400);

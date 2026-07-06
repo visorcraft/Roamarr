@@ -6,7 +6,7 @@ const locals = { user: { id: 1, role: 'user' } };
 test('licenses load defaults to project document', () => {
 	const result = load({
 		locals,
-		url: new URL('http://localhost/settings/about/licenses')
+		url: new URL('http://localhost/about/licenses')
 	} as any) as any;
 
 	expect(result.activeTab).toBe('project');
@@ -17,7 +17,7 @@ test('licenses load defaults to project document', () => {
 test('licenses load selects requested tab', () => {
 	const result = load({
 		locals,
-		url: new URL('http://localhost/settings/about/licenses?tab=third-party')
+		url: new URL('http://localhost/about/licenses?tab=third-party')
 	} as any) as any;
 
 	expect(result.activeTab).toBe('third-party');

@@ -151,7 +151,7 @@ test('load includes recent audit log entries for admins', () => {
 test('save action sets a flash cookie and redirects', async () => {
 	const u = makeUser('admin@x.c', 'Admin', 'admin');
 	const cookies = { set: vi.fn(), get: vi.fn() };
-	const request = new Request('http://x/settings', {
+	const request = new Request('http://x/general', {
 		method: 'POST',
 		body: new URLSearchParams({
 			instanceName: 'R',
@@ -165,7 +165,7 @@ test('save action sets a flash cookie and redirects', async () => {
 	const locals = { user: { id: Number(u.id), role: 'admin' } } as App.Locals;
 	await expect(actions.save({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/settings'
+		location: '/general'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Settings saved.', expect.any(Object));
 });

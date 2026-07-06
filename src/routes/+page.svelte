@@ -19,7 +19,7 @@ import { formatDate } from '$lib/dateFormat';
 		{ label: 'Upcoming trips', value: data.stats.upcoming, href: '/trips', accent: 'text-indigo-300' },
 		{ label: 'Unread alerts', value: data.stats.unread, href: '/notifications', accent: 'text-amber-300' },
 		{ label: 'Docs expiring', value: data.stats.expiring, href: '/profile/documents', accent: 'text-emerald-300' },
-		{ label: 'Fare watches', value: data.stats.watches, href: '/settings/fare-providers', accent: 'text-fuchsia-300' }
+		{ label: 'Fare watches', value: data.stats.watches, href: '/fare-providers', accent: 'text-fuchsia-300' }
 	]);
 </script>
 

@@ -34,19 +34,19 @@ export const actions: Actions = {
 			apiKey: String(f.get('apiKey') || ''),
 			enabled: f.get('enabled') === 'on'
 		});
-		throw redirect(303, '/settings/fare-providers');
+		throw redirect(303, '/fare-providers');
 	},
 	update: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		updateProvider(u.id, Number(f.get('id')), String(f.get('label') || ''), String(f.get('apiKey') || ''), f.get('enabled') === 'on');
-		throw redirect(303, '/settings/fare-providers');
+		throw redirect(303, '/fare-providers');
 	},
 	delete: async ({ request, locals }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		deleteProvider(u.id, Number(f.get('id')));
-		throw redirect(303, '/settings/fare-providers');
+		throw redirect(303, '/fare-providers');
 	},
 	test: async ({ request, locals }) => {
 		const u = requireUser(locals);

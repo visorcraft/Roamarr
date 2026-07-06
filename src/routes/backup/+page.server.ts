@@ -70,7 +70,7 @@ export const actions: Actions = {
 
 		logAudit(u.id, 'db_restore', 'settings', 1);
 		setFlash(cookies, 'Restore pending. Restart the app to complete.');
-		throw redirect(303, '/settings/backup');
+		throw redirect(303, '/backup');
 	} catch (e) {
 		if (e && typeof e === 'object' && 'status' in e) throw e;
 		const original = e instanceof Error ? e.message : String(e);

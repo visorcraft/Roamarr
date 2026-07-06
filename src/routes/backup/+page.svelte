@@ -10,7 +10,7 @@
 	<h2 class="section-title">Download backup</h2>
 	<p class="mt-1 text-sm text-slate-400">This creates a point-in-time archive of the MongrelDB database directory and attachments.</p>
 	<div class="mt-4">
-		<a href="/settings/backup" download class="btn btn-primary">Download backup</a>
+		<a href="/backup" download class="btn btn-primary">Download backup</a>
 	</div>
 </section>
 

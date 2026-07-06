@@ -21,7 +21,7 @@
 			{data.counts.packages} npm packages - {data.counts.runtimeComponents} runtime components
 		</p>
 	</div>
-	<a class="btn btn-secondary" href="/settings/about/licenses">Licenses</a>
+	<a class="btn btn-secondary" href="/about/licenses">Licenses</a>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
@@ -33,7 +33,7 @@
 				add their own notices.
 			</p>
 		</div>
-		<a class="btn btn-ghost" href="/settings/about/licenses?tab=runtime">Runtime licenses</a>
+		<a class="btn btn-ghost" href="/about/licenses?tab=runtime">Runtime licenses</a>
 	</div>
 
 	<div class="mt-5 divide-y" style="border-color: var(--theme-line);">

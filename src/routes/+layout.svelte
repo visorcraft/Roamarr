@@ -308,7 +308,17 @@
 		{
 			label: 'Admin',
 			admin: true,
-			items: [{ href: '/settings', label: 'Settings', icon: 'settings' }]
+			items: [
+				{ href: '/general', label: 'General', icon: 'settings' },
+				{ href: '/users', label: 'Users', icon: 'users' },
+				{ href: '/fare-providers', label: 'Fare providers', icon: 'card' },
+				{ href: '/jobs', label: 'Scheduled Jobs', icon: 'reminder' },
+				{ href: '/audit-logs', label: 'Audit log', icon: 'document' },
+				{ href: '/backup', label: 'Backup', icon: 'archive' },
+				{ href: '/maintenance', label: 'Maintenance', icon: 'settings' },
+				{ href: '/seed', label: 'Seed', icon: 'plus' },
+				{ href: '/about', label: 'About', icon: 'info' }
+			]
 		}
 	];
 
@@ -386,9 +396,9 @@
 					<span>Profile</span>
 				</a>
 				{#if data.user?.role === 'admin'}
-					<a href="/settings" class="app-user-menu-item" onclick={closeUserMenu}>
+					<a href="/general" class="app-user-menu-item" onclick={closeUserMenu}>
 						<Icon name="settings" class="h-4.5 w-4.5" />
-						<span>Settings</span>
+						<span>General</span>
 					</a>
 				{/if}
 				<form method="POST" action="/logout">
@@ -539,7 +549,7 @@
 			<!-- App footer -->
 			<div class="app-sidebar-footer border-t p-3">
 				<a
-					href="/settings/about"
+					href="/about"
 					class="app-version-link flex items-center gap-3 rounded-lg px-3 py-2 transition"
 					title="{data.appName} {data.appVersion}"
 				>

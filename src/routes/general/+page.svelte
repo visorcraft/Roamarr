@@ -427,7 +427,7 @@
 					{/each}
 				</ul>
 				<div class="mt-4">
-					<a href="/settings/audit-logs" class="btn btn-primary">View full audit log</a>
+					<a href="/audit-logs" class="btn btn-primary">View full audit log</a>
 				</div>
 			{/if}
 		</div>

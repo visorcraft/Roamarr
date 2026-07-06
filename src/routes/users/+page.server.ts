@@ -76,7 +76,7 @@ export const actions: Actions = {
 		}
 
 		setFlash(cookies, 'User deleted.');
-		throw redirect(303, '/settings/users');
+		throw redirect(303, '/users');
 	},
 
 	update: async ({ request, locals, cookies }) => {
@@ -91,7 +91,7 @@ export const actions: Actions = {
 		}
 
 		setFlash(cookies, 'User updated.');
-		throw redirect(303, '/settings/users');
+		throw redirect(303, '/users');
 	},
 
 	sendReset: async ({ request, locals, cookies, url }) => {
@@ -107,7 +107,7 @@ export const actions: Actions = {
 
 		logAudit(admin.id, 'user_password_reset_sent', 'user', userId);
 		setFlash(cookies, 'Password reset link sent.');
-		throw redirect(303, '/settings/users');
+		throw redirect(303, '/users');
 	},
 
 	disableTwoFactor: async ({ request, locals, cookies }) => {
@@ -122,6 +122,6 @@ export const actions: Actions = {
 		}
 
 		setFlash(cookies, 'Two-factor authentication disabled for user.');
-		throw redirect(303, '/settings/users');
+		throw redirect(303, '/users');
 	}
 };

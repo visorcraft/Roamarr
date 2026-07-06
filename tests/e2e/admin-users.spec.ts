@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures';
 
 test('create a user from admin settings', async ({ page }) => {
-	await page.goto('/settings/users', { waitUntil: 'networkidle' });
+	await page.goto('/users', { waitUntil: 'networkidle' });
 	await expect(page.locator('h1')).toContainText('Users');
 
 	await page.getByRole('button', { name: 'Create user', exact: true }).click();

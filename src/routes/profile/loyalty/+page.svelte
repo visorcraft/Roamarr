@@ -45,7 +45,7 @@
 								<label class="label" for={`notes-${p.id}`}>Notes</label>
 								<input id={`notes-${p.id}`} name="notes" value={p.notes ?? ''} class="input" />
 							</div>
-							<div class="mt-3 flex gap-2">
+							<div class="mt-3 flex justify-end gap-2">
 								<CancelButton dirty={dirtyIds[p.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Update</button>
 							</div>
@@ -105,7 +105,7 @@
 			<label class="label" for="notes">Notes</label>
 			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary">Add program</button>
 		</div>
 	</form>

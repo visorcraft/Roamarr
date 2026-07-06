@@ -37,6 +37,6 @@
 				disabled={submitting}
 			/>
 		</div>
-		<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Save password</button>
+		<button class="btn btn-primary justify-self-end" disabled={submitting} class:btn-loading={submitting}>Save password</button>
 	</form>
 </section>

@@ -74,7 +74,7 @@
 									class="input"
 								/>
 							</div>
-							<div class="flex gap-2 sm:col-span-2">
+							<div class="flex justify-end gap-2 sm:col-span-2">
 								<CancelButton dirty={dirtyIds[s.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Save</button>
 							</div>
@@ -118,7 +118,7 @@
 				Enabled
 			</label>
 		</div>
-		<div class="flex items-end">
+		<div class="flex items-end justify-end">
 			<button class="btn btn-primary">Add account</button>
 		</div>
 	</form>

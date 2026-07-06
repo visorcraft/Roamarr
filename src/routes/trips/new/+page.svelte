@@ -120,7 +120,7 @@
 		<TextField name="endDate" label="End date" type="date" disabled={submitting} errors={form?.errors ?? {}} />
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="tags" label="Tags" placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
-		<div class="flex flex-wrap gap-2 sm:col-span-2">
+		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
 			<CancelButton dirty={isDirty} onConfirm={() => goto('/trips')}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Create trip</button>
 		</div>

@@ -66,7 +66,7 @@
 					<option value="admin">Admin</option>
 				</select>
 			</div>
-			<div class="flex items-end sm:col-span-3">
+			<div class="flex items-end justify-end sm:col-span-3">
 				<button class="btn btn-primary">Create account</button>
 			</div>
 		</form>
@@ -246,13 +246,13 @@
 										</div>
 									</div>
 
-									<div class="flex flex-wrap gap-2 border-t border-white/5 pt-4">
+									<div class="flex flex-wrap justify-end gap-2 border-t border-white/5 pt-4">
 										<CancelButton dirty={dirtyIds[user.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 										<button class="btn btn-primary">Save changes</button>
 									</div>
 								</form>
 
-							<form method="POST" action="?/sendReset" class="mt-4 border-t border-white/5 pt-4">
+							<form method="POST" action="?/sendReset" class="mt-4 flex justify-end border-t border-white/5 pt-4">
 								<input type="hidden" name="userId" value={user.id} />
 								<p class="field-help">
 									Send a one-hour password reset link to {user.email}.
@@ -261,7 +261,7 @@
 							</form>
 
 							{#if user.twoFactorEnabled}
-								<form method="POST" action="?/disableTwoFactor" class="mt-3">
+								<form method="POST" action="?/disableTwoFactor" class="mt-3 flex justify-end">
 									<input type="hidden" name="userId" value={user.id} />
 									<p class="field-help">Two-factor authentication is enabled for this user.</p>
 									<button class="btn btn-danger mt-2">Disable user 2FA (admin reset)</button>

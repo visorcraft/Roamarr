@@ -75,7 +75,7 @@
 								<label class="label" for="notes-{d.id}">Notes</label>
 								<input id="notes-{d.id}" name="notes" value={d.notes ?? ''} placeholder="Optional notes" class="input" />
 							</div>
-							<div class="flex items-center gap-2 sm:col-span-2">
+							<div class="flex items-center justify-end gap-2 sm:col-span-2">
 								<CancelButton dirty={dirtyIds[d.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary">Save</button>
 							</div>
@@ -159,7 +159,7 @@
 			<label class="label" for="notes">Notes</label>
 			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary">Add document</button>
 		</div>
 	</form>

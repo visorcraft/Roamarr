@@ -69,13 +69,13 @@
 
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
-<div class="tab-list mt-6">
+<div class="tab-list visited-tab-list mt-6">
 	<a href={href({ tab: null, page: null })} class="tab-link {data.tab === 'visits' ? 'tab-link-active' : ''}">Visits</a>
 	<a href={href({ tab: 'list', page: null })} class="tab-link {data.tab === 'list' ? 'tab-link-active' : ''}">{listLabel}</a>
 </div>
 
 {#if data.tab === 'visits'}
-	<section class="card mt-4 p-5 sm:p-6">
+	<section class="card visited-tab-panel p-5 sm:p-6">
 		<div class="flex flex-wrap items-center gap-3">
 			<form method="GET" action={pageHref} class="flex flex-wrap items-center gap-2">
 				<input class="input w-64" type="search" name="q" value={data.q} placeholder={`Search ${plural}...`} />
@@ -109,7 +109,7 @@
 					<span class="label">Last visited</span>
 					<input type="date" name="lastVisitedOn" value={data.today} class="input" />
 				</label>
-				<div class="flex items-center gap-2 sm:col-span-4">
+				<div class="flex items-center justify-end gap-2 sm:col-span-4">
 					<button type="button" class="btn btn-ghost" onclick={() => (adding = false)}>Cancel</button>
 					<button class="btn btn-primary">Save visit</button>
 				</div>
@@ -147,9 +147,9 @@
 											<span class="label">Last visited</span>
 											<input type="date" name="lastVisitedOn" value={row.lastVisitedOn ?? ''} class="input" />
 										</label>
-										<div class="flex items-end gap-2">
-											<button class="btn btn-primary btn-sm">Save</button>
+										<div class="flex items-end justify-end gap-2">
 											<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingCode = null)}>Cancel</button>
+											<button class="btn btn-primary btn-sm">Save</button>
 										</div>
 									</form>
 								</td>
@@ -193,7 +193,7 @@
 		</div>
 	</section>
 {:else}
-	<section class="card mt-4 p-5 sm:p-6">
+	<section class="card visited-tab-panel p-5 sm:p-6">
 		<div class="mb-4 flex flex-wrap items-center gap-3">
 			<p class="meta">Toggle {plural} you have visited.</p>
 			{#if data.visitedCodes.length > 0}

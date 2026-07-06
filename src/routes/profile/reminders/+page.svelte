@@ -41,7 +41,7 @@
 								required
 							/>
 						</div>
-						<div class="mt-3 flex gap-2">
+						<div class="mt-3 flex justify-end gap-2">
 							<CancelButton dirty={dirtyIds[r.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
 							<button class="btn btn-primary">Update</button>
 						</div>

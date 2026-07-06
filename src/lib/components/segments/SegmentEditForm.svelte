@@ -87,7 +87,7 @@
 	{#if cards?.length}
 		<CardSelect {cards} name="cardId" value={s.cardId} {errors} />
 	{/if}
-	<div class="flex gap-2 sm:col-span-2">
+	<div class="flex justify-end gap-2 sm:col-span-2">
 		<CancelButton dirty={isDirty} onConfirm={onCancel}>Cancel</CancelButton>
 		<button class="btn btn-primary">Save</button>
 	</div>

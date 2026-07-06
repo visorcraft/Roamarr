@@ -886,7 +886,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.action-row {
-		@apply flex flex-wrap items-center gap-2;
+		@apply flex flex-wrap items-center justify-end gap-2;
 	}
 	.form-actions {
 		@apply flex flex-wrap items-center justify-between gap-3 border-t pt-4;
@@ -934,8 +934,7 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 	.tab-list {
-		@apply -mb-px flex max-w-full gap-6 overflow-x-auto border-b border-white/10 text-sm font-medium;
-		border-color: var(--theme-line);
+		@apply inline-flex max-w-full gap-6 overflow-x-auto text-sm font-medium;
 	}
 	.tab-link {
 		@apply whitespace-nowrap border-b-2 border-transparent px-1 pb-3 text-slate-400 transition hover:border-white/20 hover:text-white;
@@ -949,6 +948,13 @@ button.card:hover,
 		@apply border-indigo-400 text-indigo-300 hover:border-indigo-400 hover:text-indigo-300;
 		border-color: var(--theme-brand);
 		color: var(--theme-brand-readable);
+	}
+	.visited-tab-list {
+		@apply relative z-10;
+		background: var(--theme-canvas);
+	}
+	.visited-tab-panel {
+		@apply relative z-0 mt-6;
 	}
 	.code-chip {
 		@apply break-all rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-300 ring-1 ring-white/5;

@@ -147,7 +147,7 @@
 				Webhook notifications
 			</label>
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary" class:btn-loading={submittingProfile} disabled={submittingProfile}>
 				Save profile
 			</button>
@@ -181,7 +181,7 @@
 			<label class="label" for="confirmEmail">Confirm new email</label>
 			<input id="confirmEmail" name="confirmEmail" type="email" class="input" required />
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary" class:btn-loading={submittingEmail} disabled={submittingEmail}>
 				Change email
 			</button>
@@ -215,7 +215,7 @@
 			<label class="label" for="confirmPassword">Confirm new password</label>
 			<input id="confirmPassword" name="confirmPassword" type="password" class="input" required />
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary" class:btn-loading={submittingPassword} disabled={submittingPassword}>
 				Update password
 			</button>
@@ -278,7 +278,7 @@
 		>
 			<label for="calendarExpiresAt" class="label">New URL expires (optional)</label>
 			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
-			<button class="btn btn-primary" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
+			<button class="btn btn-primary self-end" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
 				Regenerate feed URL
 			</button>
 		</form>
@@ -298,7 +298,7 @@
 		>
 			<label for="calendarExpiresAt" class="label">Expires (optional)</label>
 			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
-			<button class="btn btn-primary" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
+			<button class="btn btn-primary self-end" class:btn-loading={submittingCalendar} disabled={submittingCalendar}>
 				Generate feed URL
 			</button>
 		</form>
@@ -350,11 +350,11 @@
 									Primary contact
 								</label>
 							</div>
-							<div class="flex flex-wrap gap-2 sm:col-span-2">
+							<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
+								<CancelButton class="btn btn-ghost btn-sm" dirty={dirtyContactIds[contact.id] ?? false} onConfirm={() => (editingContactId = null)}>Cancel</CancelButton>
 								<button class="btn btn-primary btn-sm" class:btn-loading={submittingEmergency} disabled={submittingEmergency}>
 									Save
 								</button>
-								<CancelButton class="btn btn-ghost btn-sm" dirty={dirtyContactIds[contact.id] ?? false} onConfirm={() => (editingContactId = null)}>Cancel</CancelButton>
 							</div>
 						</form>
 					{:else}
@@ -430,7 +430,7 @@
 				Primary contact
 			</label>
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary" class:btn-loading={submittingEmergency} disabled={submittingEmergency}>
 				Add contact
 			</button>

@@ -1788,7 +1788,7 @@
 										<input name="notes" class="input text-sm" placeholder="General notes (optional)" value={c.notes ?? ''} />
 									{/if}
 									<CancelButton
-										class="btn btn-ghost btn-xs self-start"
+										class="btn btn-ghost btn-xs self-end"
 										dirty={dirtyCompanionIds[c.id] ?? false}
 										onConfirm={() => (editingCompanionId = null)}
 									>

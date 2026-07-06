@@ -98,14 +98,14 @@
 			</div>
 		</div>
 
-		<div class="flex flex-wrap gap-2">
+		<div class="flex flex-wrap justify-end gap-2">
 			<button class="btn btn-primary">Save override</button>
 			<button class="btn btn-ghost" type="submit" formaction="?/testEmail">Send test email</button>
 		</div>
 	</form>
 
 	{#if o}
-		<form method="POST" action="?/disable" class="mt-4">
+		<form method="POST" action="?/disable" class="mt-4 flex justify-end">
 			<ConfirmButton class="btn btn-danger" message="Remove your SMTP override entirely?">
 				Remove override
 			</ConfirmButton>

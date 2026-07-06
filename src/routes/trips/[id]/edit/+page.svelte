@@ -98,7 +98,7 @@
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}}>{data.trip.notes ?? ''}</TextAreaField>
 		<TextField name="tags" label="Tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="baseCurrency" label="Base currency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" disabled={submitting} errors={form?.errors ?? {}} />
-		<div class="flex flex-wrap gap-2 sm:col-span-2">
+		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
 			<CancelButton dirty={isDirty} onConfirm={() => goto(`/trips/${data.trip.id}`)}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>Save changes</button>
 		</div>

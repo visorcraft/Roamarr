@@ -86,7 +86,7 @@
 							<label class="label" for={`notes-${c.id}`}>Notes</label>
 							<input id={`notes-${c.id}`} name="notes" value={c.notes ?? ''} placeholder="Optional notes" class="input" />
 						</div>
-						<div class="flex gap-2 sm:col-span-2">
+						<div class="flex justify-end gap-2 sm:col-span-2">
 							<CancelButton dirty={dirtyCards[c.id] ?? false} onConfirm={() => (editingCardId = null)}>Cancel</CancelButton>
 							<button class="btn btn-primary">Update card</button>
 						</div>
@@ -175,7 +175,7 @@
 						<label class="label" for={`coverageAmount-${c.id}`}>Coverage (cents)</label>
 						<input id={`coverageAmount-${c.id}`} name="coverageAmount" type="number" placeholder="0" class="input" disabled={!!selectedTemplate} />
 					</div>
-					<button class="btn btn-primary">Add benefit</button>
+					<button class="btn btn-primary justify-self-end">Add benefit</button>
 				</form>
 			</section>
 		{/each}
@@ -213,7 +213,7 @@
 			<label class="label" for="notes">Notes</label>
 			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
 		</div>
-		<div class="sm:col-span-2">
+		<div class="flex justify-end sm:col-span-2">
 			<button class="btn btn-primary">Add card</button>
 		</div>
 	</form>

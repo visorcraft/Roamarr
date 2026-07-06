@@ -9,32 +9,72 @@ const outputPath = path.join(root, 'src/lib/server/licenseData.generated.json');
 const PROJECT_LICENSE_NAMES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING', 'COPYING.md'];
 const PACKAGE_LICENSE_RE = /^(licen[cs]e|copying|copyright|notice)(\..*)?$/i;
 
-const runtimeComponents = [
-	{
-		name: 'Node.js runtime',
-		licenses: 'MIT',
-		url: 'https://nodejs.org/',
-		usage: 'Required JavaScript runtime for the SvelteKit adapter-node server.'
+function runtimeComponentsFor(lock) {
+	const components = [
+		{
+			name: 'Node.js runtime',
+			licenses: 'MIT',
+			url: 'https://nodejs.org/',
+			usage: 'Required JavaScript runtime for the SvelteKit adapter-node server.'
+		}
+	];
+
+	for (const packageName of ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit']) {
+		const packagePath = `node_modules/${packageName}`;
+		const packageJsonPath = path.join(root, packagePath, 'package.json');
+		if (!existsSync(packageJsonPath)) continue;
+		const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+		const version = pkg.version ?? lock.packages?.[packagePath]?.version ?? 'unknown';
+		const license = licenseExpression(pkg);
+		const url = normalizeRepository(pkg.repository, pkg.homepage, pkg.bugs);
+		if (packageName === '@visorcraft/mongreldb') {
+			components.push({
+				name: `MongrelDB engine ${version}`,
+				licenses: license,
+				url,
+				usage: 'Native database engine (Rust) bundled in the @visorcraft/mongreldb npm package.'
+			});
+		} else {
+			components.push({
+				name: `MongrelDB Kit ${version}`,
+				licenses: license,
+				url,
+				usage: 'Schema/query-builder layer (TypeScript/Rust/Python) bundled in the @visorcraft/mongreldb-kit npm package.'
+			});
+		}
 	}
-];
 
-const runtimeLicensesText = `Runtime components
-==================
+	return components;
+}
 
-Roamarr is a Node.js application. These runtime components are required for
-common source builds and deployments, but most are provided by the host operating
-system rather than by Roamarr source code.
-
-Node.js runtime
----------------
-License: MIT
-Project: https://nodejs.org/
-Usage: Required JavaScript runtime for the SvelteKit adapter-node server.
-
-Node.js itself carries its own bundled third-party notices. For the complete
-notice set for the exact Node.js binary you distribute, include the LICENSE file
-shipped by that Node.js release.
-`;
+function buildRuntimeLicensesText(components) {
+	const lines = [
+		'Runtime components',
+		'==================',
+		'',
+		'Roamarr is a Node.js application. These runtime components are required for',
+		'common source builds and deployments, but most are provided by the host operating',
+		'system rather than by Roamarr source code. The @visorcraft/mongreldb and',
+		'@visorcraft/mongreldb-kit packages bundle Rust crates that power the database',
+		'engine and persistence layer.',
+		''
+	];
+	for (const component of components) {
+		const title = component.name;
+		lines.push(title);
+		lines.push('-'.repeat(title.length));
+		lines.push(`License: ${component.licenses}`);
+		lines.push(`Project: ${component.url}`);
+		lines.push(`Usage: ${component.usage}`);
+		lines.push('');
+	}
+	lines.push(
+		'Node.js itself carries its own bundled third-party notices. For the complete',
+		'notice set for the exact Node.js binary you distribute, include the LICENSE file',
+		'shipped by that Node.js release.'
+	);
+	return lines.join('\n');
+}
 
 function readJson(file) {
 	return JSON.parse(readFileSync(path.join(root, file), 'utf8'));
@@ -227,14 +267,16 @@ ${sections}
 `;
 }
 
-function buildAcknowledgementsText(packages) {
+function buildAcknowledgementsText(packages, components) {
 	const production = packages.filter((pkg) => pkg.scope === 'production').length;
 	const development = packages.length - production;
 	return `Credits and attribution
 =======================
 
 Roamarr is built with SvelteKit, Svelte, MongrelDB Kit, Tailwind CSS,
-Vitest, and the wider npm ecosystem.
+Vitest, and the wider npm ecosystem. The @visorcraft/mongreldb and
+@visorcraft/mongreldb-kit packages bundle Rust crates that provide the
+MongrelDB database engine and persistence layer.
 
 This attribution bundle was generated from package-lock.json and the installed
 package metadata in node_modules.
@@ -245,11 +287,12 @@ Package summary
 - Total npm packages listed here: ${packages.length}
 - Production/runtime packages: ${production}
 - Development/build/test packages: ${development}
+- Runtime components: ${components.length}
 
 Runtime components
 ------------------
 
-${runtimeComponents.map((component) => `- ${component.name}: ${component.licenses} (${component.url})`).join('\n')}
+${components.map((component) => `- ${component.name}: ${component.licenses} (${component.url})`).join('\n')}
 
 Reporting attribution gaps
 --------------------------
@@ -274,8 +317,10 @@ const rootPackage = readJson('package.json');
 const lock = readJson('package-lock.json');
 const packages = packageRows(lock);
 const projectLicense = findProjectLicense(rootPackage);
+const runtimeComponents = runtimeComponentsFor(lock);
 const thirdPartyLicensesText = buildThirdPartyText(packages);
-const acknowledgementsText = buildAcknowledgementsText(packages);
+const acknowledgementsText = buildAcknowledgementsText(packages, runtimeComponents);
+const runtimeLicensesText = buildRuntimeLicensesText(runtimeComponents);
 const lockHash = createHash('sha256').update(readFileSync(path.join(root, 'package-lock.json'))).digest('hex');
 
 const output = {

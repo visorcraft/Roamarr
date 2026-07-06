@@ -25,10 +25,6 @@
 	}
 
 	$effect(() => {
-		selectedThemeId = data.user.themeId;
-	});
-
-	$effect(() => {
 		applyThemePreview(selectedThemeId);
 	});
 
@@ -118,7 +114,8 @@
 							type="radio"
 							name="themeId"
 							value={theme.id}
-							bind:group={selectedThemeId}
+							checked={selectedThemeId === theme.id}
+							onchange={() => (selectedThemeId = theme.id)}
 						/>
 						<span class="theme-option-preview theme-preview" data-theme={theme.id} aria-hidden="true">
 							<span class="theme-option-sidebar"></span>

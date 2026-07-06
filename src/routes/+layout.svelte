@@ -72,7 +72,7 @@
 	}
 
 	function isExpanded(label: string) {
-		return expanded[label] ?? true;
+		return expanded[label] ?? false;
 	}
 
 	function sectionId(label: string) {
@@ -83,9 +83,17 @@
 		return `nav-item-children-${label.toLowerCase().replace(/\s+/g, '-')}`;
 	}
 
+	function setExpandedSection(label: string | null) {
+		const next: Record<string, boolean> = {};
+		for (const section of visibleSections) {
+			next[section.label] = section.label === label;
+		}
+		expanded = next;
+		writeStoredSections(next);
+	}
+
 	function toggleSection(label: string) {
-		expanded[label] = !isExpanded(label);
-		writeStoredSections(expanded);
+		setExpandedSection(isExpanded(label) ? null : label);
 	}
 
 	function closeUserMenu() {
@@ -161,15 +169,13 @@
 	$effect(() => {
 		if (!browser) return;
 		const path = page.url.pathname;
+		const activeSection = visibleSections.find((section) => section.items.some((item) => itemActive(item)));
+		if (activeSection) {
+			// Expand only the active section and collapse all others. This runs
+			// on route changes and overrides any manually-expanded sections.
+			setExpandedSection(activeSection.label);
+		}
 		for (const section of visibleSections) {
-			if (section.items.some((item) => itemActive(item))) {
-				// Read expansion state without tracking it; this effect should only
-				// react to route changes, not to manual toggles.
-				if (!untrack(() => isExpanded(section.label))) {
-					expanded[section.label] = true;
-					writeStoredSections(expanded);
-				}
-			}
 			for (const item of section.items) {
 				if (item.children?.some((child) => isActive(child.href))) {
 					if (!untrack(() => isItemExpanded(item.label))) {

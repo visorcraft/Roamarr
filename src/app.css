@@ -1070,7 +1070,7 @@ button.card:hover,
 		background-color: var(--theme-primary-bottom);
 		background-image: linear-gradient(180deg, var(--theme-primary-top), var(--theme-primary-bottom));
 		box-shadow:
-			0 12px 24px var(--theme-primary-shadow),
+			0 6px 12px var(--theme-primary-shadow),
 			inset 0 0 0 1px var(--theme-primary-border);
 		color: var(--theme-primary-text);
 	}
@@ -1100,7 +1100,7 @@ button.card:hover,
 		@apply text-white active:translate-y-px;
 		background-image: linear-gradient(180deg, var(--theme-danger-top), var(--theme-danger-bottom));
 		box-shadow:
-			0 6px 12px color-mix(in oklab, var(--theme-danger-shadow) 30%, transparent),
+			0 3px 6px color-mix(in oklab, var(--theme-danger-shadow) 30%, transparent),
 			inset 0 0 0 1px color-mix(in oklab, var(--theme-danger-border) 30%, transparent);
 		color: var(--theme-danger-text);
 	}

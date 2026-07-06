@@ -15,87 +15,68 @@ test.describe('desktop sidebar', () => {
 		await page.reload({ waitUntil: 'networkidle' });
 	});
 
-	test('defaults collapsed except the active section', async ({ page }) => {
-		// On the dashboard, Plan is the active section and should be expanded.
-		await expect(getSectionHeader(page, 'Plan')).toHaveAttribute('aria-expanded', 'true');
-		await expect(getSectionItems(page, 'Plan')).toBeVisible();
-
-		for (const label of ['Me', 'Organizer']) {
+	test('defaults expanded and admin section is visible', async ({ page }) => {
+		for (const label of ['Plan', 'Me', 'Organizer']) {
 			const header = getSectionHeader(page, label);
-			await expect(header).toHaveAttribute('aria-expanded', 'false');
-			await expect(getSectionItems(page, label)).toHaveClass(/hidden/);
+			await expect(header).toHaveAttribute('aria-expanded', 'true');
+			await expect(getSectionItems(page, label)).toBeVisible();
 		}
 
 		await expect(getSection(page, 'Admin')).toBeVisible();
-		await expect(getSectionHeader(page, 'Admin')).toHaveAttribute('aria-expanded', 'false');
+		await expect(getSectionHeader(page, 'Admin')).toHaveAttribute('aria-expanded', 'true');
 	});
 
-	test('clicking a section header collapses and expands it', async ({ page }) => {
+	test('clicking a section header collapses and expands it independently', async ({ page }) => {
 		const planHeader = getSectionHeader(page, 'Plan');
 		const planItems = getSectionItems(page, 'Plan');
 		const meHeader = getSectionHeader(page, 'Me');
 		const meItems = getSectionItems(page, 'Me');
 
-		// Plan starts expanded on the dashboard.
+		// All sections start expanded.
 		await expect(planHeader).toHaveAttribute('aria-expanded', 'true');
 		await expect(planItems).toBeVisible();
-		await expect(meHeader).toHaveAttribute('aria-expanded', 'false');
+		await expect(meHeader).toHaveAttribute('aria-expanded', 'true');
+		await expect(meItems).toBeVisible();
 
-		// Collapsing Plan leaves all sections collapsed.
+		// Collapsing Plan does not affect Me.
 		await planHeader.click();
 		await expect(planHeader).toHaveAttribute('aria-expanded', 'false');
 		await expect(planItems).toHaveClass(/hidden/);
-
-		// Expanding Me automatically collapses any other section.
-		await meHeader.click();
 		await expect(meHeader).toHaveAttribute('aria-expanded', 'true');
 		await expect(meItems).toBeVisible();
-		await expect(planHeader).toHaveAttribute('aria-expanded', 'false');
-		await expect(planItems).toHaveClass(/hidden/);
 
-		// Clicking Me again collapses it.
-		await meHeader.click();
-		await expect(meHeader).toHaveAttribute('aria-expanded', 'false');
-		await expect(meItems).toHaveClass(/hidden/);
+		// Expanding Plan does not collapse Me.
+		await planHeader.click();
+		await expect(planHeader).toHaveAttribute('aria-expanded', 'true');
+		await expect(planItems).not.toHaveClass(/hidden/);
+		await expect(meHeader).toHaveAttribute('aria-expanded', 'true');
+		await expect(meItems).toBeVisible();
 	});
 
-	test('active section expands automatically and only one section is expanded', async ({ page }) => {
-		// On the dashboard only Plan is expanded.
-		await expect(getSectionHeader(page, 'Plan')).toHaveAttribute('aria-expanded', 'true');
-		for (const label of ['Me', 'Organizer', 'Admin']) {
-			await expect(getSectionHeader(page, label)).toHaveAttribute('aria-expanded', 'false');
-		}
-
-		// Manually expand Me; Plan should collapse so only Me is expanded.
-		await getSectionHeader(page, 'Me').click();
-		await expect(getSectionHeader(page, 'Me')).toHaveAttribute('aria-expanded', 'true');
-		await expect(getSectionHeader(page, 'Plan')).toHaveAttribute('aria-expanded', 'false');
-
-		// Navigate to a route in Organizer; it expands and all others collapse.
-		await page.goto('/cards', { waitUntil: 'networkidle' });
-		await expect(getSectionHeader(page, 'Organizer')).toHaveAttribute('aria-expanded', 'true');
-		for (const label of ['Plan', 'Me', 'Admin']) {
-			await expect(getSectionHeader(page, label)).toHaveAttribute('aria-expanded', 'false');
-		}
-
-		// Reloading the page restores the same single-expanded state.
-		await page.reload({ waitUntil: 'networkidle' });
-		await expect(getSectionHeader(page, 'Organizer')).toHaveAttribute('aria-expanded', 'true');
-		for (const label of ['Plan', 'Me', 'Admin']) {
-			await expect(getSectionHeader(page, label)).toHaveAttribute('aria-expanded', 'false');
-		}
-	});
-
-	test('navigating to a route inside a collapsed section expands it automatically', async ({ page }) => {
+	test('navigating to a route inside a collapsed section expands it without collapsing others', async ({ page }) => {
 		await collapseSidebarSection(page, 'Plan');
 		await expect(getSectionHeader(page, 'Plan')).toHaveAttribute('aria-expanded', 'false');
-		await getSectionHeader(page, 'Me').click();
-		await expect(getSectionHeader(page, 'Me')).toHaveAttribute('aria-expanded', 'true');
 
 		await page.goto('/trips', { waitUntil: 'networkidle' });
 		await expect(getSectionHeader(page, 'Plan')).toHaveAttribute('aria-expanded', 'true');
 		await expect(getSectionItems(page, 'Plan')).toBeVisible();
-		await expect(getSectionHeader(page, 'Me')).toHaveAttribute('aria-expanded', 'false');
+		// Other sections remain in their previous state.
+		await expect(getSectionHeader(page, 'Me')).toHaveAttribute('aria-expanded', 'true');
+	});
+
+	test('Visited toggle is a single button with integrated chevron', async ({ page }) => {
+		const visitedButton = page.locator('button[aria-controls="nav-item-children-visited"]');
+		await expect(visitedButton).toHaveCount(1);
+		await expect(visitedButton).toHaveAttribute('aria-expanded', 'false');
+
+		// There should be no separate toggle button next to the Visited link.
+		const visitedLink = page.locator('a[href="/profile/visited"]');
+		await expect(visitedLink).toHaveCount(0);
+
+		await visitedButton.click();
+		await expect(visitedButton).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.locator('a[href="/profile/visited/countries"]')).toBeVisible();
+		await expect(page.locator('a[href="/profile/visited/states"]')).toBeVisible();
 	});
 
 	test('unread notifications badge moves to Plan header when collapsed', async ({ page }) => {

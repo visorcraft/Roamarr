@@ -72,7 +72,7 @@
 	}
 
 	function isExpanded(label: string) {
-		return expanded[label] ?? false;
+		return expanded[label] ?? true;
 	}
 
 	function sectionId(label: string) {
@@ -83,17 +83,9 @@
 		return `nav-item-children-${label.toLowerCase().replace(/\s+/g, '-')}`;
 	}
 
-	function setExpandedSection(label: string | null) {
-		const next: Record<string, boolean> = {};
-		for (const section of visibleSections) {
-			next[section.label] = section.label === label;
-		}
-		expanded = next;
-		writeStoredSections(next);
-	}
-
 	function toggleSection(label: string) {
-		setExpandedSection(isExpanded(label) ? null : label);
+		expanded[label] = !isExpanded(label);
+		writeStoredSections(expanded);
 	}
 
 	function closeUserMenu() {
@@ -169,13 +161,15 @@
 	$effect(() => {
 		if (!browser) return;
 		const path = page.url.pathname;
-		const activeSection = visibleSections.find((section) => section.items.some((item) => itemActive(item)));
-		if (activeSection) {
-			// Expand only the active section and collapse all others. This runs
-			// on route changes and overrides any manually-expanded sections.
-			setExpandedSection(activeSection.label);
-		}
 		for (const section of visibleSections) {
+			if (section.items.some((item) => itemActive(item))) {
+				// Read expansion state without tracking it; this effect should only
+				// react to route changes, not to manual toggles.
+				if (!untrack(() => isExpanded(section.label))) {
+					expanded[section.label] = true;
+					writeStoredSections(expanded);
+				}
+			}
 			for (const item of section.items) {
 				if (item.children?.some((child) => isActive(child.href))) {
 					if (!untrack(() => isItemExpanded(item.label))) {
@@ -464,7 +458,7 @@
 							type="button"
 							aria-expanded={sectionExpanded}
 							aria-controls={sectionItemsId}
-							class="app-nav-section-header flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide"
+							class="app-nav-section-header flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide"
 							onclick={() => toggleSection(section.label)}
 						>
 							<span class="flex-1">{section.label}</span>
@@ -482,35 +476,25 @@
 								{#if item.children}
 									{@const itemExpanded = isItemExpanded(item.label)}
 									{@const childrenId = itemChildrenId(item.label)}
-									<div class="flex items-center gap-1">
-										<a
-											href={item.href}
-											onclick={() => (open = false)}
-											aria-current={active ? 'page' : undefined}
-											class="flex flex-1 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition {active
-												? 'app-nav-item-active'
-												: 'app-nav-item'}"
-										>
-											<Icon
-												name={item.icon}
-												class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
-											/>
-											<span class="flex-1">{item.label}</span>
-										</a>
-										<button
-											type="button"
-											onclick={() => toggleItem(item.label)}
-											aria-expanded={itemExpanded}
-											aria-controls={childrenId}
-											aria-label="Toggle {item.label}"
-											class="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-ink/70 transition hover:bg-surface2"
-										>
-											<Icon
-												name="chevron-down"
-												class="h-4 w-4 transition-transform {itemExpanded ? 'rotate-180' : ''}"
-											/>
-										</button>
-									</div>
+									<button
+										type="button"
+										onclick={() => toggleItem(item.label)}
+										aria-expanded={itemExpanded}
+										aria-controls={childrenId}
+										class="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition {active
+											? 'app-nav-item-active'
+											: 'app-nav-item'}"
+									>
+										<Icon
+											name={item.icon}
+											class="h-5 w-5 {active ? 'app-nav-icon-active' : ''}"
+										/>
+										<span class="flex-1">{item.label}</span>
+										<Icon
+											name="chevron-down"
+											class="app-nav-chevron h-4 w-4 transition-transform {itemExpanded ? 'rotate-180' : ''}"
+										/>
+									</button>
 									{#if itemExpanded}
 										<div id={childrenId} class="ml-8 space-y-1">
 											{#each item.children as child (child.href)}

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import PasswordStrength from '$lib/components/PasswordStrength.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 
 	let { data, form } = $props();
 
@@ -53,7 +54,7 @@
 				</div>
 				<div class="field">
 					<label class="label" for="timezone">Timezone</label>
-					<input id="timezone" bind:value={timezone} class="input" placeholder="America/New_York" />
+					<TimezoneSelect id="timezone" name="timezone" bind:value={timezone} class="input" />
 				</div>
 
 				<div class="rounded border p-4 mt-2">
@@ -80,7 +81,7 @@
 				</div>
 
 				<div class="flex gap-3">
-					<button type="button" class="btn btn-primary flex-1" onclick={() => location.reload()}>Re-check</button>
+					<button type="button" class="btn btn-danger flex-1" onclick={() => location.reload()}>Re-check</button>
 					<button type="button" class="btn btn-primary flex-1" disabled={!canContinue} onclick={() => step = 2}>Continue</button>
 				</div>
 			</div>

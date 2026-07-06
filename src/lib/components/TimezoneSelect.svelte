@@ -9,7 +9,7 @@
 		class?: string;
 	}
 
-	let { id, name, value = 'UTC', required = false, class: className = '' }: Props = $props();
+	let { id, name, value = $bindable('UTC'), required = false, class: className = '' }: Props = $props();
 
 	const zones = $derived.by(() => {
 		try {
@@ -22,9 +22,13 @@
 			return ['UTC'];
 		}
 	});
+
+	function onChange(e: Event) {
+		value = (e.currentTarget as HTMLSelectElement).value;
+	}
 </script>
 
-<select {id} {name} {required} class={className} {value}>
+<select {id} {name} {required} class={className} {value} onchange={onChange}>
 	{#each zones as zone (zone)}
 		<option value={zone}>{zone}</option>
 	{/each}

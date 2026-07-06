@@ -26,6 +26,7 @@ export interface SeederOptions {
 	baseCurrency?: string;
 	timezone?: string;
 	role?: 'admin' | 'user';
+	displayName?: string;
 }
 
 interface TripDef extends CreateTripInput {
@@ -39,6 +40,7 @@ export class DatabaseSeeder {
 	private baseCurrency: string;
 	private timezone: string;
 	private role: 'admin' | 'user';
+	private displayName: string;
 	private userId!: number;
 
 	constructor(opts: SeederOptions) {
@@ -48,6 +50,7 @@ export class DatabaseSeeder {
 		this.baseCurrency = opts.baseCurrency ?? 'USD';
 		this.timezone = opts.timezone ?? 'UTC';
 		this.role = opts.role ?? 'admin';
+		this.displayName = opts.displayName ?? 'Seed User';
 	}
 
 	async run() {
@@ -71,7 +74,7 @@ export class DatabaseSeeder {
 		const user = usersRepo.createUser({
 			email: this.email,
 			password_hash: await hashPassword(this.password),
-			display_name: 'Ciamos',
+			display_name: this.displayName,
 			role: this.role,
 			timezone: this.timezone,
 			default_currency: this.baseCurrency,

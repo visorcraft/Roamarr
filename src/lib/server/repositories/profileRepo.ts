@@ -12,6 +12,7 @@ import {
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { sanitizeLast4 } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
+import { compareRows } from '$lib/server/sortUtils';
 import type { Row, Insert, Update, ColumnSpec } from '@visorcraft/mongreldb-kit';
 
 function toBigInt(id: number): bigint {
@@ -378,6 +379,52 @@ export function listCards(userId: number): Card[] {
 		.orderBy(desc(cards.id))
 		.executeSync();
 	return rows.map(toCard);
+}
+
+export interface ListCardsOptions {
+	search?: string;
+	sortBy?: 'nickname' | 'network' | 'last4';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+export function listCardsPaginated(userId: number, opts: ListCardsOptions = {}): Card[] {
+	let rows = listCards(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(c) =>
+				c.nickname.toLowerCase().includes(q) ||
+				c.network.toLowerCase().includes(q) ||
+				(c.last4?.toLowerCase().includes(q) ?? false)
+		);
+	}
+	const sortBy = opts.sortBy ?? 'nickname';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countCards(userId: number, search?: string): number {
+	if (!search?.trim()) {
+		return Number(
+			kit
+				.selectFrom(cards)
+				.where(eq(cards.user_id, toBigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	const q = search.trim().toLowerCase();
+	return listCards(userId).filter(
+		(c) =>
+			c.nickname.toLowerCase().includes(q) ||
+			c.network.toLowerCase().includes(q) ||
+			(c.last4?.toLowerCase().includes(q) ?? false)
+	).length;
 }
 
 export function getCardById(id: number, userId: number): Card | null {

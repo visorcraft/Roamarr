@@ -41,6 +41,7 @@ export interface AuditFilters {
 	entityType?: string;
 	from?: string;
 	to?: string;
+	search?: string;
 	limit?: number;
 	offset?: number;
 }
@@ -117,12 +118,10 @@ function hydrateUsers(userIds: number[]): Map<number, { id: number; email: strin
 export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	const limit = filters.limit ?? 100;
 	const offset = filters.offset ?? 0;
+	const search = filters.search?.trim().toLowerCase();
 
 	const conditions = buildKitConditions(filters);
 	const where = conditions.length ? kitAnd(...conditions) : undefined;
-
-	const countQuery = kit.selectFrom(kitAuditLogs).selectCount();
-	const total = Number((where ? countQuery.where(where) : countQuery).executeSync());
 
 	let rowsQuery = kit
 		.selectFrom(kitAuditLogs)
@@ -130,12 +129,12 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	if (where) {
 		rowsQuery = rowsQuery.where(where);
 	}
-	const rows = rowsQuery.limit(limit).offset(offset).executeSync();
+	const rows = rowsQuery.executeSync();
 
 	const userIds = rows.map((r) => idFromBigInt(r.user_id));
 	const userMap = hydrateUsers(userIds);
 
-	const logs = rows.map((r) => ({
+	let logs = rows.map((r) => ({
 		id: idFromBigInt(r.id),
 		action: r.action,
 		entityType: r.entity_type,
@@ -149,7 +148,23 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 		}
 	}));
 
-	return { logs, total };
+	if (search) {
+		logs = logs.filter((l) => {
+			const haystack = [
+				l.action,
+				l.entityType,
+				l.user.email,
+				l.user.displayName,
+				JSON.stringify(l.meta)
+			]
+				.join(' ')
+				.toLowerCase();
+			return haystack.includes(search);
+		});
+	}
+
+	const total = logs.length;
+	return { logs: logs.slice(offset, offset + limit), total };
 }
 
 function csvCell(value: unknown) {

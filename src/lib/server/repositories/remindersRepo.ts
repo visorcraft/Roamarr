@@ -16,6 +16,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { nowIso } from '$lib/server/tz';
+import { compareRows } from '$lib/server/sortUtils';
 
 export interface ReminderRow {
 	id: number;
@@ -397,6 +398,47 @@ export function listRecentSchedulerRuns(limit: number): SchedulerRunRow[] {
 		.executeSync()
 		.slice(0, limit)
 		.map(toSchedulerRunRow);
+}
+
+export interface ListSchedulerRunsOptions {
+	search?: string;
+	sortBy?: 'startedAt';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): SchedulerRunRow[] {
+	let rows = kit
+		.selectFrom(kitSchedulerRuns)
+		.orderBy(kitDesc(kitSchedulerRuns.started_at), kitDesc(kitSchedulerRuns.id))
+		.executeSync()
+		.map(toSchedulerRunRow);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(r) =>
+				r.startedAt.toLowerCase().includes(q) ||
+				(r.finishedAt?.toLowerCase().includes(q) ?? false) ||
+				(r.errorMessage?.toLowerCase().includes(q) ?? false) ||
+				(q === 'success' && r.success) ||
+				(q === 'failure' && !r.success)
+		);
+	}
+	const sortBy = opts.sortBy ?? 'startedAt';
+	const sortDir = opts.sortDir ?? 'desc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countSchedulerRuns(search?: string): number {
+	if (!search?.trim()) {
+		return Number(kit.selectFrom(kitSchedulerRuns).selectCount().executeSync());
+	}
+	const q = search.trim().toLowerCase();
+	return listSchedulerRuns({ search: q }).length;
 }
 
 export function pruneOldSchedulerRuns(before: string): bigint {

@@ -18,6 +18,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { nowIso } from '$lib/server/tz';
+import { compareRows } from '$lib/server/sortUtils';
 
 // ============================================================================
 // GeoNames cities
@@ -214,6 +215,53 @@ export function listFareProvidersForUser(userId: number): FareProviderAccount[] 
 		.orderBy(asc(fareProviders.id))
 		.executeSync();
 	return rows.map(toFareProviderAccount);
+}
+
+export interface ListFareProvidersOptions {
+	search?: string;
+	sortBy?: 'providerKey' | 'label' | 'enabled';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+export function listFareProvidersForUserPaginated(
+	userId: number,
+	opts: ListFareProvidersOptions = {}
+): FareProviderAccount[] {
+	let rows = listFareProvidersForUser(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(p) =>
+				p.providerKey.toLowerCase().includes(q) ||
+				p.label.toLowerCase().includes(q)
+		);
+	}
+	const sortBy = opts.sortBy ?? 'label';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countFareProvidersForUser(userId: number, search?: string): number {
+	if (!search?.trim()) {
+		return Number(
+			kit
+				.selectFrom(fareProviders)
+				.where(eq(fareProviders.user_id, BigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	const q = search.trim().toLowerCase();
+	return listFareProvidersForUser(userId).filter(
+		(p) =>
+			p.providerKey.toLowerCase().includes(q) ||
+			p.label.toLowerCase().includes(q)
+	).length;
 }
 
 export function getFareProviderById(id: number): FareProviderAccount | null {

@@ -1,5 +1,6 @@
 import { eq as kitEq, and as kitAnd, and, inList, asc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
+import { compareRows } from '$lib/server/sortUtils';
 import {
 	users as usersTable,
 	trips,
@@ -548,6 +549,57 @@ export function listGroupsForUser(userId: number): Group[] {
 	}
 
 	return [...owned, ...memberGroups].map(toGroup);
+}
+
+export interface ListGroupsOptions {
+	search?: string;
+	sortBy?: 'name' | 'createdAt';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+export function listGroupsForUserPaginated(
+	userId: number,
+	opts: ListGroupsOptions = {}
+): Group[] {
+	let rows = listGroupsForUser(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter((g) => g.name.toLowerCase().includes(q));
+	}
+	const sortBy = opts.sortBy ?? 'name';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countGroupsForUser(userId: number, search?: string): number {
+	if (!search?.trim()) {
+		const owned = kit
+			.selectFrom(groups)
+			.where(kitEq(groups.owner_id, kitId(userId)))
+			.selectCount()
+			.executeSync();
+		const memberships = kit
+			.selectFrom(groupMembers)
+			.where(kitEq(groupMembers.user_id, kitId(userId)))
+			.executeSync();
+		const memberIds = memberships.map((m) => m.group_id);
+		const memberCount =
+			memberIds.length === 0
+				? 0
+				: kit
+						.selectFrom(groups)
+						.where(inList(groups.id, memberIds))
+						.selectCount()
+						.executeSync();
+		return Number(owned) + Number(memberCount);
+	}
+	const q = search.trim().toLowerCase();
+	return listGroupsForUser(userId).filter((g) => g.name.toLowerCase().includes(q)).length;
 }
 
 export function createGroup(input: CreateGroupInput): Group {

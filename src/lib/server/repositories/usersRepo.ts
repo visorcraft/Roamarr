@@ -1,6 +1,7 @@
 import { eq as kitEq, and, ne, lt, asc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
+import { compareRows } from '$lib/server/sortUtils';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 
 export type KitUser = Row<typeof users>;
@@ -30,8 +31,51 @@ export function listAllUsers(): KitUser[] {
 	return kit.selectFrom(users).orderBy(asc(users.email)).executeSync();
 }
 
-export function countUsers(): number {
-	return Number(kit.selectFrom(users).selectCount().executeSync());
+export interface ListUsersOptions {
+	search?: string;
+	sortBy?: 'email' | 'displayName' | 'role' | 'createdAt';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+const USER_SORT_KEY_MAP: Record<NonNullable<ListUsersOptions['sortBy']>, keyof KitUser> = {
+	email: 'email',
+	displayName: 'display_name',
+	role: 'role',
+	createdAt: 'created_at'
+};
+
+export function listUsers(opts: ListUsersOptions = {}): KitUser[] {
+	let rows = listAllUsers();
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(u) =>
+				u.email.toLowerCase().includes(q) ||
+				(u.display_name?.toLowerCase().includes(q) ?? false) ||
+				u.role.toLowerCase().includes(q)
+		);
+	}
+	const sortBy = opts.sortBy ?? 'email';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, USER_SORT_KEY_MAP[sortBy], sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countUsers(search?: string): number {
+	if (!search?.trim()) {
+		return Number(kit.selectFrom(users).selectCount().executeSync());
+	}
+	const q = search.trim().toLowerCase();
+	return listAllUsers().filter(
+		(u) =>
+			u.email.toLowerCase().includes(q) ||
+			(u.display_name?.toLowerCase().includes(q) ?? false) ||
+			u.role.toLowerCase().includes(q)
+	).length;
 }
 
 export function getUserById(id: number): KitUser | null {

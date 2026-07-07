@@ -2,6 +2,7 @@ import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { adminDisableTwoFactor, isTwoFactorEnabled } from '$lib/server/twoFactor';
 import { adminSendPasswordReset, adminUpdateUser } from '$lib/server/users';
@@ -51,8 +52,12 @@ function parseUpdate(formData: FormData) {
 }
 
 export const actions: Actions = {
-	update: async ({ params, request, locals, cookies }) => {
+	update: async ({ params, request, locals, cookies, getClientAddress }) => {
 		const admin = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'users:update');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		const id = Number(params.id);
 		if (!Number.isInteger(id) || id <= 0) throw error(404, 'Not found');
 
@@ -69,8 +74,12 @@ export const actions: Actions = {
 		throw redirect(303, '/users');
 	},
 
-	sendReset: async ({ params, locals, cookies, url }) => {
+	sendReset: async ({ params, locals, cookies, url, getClientAddress }) => {
 		const admin = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'users:sendReset');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		const id = Number(params.id);
 		if (!Number.isInteger(id) || id <= 0) throw error(404, 'Not found');
 
@@ -85,8 +94,12 @@ export const actions: Actions = {
 		throw redirect(303, '/users');
 	},
 
-	disableTwoFactor: async ({ params, locals, cookies }) => {
+	disableTwoFactor: async ({ params, locals, cookies, getClientAddress }) => {
 		const admin = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'users:disableTwoFactor');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		const id = Number(params.id);
 		if (!Number.isInteger(id) || id <= 0) throw error(404, 'Not found');
 
@@ -96,7 +109,6 @@ export const actions: Actions = {
 			return fail(400, { error: e instanceof Error ? e.message : 'Could not disable 2FA.' });
 		}
 
-		logAudit(admin.id, 'user_2fa_disabled', 'user', id);
 		setFlash(cookies, 'Two-factor authentication disabled for user.');
 		throw redirect(303, '/users');
 	}

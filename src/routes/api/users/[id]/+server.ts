@@ -17,7 +17,8 @@ export const DELETE: RequestHandler = async ({ params, locals, getClientAddress 
 	try {
 		await adminDeleteUser(admin.id, id);
 	} catch (e) {
-		throw error(400, e instanceof Error ? e.message : 'Could not delete user.');
+		const message = e instanceof Error ? e.message : 'Could not delete user.';
+		throw error(message === 'User not found.' ? 404 : 400, message);
 	}
 
 	return new Response(null, { status: 204 });

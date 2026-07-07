@@ -17,6 +17,7 @@ vi.mock('$lib/server/notify', () => ({
 
 beforeEach(() => {
 	ctx.kit.deleteFrom(users).executeSync();
+	resetRateLimit();
 });
 
 afterAll(() => {
@@ -27,11 +28,13 @@ import { load, actions } from './+page.server';
 import { users } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeAdminLocals, makeUserLocals } from '../../../../tests/eventHelpers';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 function event(user: { id: number } | null, body?: FormData) {
 	return {
 		locals: { user } as App.Locals,
-		request: body ? ({ formData: async () => body } as Request) : undefined
+		request: body ? ({ formData: async () => body } as Request) : undefined,
+		getClientAddress: () => '127.0.0.1'
 	} as any;
 }
 

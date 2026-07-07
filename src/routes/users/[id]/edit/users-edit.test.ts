@@ -20,6 +20,7 @@ beforeEach(() => {
 	ctx.kit.deleteFrom(twoFactorBackupCodes).executeSync();
 	ctx.kit.deleteFrom(users).executeSync();
 	ctx.kit.deleteFrom(auditLogs).executeSync();
+	resetRateLimit();
 });
 
 afterAll(() => {
@@ -34,6 +35,7 @@ import { makeKitUser } from '../../../../../tests/kitHelpers';
 import * as OTPAuth from 'otpauth';
 import { generateSecret, enableTwoFactor, isTwoFactorEnabled } from '$lib/server/twoFactor';
 import { deliver } from '$lib/server/notify';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 function validToken(secret: string): string {
 	return new OTPAuth.TOTP({
@@ -51,7 +53,8 @@ function event(user: { id: number } | null, params: Record<string, string>, body
 		params,
 		request: body ? ({ formData: async () => body } as Request) : undefined,
 		url: new URL('https://roamarr.test/users/1/edit'),
-		cookies: { set: vi.fn() }
+		cookies: { set: vi.fn() },
+		getClientAddress: () => '127.0.0.1'
 	} as any;
 }
 
@@ -193,5 +196,5 @@ test('disableTwoFactor removes 2FA for another user', async () => {
 
 	expect(isTwoFactorEnabled(Number(target.id))).toBe(false);
 	const logs = ctx.kit.selectFrom(auditLogs).executeSync();
-	expect(logs.some((l) => l.action === 'user_2fa_disabled')).toBe(true);
+	expect(logs.some((l) => l.action === 'two_factor_admin_disable')).toBe(true);
 });

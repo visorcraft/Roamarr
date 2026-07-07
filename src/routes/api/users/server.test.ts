@@ -1,15 +1,29 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ kit: null as never }));
+const ctx = vi.hoisted(() => ({
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
+	close: null as unknown as () => void
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
-	Object.assign(ctx, freshDb());
-	return ctx;
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
 });
 
 import { GET } from './+server';
 import { makeAdmin, makeUser } from '../../../../tests/helpers';
-import { userTwoFactor } from '$lib/server/db/mongrelSchema';
+import { resetRateLimit } from '$lib/server/rateLimit';
+import { userTwoFactor, users } from '$lib/server/db/mongrelSchema';
+
+beforeEach(() => {
+	ctx.kit.deleteFrom(users).executeSync();
+	resetRateLimit();
+});
+
+afterAll(() => {
+	ctx.close();
+});
 
 function makeEvent(url: string, user: unknown) {
 	return {

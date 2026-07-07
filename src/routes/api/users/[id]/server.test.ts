@@ -71,3 +71,11 @@ test('delete rejects invalid id', async () => {
 	const admin = makeAdmin(ctx.kit, { email: 'admin@x.c' });
 	await expect(DELETE(makeEvent({ id: 'abc' }, admin))).rejects.toMatchObject({ status: 400 });
 });
+
+test('delete returns 404 for missing user', async () => {
+	const admin = makeAdmin(ctx.kit, { email: 'admin@x.c' });
+	await expect(DELETE(makeEvent({ id: '99999' }, admin))).rejects.toMatchObject({
+		status: 404,
+		body: { message: 'User not found.' }
+	});
+});

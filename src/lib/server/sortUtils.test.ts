@@ -41,7 +41,7 @@ test('treats null and undefined as empty strings', () => {
 	expect(compareRows(rows[1], rows[3], 'label', 'asc')).toBe(1);
 });
 
-test('mixed string and null sorting is stable by value', () => {
+test('sorts null before non-empty strings ascending', () => {
 	const rows = [{ label: 'Zebra' }, { label: null }, { label: 'apple' }];
 	const sorted = rows.slice().sort((a, b) => compareRows(a, b, 'label', 'asc'));
 	expect(sorted.map((r) => r.label)).toEqual([null, 'apple', 'Zebra']);

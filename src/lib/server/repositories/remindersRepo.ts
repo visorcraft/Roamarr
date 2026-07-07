@@ -98,6 +98,16 @@ function toSchedulerRunRow(row: KitSchedulerRun): SchedulerRunRow {
 	};
 }
 
+function schedulerRunMatchesSearch(row: SchedulerRunRow, q: string): boolean {
+	return (
+		row.startedAt.toLowerCase().includes(q) ||
+		(row.finishedAt?.toLowerCase().includes(q) ?? false) ||
+		(row.errorMessage?.toLowerCase().includes(q) ?? false) ||
+		(q === 'success' && row.success) ||
+		(q === 'failure' && !row.success)
+	);
+}
+
 // Reminders
 
 export type CreateReminderInput = Pick<ReminderRow, 'userId' | 'kind' | 'refType' | 'refId' | 'fireAt'> &
@@ -416,14 +426,7 @@ export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): Schedule
 		.map(toSchedulerRunRow);
 	const q = opts.search?.trim().toLowerCase();
 	if (q) {
-		rows = rows.filter(
-			(r) =>
-				r.startedAt.toLowerCase().includes(q) ||
-				(r.finishedAt?.toLowerCase().includes(q) ?? false) ||
-				(r.errorMessage?.toLowerCase().includes(q) ?? false) ||
-				(q === 'success' && r.success) ||
-				(q === 'failure' && !r.success)
-		);
+		rows = rows.filter((r) => schedulerRunMatchesSearch(r, q));
 	}
 	const sortBy = opts.sortBy ?? 'startedAt';
 	const sortDir = opts.sortDir ?? 'desc';
@@ -442,14 +445,7 @@ export function countSchedulerRuns(search?: string): number {
 		.selectFrom(kitSchedulerRuns)
 		.executeSync()
 		.map(toSchedulerRunRow)
-		.filter(
-			(r) =>
-				r.startedAt.toLowerCase().includes(q) ||
-				(r.finishedAt?.toLowerCase().includes(q) ?? false) ||
-				(r.errorMessage?.toLowerCase().includes(q) ?? false) ||
-				(q === 'success' && r.success) ||
-				(q === 'failure' && !r.success)
-		)
+		.filter((r) => schedulerRunMatchesSearch(r, q))
 		.length;
 }
 

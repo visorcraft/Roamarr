@@ -1,125 +1,118 @@
 <script lang="ts">
-	import CancelButton from '$lib/components/CancelButton.svelte';
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
+	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
+	import type { PageData } from './$types';
 
-	let { data, form }: { data: import('./$types').PageData; form?: { testResult?: string } } = $props();
-	let editingId = $state<number | null>(null);
-	let dirtyIds = $state<Record<number, boolean>>({});
+	let { data }: { data: PageData } = $props();
+	let grid: any = $state();
+	let testResult: { message: string; success: boolean } | null = $state(null);
 
-	const providerLabel = $derived(
-		new Map(data.providers.map((p) => [p.key, p.label]))
-	);
+	const providerLabel = $derived(new Map(data.providers.map((p) => [p.key, p.label])));
+
+	function escapeHtml(value: unknown): string {
+		return String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
+	const columns = [
+		{
+			id: 'label',
+			name: 'Label',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				escapeHtml(row.label || providerLabel.get(String(row.providerKey)) || row.providerKey)
+		},
+		{
+			id: 'providerKey',
+			name: 'Provider',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<span class="badge badge-slate">${escapeHtml(providerLabel.get(String(row.providerKey)) || row.providerKey)}</span>`
+				)
+		},
+		{
+			id: 'enabled',
+			name: 'Status',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.enabled
+					? html('<span class="badge badge-green">Enabled</span>')
+					: html('<span class="badge badge-slate">Disabled</span>')
+		}
+	];
+
+	const actions = [
+		{ id: 'test', label: 'Test' },
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'delete',
+			label: 'Delete',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: 'Delete provider',
+			confirmMessage: (row: Record<string, unknown>) =>
+				`Delete ${row.label || providerLabel.get(String(row.providerKey)) || row.providerKey}?`
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/fare-providers?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load providers: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	async function handleAction(e: Event) {
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'test') {
+			const res = await fetch(`/api/fare-providers/${row.id}/test`, { method: 'POST' });
+			if (res.ok) {
+				const body = await res.json();
+				testResult = { message: body.ok ? `OK: ${body.summary}` : `Failed: ${body.summary}`, success: body.ok };
+			} else {
+				testResult = { message: 'Test request failed', success: false };
+			}
+		} else if (action === 'edit') {
+			goto(`/fare-providers/${row.id}/edit`);
+		} else if (action === 'delete') {
+			const res = await fetch(`/api/fare-providers/${row.id}`, { method: 'DELETE' });
+			if (res.ok) {
+				testResult = null;
+				grid?.reload();
+			} else {
+				testResult = { message: 'Delete failed', success: false };
+			}
+		}
+	}
 </script>
 
-<header>
-	<h1 class="page-title">Fare-watch providers</h1>
-	<p class="page-subtitle">Connect named provider accounts to power fare watching on your trips.</p>
+<header class="page-header">
+	<div>
+		<h1 class="page-title">Fare-watch providers</h1>
+		<p class="page-subtitle">Connect named provider accounts to power fare watching on your trips.</p>
+	</div>
 </header>
 
 <section class="card mt-8 p-5 sm:p-6">
-	<h2 class="section-title">Your accounts</h2>
-	{#if form?.testResult}<p class="notice notice-info mt-3 text-sm">{form.testResult}</p>{/if}
-	{#if data.saved.length}
-		<div class="mt-3 list-stack">
-			{#each data.saved as s (s.id)}
-				<div class="list-item">
-					<div class="flex flex-wrap items-center justify-between gap-3">
-						<div class="min-w-0">
-							<div class="flex items-center gap-2">
-								<span class="list-title">{s.label || providerLabel.get(s.providerKey) || s.providerKey}</span>
-								<span class="badge badge-slate">{providerLabel.get(s.providerKey) || s.providerKey}</span>
-								{#if s.enabled}
-									<span class="badge badge-green">Enabled</span>
-								{:else}
-									<span class="badge badge-slate">Disabled</span>
-								{/if}
-							</div>
-						</div>
-						<div class="action-row gap-1">
-							<button type="button" class="btn btn-primary" onclick={() => { editingId = s.id; dirtyIds[s.id] = false; }}>Edit</button>
-							<form method="POST" action="?/test">
-								<input type="hidden" name="id" value={s.id} />
-								<button class="btn btn-primary">Test</button>
-							</form>
-							<form method="POST" action="?/delete">
-								<input type="hidden" name="id" value={s.id} />
-								<ConfirmButton class="btn btn-danger" message="Delete this provider account and its watches?">Delete</ConfirmButton>
-							</form>
-						</div>
-					</div>
-					{#if editingId === s.id}
-						<form method="POST" action="?/update" class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2" oninput={() => (dirtyIds[s.id] = true)}>
-							<input type="hidden" name="id" value={s.id} />
-							<div class="field">
-								<label class="label" for={`label-${s.id}`}>Label</label>
-								<input id={`label-${s.id}`} name="label" value={s.label} class="input" placeholder="e.g. Personal API key" />
-							</div>
-							<div class="field flex items-end">
-								<label class="checkbox-label">
-									<input
-										type="checkbox"
-										name="enabled"
-										checked={s.enabled}
-										class="checkbox"
-									/>
-									Enabled
-								</label>
-							</div>
-							<div class="field sm:col-span-2">
-								<label class="label" for={`apiKey-${s.id}`}>API key</label>
-								<input
-									id={`apiKey-${s.id}`}
-									name="apiKey"
-									placeholder={s.hasKey ? 'API key set — leave blank to keep' : 'API key'}
-									class="input"
-								/>
-							</div>
-							<div class="flex justify-end gap-2 sm:col-span-2">
-								<CancelButton dirty={dirtyIds[s.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
-								<button class="btn btn-primary">Save</button>
-							</div>
-						</form>
-					{/if}
-				</div>
-			{/each}
-		</div>
-	{:else}
-		<p class="empty-text mt-3">No provider accounts saved yet.</p>
+	{#if testResult}
+		<p class="notice {testResult.success ? 'notice-success' : 'notice-error'} mb-4 text-sm">
+			{testResult.message}
+		</p>
 	{/if}
-</section>
-
-<section class="card mt-6 p-5 sm:p-6">
-	<h2 class="section-title">Add account</h2>
-	<form method="POST" action="?/add" class="mt-3 grid gap-4 sm:grid-cols-2">
-		<div class="field">
-			<label class="label" for="providerKey">Provider</label>
-			<select id="providerKey" name="providerKey" class="select">
-				{#each data.providers as p (p.key)}
-					<option value={p.key}>{p.label}</option>
-				{/each}
-			</select>
-		</div>
-		<div class="field">
-			<label class="label" for="label">Label</label>
-			<input id="label" name="label" placeholder="e.g. Personal API key" class="input" />
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="apiKey">API key</label>
-			<input id="apiKey" name="apiKey" placeholder="API key" class="input" />
-		</div>
-		<div class="field flex items-end">
-			<label class="checkbox-label">
-				<input
-					type="checkbox"
-					name="enabled"
-					checked
-					class="checkbox"
-				/>
-				Enabled
-			</label>
-		</div>
-		<div class="flex items-end justify-end">
-			<button class="btn btn-primary">Add account</button>
-		</div>
-	</form>
+	<GridTable
+		bind:this={grid}
+		{columns}
+		{fetchData}
+		{actions}
+		addHref="/fare-providers/new"
+		addLabel="Add account"
+		emptyMessage="No provider accounts saved yet."
+		onaction={handleAction}
+	/>
 </section>

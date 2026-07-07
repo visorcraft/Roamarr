@@ -16,7 +16,13 @@ vi.mock('gridjs', () => ({
 			this.config = config;
 		}
 		render(el: HTMLElement) {
-			renderFn(el, this.config);
+			renderFn(el, this);
+			return this;
+		}
+		updateConfig() {
+			return this;
+		}
+		forceRender() {
 			return this;
 		}
 		destroy() {}
@@ -44,6 +50,14 @@ describe('GridTable', () => {
 		return app;
 	}
 
+	function lastGridInstance() {
+		return renderFn.mock.lastCall![1] as any;
+	}
+
+	function lastConfig() {
+		return lastGridInstance().config as any;
+	}
+
 	it('renders the wrapper div for Grid.js and an add link', async () => {
 		mountTable({
 			columns: [{ id: 'name', name: 'Name' }],
@@ -67,7 +81,7 @@ describe('GridTable', () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(renderFn).toHaveBeenCalledOnce();
-		const config = renderFn.mock.lastCall![1] as any;
+		const config = lastConfig();
 		const actionColumn = config.columns[config.columns.length - 1];
 		expect(actionColumn.id).toBe('__actions');
 
@@ -83,7 +97,7 @@ describe('GridTable', () => {
 		});
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		const config = renderFn.mock.lastCall![1] as any;
+		const config = lastConfig();
 		const actionColumn = config.columns[config.columns.length - 1];
 		const result = actionColumn.formatter(null, { id: '2\'&3', name: 'A' }) as { __html: string };
 
@@ -102,7 +116,7 @@ describe('GridTable', () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(renderFn).toHaveBeenCalledOnce();
-		const config = renderFn.mock.lastCall![1] as any;
+		const config = lastConfig();
 		await config.server.data({ url: {} });
 		expect(fetchData).toHaveBeenCalledOnce();
 
@@ -134,7 +148,7 @@ describe('GridTable', () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(renderFn).toHaveBeenCalledOnce();
-		const config = renderFn.mock.lastCall![1] as any;
+		const config = lastConfig();
 		await config.server.data({ url: {} });
 
 		const container = renderFn.mock.lastCall![0] as HTMLDivElement;
@@ -158,5 +172,22 @@ describe('GridTable', () => {
 
 		expect(fired).toHaveLength(1);
 		expect(fired[0].detail).toEqual({ action: 'edit', row: { id: 1, name: 'A' } });
+	});
+
+	it('exposes a reload method that updates and force-renders the grid', async () => {
+		const app = mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 })
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const grid = lastGridInstance();
+		const updateConfig = vi.spyOn(grid, 'updateConfig').mockReturnValue(grid);
+		const forceRender = vi.spyOn(grid, 'forceRender').mockReturnValue(grid);
+
+		(app as any).reload();
+
+		expect(updateConfig).toHaveBeenCalledOnce();
+		expect(forceRender).toHaveBeenCalledOnce();
 	});
 });

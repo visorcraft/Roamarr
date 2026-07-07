@@ -46,6 +46,7 @@
 		addHref?: string;
 		addLabel?: string;
 		emptyMessage?: string;
+		onaction?: (e: CustomEvent<{ action: string; row: Record<string, unknown> }>) => void;
 	}
 
 	let {
@@ -55,7 +56,8 @@
 		pageSize = 25,
 		addHref,
 		addLabel = 'Add',
-		emptyMessage = 'No records found'
+		emptyMessage = 'No records found',
+		onaction
 	}: Props = $props();
 
 	let wrapper: HTMLDivElement | undefined = $state();
@@ -84,6 +86,10 @@
 	const gridColumns = $derived(actionColumn ? [...columns, actionColumn] : columns);
 
 	let grid: any;
+
+	export function reload() {
+		grid?.updateConfig({}).forceRender();
+	}
 
 	$effect(() => {
 		const container = wrapper;
@@ -164,7 +170,9 @@
 	});
 
 	function dispatchAction(detail: { action: string; row: Record<string, unknown> }) {
-		wrapper?.dispatchEvent(new CustomEvent('action', { detail, bubbles: true }));
+		const event = new CustomEvent('action', { detail, bubbles: true });
+		wrapper?.dispatchEvent(event);
+		onaction?.(event);
 	}
 
 	function handleClick(e: MouseEvent) {

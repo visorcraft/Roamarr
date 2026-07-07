@@ -28,6 +28,8 @@ export interface FareProvider {
 
 export const registry: Record<string, FareProvider> = { [stub.key]: stub };
 
+export { getFareProviderByIdAndUser };
+
 export function createProvider(
 	userId: number,
 	providerKey: string,

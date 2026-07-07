@@ -7,7 +7,7 @@
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import type { PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string>; values?: Record<string, unknown> } } = $props();
 
 	let cardSubmitting = $state(false);
 	let cardDirty = $state(false);
@@ -15,6 +15,17 @@
 	let benefitDirty = $state(false);
 	let editingBenefitId = $state<number | null>(null);
 	let selectedTemplateId = $state('');
+
+	const editingBenefitValues = $derived(
+		form?.values?.id != null && typeof form.values.id === 'number' && editingBenefitId === form.values.id
+			? form.values
+			: null
+	);
+	const addBenefitValues = $derived(
+		form?.values?.id == null && (form?.values?.benefitType != null || form?.values?.coverageAmount != null || form?.values?.currency != null)
+			? form.values
+			: null
+	);
 
 	const networks = [
 		{ key: 'visa', label: 'Visa' },
@@ -58,15 +69,18 @@
 		aria-busy={cardSubmitting}
 		oninput={() => (cardDirty = true)}
 	>
+		{#if form?.error && !form.values?.benefitType && form.values?.id == null}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
+
 		<TextField
 			name="nickname"
 			label="Nickname"
-			value={data.card.nickname}
+			value={(form?.values?.nickname as string | undefined) ?? data.card.nickname}
 			placeholder="e.g. Sapphire Reserve"
 			required
 			disabled={cardSubmitting}
+			errors={form?.errors ?? {}}
 		/>
-		<SelectField name="network" label="Network" value={data.card.network} required disabled={cardSubmitting}>
+		<SelectField name="network" label="Network" value={(form?.values?.network as string | undefined) ?? data.card.network} required disabled={cardSubmitting} errors={form?.errors ?? {}}>
 			{#each networks as n (n.key)}
 				<option value={n.key}>{n.label}</option>
 			{/each}
@@ -74,18 +88,20 @@
 		<TextField
 			name="last4"
 			label="Last 4"
-			value={data.card.last4 ?? ''}
+			value={(form?.values?.last4 as string | undefined) ?? data.card.last4 ?? ''}
 			placeholder="1234"
 			maxlength="4"
 			inputmode="numeric"
 			disabled={cardSubmitting}
+			errors={form?.errors ?? {}}
 		/>
 		<TextField
 			name="notes"
 			label="Notes"
-			value={data.card.notes ?? ''}
+			value={(form?.values?.notes as string | undefined) ?? data.card.notes ?? ''}
 			placeholder="Optional notes"
 			disabled={cardSubmitting}
+			errors={form?.errors ?? {}}
 		/>
 		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
 			<CancelButton dirty={cardDirty} onConfirm={() => goto('/cards')}>Cancel</CancelButton>
@@ -110,17 +126,20 @@
 							class="flex flex-wrap items-end gap-3"
 							use:enhance={() => {
 								benefitSubmitting = true;
-								return async ({ update }) => {
+								return async ({ update, result }) => {
 									await update();
 									benefitSubmitting = false;
-									editingBenefitId = null;
+									if (result.type !== 'failure') {
+										editingBenefitId = null;
+									}
 								};
 							}}
 							aria-busy={benefitSubmitting}
 							oninput={() => (benefitDirty = true)}
 						>
 							<input type="hidden" name="id" value={b.id} />
-							<SelectField name="benefitType" label="Benefit" value={b.benefitType} required disabled={benefitSubmitting}>
+							{#if editingBenefitValues}<p class="notice notice-error w-full">{form?.error}</p>{/if}
+								<SelectField name="benefitType" label="Benefit" value={(editingBenefitValues?.benefitType as string | undefined) ?? b.benefitType} required disabled={benefitSubmitting} errors={form?.errors ?? {}}>
 								{#each benefitTypes as bt (bt.key)}
 									<option value={bt.key}>{bt.label}</option>
 								{/each}
@@ -129,23 +148,26 @@
 								name="coverageAmount"
 								label="Coverage"
 								type="number"
-								value={b.coverageAmount ?? ''}
+								value={(editingBenefitValues?.coverageAmount as string | number | undefined) ?? b.coverageAmount ?? ''}
 								placeholder="0"
 								disabled={benefitSubmitting}
+								errors={form?.errors ?? {}}
 							/>
 							<TextField
 								name="currency"
 								label="Currency"
-								value={b.currency}
+								value={(editingBenefitValues?.currency as string | undefined) ?? b.currency}
 								placeholder="USD"
 								disabled={benefitSubmitting}
+								errors={form?.errors ?? {}}
 							/>
 							<TextField
 								name="notes"
 								label="Notes"
-								value={b.notes ?? ''}
+								value={(editingBenefitValues?.notes as string | undefined) ?? b.notes ?? ''}
 								placeholder="Optional"
 								disabled={benefitSubmitting}
+								errors={form?.errors ?? {}}
 							/>
 							<div class="action-row">
 								<CancelButton
@@ -196,14 +218,17 @@
 		class="mt-6 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-end"
 		use:enhance={() => {
 			benefitSubmitting = true;
-			return async ({ update }) => {
+			return async ({ update, result }) => {
 				await update();
 				benefitSubmitting = false;
-				selectedTemplateId = '';
+				if (result.type !== 'failure') {
+					selectedTemplateId = '';
+				}
 			};
 		}}
 		aria-busy={benefitSubmitting}
 	>
+		{#if addBenefitValues}<p class="notice notice-error col-span-full">{form?.error}</p>{/if}
 		<div class="field">
 			<label class="label" for="templateId">Template</label>
 			<select
@@ -219,7 +244,7 @@
 				{/each}
 			</select>
 		</div>
-		<SelectField name="benefitType" label="Benefit" required disabled={benefitSubmitting || !!selectedTemplate}>
+		<SelectField name="benefitType" label="Benefit" value={(addBenefitValues?.benefitType as string | undefined) ?? ''} required disabled={benefitSubmitting || !!selectedTemplate} errors={form?.errors ?? {}}>
 			{#each benefitTypes as bt (bt.key)}
 				<option value={bt.key}>{bt.label}</option>
 			{/each}
@@ -228,21 +253,26 @@
 			name="coverageAmount"
 			label="Coverage"
 			type="number"
+			value={(addBenefitValues?.coverageAmount as string | number | undefined) ?? ''}
 			placeholder="0"
 			disabled={benefitSubmitting || !!selectedTemplate}
+			errors={form?.errors ?? {}}
 		/>
 		<TextField
 			name="currency"
 			label="Currency"
-			value="USD"
+			value={(addBenefitValues?.currency as string | undefined) ?? 'USD'}
 			placeholder="USD"
 			disabled={benefitSubmitting || !!selectedTemplate}
+			errors={form?.errors ?? {}}
 		/>
 		<TextField
 			name="notes"
 			label="Notes"
+			value={(addBenefitValues?.notes as string | undefined) ?? ''}
 			placeholder="Optional"
 			disabled={benefitSubmitting}
+			errors={form?.errors ?? {}}
 		/>
 		<button class="btn btn-primary justify-self-end" disabled={benefitSubmitting}>Add benefit</button>
 	</form>

@@ -9,19 +9,12 @@ import {
 	listBenefitsForCard
 } from '$lib/server/repositories/profileRepo';
 import { listBenefitTemplates, getBenefitTemplate } from '$lib/server/benefitTemplates';
-import { sanitizeLast4, positiveIdFromForm } from '$lib/server/validation';
+import { Validator, sanitizeLast4, positiveIdFromForm, currency } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
 import type { PageServerLoad } from './$types';
 
-const allowedNetworks = new Set(['visa', 'mc', 'amex', 'disc', 'other']);
-
-function validateCardFields(f: FormData) {
-	const nickname = String(f.get('nickname') || '').trim();
-	const network = String(f.get('network') || '').trim();
-	if (!nickname) return { error: 'Nickname is required' };
-	if (!allowedNetworks.has(network)) return { error: 'Unsupported network' };
-	return null;
-}
+const allowedNetworks = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
+const allowedBenefitTypes = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
 
 function parseId(params: { id?: string }): number {
 	const id = Number(params.id);
@@ -46,13 +39,28 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const id = parseId(params);
 		const f = await request.formData();
-		const validation = validateCardFields(f);
-		if (validation) return fail(400, validation);
+		const v = new Validator();
+		const nickname = v.requiredString(f.get('nickname'), 'nickname');
+		const network = v.enumValue(f.get('network'), allowedNetworks, 'network');
+		const last4Raw = v.optionalString(f.get('last4'), 'last4');
+		const notes = v.optionalString(f.get('notes'), 'notes');
+		if (!v.ok()) {
+			return fail(400, {
+				error: v.failMessage(),
+				errors: v.errors,
+				values: {
+					nickname: String(f.get('nickname') || '').trim(),
+					network: String(f.get('network') || ''),
+					last4: String(f.get('last4') || ''),
+					notes: String(f.get('notes') || '').trim()
+				}
+			});
+		}
 		updateCard(id, u.id, {
-			nickname: String(f.get('nickname') || '').trim(),
-			network: String(f.get('network') || '').trim(),
-			last4: sanitizeLast4(String(f.get('last4') || '')),
-			notes: String(f.get('notes') || '') || null
+			nickname: nickname!,
+			network: network!,
+			last4: sanitizeLast4(last4Raw),
+			notes
 		});
 		logAudit(u.id, 'card_update', 'card', id);
 		throw redirect(303, '/cards');
@@ -72,26 +80,52 @@ export const actions: Actions = {
 
 		let benefitType: string | undefined;
 		let coverageAmount: number | null = null;
-		let currency: string | undefined;
+		let currencyValue: string | undefined;
+		const notes = String(f.get('notes') || '').trim() || undefined;
 
 		if (templateId != null) {
 			const template = getBenefitTemplate(templateId);
 			if (!template) return fail(404, { error: 'Template not found' });
 			benefitType = template.benefitType;
 			coverageAmount = template.coverageAmount ?? null;
-			currency = template.currency;
+			currencyValue = template.currency;
 		} else {
-			benefitType = String(f.get('benefitType') || '');
+			const v = new Validator();
+			benefitType = v.enumValue(f.get('benefitType'), allowedBenefitTypes, 'benefitType');
 			const coverageRaw = f.get('coverageAmount');
-			coverageAmount = coverageRaw !== '' && coverageRaw != null ? Number(coverageRaw) : null;
-			currency = String(f.get('currency') || '') || undefined;
+			if (coverageRaw !== '' && coverageRaw != null) {
+				const n = Number(coverageRaw);
+				if (!Number.isFinite(n)) {
+					v.addError('coverageAmount', 'coverageAmount must be a number');
+				} else {
+					coverageAmount = n;
+				}
+			}
+			const currencyResult = currency(f.get('currency'), 'currency');
+			if (!currencyResult.ok) {
+				v.addError('currency', currencyResult.error);
+			} else {
+				currencyValue = currencyResult.value;
+			}
+			if (!v.ok()) {
+				return fail(400, {
+					error: v.failMessage(),
+					errors: v.errors,
+					values: {
+						benefitType,
+						coverageAmount: coverageRaw,
+						currency: String(f.get('currency') || ''),
+						notes
+					}
+				});
+			}
 		}
 
 		const benefit = createCardBenefit(u.id, cardId, {
 			benefitType: benefitType!,
 			coverageAmount: coverageAmount ?? undefined,
-			currency,
-			notes: String(f.get('notes') || '') || undefined
+			currency: currencyValue,
+			notes
 		});
 		logAudit(u.id, 'card_benefit_create', 'card_benefit', benefit.id);
 		throw redirect(303, `/cards/${cardId}/edit`);
@@ -103,13 +137,45 @@ export const actions: Actions = {
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
 		if (!getCardById(cardId, u.id)) throw error(404, 'Not found');
+
+		const v = new Validator();
+		const benefitType = v.enumValue(f.get('benefitType'), allowedBenefitTypes, 'benefitType');
 		const coverageRaw = f.get('coverageAmount');
-		const coverageAmount = coverageRaw !== '' && coverageRaw != null ? Number(coverageRaw) : null;
+		let coverageAmount: number | null = null;
+		if (coverageRaw !== '' && coverageRaw != null) {
+			const n = Number(coverageRaw);
+			if (!Number.isFinite(n)) {
+				v.addError('coverageAmount', 'coverageAmount must be a number');
+			} else {
+				coverageAmount = n;
+			}
+		}
+		const currencyResult = currency(f.get('currency'), 'currency');
+		let currencyValue: string | undefined;
+		if (!currencyResult.ok) {
+			v.addError('currency', currencyResult.error);
+		} else {
+			currencyValue = currencyResult.value;
+		}
+		const notes = v.optionalString(f.get('notes'), 'notes');
+		if (!v.ok()) {
+			return fail(400, {
+				error: v.failMessage(),
+				errors: v.errors,
+				values: {
+					id: idResult.value,
+					benefitType,
+					coverageAmount: coverageRaw,
+					currency: String(f.get('currency') || ''),
+					notes
+				}
+			});
+		}
 		updateCardBenefit(idResult.value, cardId, {
-			benefitType: String(f.get('benefitType') || ''),
+			benefitType: benefitType!,
 			coverageAmount,
-			currency: String(f.get('currency') || '') || undefined,
-			notes: String(f.get('notes') || '') || undefined
+			currency: currencyValue,
+			notes
 		});
 		logAudit(u.id, 'card_benefit_update', 'card_benefit', idResult.value);
 		throw redirect(303, `/cards/${cardId}/edit`);

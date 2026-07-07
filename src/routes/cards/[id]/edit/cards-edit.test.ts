@@ -250,23 +250,31 @@ test('updateBenefit action edits a benefit and logs audit', async () => {
 	expect(Number(logs[0].entity_id)).toBe(benefit.id);
 });
 
-test('updateCard action rejects empty nickname or unsupported network', async () => {
+test('updateCard action rejects empty nickname or unsupported network with errors object', async () => {
 	const user = makeUser(ctx.kit);
 	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
 
 	const emptyNickname = new FormData();
 	emptyNickname.set('nickname', '');
 	emptyNickname.set('network', 'visa');
-	await expect(actions.updateCard(event(user, { id: String(card.id) }, emptyNickname))).resolves.toEqual(
-		expect.objectContaining({ status: 400, data: { error: 'Nickname is required' } })
-	);
+	const emptyResult = (await actions.updateCard(event(user, { id: String(card.id) }, emptyNickname))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(emptyResult.status).toBe(400);
+	expect(emptyResult.data.errors.nickname).toBe('nickname is required');
+	expect(emptyResult.data.values?.nickname).toBe('');
 
 	const badNetwork = new FormData();
 	badNetwork.set('nickname', 'Sapphire');
 	badNetwork.set('network', 'jcb');
-	await expect(actions.updateCard(event(user, { id: String(card.id) }, badNetwork))).resolves.toEqual(
-		expect.objectContaining({ status: 400, data: { error: 'Unsupported network' } })
-	);
+	const networkResult = (await actions.updateCard(event(user, { id: String(card.id) }, badNetwork))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(networkResult.status).toBe(400);
+	expect(networkResult.data.errors.network).toContain('visa');
+	expect(networkResult.data.values?.network).toBe('jcb');
 
 	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.id, BigInt(card.id))).executeSync();
 	expect(rows[0].nickname).toBe('Sapphire');
@@ -290,6 +298,73 @@ test('updateBenefit action preserves coverage amount 0', async () => {
 
 	const row = ctx.kit.selectFrom(cardBenefits).where(kitEq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0];
 	expect(Number(row!.coverage_amount)).toBe(0);
+});
+
+test('addBenefit action rejects invalid benefit fields', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Freedom', network: 'mc' });
+
+	const invalidType = new FormData();
+	invalidType.set('benefitType', 'invalid_type');
+	invalidType.set('coverageAmount', '100');
+	invalidType.set('currency', 'USD');
+	const typeResult = (await actions.addBenefit(event(user, { id: String(card.id) }, invalidType))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string> };
+	};
+	expect(typeResult.status).toBe(400);
+	expect(typeResult.data.errors.benefitType).toContain('trip_delay');
+	expect(ctx.kit.selectFrom(cardBenefits).executeSync()).toHaveLength(0);
+
+	const nonNumericCoverage = new FormData();
+	nonNumericCoverage.set('benefitType', 'other');
+	nonNumericCoverage.set('coverageAmount', 'abc');
+	nonNumericCoverage.set('currency', 'USD');
+	const coverageResult = (await actions.addBenefit(event(user, { id: String(card.id) }, nonNumericCoverage))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string> };
+	};
+	expect(coverageResult.status).toBe(400);
+	expect(coverageResult.data.errors.coverageAmount).toBe('coverageAmount must be a number');
+
+	const invalidCurrency = new FormData();
+	invalidCurrency.set('benefitType', 'other');
+	invalidCurrency.set('coverageAmount', '100');
+	invalidCurrency.set('currency', 'dollars');
+	const currencyResult = (await actions.addBenefit(event(user, { id: String(card.id) }, invalidCurrency))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string> };
+	};
+	expect(currencyResult.status).toBe(400);
+	expect(currencyResult.data.errors.currency).toContain('3-letter currency code');
+
+	expect(ctx.kit.selectFrom(cardBenefits).executeSync()).toHaveLength(0);
+	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
+});
+
+test('updateBenefit action rejects invalid benefit fields', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	const benefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
+
+	const invalid = new FormData();
+	invalid.set('id', String(benefit.id));
+	invalid.set('benefitType', 'invalid_type');
+	invalid.set('coverageAmount', 'not-a-number');
+	invalid.set('currency', 'XYZABC');
+	const result = (await actions.updateBenefit(event(user, { id: String(card.id) }, invalid))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.errors.benefitType).toContain('trip_delay');
+	expect(result.data.errors.coverageAmount).toBe('coverageAmount must be a number');
+	expect(result.data.errors.currency).toContain('3-letter currency code');
+	expect(result.data.values?.id).toBe(benefit.id);
+
+	const row = ctx.kit.selectFrom(cardBenefits).where(kitEq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0];
+	expect(row!.benefit_type).toBe('trip_delay');
+	expect(Number(row!.coverage_amount)).toBe(100);
 });
 
 test('deleteBenefit action removes a benefit and logs audit', async () => {

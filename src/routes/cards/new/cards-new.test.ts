@@ -63,22 +63,30 @@ test('create action adds a card, logs audit, and redirects', async () => {
 	expect(Number(logs[0].entity_id)).toBe(Number(rows[0].id));
 });
 
-test('create action rejects empty nickname or unsupported network', async () => {
+test('create action rejects empty nickname or unsupported network with errors object', async () => {
 	const user = makeUserLocals(ctx.kit);
 
 	const emptyNickname = new FormData();
 	emptyNickname.set('nickname', '');
 	emptyNickname.set('network', 'visa');
-	await expect(actions.create(event(user.user, emptyNickname))).resolves.toEqual(
-		expect.objectContaining({ status: 400, data: { error: 'Nickname is required' } })
-	);
+	const emptyResult = (await actions.create(event(user.user, emptyNickname))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(emptyResult.status).toBe(400);
+	expect(emptyResult.data.errors.nickname).toBe('nickname is required');
+	expect(emptyResult.data.values?.nickname).toBe('');
 
 	const badNetwork = new FormData();
 	badNetwork.set('nickname', 'Sapphire');
 	badNetwork.set('network', 'jcb');
-	await expect(actions.create(event(user.user, badNetwork))).resolves.toEqual(
-		expect.objectContaining({ status: 400, data: { error: 'Unsupported network' } })
-	);
+	const networkResult = (await actions.create(event(user.user, badNetwork))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(networkResult.status).toBe(400);
+	expect(networkResult.data.errors.network).toContain('visa');
+	expect(networkResult.data.values?.network).toBe('jcb');
 
 	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.user_id, BigInt(user.user.id))).executeSync();
 	expect(rows).toHaveLength(0);

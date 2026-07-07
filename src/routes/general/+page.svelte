@@ -132,7 +132,9 @@
 						<p class="field-help">
 							Standard protection allows the session cookie on top-level cross-site navigation
 							(e.g., OAuth redirects, email links). Strict forces re-login when arriving from
-							external links, including OAuth authorization prompts and email links.
+							external links, including OAuth authorization prompts and email links. The change
+							only applies to sessions created after saving; existing sessions keep their previous
+							attribute until the user signs in again.
 						</p>
 					</div>
 					<select id="sessionCookieSameSite" name="sessionCookieSameSite" value={s.sessionCookieSameSite} class="input">

@@ -8,8 +8,10 @@ type FlashMessage = {
 };
 
 /**
- * Cookie options for flash messages. Mirrors session cookie transport settings
- * but uses a short max-age so stale flashes disappear quickly if not consumed.
+ * Cookie options for flash messages. Uses the same secure/httpOnly transport
+ * logic as the session cookie but keeps SameSite=Lax because flashes only need
+ * to survive same-site redirects, and a short max-age so stale flashes disappear
+ * quickly if not consumed.
  */
 export function flashCookieOptions() {
 	const origin = process.env.ORIGIN;

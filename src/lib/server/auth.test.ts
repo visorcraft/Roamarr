@@ -1,4 +1,4 @@
-import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import { test, expect, vi, beforeEach, afterEach, afterAll } from 'vitest';
 
 const ctx = vi.hoisted(
 	() =>
@@ -36,6 +36,10 @@ function resetKitTables() {
 
 beforeEach(() => {
 	resetKitTables();
+});
+
+afterEach(() => {
+	updateSettings({ sessionCookieSameSite: 'lax' });
 });
 
 afterAll(() => {

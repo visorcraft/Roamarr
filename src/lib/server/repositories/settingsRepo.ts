@@ -1,9 +1,13 @@
 import { kit } from '$lib/server/db';
-import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
+import {
+	settings,
+	benefitTemplates,
+	SESSION_COOKIE_SAME_SITE_VALUES
+} from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import type { Row, Update } from '@visorcraft/mongreldb-kit';
 
-export type SessionCookieSameSite = 'lax' | 'strict';
+export type SessionCookieSameSite = (typeof SESSION_COOKIE_SAME_SITE_VALUES)[number];
 
 export type Settings = {
 	id: number;

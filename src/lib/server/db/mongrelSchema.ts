@@ -66,6 +66,7 @@ export {
 	EXPENSE_CATEGORIES,
 	WATCH_STATUSES,
 	MAPS_TILE_PROVIDERS,
+	SESSION_COOKIE_SAME_SITE_VALUES,
 	SEGMENT_TYPES,
 	SEGMENT_STATUSES,
 	SEGMENT_PAYMENT_STATUSES,
@@ -82,6 +83,7 @@ export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
 export type SegmentAttendeeStatus = (typeof SEGMENT_ATTENDEE_STATUSES)[number];
 export type TravelDocumentType = (typeof TRAVEL_DOCUMENT_TYPES)[number];
 export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
+export type SessionCookieSameSite = (typeof SESSION_COOKIE_SAME_SITE_VALUES)[number];
 export type { SegmentType };
 
 export const schedulerRuns = table('scheduler_runs', {

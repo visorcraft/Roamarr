@@ -11,7 +11,8 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
-import type { SessionCookieSameSite } from '$lib/server/repositories/settingsRepo';
+import { SESSION_COOKIE_SAME_SITE_VALUES } from '$lib/server/db/mongrelSchema';
+import type { SessionCookieSameSite } from '$lib/server/db/mongrelSchema';
 import type { PageServerLoad } from './$types';
 
 function userFacingError(e: unknown, fallback: string): string {
@@ -49,6 +50,12 @@ export function _saveAdminSettings(
 		throw new Error('Default document expiry lead must be a non-negative integer');
 	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
+	if (
+		i.sessionCookieSameSite !== undefined &&
+		!SESSION_COOKIE_SAME_SITE_VALUES.includes(i.sessionCookieSameSite)
+	) {
+		throw new Error('Session cookie SameSite must be lax or strict');
+	}
 	const patch: Record<string, unknown> = {
 		instanceName: i.instanceName,
 		allowRegistration: i.allowRegistration,
@@ -135,7 +142,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Invalid tile provider' });
 		}
 		const sessionCookieSameSite = String(f.get('sessionCookieSameSite') || 'lax');
-		if (sessionCookieSameSite !== 'lax' && sessionCookieSameSite !== 'strict') {
+		if (!SESSION_COOKIE_SAME_SITE_VALUES.includes(sessionCookieSameSite as SessionCookieSameSite)) {
 			return fail(400, { error: 'Invalid SameSite value' });
 		}
 		const pass = String(f.get('smtpPass') || '');

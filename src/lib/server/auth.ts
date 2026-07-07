@@ -6,7 +6,8 @@ import { dev } from '$app/environment';
 import * as usersRepo from './repositories/usersRepo';
 import type { KitUser } from './repositories/usersRepo';
 import { getSettings } from './settings';
-import type { SessionCookieSameSite } from './repositories/settingsRepo';
+import { SESSION_COOKIE_SAME_SITE_VALUES } from './db/mongrelSchema';
+import type { SessionCookieSameSite } from './db/mongrelSchema';
 import { nowIso } from './tz';
 
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
@@ -138,7 +139,9 @@ export function sessionCookieOptions() {
 	const origin = process.env.ORIGIN;
 	const secure = dev ? false : !(origin && origin.startsWith('http://'));
 	const raw = getSettings().sessionCookieSameSite;
-	const sameSite: SessionCookieSameSite = raw === 'strict' ? 'strict' : 'lax';
+	const sameSite: SessionCookieSameSite = SESSION_COOKIE_SAME_SITE_VALUES.includes(raw)
+		? raw
+		: 'lax';
 	return {
 		path: '/',
 		httpOnly: true,

@@ -3,15 +3,7 @@
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 	import { buildTableQuery } from '$lib/tableParams';
-
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
+	import { escapeHtml } from '$lib/escapeHtml';
 
 	function durationMs(startedAt: string, finishedAt: string | null | undefined) {
 		if (!finishedAt) return '';
@@ -26,7 +18,7 @@
 			name: 'Started',
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(
 						formatDateTime(String(row.startedAt), { timeStyle: 'medium' })
 					)}</span>`
 				)
@@ -37,7 +29,7 @@
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(
 						durationMs(String(row.startedAt), row.finishedAt as string | null | undefined)
 					)}</span>`
 				)
@@ -64,7 +56,7 @@
 				const message = row.errorMessage;
 				if (message) {
 					return html(
-						`<code class="code-chip px-2 py-1 text-red-300">${escapeHtml(String(message))}</code>`
+						`<code class="code-chip px-2 py-1" style="color: var(--theme-danger-text)">${escapeHtml(String(message))}</code>`
 					);
 				}
 				return '';

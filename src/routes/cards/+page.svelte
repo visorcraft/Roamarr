@@ -3,18 +3,10 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
+	import { escapeHtml } from '$lib/escapeHtml';
 
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
-
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
 
 	const networkLabel: Record<string, string> = {
 		visa: 'Visa',

@@ -1,7 +1,8 @@
-import { error, redirect, type Actions } from '@sveltejs/kit';
+import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { getFareProviderByIdAndUser, registry, updateProvider } from '$lib/server/fareproviders';
 import { logAudit } from '$lib/server/audit';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params, locals }) => {
@@ -23,10 +24,14 @@ export const load: PageServerLoad = ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	update: async ({ params, request, locals }) => {
+	update: async ({ params, request, locals, getClientAddress }) => {
 		const admin = requireAdmin(locals);
 		const id = Number(params.id);
 		if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
+		const limit = checkRateLimit(getClientAddress(), 'fare-providers:update');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		const f = await request.formData();
 		updateProvider(
 			admin.id,

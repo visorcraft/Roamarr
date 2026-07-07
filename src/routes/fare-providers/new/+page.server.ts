@@ -1,7 +1,8 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { createProvider, registry } from '$lib/server/fareproviders';
 import { logAudit } from '$lib/server/audit';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -12,8 +13,12 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
+	create: async ({ request, locals, getClientAddress }) => {
 		const admin = requireAdmin(locals);
+		const limit = checkRateLimit(getClientAddress(), 'fare-providers:create');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
 		const f = await request.formData();
 		const provider = createProvider(
 			admin.id,

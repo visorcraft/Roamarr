@@ -4,19 +4,11 @@
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
+	import { escapeHtml } from '$lib/escapeHtml';
 
 	let { form }: { form: { error?: string; success?: boolean; email?: string; generatedPassword?: string } | null } = $props();
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
-
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
 
 	const columns = [
 		{
@@ -25,8 +17,8 @@
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<div class="font-medium text-white">${escapeHtml(row.displayName)}</div>` +
-						`<div class="text-xs text-slate-500">${escapeHtml(row.email)}</div>`
+					`<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.displayName)}</div>` +
+						`<div class="text-xs" style="color: var(--theme-readable-faint)">${escapeHtml(row.email)}</div>`
 				)
 		},
 		{
@@ -63,7 +55,7 @@
 			name: 'Joined',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(`<span class="text-slate-400">${escapeHtml(formatDateTime(String(row.createdAt)))}</span>`)
+				html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(formatDateTime(String(row.createdAt)))}</span>`)
 		}
 	];
 

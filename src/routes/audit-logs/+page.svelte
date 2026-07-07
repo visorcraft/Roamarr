@@ -5,6 +5,7 @@
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
+	import { escapeHtml } from '$lib/escapeHtml';
 	import type { AuditLogFilters } from './+page.server';
 
 	let { data } = $props<{ data: { filters: AuditLogFilters } }>();
@@ -35,15 +36,6 @@
 				users = [];
 			});
 	});
-
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
 
 	function truncateMeta(value: unknown): string {
 		const text = JSON.stringify(value);
@@ -116,7 +108,7 @@
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(
 						formatDateTime(String(row.createdAt), { dateStyle: 'short', timeStyle: 'medium' })
 					)}</span>`
 				)
@@ -128,8 +120,8 @@
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				const u = row.user as Record<string, unknown> | undefined;
 				return html(
-					`<div class="font-medium text-white">${escapeHtml(u?.displayName)}</div>` +
-						`<div class="text-xs text-slate-500">${escapeHtml(u?.email)}</div>`
+					`<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(u?.displayName)}</div>` +
+						`<div class="text-xs" style="color: var(--theme-readable-faint)">${escapeHtml(u?.email)}</div>`
 				);
 			}
 		},
@@ -146,7 +138,7 @@
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(row.entityType)}:${escapeHtml(
+					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(row.entityType)}:${escapeHtml(
 						row.entityId
 					)}</span>`
 				)

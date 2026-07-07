@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
+	import { escapeHtml } from '$lib/escapeHtml';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -10,15 +11,6 @@
 	let testResult: { message: string; success: boolean } | null = $state(null);
 
 	const providerLabel = $derived(new Map(data.providers.map((p) => [p.key, p.label])));
-
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
 
 	const columns = [
 		{

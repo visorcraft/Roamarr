@@ -41,3 +41,7 @@ test('returns paginated cards', async () => {
 		notes: 'Primary card'
 	});
 });
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/cards', null))).rejects.toMatchObject({ status: 401 });
+});

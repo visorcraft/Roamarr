@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { GET } from './+server';
-import { makeAdmin, makeSchedulerRun } from '../../../../tests/helpers';
+import { makeAdmin, makeSchedulerRun, makeUser } from '../../../../tests/helpers';
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -50,4 +50,13 @@ test('returns paginated scheduler runs', async () => {
 		success: false,
 		errorMessage: 'boom'
 	});
+});
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/jobs', null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('rejects non-admin users', async () => {
+	const user = makeUser(ctx.kit);
+	await expect(GET(makeEvent('/api/jobs', user))).rejects.toMatchObject({ status: 403 });
 });

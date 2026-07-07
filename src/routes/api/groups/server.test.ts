@@ -38,3 +38,7 @@ test('returns paginated groups with member counts', async () => {
 		memberCount: 2
 	});
 });
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/groups', null))).rejects.toMatchObject({ status: 401 });
+});

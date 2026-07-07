@@ -61,3 +61,7 @@ test('returns paginated fare providers without exposing api keys', async () => {
 		expect(row).not.toHaveProperty('apiKey');
 	}
 });
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/fare-providers', null))).rejects.toMatchObject({ status: 401 });
+});

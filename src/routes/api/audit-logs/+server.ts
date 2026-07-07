@@ -4,22 +4,28 @@ import { parseTableParams } from '$lib/tableParams';
 import { requireAdmin } from '$lib/server/auth';
 import { listAuditLogs } from '$lib/server/repositories/auditRepo';
 
-function parsePositiveIntParam(raw: string | null): number | undefined {
+function parsePositiveInteger(raw: string | null): number | undefined {
 	if (raw == null || raw === '') return undefined;
 	const value = Number(raw);
-	if (!Number.isInteger(value) || value < 1) throw error(400, 'Invalid userId');
+	if (!Number.isInteger(value) || value < 1) throw error(400, 'Invalid value');
 	return value;
 }
 
-export const GET: RequestHandler = ({ url, locals }) => {
+function parseIsoDateParam(raw: string | null, name: string): string | undefined {
+	if (raw == null || raw === '') return undefined;
+	if (Number.isNaN(Date.parse(raw))) throw error(400, `Invalid ${name} date`);
+	return raw;
+}
+
+export const GET: RequestHandler = async ({ url, locals }) => {
 	requireAdmin(locals);
 	const { page, limit, search } = parseTableParams(url);
 	const offset = (page - 1) * limit;
-	const userId = parsePositiveIntParam(url.searchParams.get('userId'));
+	const userId = parsePositiveInteger(url.searchParams.get('userId'));
 	const action = url.searchParams.get('action') ?? undefined;
 	const entityType = url.searchParams.get('entityType') ?? undefined;
-	const from = url.searchParams.get('from') ?? undefined;
-	const to = url.searchParams.get('to') ?? undefined;
+	const from = parseIsoDateParam(url.searchParams.get('from'), 'from');
+	const to = parseIsoDateParam(url.searchParams.get('to'), 'to');
 
 	const { logs, total } = listAuditLogs({
 		userId,

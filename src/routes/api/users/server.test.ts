@@ -50,3 +50,12 @@ test('returns paginated users with two-factor status', async () => {
 	});
 	expect(row.createdAt).toBeDefined();
 });
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/users', null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('rejects non-admin users', async () => {
+	const user = makeUser(ctx.kit);
+	await expect(GET(makeEvent('/api/users', user))).rejects.toMatchObject({ status: 403 });
+});

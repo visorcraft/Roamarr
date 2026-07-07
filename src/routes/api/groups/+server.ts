@@ -5,10 +5,10 @@ import { requireUser } from '$lib/server/auth';
 import {
 	listGroupsForUserPaginated,
 	countGroupsForUser,
-	listMembersForGroup
+	countMembersForGroupIds
 } from '$lib/server/repositories/tripsRepo';
 
-export const GET: RequestHandler = ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	const u = requireUser(locals);
 	const { page, limit, search, sort, dir } = parseTableParams(url, ['name', 'createdAt']);
 	const offset = (page - 1) * limit;
@@ -19,11 +19,12 @@ export const GET: RequestHandler = ({ url, locals }) => {
 		limit,
 		offset
 	});
+	const memberCounts = countMembersForGroupIds(groups.map((g) => g.id));
 	const rows = groups.map((g) => ({
 		id: g.id,
 		name: g.name,
 		createdAt: g.createdAt,
-		memberCount: listMembersForGroup(g.id).length
+		memberCount: memberCounts.get(g.id) ?? 0
 	}));
 	const total = countGroupsForUser(u.id, search);
 	return json({ rows, total });

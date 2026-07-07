@@ -664,6 +664,20 @@ export function listMembersForGroup(groupId: number): GroupMemberWithEmail[] {
 	}));
 }
 
+export function countMembersForGroupIds(groupIds: number[]): Map<number, number> {
+	const counts = new Map<number, number>();
+	if (groupIds.length === 0) return counts;
+	const rows = kit
+		.selectFrom(groupMembers)
+		.where(inList(groupMembers.group_id, groupIds.map(kitId)))
+		.executeSync();
+	for (const row of rows) {
+		const groupId = num(row.group_id);
+		counts.set(groupId, (counts.get(groupId) ?? 0) + 1);
+	}
+	return counts;
+}
+
 export function addGroupMember(groupId: number, userId: number): GroupMember {
 	const existing = kit
 		.selectFrom(groupMembers)

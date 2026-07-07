@@ -7,7 +7,7 @@ import {
 	countFareProvidersForUser
 } from '$lib/server/repositories/travelDataRepo';
 
-export const GET: RequestHandler = ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	const u = requireUser(locals);
 	const { page, limit, search, sort, dir } = parseTableParams(url, [
 		'providerKey',

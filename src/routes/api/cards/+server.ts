@@ -4,7 +4,7 @@ import { parseTableParams } from '$lib/tableParams';
 import { requireUser } from '$lib/server/auth';
 import { listCardsPaginated, countCards } from '$lib/server/repositories/profileRepo';
 
-export const GET: RequestHandler = ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	const u = requireUser(locals);
 	const { page, limit, search, sort, dir } = parseTableParams(url, ['nickname', 'network', 'last4']);
 	const offset = (page - 1) * limit;

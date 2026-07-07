@@ -41,3 +41,24 @@ test('returns paginated audit logs with nested user', async () => {
 	});
 	expect(body.rows[0].createdAt).toBeDefined();
 });
+
+test('rejects unauthenticated requests', async () => {
+	await expect(GET(makeEvent('/api/audit-logs', null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('rejects non-admin users', async () => {
+	const user = makeUser(ctx.kit);
+	await expect(GET(makeEvent('/api/audit-logs', user))).rejects.toMatchObject({ status: 403 });
+});
+
+test('rejects invalid from date', async () => {
+	const admin = makeAdmin(ctx.kit);
+	await expect(GET(makeEvent('/api/audit-logs?from=not-a-date', admin))).rejects.toMatchObject({
+		status: 400
+	});
+});
+
+test('rejects invalid to date', async () => {
+	const admin = makeAdmin(ctx.kit);
+	await expect(GET(makeEvent('/api/audit-logs?to=bad', admin))).rejects.toMatchObject({ status: 400 });
+});

@@ -5,6 +5,7 @@ import {
 	eq as kitEq,
 	and as kitAnd,
 	isNull as kitIsNull,
+	inList,
 	validateRow,
 	toCells,
 	enforceForeignKeys,
@@ -90,6 +91,19 @@ export function isTwoFactorEnabled(userId: number): boolean {
 		.where(kitEq(userTwoFactor.user_id, BigInt(userId)))
 		.executeSync()[0];
 	return Boolean(row?.enabled);
+}
+
+export function areTwoFactorEnabledForUserIds(userIds: number[]): Set<number> {
+	if (userIds.length === 0) return new Set();
+	const rows = kit
+		.selectFrom(userTwoFactor)
+		.where(inList(userTwoFactor.user_id, userIds.map((id) => BigInt(id))))
+		.executeSync();
+	const enabled = new Set<number>();
+	for (const row of rows) {
+		if (row.enabled) enabled.add(Number(row.user_id));
+	}
+	return enabled;
 }
 
 export function getTwoFactorState(userId: number): TwoFactorState {

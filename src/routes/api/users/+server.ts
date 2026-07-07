@@ -3,9 +3,9 @@ import type { RequestHandler } from './$types';
 import { parseTableParams } from '$lib/tableParams';
 import { requireAdmin } from '$lib/server/auth';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
-import { isTwoFactorEnabled } from '$lib/server/twoFactor';
+import { areTwoFactorEnabledForUserIds } from '$lib/server/twoFactor';
 
-export const GET: RequestHandler = ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
 	requireAdmin(locals);
 	const { page, limit, search, sort, dir } = parseTableParams(url, [
 		'email',
@@ -21,6 +21,7 @@ export const GET: RequestHandler = ({ url, locals }) => {
 		limit,
 		offset
 	});
+	const twoFactorEnabled = areTwoFactorEnabledForUserIds(users.map((u) => Number(u.id)));
 	const rows = users.map((u) => ({
 		id: Number(u.id),
 		email: u.email,
@@ -29,7 +30,7 @@ export const GET: RequestHandler = ({ url, locals }) => {
 		disabled: u.disabled,
 		mustResetPassword: u.must_reset_password,
 		createdAt: u.created_at,
-		twoFactorEnabled: isTwoFactorEnabled(Number(u.id))
+		twoFactorEnabled: twoFactorEnabled.has(Number(u.id))
 	}));
 	const total = usersRepo.countUsers(search);
 	return json({ rows, total });

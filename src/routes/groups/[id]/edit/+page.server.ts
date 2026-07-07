@@ -71,12 +71,9 @@ export const actions: Actions = {
 			return fail(400, { error: 'A valid email is required', values: { email } });
 		}
 		const member = getUserByEmail(email);
-		if (!member) {
-			return fail(400, { error: 'User not found', values: { email } });
-		}
-		const { created } = addGroupMember(id, Number(member.id));
-		if (!created) {
-			return fail(400, { error: 'User is already a member', values: { email } });
+		const { created } = member ? addGroupMember(id, Number(member.id)) : { created: false };
+		if (!member || !created) {
+			return fail(400, { error: 'Could not add member', values: { email } });
 		}
 		logAudit(u.id, 'group_member_add', 'group', id);
 		throw redirect(303, `/groups/${id}/edit`);

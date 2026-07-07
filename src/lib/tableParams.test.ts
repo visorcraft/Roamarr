@@ -69,6 +69,12 @@ describe('parseTableParams', () => {
 		const p = parseTableParams(url('sort=createdAt'), ['name', 'createdAt']);
 		expect(p.sort).toBe('createdAt');
 	});
+
+	it('caps search strings at 200 characters', () => {
+		const long = 'a'.repeat(300);
+		const p = parseTableParams(url('search=' + long));
+		expect(p.search).toBe('a'.repeat(200));
+	});
 });
 
 describe('buildTableQuery', () => {

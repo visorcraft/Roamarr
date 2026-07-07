@@ -5,6 +5,14 @@ import { logAudit } from '$lib/server/audit';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
+function parseCreate(formData: FormData) {
+	const providerKey = String(formData.get('providerKey'));
+	const label = String(formData.get('label') || '');
+	const apiKey = String(formData.get('apiKey') || '');
+	const enabled = formData.get('enabled') === 'on';
+	return { providerKey, label, apiKey, enabled };
+}
+
 export const load: PageServerLoad = ({ locals }) => {
 	requireAdmin(locals);
 	return {
@@ -20,14 +28,25 @@ export const actions: Actions = {
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
 		}
 		const f = await request.formData();
-		const provider = createProvider(
-			admin.id,
-			String(f.get('providerKey')),
-			String(f.get('label') || ''),
-			String(f.get('apiKey') || ''),
-			f.get('enabled') === 'on'
-		);
-		logAudit(admin.id, 'fare_provider_create', 'fare_provider', provider.id);
-		throw redirect(303, '/fare-providers');
+		const parsed = parseCreate(f);
+		try {
+			const provider = createProvider(
+				admin.id,
+				parsed.providerKey,
+				parsed.label,
+				parsed.apiKey,
+				parsed.enabled
+			);
+			logAudit(admin.id, 'fare_provider_create', 'fare_provider', provider.id);
+			throw redirect(303, '/fare-providers');
+		} catch (e) {
+			if (e instanceof Error && e.message.includes('Label is required')) {
+				return fail(400, {
+					error: e.message,
+					values: { providerKey: parsed.providerKey, label: parsed.label, enabled: parsed.enabled }
+				});
+			}
+			throw e;
+		}
 	}
 };

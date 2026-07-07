@@ -2,6 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { createCard } from '$lib/server/repositories/profileRepo';
 import { logAudit } from '$lib/server/audit';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import { Validator, sanitizeLast4 } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
@@ -13,8 +14,14 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
+	create: async ({ request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
+
+		const limit = checkRateLimit(getClientAddress(), 'cards:create');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
 		const v = new Validator();
 		const nickname = v.requiredString(f.get('nickname'), 'nickname', { max: 200 });

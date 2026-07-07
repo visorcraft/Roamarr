@@ -163,6 +163,38 @@ test('runFareChecks skips paused watches and disabled providers', async () => {
 	expect(r2!.lastCheckedAt).toBeNull();
 });
 
+test('createProvider rejects empty or oversized labels', () => {
+	const a = makeKitUser({ email: 'fare-label@x.c' });
+	expect(() => createProvider(Number(a.id), 'stub', '   ', 'KEY', true)).toThrow(
+		'Label is required and must be 200 characters or fewer.'
+	);
+	expect(() => createProvider(Number(a.id), 'stub', 'x'.repeat(201), 'KEY', true)).toThrow(
+		'Label is required and must be 200 characters or fewer.'
+	);
+	expect(
+		(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
+			.selectFrom(fareProviders)
+			.where(kitEq(fareProviders.user_id, a.id))
+			.executeSync()
+	).toHaveLength(0);
+});
+
+test('updateProvider rejects empty or oversized labels', () => {
+	const a = makeKitUser({ email: 'fare-label-up@x.c' });
+	const p = createProvider(Number(a.id), 'stub', 'Original', 'KEY', true);
+	expect(() => updateProvider(Number(a.id), p.id, '   ', 'KEY', true)).toThrow(
+		'Label is required and must be 200 characters or fewer.'
+	);
+	expect(() => updateProvider(Number(a.id), p.id, 'x'.repeat(201), 'KEY', true)).toThrow(
+		'Label is required and must be 200 characters or fewer.'
+	);
+	const row = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
+		.selectFrom(fareProviders)
+		.where(kitEq(fareProviders.id, BigInt(p.id)))
+		.executeSync()[0];
+	expect(row!.label).toBe('Original');
+});
+
 test('testProvider returns the stub result for an owned account', async () => {
 	const a = makeKitUser({ email: 'fare-test@x.c' });
 	const p = createProvider(Number(a.id), 'stub', 'Test', 'KEY', true);

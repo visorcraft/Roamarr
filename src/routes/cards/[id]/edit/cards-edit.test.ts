@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 const ctx = vi.hoisted(() => ({
 	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
@@ -16,6 +17,7 @@ beforeEach(() => {
 	ctx.kit.deleteFrom(cards).executeSync();
 	ctx.kit.deleteFrom(auditLogs).executeSync();
 	ctx.kit.deleteFrom(users).executeSync();
+	resetRateLimit();
 });
 
 afterAll(() => {
@@ -29,11 +31,17 @@ import { listBenefitTemplates } from '$lib/server/benefitTemplates';
 import { makeUser } from '../../../../../tests/helpers';
 import { createCard, createCardBenefit } from '$lib/server/repositories/profileRepo';
 
-function event(user: { id: number } | null, params: Record<string, string>, body?: FormData) {
+function event(
+	user: { id: number } | null,
+	params: Record<string, string>,
+	body?: FormData,
+	clientAddress = '127.0.0.1'
+) {
 	return {
 		locals: { user } as App.Locals,
 		params,
-		request: body ? ({ formData: async () => body } as Request) : undefined
+		request: body ? ({ formData: async () => body } as Request) : undefined,
+		getClientAddress: () => clientAddress
 	} as any;
 }
 
@@ -348,6 +356,17 @@ test('addBenefit action rejects invalid benefit fields', async () => {
 	expect(coverageResult.status).toBe(400);
 	expect(coverageResult.data.errors.coverageAmount).toBe('coverageAmount must be a number');
 
+	const negativeCoverage = new FormData();
+	negativeCoverage.set('benefitType', 'other');
+	negativeCoverage.set('coverageAmount', '-1');
+	negativeCoverage.set('currency', 'USD');
+	const negativeResult = (await actions.addBenefit(event(user, { id: String(card.id) }, negativeCoverage))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string> };
+	};
+	expect(negativeResult.status).toBe(400);
+	expect(negativeResult.data.errors.coverageAmount).toBe('Coverage amount cannot be negative');
+
 	const invalidCurrency = new FormData();
 	invalidCurrency.set('benefitType', 'other');
 	invalidCurrency.set('coverageAmount', '100');
@@ -383,6 +402,18 @@ test('updateBenefit action rejects invalid benefit fields', async () => {
 	expect(result.data.errors.currency).toContain('3-letter currency code');
 	expect(result.data.values?.id).toBe(benefit.id);
 
+	const negative = new FormData();
+	negative.set('id', String(benefit.id));
+	negative.set('benefitType', 'trip_delay');
+	negative.set('coverageAmount', '-5');
+	negative.set('currency', 'USD');
+	const negativeResult = (await actions.updateBenefit(event(user, { id: String(card.id) }, negative))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string> };
+	};
+	expect(negativeResult.status).toBe(400);
+	expect(negativeResult.data.errors.coverageAmount).toBe('Coverage amount cannot be negative');
+
 	const row = ctx.kit.selectFrom(cardBenefits).where(kitEq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0];
 	expect(row!.benefit_type).toBe('trip_delay');
 	expect(Number(row!.coverage_amount)).toBe(100);
@@ -407,4 +438,104 @@ test('deleteBenefit action removes a benefit and logs audit', async () => {
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('card_benefit_delete');
 	expect(Number(logs[0].entity_id)).toBe(benefit.id);
+});
+
+test('updateCard action rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	for (let i = 0; i < 10; i++) {
+		const f = new FormData();
+		f.set('nickname', `Updated ${i}`);
+		f.set('network', 'visa');
+		await expect(actions.updateCard(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const f = new FormData();
+	f.set('nickname', 'Blocked');
+	f.set('network', 'visa');
+	const result = (await actions.updateCard(event(user, { id: String(card.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
+});
+
+test('addBenefit action rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	for (let i = 0; i < 10; i++) {
+		const f = new FormData();
+		f.set('benefitType', 'other');
+		f.set('coverageAmount', String(i));
+		f.set('currency', 'USD');
+		await expect(actions.addBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const f = new FormData();
+	f.set('benefitType', 'other');
+	f.set('coverageAmount', '100');
+	f.set('currency', 'USD');
+	const result = (await actions.addBenefit(event(user, { id: String(card.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
+});
+
+test('updateBenefit action rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	for (let i = 0; i < 10; i++) {
+		const benefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay', coverageAmount: i });
+		const f = new FormData();
+		f.set('id', String(benefit.id));
+		f.set('benefitType', 'trip_delay');
+		f.set('coverageAmount', String(i + 1));
+		f.set('currency', 'USD');
+		await expect(actions.updateBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const lastBenefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay', coverageAmount: 99 });
+	const f = new FormData();
+	f.set('id', String(lastBenefit.id));
+	f.set('benefitType', 'trip_delay');
+	f.set('coverageAmount', '100');
+	f.set('currency', 'USD');
+	const result = (await actions.updateBenefit(event(user, { id: String(card.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
+});
+
+test('deleteBenefit action rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	for (let i = 0; i < 10; i++) {
+		const benefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay' });
+		const f = new FormData();
+		f.set('id', String(benefit.id));
+		await expect(actions.deleteBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const lastBenefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay' });
+	const f = new FormData();
+	f.set('id', String(lastBenefit.id));
+	const result = (await actions.deleteBenefit(event(user, { id: String(card.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
 });

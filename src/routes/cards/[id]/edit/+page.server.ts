@@ -11,6 +11,7 @@ import {
 import { listBenefitTemplates, getBenefitTemplate } from '$lib/server/benefitTemplates';
 import { Validator, sanitizeLast4, positiveIdFromForm, currency } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
 const allowedNetworks = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
@@ -35,9 +36,15 @@ export const load: PageServerLoad = ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	updateCard: async ({ params, request, locals }) => {
+	updateCard: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
 		const id = parseId(params);
+
+		const limit = checkRateLimit(getClientAddress(), 'cards:update');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
 		const v = new Validator();
 		const nickname = v.requiredString(f.get('nickname'), 'nickname', { max: 200 });
@@ -65,9 +72,15 @@ export const actions: Actions = {
 		logAudit(u.id, 'card_update', 'card', id);
 		throw redirect(303, '/cards');
 	},
-	addBenefit: async ({ params, request, locals }) => {
+	addBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
 		const cardId = parseId(params);
+
+		const limit = checkRateLimit(getClientAddress(), 'cards:addBenefit');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
 
 		const templateIdRaw = f.get('templateId');
@@ -97,6 +110,8 @@ export const actions: Actions = {
 				const n = Number(coverageRaw);
 				if (!Number.isFinite(n)) {
 					v.addError('coverageAmount', 'coverageAmount must be a number');
+				} else if (n < 0) {
+					v.addError('coverageAmount', 'Coverage amount cannot be negative');
 				} else {
 					coverageAmount = n;
 				}
@@ -130,9 +145,15 @@ export const actions: Actions = {
 		logAudit(u.id, 'card_benefit_create', 'card_benefit', benefit.id);
 		throw redirect(303, `/cards/${cardId}/edit`);
 	},
-	updateBenefit: async ({ params, request, locals }) => {
+	updateBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
 		const cardId = parseId(params);
+
+		const limit = checkRateLimit(getClientAddress(), 'cards:updateBenefit');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });
@@ -146,6 +167,8 @@ export const actions: Actions = {
 			const n = Number(coverageRaw);
 			if (!Number.isFinite(n)) {
 				v.addError('coverageAmount', 'coverageAmount must be a number');
+			} else if (n < 0) {
+				v.addError('coverageAmount', 'Coverage amount cannot be negative');
 			} else {
 				coverageAmount = n;
 			}
@@ -180,9 +203,15 @@ export const actions: Actions = {
 		logAudit(u.id, 'card_benefit_update', 'card_benefit', idResult.value);
 		throw redirect(303, `/cards/${cardId}/edit`);
 	},
-	deleteBenefit: async ({ params, request, locals }) => {
+	deleteBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
 		const cardId = parseId(params);
+
+		const limit = checkRateLimit(getClientAddress(), 'cards:deleteBenefit');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
 		const idResult = positiveIdFromForm(f.get('id'), 'id');
 		if (!idResult.ok) return fail(400, { error: idResult.error });

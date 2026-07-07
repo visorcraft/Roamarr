@@ -100,3 +100,35 @@ test('create rejects duplicate email', async () => {
 	expect(result.status).toBe(400);
 	expect(result.data.error).toMatch(/already in use/i);
 });
+
+test('create rejects invalid email format', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const form = new FormData();
+	form.set('displayName', 'Bad Email');
+	form.set('email', 'not-an-email');
+	form.set('role', 'user');
+
+	const result = (await actions.create(event(admin.user, form))) as {
+		status: number;
+		data: { error: string };
+	};
+
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('A valid email is required.');
+});
+
+test('create rejects oversized email and display name', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const form = new FormData();
+	form.set('displayName', 'x'.repeat(201));
+	form.set('email', 'a'.repeat(252) + '@x.c');
+	form.set('role', 'user');
+
+	const result = (await actions.create(event(admin.user, form))) as {
+		status: number;
+		data: { error: string };
+	};
+
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/email|display name/i);
+});

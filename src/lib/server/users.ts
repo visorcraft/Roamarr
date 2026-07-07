@@ -13,6 +13,20 @@ export function normalizeEmail(raw: string): string {
 	return raw.trim().toLowerCase();
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+$/;
+
+function validateEmail(email: string): void {
+	if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
+		throw new Error('A valid email is required.');
+	}
+}
+
+function validateDisplayName(displayName: string): void {
+	if (!displayName || displayName.length > 200) {
+		throw new Error('Display name is required and must be 200 characters or fewer.');
+	}
+}
+
 function countAdmins() {
 	return kit.selectFrom(users).where(kitEq(users.role, 'admin')).executeSync().length;
 }
@@ -39,8 +53,8 @@ interface AdminCreateUserInput {
 export async function adminCreateUser(actorId: number, input: AdminCreateUserInput) {
 	const displayName = input.displayName.trim();
 	const email = normalizeEmail(input.email);
-	if (!displayName) throw new Error('Display name is required.');
-	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
+	validateDisplayName(displayName);
+	validateEmail(email);
 
 	const duplicate = usersRepo.getUserByEmail(email);
 	if (duplicate) throw new Error('That email is already in use.');
@@ -100,8 +114,8 @@ export async function adminUpdateUser(
 
 	const displayName = input.displayName.trim();
 	const email = normalizeEmail(input.email);
-	if (!displayName) throw new Error('Display name is required.');
-	if (!email || !email.includes('@')) throw new Error('A valid email is required.');
+	validateDisplayName(displayName);
+	validateEmail(email);
 
 	const duplicate = usersRepo.getUserByEmail(email);
 	if (duplicate && Number(duplicate.id) !== userId) throw new Error('That email is already in use.');

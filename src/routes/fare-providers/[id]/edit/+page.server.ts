@@ -5,6 +5,13 @@ import { logAudit } from '$lib/server/audit';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
 
+function parseUpdate(formData: FormData) {
+	const label = String(formData.get('label') || '');
+	const apiKey = String(formData.get('apiKey') || '');
+	const enabled = formData.get('enabled') === 'on';
+	return { label, apiKey, enabled };
+}
+
 export const load: PageServerLoad = ({ params, locals }) => {
 	const admin = requireAdmin(locals);
 	const id = Number(params.id);
@@ -33,14 +40,19 @@ export const actions: Actions = {
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
 		}
 		const f = await request.formData();
-		updateProvider(
-			admin.id,
-			id,
-			String(f.get('label') || ''),
-			String(f.get('apiKey') || ''),
-			f.get('enabled') === 'on'
-		);
-		logAudit(admin.id, 'fare_provider_update', 'fare_provider', id);
-		throw redirect(303, '/fare-providers');
+		const parsed = parseUpdate(f);
+		try {
+			updateProvider(admin.id, id, parsed.label, parsed.apiKey, parsed.enabled);
+			logAudit(admin.id, 'fare_provider_update', 'fare_provider', id);
+			throw redirect(303, '/fare-providers');
+		} catch (e) {
+			if (e instanceof Error && e.message.includes('Label is required')) {
+				return fail(400, {
+					error: e.message,
+					values: { label: parsed.label, enabled: parsed.enabled }
+				});
+			}
+			throw e;
+		}
 	}
 };

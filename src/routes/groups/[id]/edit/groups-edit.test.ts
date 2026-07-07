@@ -175,7 +175,7 @@ test('addMember action fails when email is not found and preserves values', asyn
 		data: { error: string; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
-	expect(result.data.error).toBe('User not found');
+	expect(result.data.error).toBe('Could not add member');
 	expect(result.data.values).toEqual({ email: 'missing@x.c' });
 
 	expect(ctx.kit.selectFrom(groupMembers).executeSync()).toHaveLength(0);
@@ -223,7 +223,7 @@ test('addMember action fails when user is already a member and does not log audi
 		data: { error: string; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
-	expect(result.data.error).toBe('User is already a member');
+	expect(result.data.error).toBe('Could not add member');
 	expect(result.data.values).toEqual({ email: 'member@x.c' });
 
 	const rows = ctx.kit.selectFrom(groupMembers).where(kitEq(groupMembers.group_id, BigInt(groupId))).executeSync();

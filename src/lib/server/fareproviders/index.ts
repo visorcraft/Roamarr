@@ -30,6 +30,14 @@ export const registry: Record<string, FareProvider> = { [stub.key]: stub };
 
 export { getFareProviderByIdAndUser };
 
+function validateLabel(label: string): string {
+	const trimmed = label.trim();
+	if (!trimmed || trimmed.length > 200) {
+		throw new Error('Label is required and must be 200 characters or fewer.');
+	}
+	return trimmed;
+}
+
 export function createProvider(
 	userId: number,
 	providerKey: string,
@@ -41,7 +49,7 @@ export function createProvider(
 	return createFareProvider({
 		userId,
 		providerKey,
-		label: label.trim(),
+		label: validateLabel(label),
 		apiKey: apiKey || null,
 		enabled
 	});
@@ -62,7 +70,7 @@ export function updateProvider(
 ) {
 	requireOwnedProvider(userId, providerId);
 	const updated = updateFareProvider(providerId, {
-		label: label.trim(),
+		label: validateLabel(label),
 		apiKey,
 		enabled
 	});

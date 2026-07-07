@@ -28,7 +28,7 @@ export function parseTableParams(url: URL, allowedSorts?: string[]): TableParams
 	return {
 		page: parsePositiveInt(pageRaw, 1),
 		limit: Math.min(parsePositiveInt(limitRaw, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
-		search: (url.searchParams.get('search') ?? '').trim().toLowerCase(),
+		search: (url.searchParams.get('search') ?? '').trim().toLowerCase().slice(0, 200),
 		sort,
 		dir: (url.searchParams.get('dir') ?? 'asc') === 'desc' ? 'desc' : 'asc'
 	};

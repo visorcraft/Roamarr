@@ -12,13 +12,16 @@
 
 	const providerLabel = $derived(new Map(data.providers.map((p) => [p.key, p.label])));
 
+	function formatLabel(row: Record<string, unknown>) {
+		return String(row.label || providerLabel.get(String(row.providerKey)) || row.providerKey);
+	}
+
 	const columns = [
 		{
 			id: 'label',
 			name: 'Label',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				escapeHtml(row.label || providerLabel.get(String(row.providerKey)) || row.providerKey)
+			formatter: (_cell: unknown, row: Record<string, unknown>) => formatLabel(row)
 		},
 		{
 			id: 'providerKey',
@@ -49,8 +52,7 @@
 			variant: 'danger' as const,
 			confirm: true,
 			confirmTitle: 'Delete provider',
-			confirmMessage: (row: Record<string, unknown>) =>
-				`Delete ${row.label || providerLabel.get(String(row.providerKey)) || row.providerKey}?`
+			confirmMessage: (row: Record<string, unknown>) => `Delete ${formatLabel(row)}?`
 		}
 	];
 

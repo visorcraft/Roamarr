@@ -13,7 +13,7 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 		throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
 	}
 
-	const { page, limit: pageLimit, search } = parseTableParams(url);
+	const { page, limit: pageLimit, search } = parseTableParams(url, ['createdAt', 'action', 'entityType']);
 	const offset = (page - 1) * pageLimit;
 	const userId = parsePositiveInteger(url.searchParams.get('userId'));
 	const action = url.searchParams.get('action') ?? undefined;

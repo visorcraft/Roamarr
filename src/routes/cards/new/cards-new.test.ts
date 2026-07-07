@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 const ctx = vi.hoisted(() => ({
 	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
@@ -15,6 +16,7 @@ beforeEach(() => {
 	ctx.kit.deleteFrom(cards).executeSync();
 	ctx.kit.deleteFrom(auditLogs).executeSync();
 	ctx.kit.deleteFrom(users).executeSync();
+	resetRateLimit();
 });
 
 afterAll(() => {
@@ -26,10 +28,11 @@ import { cards, auditLogs, users } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUserLocals } from '../../../../tests/eventHelpers';
 
-function event(user: { id: number } | null, body?: FormData) {
+function event(user: { id: number } | null, body?: FormData, clientAddress = '127.0.0.1') {
 	return {
 		locals: { user } as App.Locals,
-		request: body ? ({ formData: async () => body } as Request) : undefined
+		request: body ? ({ formData: async () => body } as Request) : undefined,
+		getClientAddress: () => clientAddress
 	} as any;
 }
 
@@ -109,4 +112,26 @@ test('create action rejects nickname and notes that exceed max length', async ()
 
 	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.user_id, BigInt(user.user.id))).executeSync();
 	expect(rows).toHaveLength(0);
+});
+
+test('create action rate limits repeated requests', async () => {
+	const user = makeUserLocals(ctx.kit);
+	for (let i = 0; i < 10; i++) {
+		const f = new FormData();
+		f.set('nickname', `Card ${i}`);
+		f.set('network', 'visa');
+		await expect(actions.create(event(user.user, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const f = new FormData();
+	f.set('nickname', 'Blocked');
+	f.set('network', 'visa');
+	const result = (await actions.create(event(user.user, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
 });

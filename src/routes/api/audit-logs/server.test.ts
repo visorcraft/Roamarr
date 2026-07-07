@@ -137,3 +137,11 @@ test('date filters exclude events outside the range', async () => {
 	expect(body.total).toBe(1);
 	expect(body.rows[0].action).toBe('mid');
 });
+
+test('ignores invalid sort keys', async () => {
+	const admin = makeAdmin(ctx.kit);
+	const res = await GET(makeEvent('/api/audit-logs?sort=invalidColumn&dir=desc', admin));
+	expect(res.status).toBe(200);
+	const body = await res.json();
+	expect(body.rows).toHaveLength(0);
+});

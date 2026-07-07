@@ -114,3 +114,37 @@ test('create action is rate limited', async () => {
 	const result = await actions.create(event(admin.user, f));
 	expect(result).toMatchObject({ status: 429, data: { error: 'Too many attempts. Try again later.' } });
 });
+
+test('create action rejects empty label', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const f = new FormData();
+	f.set('providerKey', 'stub');
+	f.set('label', '   ');
+	f.set('apiKey', 'SECRET');
+	f.set('enabled', 'on');
+
+	const result = (await actions.create(event(admin.user, f))) as {
+		status: number;
+		data: { error: string; values: Record<string, unknown> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Label is required and must be 200 characters or fewer.');
+	expect(ctx.kit.selectFrom(fareProviders).executeSync()).toHaveLength(0);
+});
+
+test('create action rejects label over 200 characters', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const f = new FormData();
+	f.set('providerKey', 'stub');
+	f.set('label', 'x'.repeat(201));
+	f.set('apiKey', 'SECRET');
+	f.set('enabled', 'on');
+
+	const result = (await actions.create(event(admin.user, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Label is required and must be 200 characters or fewer.');
+	expect(ctx.kit.selectFrom(fareProviders).executeSync()).toHaveLength(0);
+});

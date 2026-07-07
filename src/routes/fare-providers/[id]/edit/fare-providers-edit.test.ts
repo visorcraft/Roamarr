@@ -131,3 +131,43 @@ test('update action is rate limited', async () => {
 	const result = await actions.update(event(admin.user, { id: String(p.id) }, f));
 	expect(result).toMatchObject({ status: 429, data: { error: 'Too many attempts. Try again later.' } });
 });
+
+test('update action rejects empty label', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const p = createProvider(admin.user.id, 'stub', 'Old', 'ORIGINAL', true);
+
+	const f = new FormData();
+	f.set('label', '   ');
+	f.set('apiKey', 'NEW-SECRET');
+	f.set('enabled', 'on');
+
+	const result = (await actions.update(event(admin.user, { id: String(p.id) }, f))) as {
+		status: number;
+		data: { error: string; values: Record<string, unknown> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Label is required and must be 200 characters or fewer.');
+
+	const row = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(p.id))).executeSync()[0];
+	expect(row!.label).toBe('Old');
+});
+
+test('update action rejects label over 200 characters', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const p = createProvider(admin.user.id, 'stub', 'Old', 'ORIGINAL', true);
+
+	const f = new FormData();
+	f.set('label', 'x'.repeat(201));
+	f.set('apiKey', 'NEW-SECRET');
+	f.set('enabled', 'on');
+
+	const result = (await actions.update(event(admin.user, { id: String(p.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Label is required and must be 200 characters or fewer.');
+
+	const row = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(p.id))).executeSync()[0];
+	expect(row!.label).toBe('Old');
+});

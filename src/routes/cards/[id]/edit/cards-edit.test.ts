@@ -281,6 +281,27 @@ test('updateCard action rejects empty nickname or unsupported network with error
 	expect(rows[0].network).toBe('visa');
 });
 
+test('updateCard action rejects nickname and notes that exceed max length', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+
+	const f = new FormData();
+	f.set('nickname', 'x'.repeat(201));
+	f.set('network', 'visa');
+	f.set('notes', 'x'.repeat(2001));
+	const result = (await actions.updateCard(event(user, { id: String(card.id) }, f))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.errors.nickname).toBe('nickname must be at most 200 characters');
+	expect(result.data.errors.notes).toBe('notes must be at most 2000 characters');
+
+	const row = ctx.kit.selectFrom(cards).where(kitEq(cards.id, BigInt(card.id))).executeSync()[0];
+	expect(row!.nickname).toBe('Sapphire');
+	expect(row!.notes).toBeNull();
+});
+
 test('updateBenefit action preserves coverage amount 0', async () => {
 	const user = makeUser(ctx.kit);
 	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });

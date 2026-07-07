@@ -1,6 +1,8 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
-const ctx = vi.hoisted(() => ({ kit: null as never }));
+const ctx = vi.hoisted(() => ({
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase
+}));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -10,6 +12,8 @@ vi.mock('$lib/server/db', async () => {
 import { GET } from './+server';
 import { makeUser, makeCard } from '../../../../tests/helpers';
 import { createCardBenefit } from '$lib/server/repositories/profileRepo';
+import { resetRateLimit } from '$lib/server/rateLimit';
+import { cards, users } from '$lib/server/db/mongrelSchema';
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -18,6 +22,12 @@ function makeEvent(url: string, user: unknown) {
 		getClientAddress: () => '127.0.0.1'
 	} as any;
 }
+
+beforeEach(() => {
+	resetRateLimit();
+	ctx.kit.deleteFrom(cards).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+});
 
 test('returns paginated cards', async () => {
 	const user = makeUser(ctx.kit);
@@ -39,9 +49,9 @@ test('returns paginated cards', async () => {
 		nickname: 'Sapphire',
 		network: 'visa',
 		last4: '1234',
-		notes: 'Primary card',
 		benefitCount: 0
 	});
+	expect(body.rows[0]).not.toHaveProperty('notes');
 });
 
 test('does not expose other users cards', async () => {
@@ -73,4 +83,14 @@ test('benefitCount reflects added benefits', async () => {
 	const body = await res.json();
 	expect(body.total).toBe(1);
 	expect(body.rows[0].benefitCount).toBe(2);
+});
+
+test('rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	makeCard(ctx.kit, user.id, { nickname: 'Sapphire', network: 'visa' });
+	for (let i = 0; i < 10; i++) {
+		const res = await GET(makeEvent('/api/cards', user));
+		expect(res.status).toBe(200);
+	}
+	await expect(GET(makeEvent('/api/cards', user))).rejects.toMatchObject({ status: 429 });
 });

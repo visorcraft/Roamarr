@@ -40,10 +40,10 @@ export const actions: Actions = {
 		const id = parseId(params);
 		const f = await request.formData();
 		const v = new Validator();
-		const nickname = v.requiredString(f.get('nickname'), 'nickname');
+		const nickname = v.requiredString(f.get('nickname'), 'nickname', { max: 200 });
 		const network = v.enumValue(f.get('network'), allowedNetworks, 'network');
 		const last4Raw = v.optionalString(f.get('last4'), 'last4');
-		const notes = v.optionalString(f.get('notes'), 'notes');
+		const notes = v.optionalString(f.get('notes'), 'notes', { max: 2000 });
 		if (!v.ok()) {
 			return fail(400, {
 				error: v.failMessage(),

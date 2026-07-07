@@ -91,3 +91,22 @@ test('create action rejects empty nickname or unsupported network with errors ob
 	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.user_id, BigInt(user.user.id))).executeSync();
 	expect(rows).toHaveLength(0);
 });
+
+test('create action rejects nickname and notes that exceed max length', async () => {
+	const user = makeUserLocals(ctx.kit);
+
+	const f = new FormData();
+	f.set('nickname', 'x'.repeat(201));
+	f.set('network', 'visa');
+	f.set('notes', 'x'.repeat(2001));
+	const result = (await actions.create(event(user.user, f))) as {
+		status: number;
+		data: { error: string; errors: Record<string, string>; values?: Record<string, unknown> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.errors.nickname).toBe('nickname must be at most 200 characters');
+	expect(result.data.errors.notes).toBe('notes must be at most 2000 characters');
+
+	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.user_id, BigInt(user.user.id))).executeSync();
+	expect(rows).toHaveLength(0);
+});

@@ -1,5 +1,26 @@
 import { test, expect } from './fixtures';
 
+test('grid table renders themed under high-contrast', async ({ page }) => {
+	await page.goto('/cards', { waitUntil: 'networkidle' });
+	await expect(page.locator('.gridjs-wrapper')).toBeVisible();
+
+	// Simulate the user selecting high-contrast by toggling the data-theme
+	// attribute the same way applyThemePreview does on /profile. CSS variables
+	// re-resolve on attribute change so this exercises the override block
+	// directly without coupling the assertion to /profile form submission.
+	await page.locator('.theme-root').evaluate((el, themeId) => {
+		el.setAttribute('data-theme', themeId);
+	}, 'high-contrast');
+	await expect(page.locator('.theme-root')).toHaveAttribute('data-theme', 'high-contrast');
+
+	const wrapperBg = await page.locator('.gridjs-wrapper').evaluate(
+		(el) => getComputedStyle(el).backgroundColor
+	);
+	// Mermaid's white background and the unthemed default should both be gone.
+	expect(wrapperBg).not.toBe('rgb(255, 255, 255)');
+	expect(wrapperBg).not.toBe('rgba(0, 0, 0, 0)');
+});
+
 test('add a payment card', async ({ page }) => {
 	const nickname = `E2E Card ${Date.now()}`;
 	const last4 = String(Date.now()).slice(-4);

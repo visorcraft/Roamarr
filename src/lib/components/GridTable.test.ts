@@ -29,7 +29,6 @@ vi.mock('gridjs', () => ({
 	}
 }));
 
-vi.mock('gridjs/dist/theme/mermaid.css', () => ({}));
 
 describe('GridTable', () => {
 	const mounted: unknown[] = [];
@@ -189,5 +188,28 @@ describe('GridTable', () => {
 
 		expect(updateConfig).toHaveBeenCalledOnce();
 		expect(forceRender).toHaveBeenCalledOnce();
+	});
+
+	it('configures gridjs with theme-safe classNames', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 })
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		expect(config.className.container).toBe('gridjs-container grid-host');
+		expect(config.className.th).toBe('gridjs-th');
+		expect(config.className.tr).toBe('gridjs-tr');
+		expect(config.className.td).toBe('gridjs-td');
+		expect(config.className.tbody).toBe('gridjs-tbody');
+		expect(config.className.thead).toBe('gridjs-thead');
+		expect(config.className.table).toBe('gridjs-table');
+		expect(config.className.search).toBe('gridjs-search');
+		expect(config.className.sort).toBe('gridjs-sort');
+		expect(config.className.pagination).toBe('gridjs-pagination');
+		expect(config.className.paginationSummary).toBe('gridjs-summary');
+		expect(config.className.paginationButton).toBe('gridjs-pages-button');
+		expect(config.className.paginationButtonCurrent).toBe('gridjs-currentPage');
 	});
 });

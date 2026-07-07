@@ -1758,6 +1758,178 @@ button.card:hover,
 	.segment-form-section-body {
 		@apply mt-4;
 	}
+
+	/* Grid.js theme overrides
+	   All rules are token-driven so the same set themes cleanly across all 16 themes,
+	   including the high-contrast override of --theme-line and --theme-brand. */
+	.grid-host {
+		color: var(--theme-ink);
+		background: transparent;
+	}
+	.grid-host *,
+	.grid-host *::before,
+	.grid-host *::after {
+		box-sizing: border-box;
+	}
+	.gridjs-container {
+		@apply text-sm;
+		display: block;
+	}
+	.gridjs-wrapper {
+		display: block;
+		width: 100%;
+		overflow: auto;
+		position: relative;
+		border: 1px solid var(--theme-line);
+		border-radius: 0.75rem;
+		background: var(--theme-panel);
+	}
+	.gridjs-head {
+		padding: 0;
+	}
+	.gridjs-header {
+		padding: 0.75rem 0.75rem 0;
+	}
+	.gridjs-footer {
+		padding: 0.75rem;
+		background: transparent;
+		border: none;
+		box-shadow: none;
+	}
+	.gridjs-search {
+		float: none;
+		width: 100%;
+		margin-bottom: 0.75rem;
+	}
+	.gridjs-table {
+		@apply w-full;
+	}
+	.gridjs-tbody {
+		background: var(--theme-panel);
+		color: var(--theme-ink);
+	}
+	.gridjs-tr {
+		border: none;
+		background: transparent;
+	}
+	.gridjs-th {
+		@apply bg-surface2 text-left font-medium;
+		white-space: nowrap;
+	}
+	.gridjs-th-sort {
+		cursor: pointer;
+		user-select: none;
+	}
+	.gridjs-th-sort:hover {
+		background: var(--theme-surface2);
+	}
+	.gridjs-th-sort:focus-visible {
+		outline: 2px solid var(--theme-brand);
+		outline-offset: -2px;
+	}
+	.gridjs-td,
+	.gridjs-th {
+		@apply border-b border-line px-3 py-2;
+	}
+	.gridjs-td {
+		border-color: color-mix(in oklab, var(--theme-line) 65%, transparent);
+	}
+	.gridjs-tbody .gridjs-tr:nth-child(even) .gridjs-td {
+		background: color-mix(in oklab, var(--theme-surface2) 35%, transparent);
+	}
+	.gridjs-tr:hover .gridjs-td {
+		@apply bg-surface2/50;
+	}
+	.gridjs-tr-selected .gridjs-td {
+		background: var(--theme-active);
+		color: var(--theme-strong);
+	}
+	button.gridjs-sort {
+		opacity: 0.4;
+		filter: grayscale(1) brightness(1.2);
+		transition: opacity 0.15s;
+	}
+	button.gridjs-sort:hover {
+		opacity: 0.7;
+	}
+	button.gridjs-sort-asc,
+	button.gridjs-sort-desc {
+		opacity: 1;
+		filter: none;
+		background-color: color-mix(in oklab, var(--theme-brand) 18%, transparent);
+	}
+	.gridjs-search-input {
+		@apply w-full min-h-10 rounded-md px-3 py-2 text-sm ring-1 ring-inset transition focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-line);
+		color: var(--theme-ink);
+		caret-color: var(--theme-brand);
+	}
+	.gridjs-search-input::placeholder {
+		color: var(--theme-readable-faint);
+	}
+	.gridjs-search-input:focus {
+		background: color-mix(in oklab, var(--theme-control) 86%, var(--theme-brand) 6%);
+		box-shadow:
+			inset 0 0 0 1px var(--theme-brand),
+			0 0 0 2px color-mix(in oklab, var(--theme-brand) 28%, transparent);
+	}
+	.gridjs-notfound,
+	.gridjs-error {
+		padding: 1.5rem;
+		text-align: center;
+		color: var(--theme-readable-muted);
+	}
+	.gridjs-loading {
+		background: color-mix(in oklab, var(--theme-panel) 60%, transparent);
+	}
+	.gridjs-summary {
+		color: var(--theme-readable-muted);
+		font-size: 0.8125rem;
+	}
+	.gridjs-resizable {
+		background: transparent;
+	}
+	.gridjs-resizable:hover {
+		background: var(--theme-brand);
+	}
+	.gridjs-pagination {
+		@apply mt-4 flex items-center justify-end gap-2 text-sm;
+	}
+	.gridjs-pages button,
+	.gridjs-pages-button,
+	.gridjs-pages-button-next,
+	.gridjs-pages-button-prev {
+		@apply inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
+		--tw-ring-offset-color: var(--theme-canvas);
+		border-color: transparent;
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-control-border);
+		color: var(--theme-readable-muted);
+	}
+	.gridjs-pages button:disabled,
+	.gridjs-pages-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.gridjs-pages button:hover,
+	.gridjs-pages-button:hover {
+		background: var(--theme-control-hover);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 36%, var(--theme-line));
+		color: var(--theme-strong);
+	}
+	.gridjs-pages button.gridjs-currentPage,
+	.gridjs-pages-button.gridjs-currentPage {
+		@apply active:translate-y-px;
+		background: var(--theme-brand);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 85%, black);
+		color: var(--theme-accent-text);
+	}
+	.gridjs-pages button.gridjs-currentPage:hover,
+	.gridjs-pages-button.gridjs-currentPage:hover {
+		background: color-mix(in oklab, var(--theme-brand) 82%, black);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 70%, black);
+	}
 }
 
 @layer utilities {
@@ -1891,66 +2063,4 @@ button.card:hover,
 		color: var(--theme-readable-faint);
 	}
 
-	/* Grid.js theme overrides */
-	.gridjs-container {
-		@apply text-sm;
-	}
-	.gridjs-table {
-		@apply w-full;
-	}
-	.gridjs-th {
-		@apply bg-surface2 text-left font-medium;
-	}
-	.gridjs-td,
-	.gridjs-th {
-		@apply border-b border-line px-3 py-2;
-	}
-	.gridjs-td {
-		border-color: color-mix(in oklab, var(--theme-line) 65%, transparent);
-	}
-	.gridjs-tr:hover .gridjs-td {
-		@apply bg-surface2/50;
-	}
-	.gridjs-search-input {
-		@apply w-full min-h-10 rounded-md px-3 py-2 text-sm ring-1 ring-inset transition focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
-		background: var(--theme-control);
-		box-shadow: inset 0 0 0 1px var(--theme-line);
-		color: var(--theme-ink);
-		caret-color: var(--theme-brand);
-	}
-	.gridjs-search-input::placeholder {
-		color: var(--theme-readable-faint);
-	}
-	.gridjs-search-input:focus {
-		background: color-mix(in oklab, var(--theme-control) 86%, var(--theme-brand) 6%);
-		box-shadow:
-			inset 0 0 0 1px var(--theme-brand),
-			0 0 0 2px color-mix(in oklab, var(--theme-brand) 28%, transparent);
-	}
-	.gridjs-pagination {
-		@apply mt-4 flex items-center justify-end gap-2 text-sm;
-	}
-	.gridjs-pages button {
-		@apply inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
-		--tw-ring-offset-color: var(--theme-canvas);
-		border-color: transparent;
-		background: var(--theme-control);
-		box-shadow: inset 0 0 0 1px var(--theme-control-border);
-		color: var(--theme-readable-muted);
-	}
-	.gridjs-pages button:hover {
-		background: var(--theme-control-hover);
-		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 36%, var(--theme-line));
-		color: var(--theme-strong);
-	}
-	.gridjs-pages button.gridjs-currentPage {
-		@apply active:translate-y-px;
-		background: var(--theme-brand);
-		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 85%, black);
-		color: var(--theme-accent-text);
-	}
-	.gridjs-pages button.gridjs-currentPage:hover {
-		background: color-mix(in oklab, var(--theme-brand) 82%, black);
-		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 70%, black);
-	}
 }

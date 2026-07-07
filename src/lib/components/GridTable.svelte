@@ -113,14 +113,33 @@
 		container.addEventListener('click', handleClick);
 
 		(async () => {
-			const [{ Grid }] = await Promise.all([
-				import('gridjs'),
-				import('gridjs/dist/theme/mermaid.css')
-			]);
+			const { Grid } = await import('gridjs');
 			if (cancelled) return;
 
 			gridInstance = new Grid({
 				columns: gridColumns,
+				className: {
+					container: 'gridjs-container grid-host',
+					thead: 'gridjs-thead',
+					th: 'gridjs-th',
+					tr: 'gridjs-tr',
+					td: 'gridjs-td',
+					tbody: 'gridjs-tbody',
+					table: 'gridjs-table',
+					header: 'gridjs-header',
+					footer: 'gridjs-footer',
+					search: 'gridjs-search',
+					sort: 'gridjs-sort',
+					pagination: 'gridjs-pagination',
+					paginationSummary: 'gridjs-summary',
+					paginationButton: 'gridjs-pages-button',
+					paginationButtonCurrent: 'gridjs-currentPage',
+					paginationButtonNext: 'gridjs-pages-button-next',
+					paginationButtonPrev: 'gridjs-pages-button-prev',
+					loading: 'gridjs-loading',
+					notfound: 'gridjs-notfound',
+					error: 'gridjs-error'
+				},
 				language: {
 					noRecordsFound: emptyMessage
 				},

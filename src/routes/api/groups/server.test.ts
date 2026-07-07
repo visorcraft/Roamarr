@@ -39,6 +39,19 @@ test('returns paginated groups with member counts', async () => {
 	});
 });
 
+test('does not expose other users groups', async () => {
+	const userA = makeUser(ctx.kit);
+	const userB = makeUser(ctx.kit);
+	makeGroup(ctx.kit, userA.id, 'Family');
+
+	const res = await GET(makeEvent('/api/groups', userB));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(0);
+	expect(body.rows).toEqual([]);
+});
+
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent('/api/groups', null))).rejects.toMatchObject({ status: 401 });
 });

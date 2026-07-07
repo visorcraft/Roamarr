@@ -62,6 +62,19 @@ test('returns paginated fare providers without exposing api keys', async () => {
 	}
 });
 
+test('does not expose other users fare providers', async () => {
+	const userA = makeUser(ctx.kit);
+	const userB = makeUser(ctx.kit);
+	makeFareProvider(ctx.kit, userA.id, { providerKey: 'amadeus', label: 'Amadeus' });
+
+	const res = await GET(makeEvent('/api/fare-providers', userB));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(0);
+	expect(body.rows).toEqual([]);
+});
+
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent('/api/fare-providers', null))).rejects.toMatchObject({ status: 401 });
 });

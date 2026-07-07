@@ -16,6 +16,7 @@ import {
 	verifyTotp,
 	generateBackupCodes,
 	isTwoFactorEnabled,
+	areTwoFactorEnabledForUserIds,
 	getTwoFactorState,
 	enableTwoFactor,
 	disableTwoFactor,
@@ -140,6 +141,29 @@ describe('twoFactor', () => {
 
 	test('verifyTwoFactor rejects for disabled accounts', () => {
 		expect(verifyTwoFactor(userId, '123456')).toBe(false);
+	});
+
+	test('areTwoFactorEnabledForUserIds returns only enabled users', () => {
+		const otherUser = makeUser(ctx.kit);
+
+		expect(areTwoFactorEnabledForUserIds([])).toEqual(new Set());
+		expect(areTwoFactorEnabledForUserIds([userId])).toEqual(new Set());
+
+		const setup = generateSecret('u@e.com');
+		enableTwoFactor(userId, setup.secret, validToken(setup.secret));
+
+		ctx.kit.insertInto(userTwoFactor).values({
+			user_id: BigInt(otherUser.id),
+			secret_encrypted: 'x',
+			enabled: false,
+			enabled_at: null,
+			backup_codes_count: 0n
+		}).executeSync();
+
+		const enabled = areTwoFactorEnabledForUserIds([userId, otherUser.id, 999999]);
+		expect(enabled).toEqual(new Set([userId]));
+		expect(enabled.has(otherUser.id)).toBe(false);
+		expect(enabled.has(999999)).toBe(false);
 	});
 
 	test('consuming a backup code decrements the remaining count', () => {

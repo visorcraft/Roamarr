@@ -167,6 +167,25 @@ test('countGroupsForUser does not double-count owned-and-member groups', () => {
 	expect(tripsRepo.listGroupsForUser(owner.id)).toHaveLength(2);
 });
 
+test('countMembersForGroupIds aggregates members across groups', () => {
+	const owner = makeUser('owner@x.c');
+	const member1 = makeUser('member1@x.c');
+	const member2 = makeUser('member2@x.c');
+	const g1 = tripsRepo.createGroup({ ownerId: owner.id, name: 'G1' });
+	const g2 = tripsRepo.createGroup({ ownerId: owner.id, name: 'G2' });
+
+	expect(tripsRepo.countMembersForGroupIds([])).toEqual(new Map());
+
+	tripsRepo.addGroupMember(g1.id, owner.id);
+	tripsRepo.addGroupMember(g1.id, member1.id);
+	tripsRepo.addGroupMember(g2.id, member2.id);
+
+	const counts = tripsRepo.countMembersForGroupIds([g1.id, g2.id, 999999]);
+	expect(counts.get(g1.id)).toBe(2);
+	expect(counts.get(g2.id)).toBe(1);
+	expect(counts.has(999999)).toBe(false);
+});
+
 test('listGroupsForUserPaginated searches, sorts, and paginates', () => {
 	const owner = makeUser('owner@x.c');
 	tripsRepo.createGroup({ ownerId: owner.id, name: 'Alpha' });

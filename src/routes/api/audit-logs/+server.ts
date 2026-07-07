@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { DateTime } from 'luxon';
 import { parseTableParams } from '$lib/tableParams';
 import { requireAdmin } from '$lib/server/auth';
 import { listAuditLogs } from '$lib/server/repositories/auditRepo';
@@ -7,13 +8,13 @@ import { listAuditLogs } from '$lib/server/repositories/auditRepo';
 function parsePositiveInteger(raw: string | null): number | undefined {
 	if (raw == null || raw === '') return undefined;
 	const value = Number(raw);
-	if (!Number.isInteger(value) || value < 1) throw error(400, 'Invalid value');
+	if (!Number.isInteger(value) || value < 1) throw error(400, 'Invalid userId');
 	return value;
 }
 
 function parseIsoDateParam(raw: string | null, name: string): string | undefined {
 	if (raw == null || raw === '') return undefined;
-	if (Number.isNaN(Date.parse(raw))) throw error(400, `Invalid ${name} date`);
+	if (!DateTime.fromISO(raw).isValid) throw error(400, `Invalid ${name} date`);
 	return raw;
 }
 

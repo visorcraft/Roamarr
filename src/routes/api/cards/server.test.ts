@@ -42,6 +42,19 @@ test('returns paginated cards', async () => {
 	});
 });
 
+test('does not expose other users cards', async () => {
+	const userA = makeUser(ctx.kit);
+	const userB = makeUser(ctx.kit);
+	makeCard(ctx.kit, userA.id, { nickname: 'Sapphire', network: 'visa', last4: '1234' });
+
+	const res = await GET(makeEvent('/api/cards', userB));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(0);
+	expect(body.rows).toEqual([]);
+});
+
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent('/api/cards', null))).rejects.toMatchObject({ status: 401 });
 });

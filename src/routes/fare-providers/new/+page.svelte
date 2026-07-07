@@ -6,7 +6,13 @@
 	import CancelButton from '$lib/components/CancelButton.svelte';
 	import type { PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
+	let {
+		data,
+		form
+	}: {
+		data: PageData;
+		form?: { error?: string; values?: Record<string, unknown> };
+	} = $props();
 	let submitting = $state(false);
 	let isDirty = $state(false);
 </script>
@@ -19,6 +25,10 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
+	{#if form?.error}
+		<p class="notice notice-error mb-4">{form.error}</p>
+	{/if}
+
 	<form
 		method="POST"
 		action="?/create"
@@ -33,13 +43,32 @@
 		aria-busy={submitting}
 		oninput={() => (isDirty = true)}
 	>
-		<SelectField name="providerKey" label="Provider" required disabled={submitting}>
+		<SelectField
+			name="providerKey"
+			label="Provider"
+			value={(form?.values?.providerKey as string | undefined) ?? ''}
+			required
+			disabled={submitting}
+		>
 			{#each data.providers as p (p.key)}
 				<option value={p.key}>{p.label}</option>
 			{/each}
 		</SelectField>
-		<TextField name="label" label="Label" placeholder="e.g. Personal API key" disabled={submitting} />
-		<TextField name="apiKey" label="API key" placeholder="API key" class="sm:col-span-2" disabled={submitting} />
+		<TextField
+			name="label"
+			label="Label"
+			value={(form?.values?.label as string | undefined) ?? ''}
+			placeholder="e.g. Personal API key"
+			disabled={submitting}
+		/>
+		<TextField
+			name="apiKey"
+			label="API key"
+			value={(form?.values?.apiKey as string | undefined) ?? ''}
+			placeholder="API key"
+			class="sm:col-span-2"
+			disabled={submitting}
+		/>
 		<div class="field flex items-end">
 			<label class="checkbox-label">
 				<input type="checkbox" name="enabled" checked class="checkbox" disabled={submitting} />

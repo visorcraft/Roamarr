@@ -70,6 +70,7 @@
 					id: '__actions',
 					name: '',
 					sort: false,
+					data: (row: Record<string, unknown>) => row,
 					formatter: (_cell: unknown, row: Record<string, unknown>) => {
 						const buttons = actions
 							.map(
@@ -83,7 +84,20 @@
 			: null
 	);
 
-	const gridColumns = $derived(actionColumn ? [...columns, actionColumn] : columns);
+	function wrapFormatter<T extends GridColumn>(col: T): T {
+		if (!col.formatter) return col;
+		const original = col.formatter;
+		return {
+			...col,
+			data: (row: Record<string, unknown>) => row,
+			formatter: (cell: unknown, _row: unknown) => {
+				const row = (cell ?? _row) as Record<string, unknown>;
+				return original(row, row);
+			}
+		} as T;
+	}
+
+	const gridColumns = $derived((actionColumn ? [...columns, actionColumn] : columns).map(wrapFormatter));
 
 	let grid: any;
 
@@ -111,6 +125,7 @@
 					noRecordsFound: emptyMessage
 				},
 				server: {
+					url: {},
 					data: async (opts: FetchOpts) => {
 						const res = await fetchData(opts);
 						rowById.clear();

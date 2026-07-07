@@ -31,7 +31,7 @@
 		url: {
 			page?: number;
 			limit?: number;
-			keyword?: string;
+			search?: string;
 			sort?: string;
 			dir?: 'asc' | 'desc';
 		};
@@ -104,7 +104,7 @@
 				search: {
 					server: {
 						url: (prev: Record<string, unknown>, keyword: string) => {
-							prev.keyword = keyword;
+							prev.search = keyword;
 							return prev;
 						}
 					}

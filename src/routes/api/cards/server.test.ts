@@ -9,6 +9,7 @@ vi.mock('$lib/server/db', async () => {
 
 import { GET } from './+server';
 import { makeUser, makeCard } from '../../../../tests/helpers';
+import { createCardBenefit } from '$lib/server/repositories/profileRepo';
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -58,4 +59,18 @@ test('does not expose other users cards', async () => {
 
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent('/api/cards', null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('benefitCount reflects added benefits', async () => {
+	const user = makeUser(ctx.kit);
+	const card = makeCard(ctx.kit, user.id, { nickname: 'Sapphire', network: 'visa' });
+	createCardBenefit(user.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
+	createCardBenefit(user.id, card.id, { benefitType: 'baggage_delay', coverageAmount: 50 });
+
+	const res = await GET(makeEvent('/api/cards', user));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows[0].benefitCount).toBe(2);
 });

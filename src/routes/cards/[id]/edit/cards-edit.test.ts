@@ -161,6 +161,67 @@ test('addBenefit action creates a custom benefit', async () => {
 	expect(rows[0].notes).toBe('manual');
 });
 
+test('addBenefit action preserves coverage amount 0', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Freedom', network: 'mc' });
+
+	const f = new FormData();
+	f.set('benefitType', 'other');
+	f.set('coverageAmount', '0');
+	f.set('currency', 'USD');
+
+	await expect(actions.addBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+
+	const rows = ctx.kit.selectFrom(cardBenefits).executeSync();
+	expect(rows).toHaveLength(1);
+	expect(Number(rows[0].coverage_amount)).toBe(0);
+});
+
+test('addBenefit action uses template currency', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	const template = listBenefitTemplates().find((t) => t.currency)!;
+	expect(template).toBeDefined();
+
+	const f = new FormData();
+	f.set('templateId', String(template.id));
+
+	await expect(actions.addBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+
+	const rows = ctx.kit.selectFrom(cardBenefits).executeSync();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].currency).toBe(template.currency);
+});
+
+test('addBenefit action logs audit with benefit id', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Freedom', network: 'mc' });
+
+	const f = new FormData();
+	f.set('benefitType', 'other');
+	f.set('coverageAmount', '50');
+	f.set('currency', 'USD');
+
+	await expect(actions.addBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+
+	const rows = ctx.kit.selectFrom(cardBenefits).executeSync();
+	expect(rows).toHaveLength(1);
+	const benefitId = Number(rows[0].id);
+
+	const logs = ctx.kit.selectFrom(auditLogs).executeSync();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('card_benefit_create');
+	expect(logs[0].entity_type).toBe('card_benefit');
+	expect(Number(logs[0].entity_id)).toBe(benefitId);
+	expect(Number(logs[0].entity_id)).not.toBe(card.id);
+});
+
 test('updateBenefit action edits a benefit and logs audit', async () => {
 	const user = makeUser(ctx.kit);
 	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
@@ -187,6 +248,48 @@ test('updateBenefit action edits a benefit and logs audit', async () => {
 	expect(logs).toHaveLength(1);
 	expect(logs[0].action).toBe('card_benefit_update');
 	expect(Number(logs[0].entity_id)).toBe(benefit.id);
+});
+
+test('updateCard action rejects empty nickname or unsupported network', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+
+	const emptyNickname = new FormData();
+	emptyNickname.set('nickname', '');
+	emptyNickname.set('network', 'visa');
+	await expect(actions.updateCard(event(user, { id: String(card.id) }, emptyNickname))).resolves.toEqual(
+		expect.objectContaining({ status: 400, data: { error: 'Nickname is required' } })
+	);
+
+	const badNetwork = new FormData();
+	badNetwork.set('nickname', 'Sapphire');
+	badNetwork.set('network', 'jcb');
+	await expect(actions.updateCard(event(user, { id: String(card.id) }, badNetwork))).resolves.toEqual(
+		expect.objectContaining({ status: 400, data: { error: 'Unsupported network' } })
+	);
+
+	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.id, BigInt(card.id))).executeSync();
+	expect(rows[0].nickname).toBe('Sapphire');
+	expect(rows[0].network).toBe('visa');
+});
+
+test('updateBenefit action preserves coverage amount 0', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+	const benefit = createCardBenefit(user.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
+
+	const f = new FormData();
+	f.set('id', String(benefit.id));
+	f.set('benefitType', 'trip_delay');
+	f.set('coverageAmount', '0');
+	f.set('currency', 'USD');
+
+	await expect(actions.updateBenefit(event(user, { id: String(card.id) }, f))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+
+	const row = ctx.kit.selectFrom(cardBenefits).where(kitEq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0];
+	expect(Number(row!.coverage_amount)).toBe(0);
 });
 
 test('deleteBenefit action removes a benefit and logs audit', async () => {

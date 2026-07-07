@@ -29,21 +29,23 @@
 			id: 'nickname',
 			name: 'Nickname',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) => escapeHtml(row.nickname)
+			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.nickname ?? '')
 		},
 		{
 			id: 'network',
 			name: 'Network',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(`<span class="badge badge-slate">${escapeHtml(networkLabel[String(row.network)] ?? row.network)}</span>`)
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const label = escapeHtml(networkLabel[String(row.network)] ?? row.network);
+				return html(`<span class="badge badge-slate">${label}</span>`);
+			}
 		},
 		{
 			id: 'last4',
 			name: 'Last 4',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				row.last4 ? escapeHtml(`…${row.last4}`) : '—'
+				row.last4 ? `…${row.last4}` : '—'
 		},
 		{
 			id: 'benefits',

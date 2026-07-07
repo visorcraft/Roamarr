@@ -193,7 +193,7 @@
 	<form
 		method="POST"
 		action="?/addBenefit"
-		class="mt-6 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
+		class="mt-6 grid gap-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto] sm:items-end"
 		use:enhance={() => {
 			benefitSubmitting = true;
 			return async ({ update }) => {
@@ -229,6 +229,13 @@
 			label="Coverage"
 			type="number"
 			placeholder="0"
+			disabled={benefitSubmitting || !!selectedTemplate}
+		/>
+		<TextField
+			name="currency"
+			label="Currency"
+			value="USD"
+			placeholder="USD"
 			disabled={benefitSubmitting || !!selectedTemplate}
 		/>
 		<TextField

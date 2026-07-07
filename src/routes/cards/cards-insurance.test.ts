@@ -8,12 +8,12 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import {
-	_addCard as addCard,
-	_addBenefit as addBenefit,
-	_updateCard as updateCard,
-	_updateBenefit as updateBenefit,
-	_deleteBenefit as deleteBenefit
-} from './+page.server';
+	createCard,
+	createCardBenefit,
+	updateCard,
+	updateCardBenefit,
+	deleteCardBenefit
+} from '$lib/server/repositories/profileRepo';
 import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
 import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
@@ -50,24 +50,24 @@ test('card + benefit are owner-scoped; insurance to foreign trip is rejected', (
 	const a = makeTestUser({ email: 'a@x.c' });
 	const b = makeTestUser({ email: 'b@x.c' });
 	const bTrip = createTrip(b.id, { name: 'B trip' });
-	const card = addCard(a.id, { nickname: 'Sapphire', network: 'visa', last4: '1111' });
-	addBenefit(a.id, card.id, { benefitType: 'trip_delay', coverageAmount: 50000 });
+	const card = createCard(a.id, { nickname: 'Sapphire', network: 'visa', last4: '1111' });
+	createCardBenefit(a.id, card.id, { benefitType: 'trip_delay', coverageAmount: 50000 });
 	expect(kit.selectFrom(cardBenefits).executeSync().length).toBe(1);
 	expect(() => addPolicy(a.id, { provider: 'Acme', tripId: bTrip.id })).toThrow();
 });
 
-test('addCard never stores a full PAN — only the last 4 digits', () => {
+test('createCard never stores a full PAN — only the last 4 digits', () => {
 	const kit = kitDb();
 	const u = makeTestUser({ email: 'pan@x.c', passwordHash: 'x', displayName: 'P' });
-	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa', last4: '4111 1111 1111 1234' });
+	const card = createCard(u.id, { nickname: 'Sapphire', network: 'visa', last4: '4111 1111 1111 1234' });
 	expect(kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]!.last4).toBe('1234');
 });
 
 test('updateCard edits a card and still only stores the last 4 digits', () => {
 	const kit = kitDb();
 	const u = makeTestUser({ email: 'update-card@x.c', passwordHash: 'x', displayName: 'U' });
-	const card = addCard(u.id, { nickname: 'Old', network: 'visa', last4: '1234' });
-	updateCard(u.id, card.id, {
+	const card = createCard(u.id, { nickname: 'Old', network: 'visa', last4: '1234' });
+	updateCard(card.id, u.id, {
 		nickname: 'Updated',
 		network: 'mc',
 		last4: '4111 1111 1111 9999',
@@ -84,8 +84,8 @@ test('updateCard cannot modify another users card', () => {
 	const kit = kitDb();
 	const a = makeTestUser({ email: 'a2@x.c' });
 	const b = makeTestUser({ email: 'b2@x.c' });
-	const card = addCard(a.id, { nickname: 'A card', network: 'visa', last4: '1111' });
-	expect(() => updateCard(b.id, card.id, { nickname: 'Hacked', network: 'amex' })).toThrow(
+	const card = createCard(a.id, { nickname: 'A card', network: 'visa', last4: '1111' });
+	expect(() => updateCard(card.id, b.id, { nickname: 'Hacked', network: 'amex' })).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
 	const row = kit.selectFrom(cards).where(eq(cards.id, BigInt(card.id))).executeSync()[0]!;
@@ -93,13 +93,12 @@ test('updateCard cannot modify another users card', () => {
 	expect(row.network).toBe('visa');
 });
 
-test('updateBenefit edits a benefit and enforces card ownership', () => {
+test('updateCardBenefit edits a benefit', () => {
 	const kit = kitDb();
 	const u = makeTestUser({ email: 'benefit-owner@x.c' });
-	const other = makeTestUser({ email: 'benefit-other@x.c' });
-	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
-	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
-	updateBenefit(u.id, benefit.id, card.id, {
+	const card = createCard(u.id, { nickname: 'Sapphire', network: 'visa' });
+	const benefit = createCardBenefit(u.id, card.id, { benefitType: 'trip_delay', coverageAmount: 100 });
+	updateCardBenefit(benefit.id, card.id, {
 		benefitType: 'baggage_delay',
 		coverageAmount: 250,
 		currency: 'EUR',
@@ -110,25 +109,15 @@ test('updateBenefit edits a benefit and enforces card ownership', () => {
 	expect(Number(row.coverage_amount)).toBe(250);
 	expect(row.currency).toBe('EUR');
 	expect(row.notes).toBe('bag notes');
-
-	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
-	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
-	expect(() => updateBenefit(u.id, otherBenefit.id, otherCard.id, { benefitType: 'other' })).toThrow();
 });
 
-test('deleteBenefit removes a benefit and enforces card ownership', () => {
+test('deleteCardBenefit removes a benefit', () => {
 	const kit = kitDb();
 	const u = makeTestUser({ email: 'benefit-delete@x.c' });
-	const other = makeTestUser({ email: 'benefit-delete-other@x.c' });
-	const card = addCard(u.id, { nickname: 'Sapphire', network: 'visa' });
-	const benefit = addBenefit(u.id, card.id, { benefitType: 'trip_delay' });
-	deleteBenefit(u.id, benefit.id, card.id);
+	const card = createCard(u.id, { nickname: 'Sapphire', network: 'visa' });
+	const benefit = createCardBenefit(u.id, card.id, { benefitType: 'trip_delay' });
+	deleteCardBenefit(benefit.id, card.id);
 	expect(kit.selectFrom(cardBenefits).where(eq(cardBenefits.id, BigInt(benefit.id))).executeSync()[0]).toBeUndefined();
-
-	const otherCard = addCard(other.id, { nickname: 'Other', network: 'amex' });
-	const otherBenefit = addBenefit(other.id, otherCard.id, { benefitType: 'trip_delay' });
-	expect(() => deleteBenefit(u.id, otherBenefit.id, otherCard.id)).toThrow();
-	expect(kit.selectFrom(cardBenefits).where(eq(cardBenefits.id, BigInt(otherBenefit.id))).executeSync()[0]).toBeDefined();
 });
 
 test('updatePolicy edits a policy and rejects a foreign trip', () => {

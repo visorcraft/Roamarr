@@ -1,0 +1,64 @@
+import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+
+const ctx = vi.hoisted(() => ({
+	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
+	close: null as unknown as () => void
+}));
+vi.mock('$lib/server/db', async () => {
+	const { freshDb } = await import('../../../../tests/helpers');
+	const { kit, close } = freshDb();
+	Object.assign(ctx, { kit, close });
+	return { kit, getDb: () => kit };
+});
+
+beforeEach(() => {
+	ctx.kit.deleteFrom(cards).executeSync();
+	ctx.kit.deleteFrom(auditLogs).executeSync();
+	ctx.kit.deleteFrom(users).executeSync();
+});
+
+afterAll(() => {
+	ctx.close();
+});
+
+import { load, actions } from './+page.server';
+import { cards, auditLogs, users } from '$lib/server/db/mongrelSchema';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
+import { makeUserLocals } from '../../../../tests/eventHelpers';
+
+function event(user: { id: number } | null, body?: FormData) {
+	return {
+		locals: { user } as App.Locals,
+		request: body ? ({ formData: async () => body } as Request) : undefined
+	} as any;
+}
+
+test('load requires a signed-in user', () => {
+	expect(() => load(event(null))).toThrow(expect.objectContaining({ status: 401 }));
+});
+
+test('create action adds a card, logs audit, and redirects', async () => {
+	const user = makeUserLocals(ctx.kit);
+	const f = new FormData();
+	f.set('nickname', 'Sapphire Reserve');
+	f.set('network', 'visa');
+	f.set('last4', '1234');
+	f.set('notes', 'Primary card');
+
+	await expect(actions.create(event(user.user, f))).rejects.toEqual(
+		expect.objectContaining({ status: 303 })
+	);
+
+	const rows = ctx.kit.selectFrom(cards).where(kitEq(cards.user_id, BigInt(user.user.id))).executeSync();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].nickname).toBe('Sapphire Reserve');
+	expect(rows[0].network).toBe('visa');
+	expect(rows[0].last4).toBe('1234');
+	expect(rows[0].notes).toBe('Primary card');
+
+	const logs = ctx.kit.selectFrom(auditLogs).executeSync();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('card_create');
+	expect(logs[0].entity_type).toBe('card');
+	expect(Number(logs[0].entity_id)).toBe(Number(rows[0].id));
+});

@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { parseTableParams } from '$lib/tableParams';
 import { requireUser } from '$lib/server/auth';
-import { listCardsPaginated, countCards } from '$lib/server/repositories/profileRepo';
+import { listCardsPaginated, countCards, listBenefitsForCards } from '$lib/server/repositories/profileRepo';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	const u = requireUser(locals);
@@ -15,12 +15,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		limit,
 		offset
 	});
+	const cardIds = cards.map((c) => c.id);
+	const allBenefits = listBenefitsForCards(cardIds);
+	const benefitCountByCard = new Map<number, number>();
+	for (const b of allBenefits) {
+		benefitCountByCard.set(b.cardId, (benefitCountByCard.get(b.cardId) ?? 0) + 1);
+	}
 	const rows = cards.map((c) => ({
 		id: c.id,
 		nickname: c.nickname,
 		network: c.network,
 		last4: c.last4,
-		notes: c.notes
+		notes: c.notes,
+		benefitCount: benefitCountByCard.get(c.id) ?? 0
 	}));
 	const total = countCards(u.id, search);
 	return json({ rows, total });

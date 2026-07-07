@@ -6,12 +6,12 @@
 	import CancelButton from '$lib/components/CancelButton.svelte';
 	import type { PageData } from './$types';
 
-	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data }: { data: PageData } = $props();
 	let submitting = $state(false);
 	let isDirty = $state(false);
 </script>
 
-<header>
+<header class="page-header">
 	<div>
 		<h1 class="page-title">Add fare provider account</h1>
 		<p class="page-subtitle">Connect a provider account to power fare watching.</p>
@@ -33,15 +33,13 @@
 		aria-busy={submitting}
 		oninput={() => (isDirty = true)}
 	>
-		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
-
-		<SelectField name="providerKey" label="Provider" required disabled={submitting} errors={form?.errors ?? {}}>
+		<SelectField name="providerKey" label="Provider" required disabled={submitting}>
 			{#each data.providers as p (p.key)}
 				<option value={p.key}>{p.label}</option>
 			{/each}
 		</SelectField>
-		<TextField name="label" label="Label" placeholder="e.g. Personal API key" disabled={submitting} errors={form?.errors ?? {}} />
-		<TextField name="apiKey" label="API key" placeholder="API key" class="sm:col-span-2" disabled={submitting} errors={form?.errors ?? {}} />
+		<TextField name="label" label="Label" placeholder="e.g. Personal API key" disabled={submitting} />
+		<TextField name="apiKey" label="API key" placeholder="API key" class="sm:col-span-2" disabled={submitting} />
 		<div class="field flex items-end">
 			<label class="checkbox-label">
 				<input type="checkbox" name="enabled" checked class="checkbox" disabled={submitting} />

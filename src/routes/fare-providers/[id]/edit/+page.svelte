@@ -5,7 +5,7 @@
 	import CancelButton from '$lib/components/CancelButton.svelte';
 	import type { PageData } from './$types';
 
-	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data }: { data: PageData } = $props();
 	let submitting = $state(false);
 	let isDirty = $state(false);
 
@@ -15,7 +15,7 @@
 	);
 </script>
 
-<header>
+<header class="page-header">
 	<div>
 		<h1 class="page-title">Edit fare provider account</h1>
 		<p class="page-subtitle">{providerLabel}</p>
@@ -37,10 +37,7 @@
 		aria-busy={submitting}
 		oninput={() => (isDirty = true)}
 	>
-		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
-
-		<input type="hidden" name="id" value={data.provider.id} />
-		<TextField name="label" label="Label" value={data.provider.label} placeholder="e.g. Personal API key" disabled={submitting} errors={form?.errors ?? {}} />
+		<TextField name="label" label="Label" value={data.provider.label} placeholder="e.g. Personal API key" disabled={submitting} />
 		<div class="field flex items-end">
 			<label class="checkbox-label">
 				<input type="checkbox" name="enabled" checked={data.provider.enabled} class="checkbox" disabled={submitting} />
@@ -53,7 +50,6 @@
 			placeholder={data.provider.hasKey ? 'API key set — leave blank to keep' : 'API key'}
 			class="sm:col-span-2"
 			disabled={submitting}
-			errors={form?.errors ?? {}}
 		/>
 		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
 			<CancelButton dirty={isDirty} onConfirm={() => goto('/fare-providers')}>Cancel</CancelButton>

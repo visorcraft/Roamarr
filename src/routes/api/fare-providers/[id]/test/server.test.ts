@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -8,7 +8,13 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { POST } from './+server';
-import { makeUser, makeFareProvider } from '../../../../../../tests/helpers';
+import { makeFareProvider, makeAdmin } from '../../../../../../tests/helpers';
+import { makeUserLocals } from '../../../../../../tests/eventHelpers';
+import { resetRateLimit } from '$lib/server/rateLimit';
+
+beforeEach(() => {
+	resetRateLimit();
+});
 
 function makeEvent(params: Record<string, string>, user: unknown) {
 	return {
@@ -19,10 +25,10 @@ function makeEvent(params: Record<string, string>, user: unknown) {
 }
 
 test('test returns the stub result for an owned provider', async () => {
-	const user = makeUser(ctx.kit);
-	const p = makeFareProvider(ctx.kit, user.id, { providerKey: 'stub', label: 'Test', apiKey: null });
+	const admin = makeAdmin(ctx.kit, { email: 'admin@x.c' });
+	const p = makeFareProvider(ctx.kit, admin.id, { providerKey: 'stub', label: 'Test', apiKey: null });
 
-	const res = await POST(makeEvent({ id: String(p.id) }, user));
+	const res = await POST(makeEvent({ id: String(p.id) }, admin));
 	expect(res.status).toBe(200);
 
 	const body = await res.json();
@@ -30,19 +36,25 @@ test('test returns the stub result for an owned provider', async () => {
 	expect(body.summary).toContain('stub provider');
 });
 
-test('test rejects another users provider', async () => {
-	const owner = makeUser(ctx.kit);
-	const other = makeUser(ctx.kit);
+test('test rejects another admins provider', async () => {
+	const owner = makeAdmin(ctx.kit, { email: 'admin-owner@x.c' });
+	const other = makeAdmin(ctx.kit, { email: 'admin-other@x.c' });
 	const p = makeFareProvider(ctx.kit, owner.id, { providerKey: 'stub', label: 'X' });
 
 	await expect(POST(makeEvent({ id: String(p.id) }, other))).rejects.toMatchObject({ status: 404 });
 });
 
 test('test rejects invalid id', async () => {
-	const user = makeUser(ctx.kit);
-	await expect(POST(makeEvent({ id: 'abc' }, user))).rejects.toMatchObject({ status: 400 });
+	const admin = makeAdmin(ctx.kit, { email: 'admin-invalid@x.c' });
+	await expect(POST(makeEvent({ id: 'abc' }, admin))).rejects.toMatchObject({ status: 400 });
 });
 
 test('test rejects unauthenticated requests', async () => {
 	await expect(POST(makeEvent({ id: '1' }, null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('test rejects non-admin requests', async () => {
+	const user = makeUserLocals(ctx.kit);
+	const p = makeFareProvider(ctx.kit, user.user.id, { providerKey: 'stub', label: 'X' });
+	await expect(POST(makeEvent({ id: String(p.id) }, user.user))).rejects.toMatchObject({ status: 403 });
 });

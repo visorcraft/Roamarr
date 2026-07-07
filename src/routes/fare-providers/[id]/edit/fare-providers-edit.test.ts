@@ -14,6 +14,7 @@ vi.mock('$lib/server/db', async () => {
 beforeEach(() => {
 	ctx.kit.deleteFrom(fareProviders).executeSync();
 	ctx.kit.deleteFrom(users).executeSync();
+	ctx.kit.deleteFrom(auditLogs).executeSync();
 });
 
 afterAll(() => {
@@ -21,11 +22,11 @@ afterAll(() => {
 });
 
 import { load, actions } from './+page.server';
-import { fareProviders, users } from '$lib/server/db/mongrelSchema';
+import { fareProviders, users, auditLogs } from '$lib/server/db/mongrelSchema';
 import { createProvider } from '$lib/server/fareproviders';
 import { decrypt } from '$lib/server/crypto';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
-import { makeUser } from '../../../../../tests/helpers';
+import { makeAdminLocals, makeUserLocals } from '../../../../../tests/eventHelpers';
 
 function event(user: { id: number } | null, params: Record<string, string>, body?: FormData) {
 	return {
@@ -39,17 +40,22 @@ test('load requires a signed-in user', () => {
 	expect(() => load(event(null, { id: '1' }))).toThrow(expect.objectContaining({ status: 401 }));
 });
 
+test('load rejects non-admin users', () => {
+	const user = makeUserLocals(ctx.kit);
+	expect(() => load(event(user.user, { id: '1' }))).toThrow(expect.objectContaining({ status: 403 }));
+});
+
 test('load returns 404 for a missing or non-owned provider', () => {
-	const u = makeUser(ctx.kit, { email: 'fp-edit@x.c', passwordHash: 'x' });
-	expect(() => load(event({ id: Number(u.id) }, { id: '999' }))).toThrow(
+	const admin = makeAdminLocals(ctx.kit);
+	expect(() => load(event(admin.user, { id: '999' }))).toThrow(
 		expect.objectContaining({ status: 404 })
 	);
 });
 
 test('load returns provider data without the api key', () => {
-	const u = makeUser(ctx.kit, { email: 'fp-edit2@x.c', passwordHash: 'x' });
-	const p = createProvider(u.id, 'stub', 'Work', 'SECRET', true);
-	const result = load(event({ id: Number(u.id) }, { id: String(p.id) })) as {
+	const admin = makeAdminLocals(ctx.kit);
+	const p = createProvider(admin.user.id, 'stub', 'Work', 'SECRET', true);
+	const result = load(event(admin.user, { id: String(p.id) })) as {
 		provider: { id: number; label: string; enabled: boolean; hasKey: boolean; apiKey?: string };
 	};
 	expect(result.provider.id).toBe(p.id);
@@ -59,17 +65,16 @@ test('load returns provider data without the api key', () => {
 	expect(result.provider.apiKey).toBeUndefined();
 });
 
-test('update action edits an owned account and redirects', async () => {
-	const u = makeUser(ctx.kit, { email: 'fp-up@x.c', passwordHash: 'x' });
-	const other = makeUser(ctx.kit, { email: 'fp-other@x.c', passwordHash: 'x' });
-	const p = createProvider(u.id, 'stub', 'Old', 'ORIGINAL', true);
+test('update action edits an owned account, logs audit, and redirects', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const other = makeUserLocals(ctx.kit);
+	const p = createProvider(admin.user.id, 'stub', 'Old', 'ORIGINAL', true);
 
 	const f = new FormData();
-	f.set('id', String(p.id));
 	f.set('label', 'New');
 	f.set('apiKey', 'NEW-SECRET');
 	f.set('enabled', 'on');
-	await expect(actions.update(event({ id: Number(u.id) }, { id: String(p.id) }, f))).rejects.toEqual(
+	await expect(actions.update(event(admin.user, { id: String(p.id) }, f))).rejects.toEqual(
 		expect.objectContaining({ status: 303 })
 	);
 
@@ -77,13 +82,27 @@ test('update action edits an owned account and redirects', async () => {
 	expect(row!.label).toBe('New');
 	expect(decrypt(row!.api_key!)).toBe('NEW-SECRET');
 
+	const logs = ctx.kit.selectFrom(auditLogs).executeSync();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('fare_provider_update');
+	expect(logs[0].entity_type).toBe('fare_provider');
+	expect(Number(logs[0].entity_id)).toBe(p.id);
+
 	const hijack = new FormData();
-	hijack.set('id', String(p.id));
 	hijack.set('label', 'Hijacked');
 	hijack.set('apiKey', 'X');
-	await expect(actions.update(event({ id: Number(other.id) }, { id: String(p.id) }, hijack))).rejects.toThrow();
+	await expect(actions.update(event(other.user, { id: String(p.id) }, hijack))).rejects.toMatchObject({
+		status: 403
+	});
 
 	const after = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(p.id))).executeSync()[0];
 	expect(after!.label).toBe('New');
 	expect(decrypt(after!.api_key!)).toBe('NEW-SECRET');
+});
+
+test('update action rejects invalid params id', async () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const f = new FormData();
+	f.set('label', 'New');
+	await expect(actions.update(event(admin.user, { id: 'abc' }, f))).rejects.toMatchObject({ status: 404 });
 });

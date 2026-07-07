@@ -23,7 +23,7 @@ afterAll(() => {
 import { load } from './+page.server';
 import { fareProviders, users } from '$lib/server/db/mongrelSchema';
 import { registry } from '$lib/server/fareproviders';
-import { makeUser } from '../../../tests/helpers';
+import { makeAdminLocals, makeUserLocals } from '../../../tests/eventHelpers';
 
 function event(user: { id: number } | null) {
 	return {
@@ -35,8 +35,13 @@ test('load requires a signed-in user', () => {
 	expect(() => load(event(null))).toThrow(expect.objectContaining({ status: 401 }));
 });
 
-test('load returns registry provider labels', () => {
-	const u = makeUser(ctx.kit, { email: 'fp@x.c', passwordHash: 'x' });
-	const result = load(event({ id: u.id })) as { providers: { key: string; label: string }[] };
+test('load rejects non-admin users', () => {
+	const user = makeUserLocals(ctx.kit);
+	expect(() => load({ locals: user } as any)).toThrow(expect.objectContaining({ status: 403 }));
+});
+
+test('load returns registry provider labels for admin', () => {
+	const admin = makeAdminLocals(ctx.kit);
+	const result = load({ locals: admin } as any) as { providers: { key: string; label: string }[] };
 	expect(result.providers).toEqual(Object.values(registry).map((p) => ({ key: p.key, label: p.label })));
 });

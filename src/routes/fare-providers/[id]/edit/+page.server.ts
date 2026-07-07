@@ -1,13 +1,14 @@
 import { error, redirect, type Actions } from '@sveltejs/kit';
-import { requireUser } from '$lib/server/auth';
+import { requireAdmin } from '$lib/server/auth';
 import { getFareProviderByIdAndUser, registry, updateProvider } from '$lib/server/fareproviders';
+import { logAudit } from '$lib/server/audit';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ params, locals }) => {
-	const u = requireUser(locals);
+	const admin = requireAdmin(locals);
 	const id = Number(params.id);
 	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	const provider = getFareProviderByIdAndUser(id, u.id);
+	const provider = getFareProviderByIdAndUser(id, admin.id);
 	if (!provider) throw error(404, 'Not found');
 	return {
 		provider: {
@@ -22,17 +23,19 @@ export const load: PageServerLoad = ({ params, locals }) => {
 };
 
 export const actions: Actions = {
-	update: async ({ request, locals }) => {
-		const u = requireUser(locals);
+	update: async ({ params, request, locals }) => {
+		const admin = requireAdmin(locals);
+		const id = Number(params.id);
+		if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
 		const f = await request.formData();
-		const id = Number(f.get('id'));
 		updateProvider(
-			u.id,
+			admin.id,
 			id,
 			String(f.get('label') || ''),
 			String(f.get('apiKey') || ''),
 			f.get('enabled') === 'on'
 		);
+		logAudit(admin.id, 'fare_provider_update', 'fare_provider', id);
 		throw redirect(303, '/fare-providers');
 	}
 };

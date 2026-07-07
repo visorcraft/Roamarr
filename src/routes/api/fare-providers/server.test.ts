@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -8,8 +8,14 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { GET } from './+server';
-import { makeUser, makeFareProvider } from '../../../../tests/helpers';
+import { makeFareProvider, makeAdmin } from '../../../../tests/helpers';
+import { makeUserLocals } from '../../../../tests/eventHelpers';
 import { encrypt } from '$lib/server/crypto';
+import { resetRateLimit } from '$lib/server/rateLimit';
+
+beforeEach(() => {
+	resetRateLimit();
+});
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -20,20 +26,20 @@ function makeEvent(url: string, user: unknown) {
 }
 
 test('returns paginated fare providers without exposing api keys', async () => {
-	const user = makeUser(ctx.kit);
-	const p1 = makeFareProvider(ctx.kit, user.id, {
+	const admin = makeAdmin(ctx.kit, { email: 'admin@x.c' });
+	const p1 = makeFareProvider(ctx.kit, admin.id, {
 		providerKey: 'amadeus',
 		label: 'Amadeus',
 		apiKey: encrypt('secret-key')
 	});
-	const p2 = makeFareProvider(ctx.kit, user.id, {
+	const p2 = makeFareProvider(ctx.kit, admin.id, {
 		providerKey: 'stub',
 		label: 'Stub Provider',
 		enabled: false,
 		apiKey: null
 	});
 
-	const res = await GET(makeEvent('/api/fare-providers', user));
+	const res = await GET(makeEvent('/api/fare-providers', admin));
 	expect(res.status).toBe(200);
 
 	const body = await res.json();
@@ -62,12 +68,12 @@ test('returns paginated fare providers without exposing api keys', async () => {
 	}
 });
 
-test('does not expose other users fare providers', async () => {
-	const userA = makeUser(ctx.kit);
-	const userB = makeUser(ctx.kit);
-	makeFareProvider(ctx.kit, userA.id, { providerKey: 'amadeus', label: 'Amadeus' });
+test('does not expose other admins fare providers', async () => {
+	const adminA = makeAdmin(ctx.kit, { email: 'admin-a@x.c' });
+	const adminB = makeAdmin(ctx.kit, { email: 'admin-b@x.c' });
+	makeFareProvider(ctx.kit, adminA.id, { providerKey: 'amadeus', label: 'Amadeus' });
 
-	const res = await GET(makeEvent('/api/fare-providers', userB));
+	const res = await GET(makeEvent('/api/fare-providers', adminB));
 	expect(res.status).toBe(200);
 
 	const body = await res.json();
@@ -77,4 +83,9 @@ test('does not expose other users fare providers', async () => {
 
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent('/api/fare-providers', null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('rejects non-admin requests', async () => {
+	const user = makeUserLocals(ctx.kit);
+	await expect(GET(makeEvent('/api/fare-providers', user.user))).rejects.toMatchObject({ status: 403 });
 });

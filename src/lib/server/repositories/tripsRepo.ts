@@ -581,22 +581,24 @@ export function countGroupsForUser(userId: number, search?: string): number {
 		const owned = kit
 			.selectFrom(groups)
 			.where(kitEq(groups.owner_id, kitId(userId)))
-			.selectCount()
 			.executeSync();
+		const ownedIds = new Set(owned.map((g) => g.id));
+
 		const memberships = kit
 			.selectFrom(groupMembers)
 			.where(kitEq(groupMembers.user_id, kitId(userId)))
 			.executeSync();
-		const memberIds = memberships.map((m) => m.group_id);
+		const memberIds = memberships.map((m) => m.group_id).filter((id) => !ownedIds.has(id));
+
 		const memberCount =
 			memberIds.length === 0
-				? 0
+				? 0n
 				: kit
 						.selectFrom(groups)
 						.where(inList(groups.id, memberIds))
 						.selectCount()
 						.executeSync();
-		return Number(owned) + Number(memberCount);
+		return ownedIds.size + Number(memberCount);
 	}
 	const q = search.trim().toLowerCase();
 	return listGroupsForUser(userId).filter((g) => g.name.toLowerCase().includes(q)).length;

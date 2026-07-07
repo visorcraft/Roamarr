@@ -228,3 +228,16 @@ test('start/finish/list/prune scheduler runs', () => {
 	repo.pruneOldSchedulerRuns('2099-01-01T00:00:00Z');
 	expect(repo.listRecentSchedulerRuns(10)).toHaveLength(0);
 });
+
+test('countSchedulerRuns with and without search', () => {
+	const ok = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(ok.id, { success: true });
+	const failed = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(failed.id, { success: false, errorMessage: 'boom' });
+
+	expect(repo.countSchedulerRuns()).toBe(2);
+	expect(repo.countSchedulerRuns('success')).toBe(1);
+	expect(repo.countSchedulerRuns('failure')).toBe(1);
+	expect(repo.countSchedulerRuns('boom')).toBe(1);
+	expect(repo.countSchedulerRuns('no-match')).toBe(0);
+});

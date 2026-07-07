@@ -154,3 +154,39 @@ test('repo reads see directly inserted trips', () => {
 	const found = tripsRepo.getTripById(Number(inserted.id));
 	expect(found?.name).toBe('Direct Trip');
 });
+
+test('countGroupsForUser does not double-count owned-and-member groups', () => {
+	const owner = makeUser('owner@x.c');
+	const member = makeUser('member@x.c');
+	const ownedGroup = tripsRepo.createGroup({ ownerId: owner.id, name: 'Owned' });
+	const memberGroup = tripsRepo.createGroup({ ownerId: member.id, name: 'Member' });
+	tripsRepo.addGroupMember(ownedGroup.id, owner.id);
+	tripsRepo.addGroupMember(memberGroup.id, owner.id);
+
+	expect(tripsRepo.countGroupsForUser(owner.id)).toBe(2);
+	expect(tripsRepo.listGroupsForUser(owner.id)).toHaveLength(2);
+});
+
+test('listGroupsForUserPaginated searches, sorts, and paginates', () => {
+	const owner = makeUser('owner@x.c');
+	tripsRepo.createGroup({ ownerId: owner.id, name: 'Alpha' });
+	tripsRepo.createGroup({ ownerId: owner.id, name: 'Beta' });
+	tripsRepo.createGroup({ ownerId: owner.id, name: 'Gamma' });
+
+	const page = tripsRepo.listGroupsForUserPaginated(owner.id, { limit: 2, offset: 0, sortDir: 'asc' });
+	expect(page).toHaveLength(2);
+	expect(page[0].name).toBe('Alpha');
+	expect(page[1].name).toBe('Beta');
+
+	const second = tripsRepo.listGroupsForUserPaginated(owner.id, {
+		limit: 2,
+		offset: 1,
+		sortDir: 'desc'
+	});
+	expect(second).toHaveLength(2);
+	expect(second[0].name).toBe('Beta');
+	expect(second[1].name).toBe('Alpha');
+
+	const searched = tripsRepo.listGroupsForUserPaginated(owner.id, { search: 'mm' });
+	expect(searched.map((g) => g.name)).toEqual(['Gamma']);
+});

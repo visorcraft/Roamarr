@@ -115,6 +115,22 @@ function hydrateUsers(userIds: number[]): Map<number, { id: number; email: strin
 	return map;
 }
 
+function toAuditLogEntry(
+	r: Row<typeof kitAuditLogs>,
+	userMap: Map<number, { id: number; email: string; displayName: string }>
+): AuditLogEntry {
+	const userId = idFromBigInt(r.user_id);
+	return {
+		id: idFromBigInt(r.id),
+		action: r.action,
+		entityType: r.entity_type,
+		entityId: idFromBigInt(r.entity_id),
+		meta: JSON.parse(r.meta_json as string) as AuditMeta,
+		createdAt: r.created_at,
+		user: userMap.get(userId) ?? { id: userId, email: '', displayName: '' }
+	};
+}
+
 export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	const limit = filters.limit ?? 100;
 	const offset = filters.offset ?? 0;
@@ -122,6 +138,29 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 
 	const conditions = buildKitConditions(filters);
 	const where = conditions.length ? kitAnd(...conditions) : undefined;
+
+	if (!search) {
+		let rowsQuery = kit
+			.selectFrom(kitAuditLogs)
+			.orderBy(kitDesc(kitAuditLogs.created_at), kitDesc(kitAuditLogs.id))
+			.limit(limit)
+			.offset(offset);
+		if (where) {
+			rowsQuery = rowsQuery.where(where);
+		}
+		const rows = rowsQuery.executeSync();
+
+		let countQuery = kit.selectFrom(kitAuditLogs).selectCount();
+		if (where) {
+			countQuery = countQuery.where(where);
+		}
+		const total = Number(countQuery.executeSync());
+
+		const userIds = rows.map((r) => idFromBigInt(r.user_id));
+		const userMap = hydrateUsers(userIds);
+		const logs = rows.map((r) => toAuditLogEntry(r, userMap));
+		return { logs, total };
+	}
 
 	let rowsQuery = kit
 		.selectFrom(kitAuditLogs)
@@ -134,34 +173,13 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	const userIds = rows.map((r) => idFromBigInt(r.user_id));
 	const userMap = hydrateUsers(userIds);
 
-	let logs = rows.map((r) => ({
-		id: idFromBigInt(r.id),
-		action: r.action,
-		entityType: r.entity_type,
-		entityId: idFromBigInt(r.entity_id),
-		meta: JSON.parse(r.meta_json as string) as AuditMeta,
-		createdAt: r.created_at,
-		user: userMap.get(idFromBigInt(r.user_id)) ?? {
-			id: idFromBigInt(r.user_id),
-			email: '',
-			displayName: ''
-		}
-	}));
-
-	if (search) {
-		logs = logs.filter((l) => {
-			const haystack = [
-				l.action,
-				l.entityType,
-				l.user.email,
-				l.user.displayName,
-				JSON.stringify(l.meta)
-			]
-				.join(' ')
-				.toLowerCase();
-			return haystack.includes(search);
-		});
-	}
+	let logs = rows.map((r) => toAuditLogEntry(r, userMap));
+	logs = logs.filter((l) => {
+		const haystack = [l.action, l.entityType, l.user.email, l.user.displayName, JSON.stringify(l.meta)]
+			.join(' ')
+			.toLowerCase();
+		return haystack.includes(search);
+	});
 
 	const total = logs.length;
 	return { logs: logs.slice(offset, offset + limit), total };

@@ -438,7 +438,19 @@ export function countSchedulerRuns(search?: string): number {
 		return Number(kit.selectFrom(kitSchedulerRuns).selectCount().executeSync());
 	}
 	const q = search.trim().toLowerCase();
-	return listSchedulerRuns({ search: q }).length;
+	return kit
+		.selectFrom(kitSchedulerRuns)
+		.executeSync()
+		.map(toSchedulerRunRow)
+		.filter(
+			(r) =>
+				r.startedAt.toLowerCase().includes(q) ||
+				(r.finishedAt?.toLowerCase().includes(q) ?? false) ||
+				(r.errorMessage?.toLowerCase().includes(q) ?? false) ||
+				(q === 'success' && r.success) ||
+				(q === 'failure' && !r.success)
+		)
+		.length;
 }
 
 export function pruneOldSchedulerRuns(before: string): bigint {

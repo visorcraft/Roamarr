@@ -28,14 +28,14 @@ async function run(path: string) {
 test('redirects to /setup before setup is complete', async () => {
 	const res: any = await run('/');
 	expect(res.status).toBe(302);
-	expect(res.location).toBe('/setup');
+	expect(res.headers.get('location')).toBe('/setup');
 });
 
 test('anonymous hitting a protected route is redirected to /login', async () => {
 	updateSettings({ setupComplete: true });
 	const res: any = await run('/trips');
 	expect(res.status).toBe(302);
-	expect(res.location).toBe('/login');
+	expect(res.headers.get('location')).toBe('/login');
 });
 
 function parseCsp(header: string | null) {
@@ -57,6 +57,9 @@ test('sets baseline security and CSP headers on a public response', async () => 
 	expect(res.headers.get('X-Frame-Options')).toBe('DENY');
 	expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
 	expect(res.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+	expect(res.headers.get('Strict-Transport-Security')).toBe(
+		'max-age=63072000; includeSubDomains; preload'
+	);
 
 	const csp = res.headers.get('Content-Security-Policy');
 	expect(csp).toBeTruthy();
@@ -78,6 +81,16 @@ test('sets CSP headers on a public share link', async () => {
 	updateSettings({ setupComplete: true });
 	const res = (await run('/share/abc123')) as Response;
 	expect(res.status).toBe(200);
+	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
+});
+
+test('sets security headers on redirect responses', async () => {
+	updateSettings({ setupComplete: true });
+	const res = (await run('/trips')) as Response;
+	expect(res.status).toBe(302);
+	expect(res.headers.get('location')).toBe('/login');
+	expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+	expect(res.headers.get('Strict-Transport-Security')).toBeTruthy();
 	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
 });
 
@@ -173,5 +186,5 @@ test('redirects users who must reset password', async () => {
 		})
 	).catch((e: any) => e);
 	expect(res.status).toBe(302);
-	expect(res.location).toBe('/profile/change-password');
+	expect(res.headers.get('location')).toBe('/profile/change-password');
 });

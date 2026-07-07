@@ -178,11 +178,7 @@ export function listAttendeesForSegments(segmentIds: number[]): Map<number, Atte
 function hydrateAttendeesWithCompanions(rows: ReturnType<typeof toAttendeeRow>[]): AttendeeWithCompanion[] {
 	if (rows.length === 0) return [];
 	const companionIds = Array.from(new Set(rows.map((r) => r.companionId)));
-	const companionMap = new Map<number, { name: string; category: string }>();
-	for (const id of companionIds) {
-		const c = getCompanionById(id);
-		if (c) companionMap.set(id, c);
-	}
+	const companionMap = getCompanionsByIds(companionIds);
 
 	return rows.map((r) => {
 		const c = companionMap.get(r.companionId);
@@ -197,10 +193,17 @@ function hydrateAttendeesWithCompanions(rows: ReturnType<typeof toAttendeeRow>[]
 	});
 }
 
-function getCompanionById(id: number): { name: string; category: string } | null {
-	const kitRow = kit.selectFrom(tripCompanions).where(kitEq(tripCompanions.id, toBigInt(id))).executeSync()[0];
-	if (kitRow) return { name: kitRow.name, category: kitRow.category };
-	return null;
+function getCompanionsByIds(ids: number[]): Map<number, { name: string; category: string }> {
+	const map = new Map<number, { name: string; category: string }>();
+	if (ids.length === 0) return map;
+	const rows = kit
+		.selectFrom(tripCompanions)
+		.where(kitInList(tripCompanions.id, ids.map(toBigInt)))
+		.executeSync();
+	for (const row of rows) {
+		map.set(Number(row.id), { name: row.name, category: row.category });
+	}
+	return map;
 }
 
 export function addAttendee(input: CreateAttendeeInput) {

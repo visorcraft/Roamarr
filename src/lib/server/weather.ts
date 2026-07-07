@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
 import { eq as kitEq, and as kitAnd, gte as kitGte, lte as kitLte } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
@@ -5,6 +6,7 @@ import { weatherCache, trips, segments } from './db/mongrelSchema';
 import { getUserById } from './repositories/usersRepo';
 import { loadTripFor } from '../../routes/trips/shared';
 import { weatherCodeSummary } from '$lib/weatherCodes';
+import { checkRateLimit } from './rateLimit';
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 14;
@@ -90,7 +92,7 @@ export async function fetchForecast(lat: number, lng: number): Promise<OpenMeteo
 		forecast_days: String(FORECAST_DAYS),
 		timezone: 'auto'
 	});
-	const res = await fetch(`${OPEN_METEO_URL}?${params}`);
+	const res = await fetch(`${OPEN_METEO_URL}?${params}`, { signal: AbortSignal.timeout(10_000) });
 	if (!res.ok) throw new Error(`Open-Meteo returned ${res.status}`);
 	return (await res.json()) as OpenMeteoResponse;
 }
@@ -335,6 +337,14 @@ export async function tripWeatherOverview(
 	tripId: number,
 	userId: number
 ): Promise<TripWeatherOverview | null> {
+	const limit = checkRateLimit(String(userId), 'weather:overview', {
+		maxAttempts: 30,
+		windowMs: 60_000
+	});
+	if (!limit.allowed) {
+		throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
+	}
+
 	// Authorize before touching destination coordinates/dates for an arbitrary id.
 	loadTripFor(userId, tripId);
 

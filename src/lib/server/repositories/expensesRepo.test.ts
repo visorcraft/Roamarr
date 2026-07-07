@@ -158,6 +158,55 @@ test('attachment CRUD', () => {
 	).toBeUndefined();
 });
 
+test('listAttachmentsForExpenses batches attachments for multiple expenses', () => {
+	const kit = kitDb();
+	const u = makeUser('batch@x.c');
+	const t = makeTrip(Number(u.id), 'Batch Trip');
+	const e1 = expensesRepo.createExpense({
+		tripId: t.id,
+		description: 'E1',
+		amount: 100,
+		currency: 'USD',
+		exchangeRate: 10000,
+		baseAmount: 100
+	});
+	const e2 = expensesRepo.createExpense({
+		tripId: t.id,
+		description: 'E2',
+		amount: 200,
+		currency: 'USD',
+		exchangeRate: 10000,
+		baseAmount: 200
+	});
+
+	const att1 = kit.insertInto(attachments).values({
+		owner_id: u.id,
+		storage_key: 'batch-1',
+		filename: 'r1.pdf',
+		content_type: 'application/pdf',
+		size_bytes: BigInt(1024),
+		context: '{}'
+	}).executeSync();
+	const att2 = kit.insertInto(attachments).values({
+		owner_id: u.id,
+		storage_key: 'batch-2',
+		filename: 'r2.pdf',
+		content_type: 'application/pdf',
+		size_bytes: BigInt(2048),
+		context: '{}'
+	}).executeSync();
+
+	expensesRepo.createExpenseAttachmentLink(e1.id, Number(att1.id));
+	expensesRepo.createExpenseAttachmentLink(e2.id, Number(att2.id));
+
+	const map = expensesRepo.listAttachmentsForExpenses([e1.id, e2.id, 99999]);
+	expect(map.get(e1.id)).toHaveLength(1);
+	expect(map.get(e1.id)![0].filename).toBe('r1.pdf');
+	expect(map.get(e2.id)).toHaveLength(1);
+	expect(map.get(e2.id)![0].filename).toBe('r2.pdf');
+	expect(map.get(99999)).toHaveLength(0);
+});
+
 test('budget category CRUD', () => {
 	const kit = kitDb();
 	const u = makeUser('budget@x.c');

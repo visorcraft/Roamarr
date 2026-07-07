@@ -23,7 +23,7 @@ type FareResult = { ok: boolean; summary: string; raw?: unknown };
 export interface FareProvider {
 	key: string;
 	label: string;
-	check(watch: FareWatch, apiKey: string): Promise<FareResult>;
+	check(watch: FareWatch, apiKey: string, signal?: AbortSignal): Promise<FareResult>;
 }
 
 export const registry: Record<string, FareProvider> = { [stub.key]: stub };
@@ -83,6 +83,8 @@ export function deleteProvider(userId: number, providerId: number) {
 	deleteFareProvider(providerId);
 }
 
+const CHECK_TIMEOUT_MS = 10_000;
+
 export async function testProvider(userId: number, providerId: number): Promise<FareResult> {
 	const p = requireOwnedProvider(userId, providerId);
 	const provider = registry[p.providerKey];
@@ -97,7 +99,7 @@ export async function testProvider(userId: number, providerId: number): Promise<
 		lastResultJson: null,
 		createdAt: new Date().toISOString()
 	};
-	return provider.check(dummyWatch, p.apiKey ?? '');
+	return provider.check(dummyWatch, p.apiKey ?? '', AbortSignal.timeout(CHECK_TIMEOUT_MS));
 }
 
 export function toggleWatch(
@@ -181,7 +183,7 @@ export async function checkWatch(userId: number, watchId: number): Promise<FareR
 	const now = new Date();
 	let res: FareResult;
 	try {
-		res = await provider.check(w, p.apiKey ?? '');
+		res = await provider.check(w, p.apiKey ?? '', AbortSignal.timeout(CHECK_TIMEOUT_MS));
 	} catch (e) {
 		res = { ok: false, summary: String(e) };
 	}
@@ -197,7 +199,7 @@ export async function runFareChecks(now: Date) {
 		const provider = registry[p.providerKey];
 		if (!provider) continue;
 		try {
-			const res = await provider.check(w, p.apiKey ?? '');
+			const res = await provider.check(w, p.apiKey ?? '', AbortSignal.timeout(CHECK_TIMEOUT_MS));
 			await applyResult(w, p, res, now);
 		} catch (e) {
 			const res = { ok: false, summary: String(e) };

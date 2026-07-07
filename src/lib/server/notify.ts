@@ -96,7 +96,8 @@ const webhookChannel: Channel = {
 				'X-Roamarr-Signature': signature,
 				'X-Roamarr-Timestamp': String(timestamp)
 			},
-			body
+			body,
+			signal: AbortSignal.timeout(10_000)
 		});
 	}
 };

@@ -13,6 +13,7 @@ vi.stubGlobal('fetch', fetchMock);
 
 import { weatherCache } from './db/mongrelSchema';
 import { locationKey, fetchForecast, getCachedForecast, tripWeatherOverview, CACHE_TTL_MS } from './weather';
+import { checkRateLimit, resetRateLimit } from './rateLimit';
 import { weatherCodeSummary, weatherIconForCode } from '$lib/weatherCodes';
 import { makeTrip, makeSegment, makeUser } from '../../../tests/helpers';
 import { DateTime } from 'luxon';
@@ -319,5 +320,19 @@ describe('weather', () => {
 		const w = await tripWeatherOverview(t.id, u.id);
 		expect(w).not.toBeNull();
 		expect(w!.advisory).toBeNull();
+	});
+
+	test('tripWeatherOverview is rate limited per user', async () => {
+		resetRateLimit();
+		const u = makeUser(ctx.kit);
+		for (let i = 0; i < 30; i++) {
+			checkRateLimit(String(u.id), 'weather:overview', { maxAttempts: 30, windowMs: 60_000 });
+		}
+		await expect(tripWeatherOverview(9999, u.id)).rejects.toEqual(
+			expect.objectContaining({
+				status: 429,
+				body: expect.objectContaining({ message: expect.stringContaining('Rate limited') })
+			})
+		);
 	});
 });

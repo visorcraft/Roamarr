@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import { checkRateLimit, resetRateLimit, DEFAULT_MAX_ATTEMPTS } from '$lib/server/rateLimit';
 
 const ctx = vi.hoisted(() => ({
 	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase,
@@ -29,11 +30,12 @@ import { createFareProvider, createFareWatch, getFareWatchById } from '$lib/serv
 import { fareProviders, fareWatches, trips, users } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
-function event(user: { id: number }, body: FormData, tripId: number) {
+function event(user: { id: number }, body: FormData, tripId: number, ip = '127.0.0.1') {
 	return {
 		locals: { user } as App.Locals,
 		request: { formData: async () => body } as Request,
-		params: { id: String(tripId) }
+		params: { id: String(tripId) },
+		getClientAddress: () => ip
 	} as any;
 }
 
@@ -98,4 +100,29 @@ test('pause, resume and delete actions are ownership-checked', async () => {
 		expect.objectContaining({ status: 303 })
 	);
 	expect(getFareWatchById(w.id)).toBeNull();
+});
+
+test('check action returns 429 when rate limited', async () => {
+	resetRateLimit();
+	const a = makeKitUser({ email: 'fw-rl@x.c' });
+	const t = createTrip(Number(a.id), { name: 'RL' });
+	const p = createFareProvider({
+		userId: Number(a.id),
+		providerKey: 'stub',
+		label: 'Work',
+		apiKey: null,
+		enabled: true
+	});
+	const w = createFareWatch({ tripId: t.id, providerId: p.id });
+	const ip = '9.9.9.9';
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit(ip, 'fare:check');
+
+	const body = new FormData();
+	body.set('watchId', String(w.id));
+	const result = (await actions.check(event({ id: Number(a.id) }, body, t.id, ip))) as {
+		status: number;
+		data?: { error?: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data?.error).toContain('Too many attempts');
 });

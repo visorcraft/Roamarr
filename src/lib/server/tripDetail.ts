@@ -10,7 +10,7 @@ import { listAttendeesForSegments } from './segmentAttendees';
 import { listPollsWithVotes } from './tripPolls';
 import { listBudgetsWithSpent } from './tripBudgets';
 import { listEmergencyContacts, listCards } from './repositories/profileRepo';
-import { listAttachments } from './tripExpenseAttachments';
+import { listAttachmentsForExpenses } from './repositories/expensesRepo';
 import { listTripTemplates } from './tripTemplates';
 import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
@@ -29,7 +29,7 @@ import {
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
 	expenseSummary: ReturnType<typeof summarizeTripExpenses>,
-	checklist: ReturnType<typeof loadChecklist>,
+	checklist: { items: Array<{ packed: boolean }> },
 	budgets: ReturnType<typeof listBudgetsWithSpent>
 ) {
 	const total = segmentsList.length;
@@ -79,21 +79,31 @@ export async function buildTripDetail(
 					roomNotes: null
 			  }
 	);
-	const checklist = loadChecklist(view.trip.id);
-	const expenses = listTripExpenses(view.trip.id).map((e) => ({
-		...e,
-		attachments: listAttachments(e.id)
-	}));
+
+	// Private trip modules are only loaded for editors. Read-only viewers get the
+	// public projection already returned by loadTripFor and should not see
+	// expenses, journal entries, medications, document links, polls, etc.
+	const checklist = view.editor ? loadChecklist(view.trip.id) : { items: [] };
+	const expenseRows = view.editor ? listTripExpenses(view.trip.id) : [];
+	const attachmentsByExpense = view.editor ? listAttachmentsForExpenses(expenseRows.map((e) => e.id)) : new Map<number, ReturnType<typeof listAttachmentsForExpenses> extends Map<number, infer V> ? V : never>();
+	const expenses = view.editor
+		? expenseRows.map((e) => ({
+				...e,
+				attachments: attachmentsByExpense.get(e.id) ?? []
+		  }))
+		: [];
 	const expenseSummary = summarizeTripExpenses(expenses, companions, baseCurrency);
 	const expenseSettlement = computeSettlement(expenses, companions);
-	const budgets = listBudgetsWithSpent(view.trip.id, expenses, u.defaultCurrency ?? 'USD');
-	const journalEntries = listJournalEntriesForTrip(view.trip.id);
-	const documentLinks = listDocumentLinksForTrip(view.trip.id);
-	const polls = listPollsWithVotes(view.trip.id);
-	const homeTasks = listHomeTasksForTrip(view.trip.id);
-	const medications = listMedicationsForTrip(view.trip.id);
-	const entryRequirements = listEntryRequirementsForTrip(view.trip.id);
-	const importantItems = listImportantItemsForTrip(view.trip.id);
+	const budgets = view.editor
+		? listBudgetsWithSpent(view.trip.id, expenses, u.defaultCurrency ?? 'USD')
+		: [];
+	const journalEntries = view.editor ? listJournalEntriesForTrip(view.trip.id) : [];
+	const documentLinks = view.editor ? listDocumentLinksForTrip(view.trip.id) : [];
+	const polls = view.editor ? listPollsWithVotes(view.trip.id) : [];
+	const homeTasks = view.editor ? listHomeTasksForTrip(view.trip.id) : [];
+	const medications = view.editor ? listMedicationsForTrip(view.trip.id) : [];
+	const entryRequirements = view.editor ? listEntryRequirementsForTrip(view.trip.id) : [];
+	const importantItems = view.editor ? listImportantItemsForTrip(view.trip.id) : [];
 	const stats = computeTripStats(
 		view.editor ? view.segments : (view.trip as { segments: Array<{ startAt: string | null; paymentStatus?: string | null }> }).segments,
 		expenseSummary,
@@ -192,7 +202,7 @@ export async function buildTripDetail(
 		documentLinks,
 		polls,
 		attendeesBySegment,
-		comments: listComments(view.trip.id),
+		comments: view.editor ? listComments(view.trip.id) : [],
 		homeTasks,
 		medications,
 		entryRequirements,

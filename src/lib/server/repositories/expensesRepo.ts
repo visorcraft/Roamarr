@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, asc, joinEq } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, asc, joinEq, inList as kitInList } from '@visorcraft/mongreldb-kit';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import {
 	runSyncTxn,
@@ -232,6 +232,39 @@ export function listAttachmentsForExpense(expenseId: number): AttachmentRow[] {
 		)
 		.executeSync();
 	return rows.map(mapJoinedAttachmentRow);
+}
+
+export function listAttachmentsForExpenses(expenseIds: number[]): Map<number, AttachmentRow[]> {
+	const map = new Map<number, AttachmentRow[]>();
+	for (const id of expenseIds) map.set(id, []);
+	if (expenseIds.length === 0) return map;
+
+	const orderedLinks = kit
+		.selectFrom(tripExpenseAttachments)
+		.where(kitInList(tripExpenseAttachments.expense_id, expenseIds.map(toBigInt)))
+		.orderBy(asc(tripExpenseAttachments.created_at));
+
+	const rows = kit
+		.with('trip_expense_attachments', orderedLinks)
+		.selectFrom('trip_expense_attachments')
+		.innerJoin(
+			attachments,
+			joinEq(
+				tripExpenseAttachments,
+				tripExpenseAttachments.attachment_id,
+				attachments,
+				attachments.id
+			)
+		)
+		.executeSync();
+
+	for (const row of rows) {
+		const link = row.trip_expense_attachments;
+		const expenseId = num(link!.expense_id as bigint);
+		const att = mapJoinedAttachmentRow(row);
+		map.get(expenseId)?.push(att);
+	}
+	return map;
 }
 
 function constraintKit() {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { html } from 'gridjs';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
@@ -78,7 +79,16 @@
 
 	function applyFilters(e?: Event) {
 		e?.preventDefault();
-		const params = buildFilterParams();
+		const params = new URLSearchParams($page.url.searchParams);
+		const filters = buildFilterParams();
+		for (const key of ['userId', 'action', 'entityType', 'from', 'to'] as const) {
+			const value = filters.get(key);
+			if (value) {
+				params.set(key, value);
+			} else {
+				params.delete(key);
+			}
+		}
 		goto('?' + params.toString(), { replaceState: true, keepFocus: true });
 		grid?.reload();
 	}
@@ -156,7 +166,7 @@
 	<form class="flex flex-wrap items-end gap-3" onsubmit={applyFilters}>
 		<label class="field min-w-[10rem]">
 			<span class="label">User</span>
-			<select bind:value={userId} class="input" onchange={() => grid?.reload()}>
+			<select bind:value={userId} class="input">
 				<option value="">All users</option>
 				{#each users as u (u.id)}
 					<option value={u.id}>{u.displayName} ({u.email})</option>

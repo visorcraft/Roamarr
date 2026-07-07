@@ -61,33 +61,38 @@ test('create action adds a group, logs audit, and redirects', async () => {
 	expect(Number(logs[0].entity_id)).toBe(Number(rows[0].id));
 });
 
-test('create action rejects empty or whitespace-only names', async () => {
+test('create action rejects empty or whitespace-only names and preserves values', async () => {
 	const user = makeUserLocals(ctx.kit);
 	const f = new FormData();
 	f.set('name', '   ');
 
 	const result = (await actions.create(event(user.user, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; errors: Record<string, string>; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
-	expect(result.data.error).toBe('Group name is required');
+	expect(result.data.error).toBe('Please fix the highlighted fields.');
+	expect(result.data.errors).toEqual({ name: 'name is required' });
+	expect(result.data.values).toEqual({ name: '   ' });
 
 	expect(ctx.kit.selectFrom(groups).executeSync()).toHaveLength(0);
 	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });
 
-test('create action rejects names over 200 characters', async () => {
+test('create action rejects names over 200 characters and preserves values', async () => {
 	const user = makeUserLocals(ctx.kit);
+	const longName = 'a'.repeat(201);
 	const f = new FormData();
-	f.set('name', 'a'.repeat(201));
+	f.set('name', longName);
 
 	const result = (await actions.create(event(user.user, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; errors: Record<string, string>; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.error).toBe('Please fix the highlighted fields.');
+	expect(result.data.errors).toEqual({ name: 'name must be at most 200 characters' });
+	expect(result.data.values).toEqual({ name: longName });
 
 	expect(ctx.kit.selectFrom(groups).executeSync()).toHaveLength(0);
 });

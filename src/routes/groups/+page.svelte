@@ -7,21 +7,12 @@
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
 
-	function escapeHtml(value: unknown): string {
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
-
 	const columns = [
 		{
 			id: 'name',
 			name: 'Name',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) => escapeHtml(row.name)
+			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.name ?? '')
 		},
 		{
 			id: 'members',
@@ -36,7 +27,7 @@
 			id: 'createdAt',
 			name: 'Created',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) => escapeHtml(formatDate(String(row.createdAt)))
+			formatter: (_cell: unknown, row: Record<string, unknown>) => formatDate(String(row.createdAt))
 		}
 	];
 

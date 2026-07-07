@@ -108,7 +108,7 @@ test('update action edits an owned group, logs audit, and redirects', async () =
 	expect(after!.name).toBe('Updated');
 });
 
-test('update action rejects empty name', async () => {
+test('update action rejects empty name and preserves values', async () => {
 	const user = makeUser(ctx.kit);
 	const group = ctx.kit
 		.insertInto(groups)
@@ -121,10 +121,12 @@ test('update action rejects empty name', async () => {
 
 	const result = (await actions.update(event(user, { id: String(groupId) }, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; errors: Record<string, string>; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
-	expect(result.data.error).toBe('Group name is required');
+	expect(result.data.error).toBe('Please fix the highlighted fields.');
+	expect(result.data.errors).toEqual({ name: 'name is required' });
+	expect(result.data.values).toEqual({ name: '  ' });
 
 	const row = ctx.kit.selectFrom(groups).where(kitEq(groups.id, BigInt(groupId))).executeSync()[0];
 	expect(row!.name).toBe('Team');
@@ -157,7 +159,7 @@ test('addMember action adds a member by email, logs audit, and redirects', async
 	expect(Number(logs[0].entity_id)).toBe(groupId);
 });
 
-test('addMember action fails when email is not found', async () => {
+test('addMember action fails when email is not found and preserves values', async () => {
 	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
 	const group = ctx.kit
 		.insertInto(groups)
@@ -170,10 +172,11 @@ test('addMember action fails when email is not found', async () => {
 
 	const result = (await actions.addMember(event(owner, { id: String(groupId) }, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.error).toBe('User not found');
+	expect(result.data.values).toEqual({ email: 'missing@x.c' });
 
 	expect(ctx.kit.selectFrom(groupMembers).executeSync()).toHaveLength(0);
 	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
@@ -228,7 +231,7 @@ test('removeMember action fails when member is not in group', async () => {
 	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });
 
-test('update action rejects names over 200 characters', async () => {
+test('update action rejects names over 200 characters and preserves values', async () => {
 	const user = makeUser(ctx.kit);
 	const group = ctx.kit
 		.insertInto(groups)
@@ -236,15 +239,18 @@ test('update action rejects names over 200 characters', async () => {
 		.executeSync();
 	const groupId = Number(group.id);
 
+	const longName = 'a'.repeat(201);
 	const f = new FormData();
-	f.set('name', 'a'.repeat(201));
+	f.set('name', longName);
 
 	const result = (await actions.update(event(user, { id: String(groupId) }, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; errors: Record<string, string>; values: Record<string, string> };
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.error).toBe('Please fix the highlighted fields.');
+	expect(result.data.errors).toEqual({ name: 'name must be at most 200 characters' });
+	expect(result.data.values).toEqual({ name: longName });
 
 	const row = ctx.kit.selectFrom(groups).where(kitEq(groups.id, BigInt(groupId))).executeSync()[0];
 	expect(row!.name).toBe('Team');

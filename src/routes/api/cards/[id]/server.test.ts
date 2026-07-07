@@ -1,6 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
-const ctx = vi.hoisted(() => ({ kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as unknown as KitDatabase }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
@@ -8,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { DELETE } from './+server';
-import { makeCard, makeUser, makeAdmin } from '../../../../../tests/helpers';
+import { makeCard, makeUser } from '../../../../../tests/helpers';
 import { cards, cardBenefits, auditLogs, users } from '$lib/server/db/mongrelSchema';
 import { kit } from '$lib/server/db';
 import { resetRateLimit } from '$lib/server/rateLimit';

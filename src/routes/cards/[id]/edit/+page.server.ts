@@ -64,7 +64,7 @@ export const actions: Actions = {
 
 		if (templateId != null) {
 			const template = getBenefitTemplate(templateId);
-			if (!template) return fail(400, { error: 'Template not found' });
+			if (!template) return fail(404, { error: 'Template not found' });
 			benefitType = template.benefitType;
 			coverageAmount = template.coverageAmount ?? undefined;
 			currency = template.currency;

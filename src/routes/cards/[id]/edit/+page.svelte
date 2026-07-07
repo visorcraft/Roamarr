@@ -231,6 +231,12 @@
 			placeholder="0"
 			disabled={benefitSubmitting || !!selectedTemplate}
 		/>
+		<TextField
+			name="notes"
+			label="Notes"
+			placeholder="Optional"
+			disabled={benefitSubmitting}
+		/>
 		<button class="btn btn-primary justify-self-end" disabled={benefitSubmitting}>Add benefit</button>
 	</form>
 	{#if selectedTemplate}

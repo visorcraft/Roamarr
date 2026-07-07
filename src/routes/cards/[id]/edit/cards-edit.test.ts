@@ -103,6 +103,19 @@ test('updateCard action edits an owned card, logs audit, and redirects', async (
 	expect(after!.nickname).toBe('Updated');
 });
 
+test('addBenefit action returns 404 for an invalid templateId', async () => {
+	const user = makeUser(ctx.kit);
+	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });
+
+	const f = new FormData();
+	f.set('templateId', '999999');
+
+	const result = await actions.addBenefit(event(user, { id: String(card.id) }, f));
+	expect(result).toEqual(
+		expect.objectContaining({ status: 404, data: { error: 'Template not found' } })
+	);
+});
+
 test('addBenefit action creates a benefit from a template', async () => {
 	const user = makeUser(ctx.kit);
 	const card = createCard(user.id, { nickname: 'Sapphire', network: 'visa' });

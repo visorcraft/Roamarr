@@ -38,7 +38,8 @@ test('returns paginated cards', async () => {
 		nickname: 'Sapphire',
 		network: 'visa',
 		last4: '1234',
-		notes: 'Primary card'
+		notes: 'Primary card',
+		benefitCount: 0
 	});
 });
 

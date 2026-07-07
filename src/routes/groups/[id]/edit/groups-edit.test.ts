@@ -182,6 +182,55 @@ test('addMember action fails when email is not found and preserves values', asyn
 	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });
 
+test('addMember action fails when email is invalid and preserves values', async () => {
+	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(owner.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+
+	const f = new FormData();
+	f.set('email', 'not-an-email');
+
+	const result = (await actions.addMember(event(owner, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string; values: Record<string, string> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('A valid email is required');
+	expect(result.data.values).toEqual({ email: 'not-an-email' });
+
+	expect(ctx.kit.selectFrom(groupMembers).executeSync()).toHaveLength(0);
+	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
+});
+
+test('addMember action fails when user is already a member and does not log audit', async () => {
+	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
+	const member = makeUser(ctx.kit, { email: 'member@x.c' });
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(owner.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+	ctx.kit.insertInto(groupMembers).values({ group_id: BigInt(groupId), user_id: BigInt(member.id) } as any).executeSync();
+
+	const f = new FormData();
+	f.set('email', 'MEMBER@X.C');
+
+	const result = (await actions.addMember(event(owner, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string; values: Record<string, string> };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('User is already a member');
+	expect(result.data.values).toEqual({ email: 'member@x.c' });
+
+	const rows = ctx.kit.selectFrom(groupMembers).where(kitEq(groupMembers.group_id, BigInt(groupId))).executeSync();
+	expect(rows).toHaveLength(1);
+	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
+});
+
 test('removeMember action removes a member, logs audit, and redirects', async () => {
 	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
 	const member = makeUser(ctx.kit, { email: 'member@x.c' });
@@ -209,7 +258,7 @@ test('removeMember action removes a member, logs audit, and redirects', async ()
 	expect(Number(logs[0].entity_id)).toBe(groupId);
 });
 
-test('removeMember action fails when member is not in group', async () => {
+test('removeMember action fails when member is not in group and scopes error to members section', async () => {
 	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
 	const member = makeUser(ctx.kit, { email: 'member@x.c' });
 	const group = ctx.kit
@@ -223,10 +272,11 @@ test('removeMember action fails when member is not in group', async () => {
 
 	const result = (await actions.removeMember(event(owner, { id: String(groupId) }, f))) as {
 		status: number;
-		data: { error: string };
+		data: { error: string; values: Record<string, unknown> };
 	};
 	expect(result.status).toBe(400);
 	expect(result.data.error).toBe('Member not found');
+	expect(result.data.values).toEqual({ removeMemberError: true });
 
 	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });

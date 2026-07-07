@@ -7,16 +7,23 @@ import {
 	countGroupsForUser,
 	countMembersForGroupIds
 } from '$lib/server/repositories/tripsRepo';
+import { checkRateLimit } from '$lib/server/rateLimit';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => {
 	const u = requireUser(locals);
-	const { page, limit, search, sort, dir } = parseTableParams(url, ['name', 'createdAt']);
-	const offset = (page - 1) * limit;
+
+	const limit = checkRateLimit(getClientAddress(), 'api:groups:list');
+	if (!limit.allowed) {
+		return json({ error: 'Too many attempts. Try again later.' }, { status: 429 });
+	}
+
+	const { page, limit: pageSize, search, sort, dir } = parseTableParams(url, ['name', 'createdAt']);
+	const offset = (page - 1) * pageSize;
 	const groups = listGroupsForUserPaginated(u.id, {
 		search,
 		sortBy: sort as 'name' | 'createdAt' | undefined,
 		sortDir: dir,
-		limit,
+		limit: pageSize,
 		offset,
 		ownedOnly: true
 	});

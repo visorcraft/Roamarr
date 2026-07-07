@@ -67,11 +67,17 @@ export const actions: Actions = {
 
 		const f = await request.formData();
 		const email = normalizeEmail(String(f.get('email') ?? ''));
+		if (!email.includes('@')) {
+			return fail(400, { error: 'A valid email is required', values: { email } });
+		}
 		const member = getUserByEmail(email);
 		if (!member) {
 			return fail(400, { error: 'User not found', values: { email } });
 		}
-		addGroupMember(id, Number(member.id));
+		const { created } = addGroupMember(id, Number(member.id));
+		if (!created) {
+			return fail(400, { error: 'User is already a member', values: { email } });
+		}
 		logAudit(u.id, 'group_member_add', 'group', id);
 		throw redirect(303, `/groups/${id}/edit`);
 	},
@@ -92,7 +98,7 @@ export const actions: Actions = {
 		}
 		const deleted = removeGroupMember(id, userId);
 		if (deleted === 0) {
-			return fail(400, { error: 'Member not found' });
+			return fail(400, { error: 'Member not found', values: { removeMemberError: true } });
 		}
 		logAudit(u.id, 'group_member_remove', 'group', id);
 		throw redirect(303, `/groups/${id}/edit`);

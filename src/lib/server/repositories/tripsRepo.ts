@@ -695,7 +695,7 @@ export function countMembersForGroupIds(groupIds: number[]): Map<number, number>
 	return counts;
 }
 
-export function addGroupMember(groupId: number, userId: number): GroupMember {
+export function addGroupMember(groupId: number, userId: number): { member: GroupMember; created: boolean } {
 	const existing = kit
 		.selectFrom(groupMembers)
 		.where(
@@ -705,7 +705,7 @@ export function addGroupMember(groupId: number, userId: number): GroupMember {
 			)
 		)
 		.executeSync()[0];
-	if (existing) return toGroupMember(existing);
+	if (existing) return { member: toGroupMember(existing), created: false };
 
 	const row = kit
 		.insertInto(groupMembers)
@@ -714,7 +714,7 @@ export function addGroupMember(groupId: number, userId: number): GroupMember {
 			user_id: kitId(userId)
 		} as Insert<typeof groupMembers>)
 		.executeSync();
-	return toGroupMember(row);
+	return { member: toGroupMember(row), created: true };
 }
 
 export function removeGroupMember(groupId: number, userId: number): number {

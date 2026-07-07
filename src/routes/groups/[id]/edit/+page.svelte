@@ -14,7 +14,8 @@
 	let updateDirty = $state(false);
 
 	const addError = $derived(form?.error && form.values && 'email' in form.values ? form.error : null);
-	const updateError = $derived(form?.error && (!form.values || !('email' in form.values)) ? form.error : null);
+	const updateError = $derived(form?.error && (!form.values || (!('email' in form.values) && !('removeMemberError' in form.values))) ? form.error : null);
+	const removeMemberError = $derived(form?.error && form.values && 'removeMemberError' in form.values ? form.error : null);
 </script>
 
 <header class="page-header">
@@ -60,6 +61,8 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title mb-4">Members</h2>
+
+	{#if removeMemberError}<p class="notice notice-error mb-4">{removeMemberError}</p>{/if}
 
 	{#if data.members.length}
 		<ul class="space-y-3">

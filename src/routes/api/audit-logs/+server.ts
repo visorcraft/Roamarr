@@ -1,27 +1,20 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { DateTime } from 'luxon';
 import { parseTableParams } from '$lib/tableParams';
 import { requireAdmin } from '$lib/server/auth';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import { listAuditLogs } from '$lib/server/repositories/auditRepo';
+import { parsePositiveInteger, parseIsoDateParam } from '$lib/server/auditParams';
 
-function parsePositiveInteger(raw: string | null): number | undefined {
-	if (raw == null || raw === '') return undefined;
-	const value = Number(raw);
-	if (!Number.isInteger(value) || value < 1) throw error(400, 'Invalid userId');
-	return value;
-}
-
-function parseIsoDateParam(raw: string | null, name: string): string | undefined {
-	if (raw == null || raw === '') return undefined;
-	if (!DateTime.fromISO(raw).isValid) throw error(400, `Invalid ${name} date`);
-	return raw;
-}
-
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => {
 	requireAdmin(locals);
-	const { page, limit, search } = parseTableParams(url);
-	const offset = (page - 1) * limit;
+	const limit = checkRateLimit(getClientAddress(), 'api:audit-logs:list');
+	if (!limit.allowed) {
+		throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
+	}
+
+	const { page, limit: pageLimit, search } = parseTableParams(url);
+	const offset = (page - 1) * pageLimit;
 	const userId = parsePositiveInteger(url.searchParams.get('userId'));
 	const action = url.searchParams.get('action') ?? undefined;
 	const entityType = url.searchParams.get('entityType') ?? undefined;
@@ -35,7 +28,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		from,
 		to,
 		search,
-		limit,
+		limit: pageLimit,
 		offset
 	});
 	return json({ rows: logs, total });

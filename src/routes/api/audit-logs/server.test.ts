@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -10,6 +10,7 @@ vi.mock('$lib/server/db', async () => {
 import { GET } from './+server';
 import { makeAdmin, makeUser } from '../../../../tests/helpers';
 import { logAudit } from '$lib/server/repositories/auditRepo';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -18,6 +19,10 @@ function makeEvent(url: string, user: unknown) {
 		getClientAddress: () => '127.0.0.1'
 	} as any;
 }
+
+beforeEach(() => {
+	resetRateLimit();
+});
 
 test('returns paginated audit logs with nested user', async () => {
 	const admin = makeAdmin(ctx.kit);
@@ -61,4 +66,13 @@ test('rejects invalid from date', async () => {
 test('rejects invalid to date', async () => {
 	const admin = makeAdmin(ctx.kit);
 	await expect(GET(makeEvent('/api/audit-logs?to=bad', admin))).rejects.toMatchObject({ status: 400 });
+});
+
+test('rate limits repeated requests', async () => {
+	const admin = makeAdmin(ctx.kit);
+	for (let i = 0; i < 10; i++) {
+		const res = await GET(makeEvent('/api/audit-logs', admin));
+		expect(res.status).toBe(200);
+	}
+	await expect(GET(makeEvent('/api/audit-logs', admin))).rejects.toMatchObject({ status: 429 });
 });

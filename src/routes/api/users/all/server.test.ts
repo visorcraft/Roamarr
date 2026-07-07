@@ -10,6 +10,7 @@ vi.mock('$lib/server/db', async () => {
 import { GET } from './+server';
 import { makeAdmin, makeUser } from '../../../../../tests/helpers';
 import { users } from '$lib/server/db/mongrelSchema';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 function makeEvent(user: unknown) {
 	return {
@@ -21,6 +22,7 @@ function makeEvent(user: unknown) {
 beforeEach(() => {
 	const kit = (ctx as any).kit;
 	kit.deleteFrom(users).executeSync();
+	resetRateLimit();
 });
 
 test('returns all users for admin', async () => {
@@ -44,4 +46,13 @@ test('rejects non-admin users', async () => {
 
 test('rejects unauthenticated requests', async () => {
 	await expect(GET(makeEvent(null))).rejects.toMatchObject({ status: 401 });
+});
+
+test('rate limits repeated requests', async () => {
+	const admin = makeAdmin(ctx.kit);
+	for (let i = 0; i < 10; i++) {
+		const res = await GET(makeEvent(admin));
+		expect(res.status).toBe(200);
+	}
+	await expect(GET(makeEvent(admin))).rejects.toMatchObject({ status: 429 });
 });

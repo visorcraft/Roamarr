@@ -29,13 +29,34 @@ beforeEach(() => {
 	kit.deleteFrom(users).executeSync();
 });
 
-test('load returns empty object for admin', () => {
+test('load returns filters for admin', () => {
 	const admin = makeUser('admin@x.c', 'Admin', 'admin');
 	const result = load({
 		locals: { user: { id: Number(admin.id), role: 'admin' } },
 		url: new URL('http://localhost/audit-logs')
 	} as any);
-	expect(result).toEqual({});
+	expect(result).toEqual({
+		filters: { userId: '', action: '', entityType: '', from: '', to: '' }
+	});
+});
+
+test('load parses and returns URL filter params', () => {
+	const admin = makeUser('admin@x.c', 'Admin', 'admin');
+	const result = load({
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
+		url: new URL(
+			'http://localhost/audit-logs?userId=3&action=login&entityType=session&from=2024-01-01&to=2024-01-31'
+		)
+	} as any);
+	expect(result).toEqual({
+		filters: {
+			userId: '3',
+			action: 'login',
+			entityType: 'session',
+			from: '2024-01-01',
+			to: '2024-01-31'
+		}
+	});
 });
 
 test('load rejects non-admin', () => {
@@ -80,4 +101,43 @@ test('load returns filtered CSV export when export=csv with filters', async () =
 	const csv = await result.text();
 	expect(csv).toContain('trip_delete');
 	expect(csv).not.toContain('settings_update');
+});
+
+test('load rejects CSV export with invalid userId', () => {
+	const admin = makeUser('admin-bad-id@x.c', 'Admin', 'admin');
+	try {
+		load({
+			locals: { user: { id: Number(admin.id), role: 'admin' } },
+			url: new URL('http://localhost/audit-logs?export=csv&userId=abc')
+		} as any);
+		expect.fail('should have thrown');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+});
+
+test('load rejects CSV export with invalid from date', () => {
+	const admin = makeUser('admin-bad-from@x.c', 'Admin', 'admin');
+	try {
+		load({
+			locals: { user: { id: Number(admin.id), role: 'admin' } },
+			url: new URL('http://localhost/audit-logs?export=csv&from=not-a-date')
+		} as any);
+		expect.fail('should have thrown');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+});
+
+test('load rejects CSV export with invalid to date', () => {
+	const admin = makeUser('admin-bad-to@x.c', 'Admin', 'admin');
+	try {
+		load({
+			locals: { user: { id: Number(admin.id), role: 'admin' } },
+			url: new URL('http://localhost/audit-logs?export=csv&to=bad')
+		} as any);
+		expect.fail('should have thrown');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
 });

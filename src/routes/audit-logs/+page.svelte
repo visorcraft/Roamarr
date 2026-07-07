@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
+	import type { AuditLogFilters } from './+page.server';
+
+	let { data } = $props<{ data: { filters: AuditLogFilters } }>();
 
 	let grid: any = $state();
 	let users: { id: number; email: string; displayName: string }[] = $state([]);
@@ -11,6 +15,14 @@
 	let entityType = $state('');
 	let from = $state('');
 	let to = $state('');
+
+	$effect(() => {
+		userId = data.filters?.userId ?? '';
+		action = data.filters?.action ?? '';
+		entityType = data.filters?.entityType ?? '';
+		from = data.filters?.from ?? '';
+		to = data.filters?.to ?? '';
+	});
 
 	$effect(() => {
 		fetch('/api/users/all')
@@ -66,6 +78,8 @@
 
 	function applyFilters(e?: Event) {
 		e?.preventDefault();
+		const params = buildFilterParams();
+		goto('?' + params.toString(), { replaceState: true, keepFocus: true });
 		grid?.reload();
 	}
 
@@ -75,6 +89,7 @@
 		entityType = '';
 		from = '';
 		to = '';
+		goto('/audit-logs', { replaceState: true, keepFocus: true });
 		grid?.reload();
 	}
 
@@ -174,5 +189,5 @@
 		<span></span>
 		<a href={exportQuery()} class="btn btn-sm btn-ghost">Export CSV</a>
 	</div>
-	<GridTable bind:this={grid} {columns} {fetchData} emptyMessage="No audit events match." />
+	<GridTable bind:this={grid} {columns} {fetchData} pageSize={50} emptyMessage="No audit events match." />
 </section>

@@ -80,6 +80,7 @@
 	function applyFilters(e?: Event) {
 		e?.preventDefault();
 		const params = new URLSearchParams($page.url.searchParams);
+		params.delete('page');
 		const filters = buildFilterParams();
 		for (const key of ['userId', 'action', 'entityType', 'from', 'to'] as const) {
 			const value = filters.get(key);
@@ -99,7 +100,12 @@
 		entityType = '';
 		from = '';
 		to = '';
-		goto('/audit-logs', { replaceState: true, keepFocus: true });
+		const params = new URLSearchParams($page.url.searchParams);
+		params.delete('page');
+		for (const key of ['userId', 'action', 'entityType', 'from', 'to'] as const) {
+			params.delete(key);
+		}
+		goto(params.toString() ? '?' + params.toString() : '/audit-logs', { replaceState: true, keepFocus: true });
 		grid?.reload();
 	}
 

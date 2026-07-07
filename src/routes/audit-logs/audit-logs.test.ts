@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { load } from './+page.server';
+import { load, type AuditLogFilters } from './+page.server';
 import { users, auditLogs } from '$lib/server/db/mongrelSchema';
 import { logAudit } from '$lib/server/audit';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -185,4 +185,21 @@ test('load initializes userId filter from URL for dropdown', () => {
 		)
 	) as { filters: { userId: string } };
 	expect(result.filters.userId).toBe(String(target.id));
+});
+
+test('load ignores pagination param and returns filters', () => {
+	const admin = makeUser('admin-page@x.c', 'Admin', 'admin');
+	const result = load(
+		makeLoadEvent(
+			{ id: Number(admin.id), role: 'admin' },
+			new URL('http://localhost/audit-logs?page=2&action=login&from=2024-01-01')
+		)
+	) as { filters: AuditLogFilters };
+	expect(result.filters).toEqual({
+		userId: '',
+		action: 'login',
+		entityType: '',
+		from: '2024-01-01',
+		to: ''
+	});
 });

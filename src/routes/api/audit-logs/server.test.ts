@@ -11,6 +11,12 @@ import { GET } from './+server';
 import { makeAdmin, makeUser } from '../../../../tests/helpers';
 import { logAudit } from '$lib/server/repositories/auditRepo';
 import { resetRateLimit } from '$lib/server/rateLimit';
+import { auditLogs, users } from '$lib/server/db/mongrelSchema';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
+
+function kitDb(): KitDatabase {
+	return (ctx as { kit: KitDatabase }).kit;
+}
 
 function makeEvent(url: string, user: unknown) {
 	return {
@@ -20,8 +26,25 @@ function makeEvent(url: string, user: unknown) {
 	} as any;
 }
 
+function insertLog(userId: number, action: string, entityType: string, entityId: number, createdAt: string) {
+	return kitDb()
+		.insertInto(auditLogs)
+		.values({
+			user_id: BigInt(userId),
+			action,
+			entity_type: entityType,
+			entity_id: BigInt(entityId),
+			meta_json: '{}',
+			created_at: createdAt
+		} as any)
+		.executeSync();
+}
+
 beforeEach(() => {
 	resetRateLimit();
+	const kit = kitDb();
+	kit.deleteFrom(auditLogs).executeSync();
+	kit.deleteFrom(users).executeSync();
 });
 
 test('returns paginated audit logs with nested user', async () => {
@@ -75,4 +98,42 @@ test('rate limits repeated requests', async () => {
 		expect(res.status).toBe(200);
 	}
 	await expect(GET(makeEvent('/api/audit-logs', admin))).rejects.toMatchObject({ status: 429 });
+});
+
+test('to date filter is inclusive of events on that day', async () => {
+	const admin = makeAdmin(ctx.kit);
+	insertLog(admin.id, 'login', 'session', 1, '2026-06-15T12:00:00.000Z');
+
+	const res = await GET(makeEvent('/api/audit-logs?to=2026-06-15', admin));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows[0].action).toBe('login');
+});
+
+test('from date filter is inclusive of events on that day', async () => {
+	const admin = makeAdmin(ctx.kit);
+	insertLog(admin.id, 'login', 'session', 1, '2026-06-15T12:00:00.000Z');
+
+	const res = await GET(makeEvent('/api/audit-logs?from=2026-06-15', admin));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows[0].action).toBe('login');
+});
+
+test('date filters exclude events outside the range', async () => {
+	const admin = makeAdmin(ctx.kit);
+	insertLog(admin.id, 'early', 'session', 1, '2026-06-14T23:59:59.999Z');
+	insertLog(admin.id, 'mid', 'session', 2, '2026-06-15T12:00:00.000Z');
+	insertLog(admin.id, 'late', 'session', 3, '2026-06-16T00:00:00.000Z');
+
+	const res = await GET(makeEvent('/api/audit-logs?from=2026-06-15&to=2026-06-15', admin));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows[0].action).toBe('mid');
 });

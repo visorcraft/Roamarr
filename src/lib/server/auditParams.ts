@@ -10,6 +10,8 @@ export function parsePositiveInteger(raw: string | null): number | undefined {
 
 export function parseIsoDateParam(raw: string | null, name: string): string | undefined {
 	if (raw == null || raw === '') return undefined;
-	if (!DateTime.fromISO(raw).isValid) throw error(400, `Invalid ${name} date`);
-	return raw;
+	const dt = DateTime.fromISO(raw, { zone: 'utc' });
+	if (!dt.isValid) throw error(400, `Invalid ${name} date`);
+	const adjusted = name === 'to' ? dt.endOf('day') : dt.startOf('day');
+	return adjusted.toISO()!;
 }

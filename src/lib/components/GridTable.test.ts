@@ -199,17 +199,24 @@ describe('GridTable', () => {
 
 		const config = lastConfig();
 		expect(config.className.container).toBe('gridjs-container grid-host');
+		expect(config.className.thead).toBe('gridjs-thead');
 		expect(config.className.th).toBe('gridjs-th');
 		expect(config.className.tr).toBe('gridjs-tr');
 		expect(config.className.td).toBe('gridjs-td');
 		expect(config.className.tbody).toBe('gridjs-tbody');
-		expect(config.className.thead).toBe('gridjs-thead');
 		expect(config.className.table).toBe('gridjs-table');
+		expect(config.className.header).toBe('gridjs-header');
+		expect(config.className.footer).toBe('gridjs-footer');
 		expect(config.className.search).toBe('gridjs-search');
 		expect(config.className.sort).toBe('gridjs-sort');
 		expect(config.className.pagination).toBe('gridjs-pagination');
 		expect(config.className.paginationSummary).toBe('gridjs-summary');
 		expect(config.className.paginationButton).toBe('gridjs-pages-button');
 		expect(config.className.paginationButtonCurrent).toBe('gridjs-currentPage');
+		expect(config.className.paginationButtonNext).toBe('gridjs-pages-button-next');
+		expect(config.className.paginationButtonPrev).toBe('gridjs-pages-button-prev');
+		expect(config.className.loading).toBe('gridjs-loading');
+		expect(config.className.notfound).toBe('gridjs-notfound');
+		expect(config.className.error).toBe('gridjs-error');
 	});
 });

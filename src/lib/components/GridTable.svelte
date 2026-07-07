@@ -6,6 +6,7 @@
 		id: string;
 		name: string;
 		formatter?: (cell: unknown, row: Record<string, unknown>) => string | ReturnType<typeof html>;
+		sort?: boolean;
 	}
 
 	export interface GridAction {
@@ -44,9 +45,18 @@
 		pageSize?: number;
 		addHref?: string;
 		addLabel?: string;
+		emptyMessage?: string;
 	}
 
-	let { columns, fetchData, actions = [], pageSize = 25, addHref, addLabel = 'Add' }: Props = $props();
+	let {
+		columns,
+		fetchData,
+		actions = [],
+		pageSize = 25,
+		addHref,
+		addLabel = 'Add',
+		emptyMessage = 'No records found'
+	}: Props = $props();
 
 	let wrapper: HTMLDivElement | undefined = $state();
 	let pendingAction: { action: string; row: Record<string, unknown> } | null = $state(null);
@@ -91,6 +101,9 @@
 
 			gridInstance = new Grid({
 				columns: gridColumns,
+				language: {
+					noRecordsFound: emptyMessage
+				},
 				server: {
 					data: async (opts: FetchOpts) => {
 						const res = await fetchData(opts);

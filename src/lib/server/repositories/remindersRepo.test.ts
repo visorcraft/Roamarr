@@ -241,3 +241,49 @@ test('countSchedulerRuns with and without search', () => {
 	expect(repo.countSchedulerRuns('boom')).toBe(1);
 	expect(repo.countSchedulerRuns('no-match')).toBe(0);
 });
+
+test('listSchedulerRuns respects limit and offset', () => {
+	const a = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(a.id, { success: true });
+	const b = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(b.id, { success: true });
+	const c = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(c.id, { success: true });
+
+	const all = repo.listSchedulerRuns({ limit: 10, offset: 0 });
+	expect(all).toHaveLength(3);
+
+	expect(repo.listSchedulerRuns({ limit: 1, offset: 0 })).toHaveLength(1);
+	expect(repo.listSchedulerRuns({ limit: 1, offset: 0 })[0].id).toBe(c.id);
+	expect(repo.listSchedulerRuns({ limit: 1, offset: 1 })[0].id).toBe(b.id);
+	expect(repo.listSchedulerRuns({ limit: 1, offset: 2 })[0].id).toBe(a.id);
+	expect(repo.listSchedulerRuns({ limit: 10, offset: 5 })).toHaveLength(0);
+});
+
+test('listSchedulerRuns filters by search', () => {
+	const ok = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(ok.id, { success: true });
+	const failed = repo.startSchedulerRun('tick');
+	repo.finishSchedulerRun(failed.id, { success: false, errorMessage: 'connection timeout' });
+
+	expect(repo.listSchedulerRuns({ search: 'success' })).toHaveLength(1);
+	expect(repo.listSchedulerRuns({ search: 'failure' })[0].id).toBe(failed.id);
+	expect(repo.listSchedulerRuns({ search: 'timeout' })).toHaveLength(1);
+	expect(repo.listSchedulerRuns({ search: 'timeout' })[0].id).toBe(failed.id);
+	expect(repo.listSchedulerRuns({ search: 'no-match' })).toHaveLength(0);
+});
+
+test('listSchedulerRuns sorts by startedAt ascending and descending', () => {
+	const a = repo.startSchedulerRun('tick');
+	repo.updateSchedulerRun(a.id, { startedAt: '2024-01-01T00:00:00Z' });
+	const b = repo.startSchedulerRun('tick');
+	repo.updateSchedulerRun(b.id, { startedAt: '2024-01-02T00:00:00Z' });
+
+	const desc = repo.listSchedulerRuns({ sortBy: 'startedAt', sortDir: 'desc' });
+	expect(desc[0].id).toBe(b.id);
+	expect(desc[1].id).toBe(a.id);
+
+	const asc = repo.listSchedulerRuns({ sortBy: 'startedAt', sortDir: 'asc' });
+	expect(asc[0].id).toBe(a.id);
+	expect(asc[1].id).toBe(b.id);
+});

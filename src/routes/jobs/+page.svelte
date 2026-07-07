@@ -4,6 +4,15 @@
 	import { formatDateTime } from '$lib/dateFormat';
 	import { buildTableQuery } from '$lib/tableParams';
 
+	function escapeHtml(value: unknown): string {
+		return String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
 	function durationMs(startedAt: string, finishedAt: string | null | undefined) {
 		if (!finishedAt) return '';
 		const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
@@ -16,35 +25,46 @@
 			id: 'startedAt',
 			name: 'Started',
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				formatDateTime(String(row.startedAt), { timeStyle: 'medium' })
+				html(
+					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+						formatDateTime(String(row.startedAt), { timeStyle: 'medium' })
+					)}</span>`
+				)
 		},
 		{
 			id: 'duration',
 			name: 'Duration',
+			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				durationMs(String(row.startedAt), row.finishedAt as string | null | undefined)
+				html(
+					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+						durationMs(String(row.startedAt), row.finishedAt as string | null | undefined)
+					)}</span>`
+				)
 		},
 		{
 			id: 'status',
 			name: 'Status',
+			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				if (row.finishedAt) {
 					if (row.success) {
-						return html('<span class="badge badge-green">OK</span>');
+						return html('<span class="badge badge-green whitespace-nowrap">OK</span>');
 					}
-					return html('<span class="badge badge-red">Failed</span>');
+					return html('<span class="badge badge-red whitespace-nowrap">Failed</span>');
 				}
-				return html('<span class="badge badge-amber">Running</span>');
+				return html('<span class="badge badge-amber whitespace-nowrap">Running</span>');
 			}
 		},
 		{
 			id: 'errorMessage',
 			name: 'Error',
+			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				const message = row.errorMessage;
 				if (message) {
 					return html(
-						`<code class="code-chip px-2 py-1 text-red-300">${String(message)}</code>`
+						`<code class="code-chip px-2 py-1 text-red-300">${escapeHtml(String(message))}</code>`
 					);
 				}
 				return '';
@@ -70,5 +90,5 @@
 </header>
 
 <section class="card mt-8 p-5 sm:p-6">
-	<GridTable {columns} {fetchData} />
+	<GridTable {columns} {fetchData} pageSize={50} emptyMessage="No scheduler runs recorded yet." />
 </section>

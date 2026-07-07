@@ -6,13 +6,15 @@ import { listSchedulerRuns, countSchedulerRuns } from '$lib/server/repositories/
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	requireAdmin(locals);
-	const { page, limit, search, sort, dir } = parseTableParams(url, ['startedAt']);
-	const offset = (page - 1) * limit;
+	const rawDir = url.searchParams.get('dir');
+	const params = parseTableParams(url, ['startedAt']);
+	const dir: 'asc' | 'desc' = rawDir === null ? 'desc' : params.dir;
+	const offset = (params.page - 1) * params.limit;
 	const rows = listSchedulerRuns({
-		search,
-		sortBy: (sort as 'startedAt' | null) ?? 'startedAt',
+		search: params.search,
+		sortBy: (params.sort as 'startedAt' | null) ?? 'startedAt',
 		sortDir: dir,
-		limit,
+		limit: params.limit,
 		offset
 	}).map((r) => ({
 		id: r.id,
@@ -21,6 +23,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		success: r.success,
 		errorMessage: r.errorMessage
 	}));
-	const total = countSchedulerRuns(search);
+	const total = countSchedulerRuns(params.search);
 	return json({ rows, total });
 };

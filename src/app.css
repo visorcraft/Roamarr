@@ -1890,4 +1890,67 @@ button.card:hover,
 		:is(.text-slate-500) {
 		color: var(--theme-readable-faint);
 	}
+
+	/* Grid.js theme overrides */
+	.gridjs-container {
+		@apply text-sm;
+	}
+	.gridjs-table {
+		@apply w-full;
+	}
+	.gridjs-th {
+		@apply bg-surface2 text-left font-medium;
+	}
+	.gridjs-td,
+	.gridjs-th {
+		@apply border-b border-line px-3 py-2;
+	}
+	.gridjs-td {
+		border-color: color-mix(in oklab, var(--theme-line) 65%, transparent);
+	}
+	.gridjs-tr:hover .gridjs-td {
+		@apply bg-surface2/50;
+	}
+	.gridjs-search-input {
+		@apply w-full min-h-10 rounded-md px-3 py-2 text-sm ring-1 ring-inset transition focus:ring-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-line);
+		color: var(--theme-ink);
+		caret-color: var(--theme-brand);
+	}
+	.gridjs-search-input::placeholder {
+		color: var(--theme-readable-faint);
+	}
+	.gridjs-search-input:focus {
+		background: color-mix(in oklab, var(--theme-control) 86%, var(--theme-brand) 6%);
+		box-shadow:
+			inset 0 0 0 1px var(--theme-brand),
+			0 0 0 2px color-mix(in oklab, var(--theme-brand) 28%, transparent);
+	}
+	.gridjs-pagination {
+		@apply mt-4 flex items-center justify-end gap-2 text-sm;
+	}
+	.gridjs-pages button {
+		@apply inline-flex min-h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
+		--tw-ring-offset-color: var(--theme-canvas);
+		border-color: transparent;
+		background: var(--theme-control);
+		box-shadow: inset 0 0 0 1px var(--theme-control-border);
+		color: var(--theme-readable-muted);
+	}
+	.gridjs-pages button:hover {
+		background: var(--theme-control-hover);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 36%, var(--theme-line));
+		color: var(--theme-strong);
+	}
+	.gridjs-pages button.gridjs-currentPage {
+		@apply active:translate-y-px;
+		background: var(--theme-brand);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 85%, black);
+		color: var(--theme-accent-text);
+	}
+	.gridjs-pages button.gridjs-currentPage:hover {
+		background: color-mix(in oklab, var(--theme-brand) 82%, black);
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 70%, black);
+	}
 }

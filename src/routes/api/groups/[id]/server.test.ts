@@ -51,7 +51,7 @@ test('delete removes an owned group, logs audit, and returns 204', async () => {
 	expect(Number(logs[0].entity_id)).toBe(group.id);
 });
 
-test('delete by member returns 403', async () => {
+test('delete by member returns 404', async () => {
 	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
 	const member = makeUser(ctx.kit, { email: 'member@x.c' });
 	const group = makeGroup(ctx.kit, owner.id, 'Team');

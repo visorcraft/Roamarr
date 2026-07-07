@@ -29,10 +29,11 @@ import { groups, auditLogs, users } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUserLocals } from '../../../../tests/eventHelpers';
 
-function event(user: { id: number } | null, body?: FormData) {
+function event(user: { id: number } | null, body?: FormData, clientAddress = '127.0.0.1') {
 	return {
 		locals: { user } as App.Locals,
-		request: body ? ({ formData: async () => body } as Request) : undefined
+		request: body ? ({ formData: async () => body } as Request) : undefined,
+		getClientAddress: () => clientAddress
 	} as any;
 }
 
@@ -58,4 +59,55 @@ test('create action adds a group, logs audit, and redirects', async () => {
 	expect(logs[0].action).toBe('group_create');
 	expect(logs[0].entity_type).toBe('group');
 	expect(Number(logs[0].entity_id)).toBe(Number(rows[0].id));
+});
+
+test('create action rejects empty or whitespace-only names', async () => {
+	const user = makeUserLocals(ctx.kit);
+	const f = new FormData();
+	f.set('name', '   ');
+
+	const result = (await actions.create(event(user.user, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Group name is required');
+
+	expect(ctx.kit.selectFrom(groups).executeSync()).toHaveLength(0);
+	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
+});
+
+test('create action rejects names over 200 characters', async () => {
+	const user = makeUserLocals(ctx.kit);
+	const f = new FormData();
+	f.set('name', 'a'.repeat(201));
+
+	const result = (await actions.create(event(user.user, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Please fix the highlighted fields.');
+
+	expect(ctx.kit.selectFrom(groups).executeSync()).toHaveLength(0);
+});
+
+test('create action rate limits repeated requests', async () => {
+	const user = makeUserLocals(ctx.kit);
+	for (let i = 0; i < 10; i++) {
+		const f = new FormData();
+		f.set('name', `Group ${i}`);
+		await expect(actions.create(event(user.user, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const f = new FormData();
+	f.set('name', 'Last');
+	const result = (await actions.create(event(user.user, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
 });

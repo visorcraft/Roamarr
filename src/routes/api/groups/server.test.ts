@@ -39,12 +39,26 @@ test('returns paginated groups with member counts', async () => {
 	});
 });
 
-test('does not expose other users groups', async () => {
+test('does not expose groups owned by other users', async () => {
 	const userA = makeUser(ctx.kit);
 	const userB = makeUser(ctx.kit);
 	makeGroup(ctx.kit, userA.id, 'Family');
 
 	const res = await GET(makeEvent('/api/groups', userB));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(0);
+	expect(body.rows).toEqual([]);
+});
+
+test('does not expose groups where user is only a member', async () => {
+	const owner = makeUser(ctx.kit);
+	const member = makeUser(ctx.kit);
+	const group = makeGroup(ctx.kit, owner.id, 'Family');
+	makeGroupMember(ctx.kit, group.id, member.id);
+
+	const res = await GET(makeEvent('/api/groups', member));
 	expect(res.status).toBe(200);
 
 	const body = await res.json();

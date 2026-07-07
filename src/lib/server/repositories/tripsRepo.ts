@@ -551,19 +551,24 @@ export function listGroupsForUser(userId: number): Group[] {
 	return [...owned, ...memberGroups].map(toGroup);
 }
 
+export function listOwnedGroups(userId: number): Group[] {
+	return kit.selectFrom(groups).where(kitEq(groups.owner_id, kitId(userId))).executeSync().map(toGroup);
+}
+
 export interface ListGroupsOptions {
 	search?: string;
 	sortBy?: 'name' | 'createdAt';
 	sortDir?: 'asc' | 'desc';
 	limit?: number;
 	offset?: number;
+	ownedOnly?: boolean;
 }
 
 export function listGroupsForUserPaginated(
 	userId: number,
 	opts: ListGroupsOptions = {}
 ): Group[] {
-	let rows = listGroupsForUser(userId);
+	let rows = opts.ownedOnly ? listOwnedGroups(userId) : listGroupsForUser(userId);
 	const q = opts.search?.trim().toLowerCase();
 	if (q) {
 		rows = rows.filter((g) => g.name.toLowerCase().includes(q));
@@ -576,7 +581,19 @@ export function listGroupsForUserPaginated(
 	return rows.slice(offset, offset + limit);
 }
 
-export function countGroupsForUser(userId: number, search?: string): number {
+export function countGroupsForUser(userId: number, search?: string, ownedOnly?: boolean): number {
+	if (ownedOnly) {
+		if (!search?.trim()) {
+			const owned = kit
+				.selectFrom(groups)
+				.where(kitEq(groups.owner_id, kitId(userId)))
+				.selectCount()
+				.executeSync();
+			return Number(owned);
+		}
+		const q = search.trim().toLowerCase();
+		return listOwnedGroups(userId).filter((g) => g.name.toLowerCase().includes(q)).length;
+	}
 	if (!search?.trim()) {
 		const owned = kit
 			.selectFrom(groups)

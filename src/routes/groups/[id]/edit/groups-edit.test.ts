@@ -30,11 +30,17 @@ import { groups, groupMembers, auditLogs, users } from '$lib/server/db/mongrelSc
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../../../tests/helpers';
 
-function event(user: { id: number } | null, params: Record<string, string>, body?: FormData) {
+function event(
+	user: { id: number } | null,
+	params: Record<string, string>,
+	body?: FormData,
+	clientAddress = '127.0.0.1'
+) {
 	return {
 		locals: { user } as App.Locals,
 		params,
-		request: body ? ({ formData: async () => body } as Request) : undefined
+		request: body ? ({ formData: async () => body } as Request) : undefined,
+		getClientAddress: () => clientAddress
 	} as any;
 }
 
@@ -198,4 +204,135 @@ test('removeMember action removes a member, logs audit, and redirects', async ()
 	expect(logs[0].action).toBe('group_member_remove');
 	expect(logs[0].entity_type).toBe('group');
 	expect(Number(logs[0].entity_id)).toBe(groupId);
+});
+
+test('removeMember action fails when member is not in group', async () => {
+	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
+	const member = makeUser(ctx.kit, { email: 'member@x.c' });
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(owner.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+
+	const f = new FormData();
+	f.set('userId', String(member.id));
+
+	const result = (await actions.removeMember(event(owner, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Member not found');
+
+	expect(ctx.kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
+});
+
+test('update action rejects names over 200 characters', async () => {
+	const user = makeUser(ctx.kit);
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(user.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+
+	const f = new FormData();
+	f.set('name', 'a'.repeat(201));
+
+	const result = (await actions.update(event(user, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Please fix the highlighted fields.');
+
+	const row = ctx.kit.selectFrom(groups).where(kitEq(groups.id, BigInt(groupId))).executeSync()[0];
+	expect(row!.name).toBe('Team');
+});
+
+test('update action rate limits repeated requests', async () => {
+	const user = makeUser(ctx.kit);
+	for (let i = 0; i < 10; i++) {
+		const group = ctx.kit
+			.insertInto(groups)
+			.values({ owner_id: BigInt(user.id), name: `Old ${i}` } as any)
+			.executeSync();
+		const groupId = Number(group.id);
+		const f = new FormData();
+		f.set('name', `Updated ${i}`);
+		await expect(actions.update(event(user, { id: String(groupId) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const lastGroup = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(user.id), name: 'Last' } as any)
+		.executeSync();
+	const f = new FormData();
+	f.set('name', 'Updated Last');
+	const result = (await actions.update(event(user, { id: String(lastGroup.id) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
+});
+
+test('addMember action rate limits repeated requests', async () => {
+	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(owner.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+
+	for (let i = 0; i < 10; i++) {
+		const member = makeUser(ctx.kit, { email: `member${i}@x.c` });
+		const f = new FormData();
+		f.set('email', member.email);
+		await expect(actions.addMember(event(owner, { id: String(groupId) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const lastMember = makeUser(ctx.kit, { email: 'last@x.c' });
+	const f = new FormData();
+	f.set('email', lastMember.email);
+	const result = (await actions.addMember(event(owner, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
+});
+
+test('removeMember action rate limits repeated requests', async () => {
+	const owner = makeUser(ctx.kit, { email: 'owner@x.c' });
+	const group = ctx.kit
+		.insertInto(groups)
+		.values({ owner_id: BigInt(owner.id), name: 'Team' } as any)
+		.executeSync();
+	const groupId = Number(group.id);
+
+	for (let i = 0; i < 10; i++) {
+		const member = makeUser(ctx.kit, { email: `member${i}@x.c` });
+		ctx.kit.insertInto(groupMembers).values({ group_id: BigInt(groupId), user_id: BigInt(member.id) } as any).executeSync();
+		const f = new FormData();
+		f.set('userId', String(member.id));
+		await expect(actions.removeMember(event(owner, { id: String(groupId) }, f))).rejects.toEqual(
+			expect.objectContaining({ status: 303 })
+		);
+	}
+
+	const lastMember = makeUser(ctx.kit, { email: 'last@x.c' });
+	ctx.kit.insertInto(groupMembers).values({ group_id: BigInt(groupId), user_id: BigInt(lastMember.id) } as any).executeSync();
+	const f = new FormData();
+	f.set('userId', String(lastMember.id));
+	const result = (await actions.removeMember(event(owner, { id: String(groupId) }, f))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toBe('Too many attempts. Try again later.');
 });

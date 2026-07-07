@@ -1,7 +1,9 @@
-import { redirect, type Actions } from '@sveltejs/kit';
+import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { createGroup } from '$lib/server/repositories/tripsRepo';
 import { logAudit } from '$lib/server/audit';
+import { checkRateLimit } from '$lib/server/rateLimit';
+import { Validator, formFail } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
@@ -10,11 +12,25 @@ export const load: PageServerLoad = ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
+	create: async ({ request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
+
+		const limit = checkRateLimit(getClientAddress(), 'groups:create');
+		if (!limit.allowed) {
+			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+		}
+
 		const f = await request.formData();
-		const name = String(f.get('name') ?? '').trim();
-		const group = createGroup({ ownerId: u.id, name });
+		const rawName = String(f.get('name') ?? '').trim();
+		if (!rawName) {
+			return fail(400, { error: 'Group name is required' });
+		}
+		const v = new Validator();
+		const name = v.requiredString(rawName, 'name', { max: 200 });
+		if (!v.ok()) {
+			return formFail(v);
+		}
+		const group = createGroup({ ownerId: u.id, name: name! });
 		logAudit(u.id, 'group_create', 'group', group.id);
 		throw redirect(303, '/groups');
 	}

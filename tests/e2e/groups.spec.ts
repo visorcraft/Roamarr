@@ -5,12 +5,14 @@ test('create a group', async ({ page }) => {
 	await expect(page.locator('h1')).toContainText('Groups');
 
 	const name = `E2E Group ${Date.now()}`;
-	const form = page.locator('section:has-text("Create a group")');
-	await form.getByLabel('Group name', { exact: true }).fill(name);
-	await form.getByRole('button', { name: 'Create group', exact: true }).click();
-	await page.waitForLoadState('networkidle');
+	await page.getByRole('link', { name: 'Create group', exact: true }).click();
+	await page.waitForURL('/groups/new');
 
-	const groupCard = page.locator('section.card', { hasText: name });
-	await expect(groupCard).toBeVisible();
-	await expect(groupCard.getByText('0 members')).toBeVisible();
+	await page.getByLabel('Group name', { exact: true }).fill(name);
+	await page.getByRole('button', { name: 'Create group', exact: true }).click();
+	await page.waitForURL('/groups');
+
+	const row = page.locator('table tbody tr', { hasText: name });
+	await expect(row).toBeVisible();
+	await expect(row.getByText('0 members')).toBeVisible();
 });

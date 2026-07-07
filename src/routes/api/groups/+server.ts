@@ -17,7 +17,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		sortBy: sort as 'name' | 'createdAt' | undefined,
 		sortDir: dir,
 		limit,
-		offset
+		offset,
+		ownedOnly: true
 	});
 	const memberCounts = countMembersForGroupIds(groups.map((g) => g.id));
 	const rows = groups.map((g) => ({
@@ -26,6 +27,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		createdAt: g.createdAt,
 		memberCount: memberCounts.get(g.id) ?? 0
 	}));
-	const total = countGroupsForUser(u.id, search);
+	const total = countGroupsForUser(u.id, search, true);
 	return json({ rows, total });
 };

@@ -1,11 +1,4 @@
-import {
-	redirect,
-	type Handle,
-	isRedirect,
-	isHttpError,
-	type Redirect,
-	type HttpError
-} from '@sveltejs/kit';
+import { redirect, type Handle, isRedirect, type Redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
@@ -75,27 +68,6 @@ function redirectResponse(e: Redirect) {
 	return new Response(null, { status: e.status, headers: { location: e.location } });
 }
 
-function httpErrorBody(e: HttpError): string {
-	const body = e.body;
-	if (body == null) return 'Internal error';
-	if (typeof body === 'string') return body;
-	if (typeof body === 'object' && 'message' in body && body.message != null) return String(body.message);
-	return JSON.stringify(body);
-}
-
-function errorResponse(e: HttpError) {
-	return new Response(httpErrorBody(e), {
-		status: e.status,
-		headers: { 'Content-Type': 'text/plain; charset=utf-8' }
-	});
-}
-
-function svelteKitResponse(e: unknown): Response | null {
-	if (isRedirect(e)) return redirectResponse(e);
-	if (isHttpError(e)) return errorResponse(e);
-	return null;
-}
-
 export const handle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
@@ -152,8 +124,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		return applySecurityHeaders(await resolve(event));
 	} catch (e) {
-		const response = svelteKitResponse(e);
-		if (response) return applySecurityHeaders(response);
+		if (isRedirect(e)) return applySecurityHeaders(redirectResponse(e));
 		throw e;
 	}
 };

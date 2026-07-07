@@ -94,6 +94,18 @@ test('sets security headers on redirect responses', async () => {
 	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
 });
 
+test('sets security headers on error responses rendered by the app', async () => {
+	updateSettings({ setupComplete: true });
+	const res = (await handle({
+		event: ev('/login') as any,
+		resolve: async () => new Response('not found', { status: 404 })
+	})) as Response;
+	expect(res.status).toBe(404);
+	expect(res.headers.get('X-Frame-Options')).toBe('DENY');
+	expect(res.headers.get('Strict-Transport-Security')).toBeTruthy();
+	expect(res.headers.get('Content-Security-Policy')).toBeTruthy();
+});
+
 test('/health is public and not redirected before setup', async () => {
 	const res = (await run('/health')) as Response;
 	expect(res.status).toBe(200);

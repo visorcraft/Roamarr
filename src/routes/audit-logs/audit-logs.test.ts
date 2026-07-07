@@ -29,23 +29,13 @@ beforeEach(() => {
 	kit.deleteFrom(users).executeSync();
 });
 
-test('load returns recent audit logs for admin', () => {
+test('load returns empty object for admin', () => {
 	const admin = makeUser('admin@x.c', 'Admin', 'admin');
-	const target = makeUser('target@x.c', 'T');
-
-	logAudit(Number(admin.id), 'settings_update', 'settings', 1, { changed: ['instanceName'] });
-	logAudit(Number(target.id), 'trip_delete', 'trip', 42, { name: 'Gone' });
-
 	const result = load({
 		locals: { user: { id: Number(admin.id), role: 'admin' } },
 		url: new URL('http://localhost/audit-logs')
-	} as any) as {
-		logs: Array<{ action: string; user: { email: string } }>;
-	};
-	expect(result.logs).toHaveLength(2);
-	expect(result.logs[0].action).toBe('trip_delete');
-	expect(result.logs[1].action).toBe('settings_update');
-	expect(result.logs[1].user.email).toBe('admin@x.c');
+	} as any);
+	expect(result).toEqual({});
 });
 
 test('load rejects non-admin', () => {
@@ -56,17 +46,6 @@ test('load rejects non-admin', () => {
 	} catch (e: any) {
 		expect(e.status).toBe(403);
 	}
-});
-
-test('load returns empty logs when no events exist', () => {
-	const admin = makeUser('admin-empty@x.c', 'Admin', 'admin');
-	const result = load({
-		locals: { user: { id: Number(admin.id), role: 'admin' } },
-		url: new URL('http://localhost/audit-logs')
-	} as any) as {
-		logs: unknown[];
-	};
-	expect(result.logs).toEqual([]);
 });
 
 test('load returns CSV export when export=csv', () => {
@@ -80,4 +59,25 @@ test('load returns CSV export when export=csv', () => {
 
 	expect(result instanceof Response).toBe(true);
 	expect(result.headers.get('Content-Type')).toBe('text/csv');
+});
+
+test('load returns filtered CSV export when export=csv with filters', async () => {
+	const admin = makeUser('admin-filter@x.c', 'Admin', 'admin');
+	const target = makeUser('target@x.c', 'Target');
+
+	logAudit(Number(admin.id), 'settings_update', 'settings', 1, { changed: ['instanceName'] });
+	logAudit(Number(target.id), 'trip_delete', 'trip', 42, { name: 'Gone' });
+
+	const result = load({
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
+		url: new URL(`http://localhost/audit-logs?export=csv&userId=${target.id}&action=trip_delete`)
+	} as any) as Response;
+
+	expect(result instanceof Response).toBe(true);
+	expect(result.headers.get('Content-Type')).toBe('text/csv');
+	expect(result.headers.get('Content-Disposition')).toBe('attachment; filename="audit-logs.csv"');
+
+	const csv = await result.text();
+	expect(csv).toContain('trip_delete');
+	expect(csv).not.toContain('settings_update');
 });

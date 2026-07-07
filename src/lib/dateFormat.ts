@@ -1,11 +1,11 @@
 export function formatDateTime(
 	iso: string | null | undefined,
-	opts?: { timeStyle?: 'short' | 'medium'; timeZone?: string }
+	opts?: { dateStyle?: 'short' | 'medium' | 'long'; timeStyle?: 'short' | 'medium'; timeZone?: string }
 ): string {
 	if (!iso) return '';
 	try {
 		return new Intl.DateTimeFormat('en-US', {
-			dateStyle: 'medium',
+			dateStyle: opts?.dateStyle ?? 'medium',
 			timeStyle: opts?.timeStyle ?? 'short',
 			...(opts?.timeZone ? { timeZone: opts.timeZone } : {})
 		}).format(new Date(iso));

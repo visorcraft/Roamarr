@@ -1,116 +1,178 @@
 <script lang="ts">
-	let { data }: { data: { filters: { userId?: number; action?: string; entityType?: string; from?: string; to?: string }; page: number; pageSize: number; total: number; users: { id: number; email: string; displayName: string }[]; logs: { id: number; createdAt: string; action: string; entityType: string; entityId: number; meta: unknown; user: { displayName: string; email: string } }[] } } = $props();
+	import { html } from 'gridjs';
+	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
+	import { formatDateTime } from '$lib/dateFormat';
 
-	const totalPages = $derived(Math.ceil(data.total / data.pageSize));
-	const hasPrev = $derived(data.page > 1);
-	const hasNext = $derived(data.page < totalPages);
+	let grid: any = $state();
+	let users: { id: number; email: string; displayName: string }[] = $state([]);
+	let userId = $state('');
+	let action = $state('');
+	let entityType = $state('');
+	let from = $state('');
+	let to = $state('');
 
-	function queryFor(page: number) {
-		const params = new URLSearchParams();
-		if (data.filters.userId) params.set('userId', String(data.filters.userId));
-		if (data.filters.action) params.set('action', data.filters.action);
-		if (data.filters.entityType) params.set('entityType', data.filters.entityType);
-		if (data.filters.from) params.set('from', data.filters.from);
-		if (data.filters.to) params.set('to', data.filters.to);
-		params.set('page', String(page));
-		return '?' + params.toString();
+	$effect(() => {
+		fetch('/api/users/all')
+			.then((res) => (res.ok ? res.json() : { users: [] }))
+			.then((body) => {
+				users = body.users ?? [];
+			})
+			.catch(() => {
+				users = [];
+			});
+	});
+
+	function escapeHtml(value: unknown): string {
+		return String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
 	}
 
-	function exportQuery() {
+	function truncateMeta(value: unknown): string {
+		const text = JSON.stringify(value);
+		if (text.length <= 200) return text;
+		return text.slice(0, 200) + '…';
+	}
+
+	function buildFilterParams(): URLSearchParams {
 		const params = new URLSearchParams();
-		if (data.filters.userId) params.set('userId', String(data.filters.userId));
-		if (data.filters.action) params.set('action', data.filters.action);
-		if (data.filters.entityType) params.set('entityType', data.filters.entityType);
-		if (data.filters.from) params.set('from', data.filters.from);
-		if (data.filters.to) params.set('to', data.filters.to);
+		if (userId) params.set('userId', userId);
+		if (action) params.set('action', action);
+		if (entityType) params.set('entityType', entityType);
+		if (from) params.set('from', from);
+		if (to) params.set('to', to);
+		return params;
+	}
+
+	function exportQuery(): string {
+		const params = buildFilterParams();
 		params.set('export', 'csv');
 		return '?' + params.toString();
 	}
+
+	async function fetchData(opts: FetchOpts) {
+		const params = new URLSearchParams(buildTableQuery(opts.url));
+		for (const [key, value] of buildFilterParams()) {
+			params.set(key, value);
+		}
+		const res = await fetch(`/api/audit-logs?${params.toString()}`);
+		if (!res.ok) throw new Error(`Failed to load audit logs: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	function applyFilters(e?: Event) {
+		e?.preventDefault();
+		grid?.reload();
+	}
+
+	function resetFilters() {
+		userId = '';
+		action = '';
+		entityType = '';
+		from = '';
+		to = '';
+		grid?.reload();
+	}
+
+	const columns = [
+		{
+			id: 'time',
+			name: 'Time',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(
+						formatDateTime(String(row.createdAt), { dateStyle: 'short', timeStyle: 'medium' })
+					)}</span>`
+				)
+		},
+		{
+			id: 'user',
+			name: 'User',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const u = row.user as Record<string, unknown> | undefined;
+				return html(
+					`<div class="font-medium text-white">${escapeHtml(u?.displayName)}</div>` +
+						`<div class="text-xs text-slate-500">${escapeHtml(u?.email)}</div>`
+				);
+			}
+		},
+		{
+			id: 'action',
+			name: 'Action',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(`<span class="badge badge-slate">${escapeHtml(row.action)}</span>`)
+		},
+		{
+			id: 'entity',
+			name: 'Entity',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<span class="whitespace-nowrap text-slate-400">${escapeHtml(row.entityType)}:${escapeHtml(
+						row.entityId
+					)}</span>`
+				)
+		},
+		{
+			id: 'details',
+			name: 'Details',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(`<code class="code-chip px-2 py-1">${escapeHtml(truncateMeta(row.meta))}</code>`)
+		}
+	];
 </script>
 
-<header>
-	<h1 class="page-title">Audit log</h1>
-	<p class="page-subtitle">Security-relevant events across the instance.</p>
+<header class="page-header">
+	<div>
+		<h1 class="page-title">Audit log</h1>
+		<p class="page-subtitle">Security-relevant events across the instance.</p>
+	</div>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="GET" class="flex flex-wrap items-end gap-3">
+	<form class="flex flex-wrap items-end gap-3" onsubmit={applyFilters}>
 		<label class="field min-w-[10rem]">
 			<span class="label">User</span>
-			<select name="userId" class="input">
+			<select bind:value={userId} class="input" onchange={() => grid?.reload()}>
 				<option value="">All users</option>
-				{#each data.users as u}
-					<option value={u.id} selected={data.filters.userId === u.id}>{u.displayName} ({u.email})</option>
+				{#each users as u (u.id)}
+					<option value={u.id}>{u.displayName} ({u.email})</option>
 				{/each}
 			</select>
 		</label>
 		<label class="field min-w-[8rem]">
 			<span class="label">Action</span>
-			<input type="text" name="action" value={data.filters.action ?? ''} placeholder="e.g. login" class="input" />
+			<input type="text" bind:value={action} placeholder="e.g. login" class="input" />
 		</label>
 		<label class="field min-w-[8rem]">
 			<span class="label">Entity type</span>
-			<input type="text" name="entityType" value={data.filters.entityType ?? ''} placeholder="e.g. trip" class="input" />
+			<input type="text" bind:value={entityType} placeholder="e.g. trip" class="input" />
 		</label>
 		<label class="field min-w-[8rem]">
 			<span class="label">From</span>
-			<input type="date" name="from" value={data.filters.from ?? ''} class="input" />
+			<input type="date" bind:value={from} class="input" />
 		</label>
 		<label class="field min-w-[8rem]">
 			<span class="label">To</span>
-			<input type="date" name="to" value={data.filters.to ?? ''} class="input" />
+			<input type="date" bind:value={to} class="input" />
 		</label>
 		<button type="submit" class="btn btn-primary">Filter</button>
-		<a href="/audit-logs" class="btn btn-ghost">Reset</a>
+		<button type="button" class="btn btn-ghost" onclick={resetFilters}>Reset</button>
 	</form>
 </section>
 
 <section class="card mt-6 p-5 sm:p-6">
 	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-		<p class="text-sm text-muted">{data.total} event{data.total === 1 ? '' : 's'} · page {data.page} of {totalPages || 1}</p>
-		<div class="flex gap-2">
-			<a href={exportQuery()} class="btn btn-sm btn-ghost">Export CSV</a>
-			<a href={queryFor(data.page - 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasPrev} aria-disabled={!hasPrev}>Previous</a>
-			<a href={queryFor(data.page + 1)} class="btn btn-sm btn-ghost" class:opacity-50={!hasNext} aria-disabled={!hasNext}>Next</a>
-		</div>
+		<span></span>
+		<a href={exportQuery()} class="btn btn-sm btn-ghost">Export CSV</a>
 	</div>
-	<div class="overflow-x-auto">
-		<table class="table">
-			<thead>
-				<tr>
-					<th>Time</th>
-					<th>User</th>
-					<th>Action</th>
-					<th>Entity</th>
-					<th class="w-full">Details</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.logs as log (log.id)}
-					<tr>
-						<td class="whitespace-nowrap text-slate-400">{log.createdAt}</td>
-						<td>
-							<div class="font-medium text-white">{log.user.displayName}</div>
-							<div class="text-xs text-slate-500">{log.user.email}</div>
-						</td>
-						<td class="whitespace-nowrap">
-							<span class="badge badge-slate">{log.action}</span>
-						</td>
-						<td class="whitespace-nowrap text-slate-400">
-							{log.entityType}:{log.entityId}
-						</td>
-						<td>
-							<code class="code-chip px-2 py-1">
-								{JSON.stringify(log.meta)}
-							</code>
-						</td>
-					</tr>
-				{:else}
-					<tr>
-						<td colspan="5" class="py-8 text-center text-slate-500">No audit events match.</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+	<GridTable bind:this={grid} {columns} {fetchData} emptyMessage="No audit events match." />
 </section>

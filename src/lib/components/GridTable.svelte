@@ -5,7 +5,7 @@
 	export interface GridColumn {
 		id: string;
 		name: string;
-		formatter?: (cell: unknown, row: Record<string, unknown>) => string;
+		formatter?: (cell: unknown, row: Record<string, unknown>) => string | ReturnType<typeof html>;
 	}
 
 	export interface GridAction {

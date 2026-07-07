@@ -1,13 +1,61 @@
 <script lang="ts">
+	import { html } from 'gridjs';
+	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
-
-	let { data } = $props();
+	import { buildTableQuery } from '$lib/tableParams';
 
 	function durationMs(startedAt: string, finishedAt: string | null | undefined) {
 		if (!finishedAt) return '';
 		const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
 		if (ms < 1000) return `${ms}ms`;
 		return `${(ms / 1000).toFixed(1)}s`;
+	}
+
+	const columns = [
+		{
+			id: 'startedAt',
+			name: 'Started',
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				formatDateTime(String(row.startedAt), { timeStyle: 'medium' })
+		},
+		{
+			id: 'duration',
+			name: 'Duration',
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				durationMs(String(row.startedAt), row.finishedAt as string | null | undefined)
+		},
+		{
+			id: 'status',
+			name: 'Status',
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				if (row.finishedAt) {
+					if (row.success) {
+						return html('<span class="badge badge-green">OK</span>');
+					}
+					return html('<span class="badge badge-red">Failed</span>');
+				}
+				return html('<span class="badge badge-amber">Running</span>');
+			}
+		},
+		{
+			id: 'errorMessage',
+			name: 'Error',
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const message = row.errorMessage;
+				if (message) {
+					return html(
+						`<code class="code-chip px-2 py-1 text-red-300">${String(message)}</code>`
+					);
+				}
+				return '';
+			}
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/jobs?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load jobs: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
 	}
 </script>
 
@@ -22,44 +70,5 @@
 </header>
 
 <section class="card mt-8 p-5 sm:p-6">
-	<div class="overflow-x-auto">
-		<table class="table">
-			<thead>
-				<tr>
-					<th>Started</th>
-					<th>Duration</th>
-					<th>Status</th>
-					<th class="w-full">Error</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.runs as run (run.id)}
-					<tr>
-						<td class="whitespace-nowrap text-slate-400">{formatDateTime(run.startedAt, { timeStyle: 'medium' })}</td>
-						<td class="whitespace-nowrap text-slate-400">{durationMs(run.startedAt, run.finishedAt)}</td>
-						<td class="whitespace-nowrap">
-							{#if run.finishedAt}
-								{#if run.success}
-									<span class="badge badge-green">OK</span>
-								{:else}
-									<span class="badge badge-red">Failed</span>
-								{/if}
-							{:else}
-								<span class="badge badge-amber">Running</span>
-							{/if}
-						</td>
-						<td>
-							{#if run.errorMessage}
-								<code class="code-chip px-2 py-1 text-red-300">{run.errorMessage}</code>
-							{/if}
-						</td>
-					</tr>
-				{:else}
-					<tr>
-						<td colspan="4" class="py-8 text-center text-slate-500">No scheduler runs recorded yet.</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
+	<GridTable {columns} {fetchData} />
 </section>

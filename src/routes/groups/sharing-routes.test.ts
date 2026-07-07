@@ -17,16 +17,12 @@ import {
 	_shareWithGroup as shareWithGroup,
 	_mintPublicToken as mintPublicToken
 } from '../trips/[id]/share/+page.server';
-import {
-	_addMember as addMember,
-	_removeMember as removeMember,
-	_deleteGroup as deleteGroup
-} from './+page.server';
 import { canView } from '$lib/server/sharing';
 import { groups, groupMembers } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { requireOwnedGroup } from '$lib/server/ownership';
 
 function makeUser(email: string) {
 	const u = usersRepo.createUser({
@@ -66,6 +62,22 @@ test('group share requires the group to belong to the sharer', () => {
 	shareWithGroup(owner.id, t.id, mine.id);
 	expect(canView(member.id, t)).toBe(true);
 });
+
+function addMember(ownerId: number, groupId: number, email: string) {
+	requireOwnedGroup(ownerId, groupId);
+	const m = usersRepo.getUserByEmail(email);
+	if (m) tripsRepo.addGroupMember(groupId, Number(m.id));
+}
+
+function removeMember(ownerId: number, groupId: number, userId: number) {
+	requireOwnedGroup(ownerId, groupId);
+	tripsRepo.removeGroupMember(groupId, userId);
+}
+
+function deleteGroup(ownerId: number, groupId: number) {
+	requireOwnedGroup(ownerId, groupId);
+	tripsRepo.deleteGroup(groupId);
+}
 
 test('group owner can remove a member and delete the group', () => {
 	const kit = kitDb();

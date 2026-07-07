@@ -11,6 +11,7 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
+import type { SessionCookieSameSite } from '$lib/server/repositories/settingsRepo';
 import type { PageServerLoad } from './$types';
 
 function userFacingError(e: unknown, fallback: string): string {
@@ -38,6 +39,7 @@ export function _saveAdminSettings(
 		mapsTileUrl?: string | null;
 		mapsTileAttribution?: string | null;
 		mapsTileApiKey?: string;
+		sessionCookieSameSite?: SessionCookieSameSite;
 		oauthClientAllowList?: string[] | null;
 	}
 ) {
@@ -64,6 +66,7 @@ export function _saveAdminSettings(
 		mapsTileUrl: i.mapsTileUrl ?? null,
 		mapsTileAttribution: i.mapsTileAttribution ?? null,
 		mapsTileApiKey: i.mapsTileApiKey ?? null,
+		sessionCookieSameSite: i.sessionCookieSameSite ?? 'lax',
 		oauthClientAllowList: i.oauthClientAllowList ?? null
 	};
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
@@ -131,6 +134,10 @@ export const actions: Actions = {
 		if (!(MAP_TILE_PROVIDERS as readonly string[]).includes(mapsTileProvider)) {
 			return fail(400, { error: 'Invalid tile provider' });
 		}
+		const sessionCookieSameSite = String(f.get('sessionCookieSameSite') || 'lax');
+		if (sessionCookieSameSite !== 'lax' && sessionCookieSameSite !== 'strict') {
+			return fail(400, { error: 'Invalid SameSite value' });
+		}
 		const pass = String(f.get('smtpPass') || '');
 		const clearSmtpPass = f.get('clearSmtpPass') === 'on';
 		const tileApiKey = String(f.get('mapsTileApiKey') || '');
@@ -156,6 +163,7 @@ export const actions: Actions = {
 			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
 			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
 			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined,
+			sessionCookieSameSite: sessionCookieSameSite as SessionCookieSameSite,
 			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
 		});
 		setFlash(cookies, 'Settings saved.');

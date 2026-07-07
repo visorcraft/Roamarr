@@ -159,7 +159,8 @@ test('save action sets a flash cookie and redirects', async () => {
 			defaultTimezone: 'UTC',
 			defaultCurrency: 'USD',
 			defaultFlightCheckinLeadHours: '24',
-			defaultDocumentExpiryLeadDays: '90'
+			defaultDocumentExpiryLeadDays: '90',
+			sessionCookieSameSite: 'lax'
 		})
 	});
 	const locals = { user: { id: Number(u.id), role: 'admin' } } as App.Locals;
@@ -211,6 +212,53 @@ test('smtpSecurity round-trips', () => {
 		smtpSecurity: 'ssl/tls'
 	});
 	expect(getSettings().smtpSecurity).toBe('ssl/tls');
+});
+
+test('sessionCookieSameSite round-trips and defaults to lax', () => {
+	const u = makeUser('samesite@x.c');
+	saveAdminSettings(Number(u.id), {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90
+	});
+	expect(getSettings().sessionCookieSameSite).toBe('lax');
+
+	saveAdminSettings(Number(u.id), {
+		instanceName: 'R',
+		allowRegistration: false,
+		defaultTimezone: 'UTC',
+		defaultCurrency: 'USD',
+		defaultFlightCheckinLeadHours: 24,
+		defaultDocumentExpiryLeadDays: 90,
+		sessionCookieSameSite: 'strict'
+	});
+	expect(getSettings().sessionCookieSameSite).toBe('strict');
+});
+
+test('save action rejects invalid sessionCookieSameSite', async () => {
+	const u = makeUser('samesite-bad@x.c', 'Admin', 'admin');
+	const request = new Request('http://x/general', {
+		method: 'POST',
+		body: new URLSearchParams({
+			instanceName: 'R',
+			allowRegistration: 'on',
+			defaultTimezone: 'UTC',
+			defaultCurrency: 'USD',
+			defaultFlightCheckinLeadHours: '24',
+			defaultDocumentExpiryLeadDays: '90',
+			sessionCookieSameSite: 'none'
+		})
+	});
+	const result = (await actions.save({
+		request,
+		locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+		cookies: { set: vi.fn() }
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/invalid SameSite value/i);
 });
 
 test('oauthClientAllowList round-trips and clears when empty', () => {

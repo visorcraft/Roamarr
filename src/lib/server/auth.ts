@@ -5,6 +5,8 @@ import { error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import * as usersRepo from './repositories/usersRepo';
 import type { KitUser } from './repositories/usersRepo';
+import { getSettings } from './settings';
+import type { SessionCookieSameSite } from './repositories/settingsRepo';
 import { nowIso } from './tz';
 
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
@@ -135,11 +137,13 @@ export function requireAdmin(locals: App.Locals) {
 export function sessionCookieOptions() {
 	const origin = process.env.ORIGIN;
 	const secure = dev ? false : !(origin && origin.startsWith('http://'));
+	const raw = getSettings().sessionCookieSameSite;
+	const sameSite: SessionCookieSameSite = raw === 'strict' ? 'strict' : 'lax';
 	return {
 		path: '/',
 		httpOnly: true,
 		secure,
-		sameSite: 'lax' as const,
+		sameSite,
 		maxAge: 60 * 60 * 24 * 30
 	};
 }

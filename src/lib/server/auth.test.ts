@@ -22,9 +22,11 @@ import {
 	verifyPassword,
 	createSession,
 	validateSession,
-	invalidateSession
+	invalidateSession,
+	sessionCookieOptions
 } from './auth';
 import { users, sessions } from './db/mongrelSchema';
+import { updateSettings } from './settings';
 import { makeKitUser } from '../../../tests/kitHelpers';
 
 function resetKitTables() {
@@ -73,3 +75,16 @@ test('createSession stores IP and user agent metadata', () => {
 	expect(row!.last_ip).toBe('127.0.0.1');
 	expect(row!.user_agent).toBe('TestAgent/1.0');
 });
+
+test('sessionCookieOptions defaults to lax', () => {
+	expect(sessionCookieOptions().sameSite).toBe('lax');
+});
+
+test('sessionCookieOptions reflects settings value', () => {
+	updateSettings({ sessionCookieSameSite: 'strict' });
+	expect(sessionCookieOptions().sameSite).toBe('strict');
+	updateSettings({ sessionCookieSameSite: 'lax' });
+	expect(sessionCookieOptions().sameSite).toBe('lax');
+});
+
+

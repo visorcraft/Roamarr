@@ -28,6 +28,7 @@ test('getSettings returns the singleton row with defaults', () => {
 	expect(s.defaultCurrency).toBe('USD');
 	expect(s.defaultFlightCheckinLeadHours).toBe(24);
 	expect(s.defaultDocumentExpiryLeadDays).toBe(90);
+	expect(s.sessionCookieSameSite).toBe('lax');
 });
 
 test('updateSettings patches the singleton row', () => {
@@ -102,4 +103,15 @@ test('updateSettings preserves omitted fields', () => {
 	const after = getSettings();
 	expect(after.instanceName).toBe('Preserved');
 	expect(after.smtpPass).toBe(before);
+});
+
+test('sessionCookieSameSite round-trips', () => {
+	updateSettings({ sessionCookieSameSite: 'strict' });
+	expect(getSettings().sessionCookieSameSite).toBe('strict');
+	updateSettings({ sessionCookieSameSite: 'lax' });
+	expect(getSettings().sessionCookieSameSite).toBe('lax');
+});
+
+test('sessionCookieSameSite rejects invalid values', () => {
+	expect(() => updateSettings({ sessionCookieSameSite: 'none' as any })).toThrow();
 });

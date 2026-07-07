@@ -128,6 +128,21 @@
 
 				<div class="settings-row">
 					<div>
+						<label class="label" for="sessionCookieSameSite">Session cookie SameSite</label>
+						<p class="field-help">
+							Standard protection allows the session cookie on top-level cross-site navigation
+							(e.g., OAuth redirects, email links). Strict forces re-login when arriving from
+							external links, including OAuth authorization prompts and email links.
+						</p>
+					</div>
+					<select id="sessionCookieSameSite" name="sessionCookieSameSite" value={s.sessionCookieSameSite} class="input">
+						<option value="lax">Lax</option>
+						<option value="strict">Strict</option>
+					</select>
+				</div>
+
+				<div class="settings-row">
+					<div>
 						<label class="label" for="defaultFlightCheckinLeadHours">Default flight check-in lead (hours)</label>
 						<p class="field-help">Default notice period for flight check-in reminders.</p>
 					</div>

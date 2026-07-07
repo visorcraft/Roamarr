@@ -13,6 +13,7 @@ import { migrations as migrations0011 } from './0011_oauth_client_allow_list';
 import { migrations as migrations0012 } from './0012_visited_places_source';
 import { migrations as migrations0013 } from './0013_attachments_table';
 import { migrations as migrations0014 } from './0014_visited_place_date_range';
+import { migrations as migrations0015 } from './0015_session_cookie_same_site';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -31,5 +32,6 @@ export const migrations: Migration[] = [
 	...migrations0011,
 	...migrations0012,
 	...migrations0013,
-	...migrations0014
+	...migrations0014,
+	...migrations0015
 ];

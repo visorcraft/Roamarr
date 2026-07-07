@@ -49,6 +49,7 @@ const SEGMENT_ATTENDEE_STATUSES = ['going', 'maybe', 'not_going'] as const;
 const ENTRY_REQUIREMENT_TYPES = ['visa', 'vaccination', 'other'] as const;
 const ENTRY_REQUIREMENT_STATUSES = ['needed', 'in_progress', 'complete', 'not_needed'] as const;
 const SMTP_SECURITY_MODES = ['none', 'starttls', 'ssl/tls'] as const;
+const SESSION_COOKIE_SAME_SITE_VALUES = ['lax', 'strict'] as const;
 const WEBAUTHN_CHALLENGE_PURPOSES = ['register', 'auth'] as const;
 const OAUTH_CODE_CHALLENGE_METHODS = ['S256'] as const;
 
@@ -193,6 +194,10 @@ export const settings = table('settings', {
 		text('maps_tile_url', { nullable: true }),
 		text('maps_tile_attribution', { nullable: true }),
 		text('maps_tile_api_key', { nullable: true }),
+		text('session_cookie_same_site', {
+			enumValues: [...SESSION_COOKIE_SAME_SITE_VALUES],
+			default: staticDefault('lax')
+		}),
 		json('oauth_client_allow_list', { nullable: true })
 	],
 	primaryKey: 'id'

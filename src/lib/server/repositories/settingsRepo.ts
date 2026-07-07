@@ -3,6 +3,8 @@ import { settings, benefitTemplates } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import type { Row, Update } from '@visorcraft/mongreldb-kit';
 
+export type SessionCookieSameSite = 'lax' | 'strict';
+
 export type Settings = {
 	id: number;
 	instanceName: string;
@@ -25,6 +27,7 @@ export type Settings = {
 	mapsTileUrl: string | null;
 	mapsTileAttribution: string | null;
 	mapsTileApiKey: string | null;
+	sessionCookieSameSite: SessionCookieSameSite;
 	oauthClientAllowList: string[] | null;
 };
 
@@ -63,6 +66,7 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	mapsTileUrl: 'maps_tile_url',
 	mapsTileAttribution: 'maps_tile_attribution',
 	mapsTileApiKey: 'maps_tile_api_key',
+	sessionCookieSameSite: 'session_cookie_same_site',
 	oauthClientAllowList: 'oauth_client_allow_list'
 };
 
@@ -99,6 +103,7 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		mapsTileUrl: nullableText(row.maps_tile_url),
 		mapsTileAttribution: nullableText(row.maps_tile_attribution),
 		mapsTileApiKey: nullableText(row.maps_tile_api_key),
+		sessionCookieSameSite: (row.session_cookie_same_site as SessionCookieSameSite) ?? 'lax',
 		oauthClientAllowList: row.oauth_client_allow_list
 			? (JSON.parse(row.oauth_client_allow_list as string) as string[])
 			: null

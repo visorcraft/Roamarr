@@ -1,112 +1,140 @@
 <script lang="ts">
-	import CancelButton from '$lib/components/CancelButton.svelte';
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
+	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
+	import { formatDateTime } from '$lib/dateFormat';
+	import { escapeHtml } from '$lib/escapeHtml';
 
-	let { data } = $props();
-	let editingId = $state<number | null>(null);
-	let dirtyIds = $state<Record<number, boolean>>({});
+	let grid: any = $state();
+	let deleteError: string | null = $state(null);
+
+	function formatBalance(value: unknown): string {
+		if (value == null) return '—';
+		const n = Number(value);
+		if (!Number.isFinite(n)) return '—';
+		return n.toLocaleString();
+	}
+
+	const columns = [
+		{
+			id: 'programName',
+			name: 'Program',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.programName)}</div>` +
+						(row.membershipNumber
+							? `<div class="text-xs font-mono" style="color: var(--theme-readable-faint)">${escapeHtml(row.membershipNumber)}</div>`
+							: '')
+				)
+		},
+		{
+			id: 'balance',
+			name: 'Balance',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.balance == null
+					? html('<span style="color: var(--theme-readable-faint)">—</span>')
+					: html(`<span class="font-mono text-sm" style="color: var(--theme-readable-muted)">${escapeHtml(formatBalance(row.balance))}</span>`)
+		},
+		{
+			id: 'balanceUpdatedAt',
+			name: 'Last Updated',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.balanceUpdatedAt
+					? html(
+							`<div style="color: var(--theme-readable-muted)">${escapeHtml(formatDateTime(String(row.balanceUpdatedAt)))}</div>` +
+								`<div class="text-xs" style="color: var(--theme-readable-faint)">${escapeHtml(timeAgo(String(row.balanceUpdatedAt)))}</div>`
+						)
+					: html('<span style="color: var(--theme-readable-faint)">Never</span>')
+		},
+		{
+			id: 'notes',
+			name: 'Notes',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.notes
+					? html(`<span class="text-sm" style="color: var(--theme-readable-muted)">${escapeHtml(row.notes)}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		}
+	];
+
+	function timeAgo(iso: string): string {
+		const then = Date.parse(iso);
+		if (!Number.isFinite(then)) return '';
+		const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+		if (seconds < 60) return 'just now';
+		const minutes = Math.floor(seconds / 60);
+		if (minutes < 60) return `${minutes}m ago`;
+		const hours = Math.floor(minutes / 60);
+		if (hours < 48) return `${hours}h ago`;
+		const days = Math.floor(hours / 24);
+		if (days < 30) return `${days}d ago`;
+		const months = Math.floor(days / 30);
+		if (months < 12) return `${months}mo ago`;
+		return `${Math.floor(months / 12)}y ago`;
+	}
+
+	const actions = [
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'delete',
+			label: 'Delete',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: 'Delete program',
+			confirmMessage: (row: Record<string, unknown>) =>
+				`Delete ${row.programName}? This cannot be undone.`,
+			confirmLabel: 'Delete'
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/loyalty?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load programs: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	async function handleAction(e: Event) {
+		deleteError = null;
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'edit') {
+			goto(`/profile/loyalty/${row.id}/edit`);
+		} else if (action === 'delete') {
+			const res = await fetch(`/api/loyalty/${row.id}`, { method: 'DELETE' });
+			if (res.ok) {
+				grid?.reload();
+			} else {
+				const body = await res.json().catch(() => ({ error: 'Delete failed.' }));
+				deleteError = body.error ?? 'Delete failed.';
+			}
+		}
+	}
 </script>
 
 <header class="page-header">
 	<div>
 		<h1 class="page-title">Loyalty programs</h1>
-		<p class="page-subtitle">
-			{data.programs.length} program{data.programs.length === 1 ? '' : 's'} tracked
-		</p>
+		<p class="page-subtitle">Frequent-flyer and rewards balances. Update the balance to track when you last checked.</p>
 	</div>
 </header>
 
-{#if data.programs.length}
-	<section class="card mt-6 p-5">
-		<h2 class="section-title mb-3">Your programs</h2>
-		<ul class="list-stack">
-			{#each data.programs as p (p.id)}
-				<li class="list-item">
-					{#if editingId === p.id}
-						<form method="POST" action="?/update" class="min-w-0" oninput={() => (dirtyIds[p.id] = true)}>
-							<input type="hidden" name="id" value={p.id} />
-							<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-								<div class="field">
-									<label class="label" for={`programName-${p.id}`}>Program</label>
-									<input id={`programName-${p.id}`} name="programName" value={p.programName} class="input" required />
-								</div>
-								<div class="field">
-									<label class="label" for={`membershipNumber-${p.id}`}>Membership #</label>
-									<input id={`membershipNumber-${p.id}`} name="membershipNumber" value={p.membershipNumber ?? ''} class="input" />
-								</div>
-								<div class="field">
-									<label class="label" for={`balance-${p.id}`}>Balance</label>
-									<input id={`balance-${p.id}`} name="balance" type="number" value={p.balance ?? ''} class="input" />
-								</div>
-							</div>
-							<div class="field mt-3">
-								<label class="label" for={`notes-${p.id}`}>Notes</label>
-								<input id={`notes-${p.id}`} name="notes" value={p.notes ?? ''} class="input" />
-							</div>
-							<div class="mt-3 flex justify-end gap-2">
-								<CancelButton dirty={dirtyIds[p.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
-								<button class="btn btn-primary">Update</button>
-							</div>
-						</form>
-					{:else}
-						<div class="flex items-start justify-between gap-3">
-							<div class="flex items-start gap-3 min-w-0 flex-1">
-								<span class="list-icon">
-									<Icon name="star" class="h-4.5 w-4.5" />
-								</span>
-								<div class="min-w-0 flex-1">
-									<div class="list-title">{p.programName}</div>
-									<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
-										<span class="meta-strong">{p.membershipNumber || '—'}</span>
-										{#if p.balance != null}<span>Balance <span class="font-mono text-slate-300">{p.balance.toLocaleString()}</span></span>{/if}
-									</div>
-									{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
-								</div>
-							</div>
-							<div class="action-row gap-1">
-								<button type="button" class="btn btn-primary" onclick={() => { editingId = p.id; dirtyIds[p.id] = false; }}>Edit</button>
-								<form method="POST" action="?/delete">
-									<input type="hidden" name="id" value={p.id} />
-									<ConfirmButton class="btn btn-danger" message="Delete this loyalty program?">Delete</ConfirmButton>
-								</form>
-							</div>
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
-{:else}
-	<EmptyState message="No loyalty programs yet — add one below.">
-		{#snippet icon()}
-			<Icon name="star" class="h-6 w-6" />
-		{/snippet}
-	</EmptyState>
-{/if}
-
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Add program</h2>
-	<form method="POST" action="?/add" class="grid gap-4 sm:grid-cols-2">
-		<div class="field">
-			<label class="label" for="programName">Program</label>
-			<input id="programName" name="programName" placeholder="e.g. United MileagePlus" class="input" required />
+<section class="card mt-8 p-5 sm:p-6">
+	{#if deleteError}
+		<div class="notice notice-error mb-4">
+			{deleteError}
 		</div>
-		<div class="field">
-			<label class="label" for="membershipNumber">Membership #</label>
-			<input id="membershipNumber" name="membershipNumber" placeholder="Membership number" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="balance">Balance</label>
-			<input id="balance" name="balance" type="number" placeholder="0" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="notes">Notes</label>
-			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
-		</div>
-		<div class="flex justify-end sm:col-span-2">
-			<button class="btn btn-primary">Add program</button>
-		</div>
-	</form>
+	{/if}
+	<GridTable
+		bind:this={grid}
+		{columns}
+		{fetchData}
+		{actions}
+		addHref="/profile/loyalty/new"
+		addLabel="Add program"
+		emptyMessage="No loyalty programs saved yet."
+		onaction={handleAction}
+	/>
 </section>

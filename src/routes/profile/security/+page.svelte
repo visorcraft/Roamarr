@@ -1,12 +1,13 @@
 <script lang="ts">
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+
+	const { formatDate, formatDateTime } = useDateFormat();
 
 	let { data, form } = $props();
 	const tfa = $derived(data.state);
-	const showSetup = $derived(Boolean(data.setup));
 	const backupCodes = $derived(form?.backupCodes as string[] | undefined);
 
-	let setupToken = $state('');
 	let disablePassword = $state('');
 	let regenToken = $state('');
 	let savedAck = $state(false);
@@ -26,12 +27,18 @@
 </header>
 
 <section class="card mt-6 p-5">
+	<h2 class="section-title mb-3">Password</h2>
+	<p class="meta">Change the password used to sign in to your account.</p>
+	<a href="/profile/security/password" class="btn btn-primary mt-3 inline-block">Change password</a>
+</section>
+
+<section class="card mt-6 p-5">
 	<h2 class="section-title mb-3">Two-factor authentication (2FA)</h2>
 
 	{#if tfa.enabled}
 		<div class="flex items-center gap-2 text-sm text-brand">
 			<span class="inline-block h-2 w-2 rounded-full bg-brand"></span>
-			Enabled{#if tfa.enabledAt}since {new Date(tfa.enabledAt).toLocaleDateString()}{/if}
+			Enabled{#if tfa.enabledAt}since {formatDate(tfa.enabledAt)}{/if}
 		</div>
 		<p class="meta mt-1">{tfa.backupCodesRemaining} backup code{tfa.backupCodesRemaining === 1 ? '' : 's'} remaining.</p>
 
@@ -87,25 +94,9 @@
 				</form>
 			</details>
 		</div>
-	{:else if showSetup}
-		<div class="space-y-4">
-			<p class="text-sm">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.), or enter the secret manually.</p>
-			<img src={data.setup!.qr} alt="QR code" class="mx-auto rounded-lg border border-line" />
-			<div class="rounded-md bg-surface2 px-3 py-2 text-center font-mono text-sm">
-				{data.setup!.secret}
-			</div>
-			<form method="POST" action="?/enable" class="space-y-3">
-				<input type="hidden" name="secret" value={data.setup!.secret} />
-				<div class="field">
-					<label class="label" for="setupToken">Enter the 6-digit code</label>
-					<input id="setupToken" name="token" bind:value={setupToken} class="input text-center text-lg tracking-widest" inputmode="numeric" placeholder="123456" autocomplete="one-time-code" />
-				</div>
-				<button class="btn btn-primary">Enable 2FA</button>
-			</form>
-		</div>
 	{:else}
 		<p class="meta">Two-factor authentication is not enabled. Add an extra layer of security to your account.</p>
-		<a href="/profile/security?setup=1" class="btn btn-primary mt-3 inline-block">Set up 2FA</a>
+		<a href="/profile/security/mfa" class="btn btn-primary mt-3 inline-block">Set up 2FA</a>
 	{/if}
 </section>
 

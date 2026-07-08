@@ -1,6 +1,5 @@
 import { hash, verify } from '@node-rs/argon2';
 import { randomBytes, createHash } from 'node:crypto';
-import { DateTime } from 'luxon';
 import { error } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import * as usersRepo from './repositories/usersRepo';
@@ -8,7 +7,7 @@ import type { KitUser } from './repositories/usersRepo';
 import { getSettings } from './settings';
 import { SESSION_COOKIE_SAME_SITE_VALUES } from './db/mongrelSchema';
 import type { SessionCookieSameSite } from './db/mongrelSchema';
-import { nowIso } from './tz';
+import { nowIso, utcIsoAfter } from './tz';
 
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
@@ -69,7 +68,7 @@ export async function verifyPassword(h: string, pw: string) {
 
 export function createSession(userId: number, ip?: string, userAgent?: string) {
 	const token = randomBytes(32).toString('base64url');
-	const expiresAt = DateTime.utc().plus({ days: 30 }).toISO()!;
+	const expiresAt = utcIsoAfter({ days: 30 });
 	const tokenHash = th(token);
 	usersRepo.createSession({
 		token_hash: tokenHash,
@@ -113,9 +112,9 @@ export function invalidateOtherSessions(userId: number, token: string) {
 	usersRepo.deleteSessionsByUserIdExceptTokenHash(userId, tokenHash);
 }
 
-export function purgeExpiredSessions() {
+export function purgeExpiredSessions(): number {
 	const now = nowIso();
-	usersRepo.deleteExpiredSessions(now);
+	return Number(usersRepo.deleteExpiredSessions(now));
 }
 
 export function requireUser(locals: App.Locals) {

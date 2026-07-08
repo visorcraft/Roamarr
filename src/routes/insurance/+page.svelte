@@ -3,8 +3,8 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDate } from '$lib/dateFormat';
 	import { escapeHtml } from '$lib/escapeHtml';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
@@ -12,6 +12,8 @@
 		{ id: 'from', label: 'From', type: 'date' },
 		{ id: 'to', label: 'To', type: 'date' }
 	];
+
+	const { formatDate } = useDateFormat();
 
 	const columns = [
 		{
@@ -51,7 +53,7 @@
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.tripName
-					? html(`<span class="badge badge-brand">${escapeHtml(row.tripName)}</span>`)
+					? html(`<span style="color: var(--theme-readable)">${escapeHtml(String(row.tripName))}</span>`)
 					: html('<span style="color: var(--theme-readable-faint)">—</span>')
 		},
 		{

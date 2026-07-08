@@ -131,6 +131,17 @@ function toAuditLogEntry(
 	};
 }
 
+export function getAuditLogById(id: number): AuditLogEntry | null {
+	const rows = kit
+		.selectFrom(kitAuditLogs)
+		.where(kitEq(kitAuditLogs.id, toBigInt(id)))
+		.executeSync();
+	const row = rows[0];
+	if (!row) return null;
+	const userMap = hydrateUsers([idFromBigInt(row.user_id)]);
+	return toAuditLogEntry(row, userMap);
+}
+
 export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	const limit = filters.limit ?? 100;
 	const offset = filters.offset ?? 0;

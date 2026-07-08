@@ -11,6 +11,7 @@ import { passkeys, webauthnChallenges } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
 import { getUserById } from './repositories/usersRepo';
 import { logAudit } from './audit';
+import { nowIso, utcIsoAfter } from './tz';
 import type { Row } from '@visorcraft/mongreldb-kit';
 
 const CHALLENGE_TTL_MIN = 5;
@@ -81,7 +82,7 @@ function hashChallenge(challenge: string): string {
 }
 
 function storeChallenge(challenge: string, userId: number | null, purpose: 'register' | 'auth'): void {
-	const expires = new Date(Date.now() + CHALLENGE_TTL_MIN * 60 * 1000).toISOString();
+	const expires = utcIsoAfter({ minutes: CHALLENGE_TTL_MIN });
 	kit.insertInto(webauthnChallenges).values({
 		challenge_hash: hashChallenge(challenge),
 		user_id: userId != null ? BigInt(userId) : null,
@@ -117,7 +118,7 @@ function deleteChallenge(challenge: string): void {
 }
 
 export function purgeExpiredChallenges(): number {
-	const now = new Date().toISOString();
+	const now = nowIso();
 	const n = kit
 		.deleteFrom(webauthnChallenges)
 		.where(kitLt(webauthnChallenges.expires_at, now))
@@ -188,7 +189,7 @@ export async function verifyRegistration(
 		transports: JSON.stringify(cred.transports ?? []),
 		device_type: info.credentialDeviceType,
 		name: safeName,
-		created_at: new Date().toISOString(),
+		created_at: nowIso(),
 		last_used_at: null
 	} as any).executeSync();
 
@@ -260,7 +261,7 @@ export async function verifyAuth(
 		.updateTable(passkeys)
 		.set({
 			counter: BigInt(verification.authenticationInfo.newCounter),
-			last_used_at: new Date().toISOString()
+			last_used_at: nowIso()
 		})
 		.where(kitEq(passkeys.id, passkey.id))
 		.executeSync();

@@ -1,7 +1,10 @@
 <script lang="ts">
 	import Icon from '$lib/components/Icon.svelte';
 	import { SEG } from '$lib/segmentLabels';
-import { formatDate } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+	import { DateTime } from 'luxon';
+
+	const { formatDate, formatDateTime } = useDateFormat();
 
 	let { data } = $props();
 
@@ -52,7 +55,7 @@ import { formatDate } from '$lib/dateFormat';
 <section class="card mt-6 p-5">
 	<div class="panel-header">
 		<h2 class="section-title">Today</h2>
-		<span class="meta">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
+		<span class="meta">{formatDate(DateTime.now().toISODate())}</span>
 	</div>
 	{#if data.agenda.length}
 		<ul class="panel-list">
@@ -110,7 +113,7 @@ import { formatDate } from '$lib/dateFormat';
 								</span>
 								{#if t.destinationLabel}<span class="row-subtitle">{t.destinationLabel}</span>{/if}
 							</span>
-							{#if t.startDate}<span class="row-meta">{t.startDate}</span>{/if}
+							{#if t.startDate}<span class="row-meta">{formatDate(t.startDate)}</span>{/if}
 						</a>
 					</li>
 				{/each}
@@ -130,7 +133,7 @@ import { formatDate } from '$lib/dateFormat';
 				{#each data.expiring as d (d.id)}
 					<li class="row-static">
 						<span class="text-sm font-medium capitalize">{d.type.replace('_', ' ')}</span>
-						<span class="badge badge-amber font-mono">{d.expiresOn}</span>
+						<span class="badge badge-amber font-mono">{formatDate(d.expiresOn)}</span>
 					</li>
 				{/each}
 			</ul>
@@ -185,7 +188,7 @@ import { formatDate } from '$lib/dateFormat';
 							<p class="mt-0.5 text-xs text-slate-500">by {a.displayName ?? 'Unknown'}</p>
 						{/if}
 					</div>
-					<span class="row-meta">{new Date(a.createdAt).toLocaleString()}</span>
+					<span class="row-meta">{formatDateTime(a.createdAt)}</span>
 				</li>
 			{/each}
 		</ul>

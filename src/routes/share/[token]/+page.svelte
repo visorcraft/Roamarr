@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { SEG } from '$lib/segmentLabels';
-	import { formatDateTime } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { formatDestination } from '$lib/tripDestination';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let { data } = $props();
+	const { formatDateTime } = useDateFormat();
 	const destinationLabel = $derived(formatDestination(data.trip.destinationCityName, data.trip.destinationCountryCode));
 </script>
 

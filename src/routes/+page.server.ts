@@ -8,6 +8,7 @@ import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import * as tripMiscRepo from '$lib/server/repositories/tripMiscRepo';
 import * as travelDataRepo from '$lib/server/repositories/travelDataRepo';
 import { DateTime } from 'luxon';
+import { formatTime } from '$lib/dateFormat';
 import type { PageServerLoad } from './$types';
 
 type AgendaItem =
@@ -121,7 +122,7 @@ function buildAgenda(userId: number, timezone: string): AgendaItem[] {
 		const { sortAt, ...rest } = item;
 		return {
 			...rest,
-			time: DateTime.fromISO(sortAt, { zone: 'utc' }).setZone(timezone).toFormat('h:mm a')
+			time: formatTime(sortAt, timezone)
 		};
 	});
 }

@@ -43,12 +43,20 @@ export interface NotificationRow {
 	readAt: string | null;
 }
 
+export interface SchedulerRunSummary {
+	reminders?: { processed: number; sent: number };
+	fareChecks?: { checked: number };
+	weatherCache?: { refreshed: number };
+	purges?: { sessions: number; challenges: number; oauth: { codes: number; tokens: number } };
+}
+
 export interface SchedulerRunRow {
 	id: number;
 	startedAt: string;
 	finishedAt: string | null;
 	success: boolean;
 	errorMessage: string | null;
+	summary: SchedulerRunSummary | null;
 }
 
 type KitReminder = Row<typeof kitReminders>;
@@ -98,7 +106,8 @@ function toSchedulerRunRow(row: KitSchedulerRun): SchedulerRunRow {
 		startedAt: row.started_at,
 		finishedAt: row.finished_at,
 		success: row.success,
-		errorMessage: row.error_message
+		errorMessage: row.error_message,
+		summary: row.summary_json ? (JSON.parse(row.summary_json as string) as SchedulerRunSummary) : null
 	};
 }
 
@@ -484,12 +493,13 @@ export function startSchedulerRun(_kind?: string): SchedulerRunRow {
 
 export function finishSchedulerRun(
 	id: number,
-	result: { success?: boolean; errorMessage?: string | null } = {}
+	result: { success?: boolean; errorMessage?: string | null; summary?: SchedulerRunSummary } = {}
 ): SchedulerRunRow | null {
 	return updateSchedulerRun(id, {
 		finishedAt: nowIso(),
 		success: result.success ?? true,
-		errorMessage: result.errorMessage ?? null
+		errorMessage: result.errorMessage ?? null,
+		summary: result.summary ?? null
 	});
 }
 
@@ -506,6 +516,7 @@ export function updateSchedulerRun(id: number, patch: UpdateSchedulerRunInput): 
 	if (patch.finishedAt !== undefined) merged.finished_at = patch.finishedAt ?? null;
 	if (patch.success !== undefined) merged.success = patch.success;
 	if (patch.errorMessage !== undefined) merged.error_message = patch.errorMessage ?? null;
+	if (patch.summary !== undefined) merged.summary_json = patch.summary ? JSON.stringify(patch.summary) : null;
 
 	const updated = kit
 		.updateTable(kitSchedulerRuns)

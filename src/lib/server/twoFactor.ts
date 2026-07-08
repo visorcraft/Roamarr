@@ -20,6 +20,7 @@ import { kit } from './db';
 import { userTwoFactor, twoFactorBackupCodes } from './db/mongrelSchema';
 import { encrypt, decrypt } from './crypto';
 import { logAudit } from './audit';
+import { nowIso } from './tz';
 
 const ISSUER = 'Roamarr';
 const BACKUP_CODE_COUNT = 10;
@@ -193,7 +194,7 @@ export function enableTwoFactor(
 
 	const encryptedSecret = encrypt(secret);
 	const codes = generateBackupCodes();
-	const now = new Date().toISOString();
+	const now = nowIso();
 
 	const existing = kit
 		.selectFrom(userTwoFactor)
@@ -281,7 +282,7 @@ export function regenerateBackupCodes(
 	if (!verifyTotp(secret, token)) return { ok: false, error: 'Invalid verification code.' };
 
 	const codes = generateBackupCodes();
-	const now = new Date().toISOString();
+	const now = nowIso();
 
 	runKitTransaction((txn) => {
 		deleteBackupCodes(txn, userId);
@@ -339,7 +340,7 @@ export function verifyTwoFactor(userId: number, code: string): boolean {
 	const target = unused.find((r) => verifyBackupCode(normalized, r.code_hash as string));
 	if (!target) return false;
 
-	const now = new Date().toISOString();
+	const now = nowIso();
 	let consumed = false;
 
 	runKitTransaction((txn) => {

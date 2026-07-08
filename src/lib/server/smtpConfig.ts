@@ -4,6 +4,7 @@ import { kit } from './db';
 import { userSmtpOverrides } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
 import { decrypt, encrypt } from './crypto';
+import { nowIso } from './tz';
 import type { Transporter } from 'nodemailer';
 import type { Row } from '@visorcraft/mongreldb-kit';
 
@@ -105,7 +106,7 @@ export function upsertUserSmtpOverride(userId: number, patch: UserSmtpPatch): Us
 		patch.password === undefined ? undefined : patch.password ? encrypt(patch.password) : null;
 
 	if (existing) {
-		const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+		const updates: Record<string, unknown> = { updated_at: nowIso() };
 		if (patch.enabled !== undefined) updates.enabled = patch.enabled;
 		if (patch.host !== undefined) updates.host = patch.host || null;
 		if (patch.port !== undefined) updates.port = patch.port == null ? null : BigInt(patch.port);
@@ -128,7 +129,7 @@ export function upsertUserSmtpOverride(userId: number, patch: UserSmtpPatch): Us
 			username: patch.username || null,
 			password: encryptedPass ?? null,
 			from_address: patch.fromAddress || null,
-			updated_at: new Date().toISOString()
+			updated_at: nowIso()
 		} as any).executeSync();
 	}
 	return getUserSmtpOverride(userId)!;

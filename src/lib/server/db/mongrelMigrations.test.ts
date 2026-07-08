@@ -107,4 +107,5 @@ describe('mongrelMigrations', () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
+
 });

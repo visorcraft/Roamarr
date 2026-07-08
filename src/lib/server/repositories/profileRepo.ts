@@ -114,6 +114,73 @@ export function listTravelDocuments(userId: number): TravelDocument[] {
 	return rows.map(toTravelDocument);
 }
 
+export interface ListTravelDocumentsOptions {
+	search?: string;
+	sortBy?: 'type' | 'issuingAuthority' | 'expiresOn' | 'notes';
+	sortDir?: 'asc' | 'desc';
+	from?: string;
+	to?: string;
+	limit?: number;
+	offset?: number;
+}
+
+function matchesTravelDocumentDateRange(value: string | null, from?: string, to?: string): boolean {
+	if (!from && !to) return true;
+	if (!value) return false;
+	const date = value.slice(0, 10);
+	return (!from || date >= from) && (!to || date <= to);
+}
+
+export function listTravelDocumentsPaginated(
+	userId: number,
+	opts: ListTravelDocumentsOptions = {}
+): TravelDocument[] {
+	let rows = listTravelDocuments(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(d) =>
+				d.type.toLowerCase().includes(q) ||
+				(d.issuingAuthority?.toLowerCase().includes(q) ?? false) ||
+				(d.notes?.toLowerCase().includes(q) ?? false) ||
+				(d.number?.toLowerCase().includes(q) ?? false)
+		);
+	}
+	rows = rows.filter((d) => matchesTravelDocumentDateRange(d.expiresOn, opts.from, opts.to));
+	const sortBy = opts.sortBy ?? 'expiresOn';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countTravelDocuments(
+	userId: number,
+	opts: { search?: string; from?: string; to?: string } = {}
+): number {
+	const q = opts.search?.trim().toLowerCase();
+	const hasFilters = Boolean(q || opts.from || opts.to);
+	if (!hasFilters) {
+		return Number(
+			kit
+				.selectFrom(travelDocuments)
+				.where(eq(travelDocuments.user_id, toBigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	return listTravelDocuments(userId).filter(
+		(d) =>
+			matchesTravelDocumentDateRange(d.expiresOn, opts.from, opts.to) &&
+			(!q ||
+				d.type.toLowerCase().includes(q) ||
+				(d.issuingAuthority?.toLowerCase().includes(q) ?? false) ||
+				(d.notes?.toLowerCase().includes(q) ?? false) ||
+				(d.number?.toLowerCase().includes(q) ?? false))
+	).length;
+}
+
 export function listTravelDocumentsExpiringBefore(
 	userId: number,
 	beforeOrOn: string

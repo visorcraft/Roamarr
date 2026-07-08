@@ -16,6 +16,11 @@ import { migrations as migrations0014 } from './0014_visited_place_date_range';
 import { migrations as migrations0015 } from './0015_session_cookie_same_site';
 import { migrations as migrations0016 } from './0016_loyalty_balance_updated_at';
 import { migrations as migrations0017 } from './0017_reminders_user_fields';
+import { migrations as migrations0018 } from './0018_settings_date_formats';
+import { migrations as migrations0019 } from './0019_settings_backfill_defaults';
+import { migrations as migrations0020 } from './0020_nullable_settings_leads';
+import { migrations as migrations0021 } from './0021_settings_catchup_repair';
+import { migrations as migrations0022 } from './0022_scheduler_run_summary';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -37,5 +42,10 @@ export const migrations: Migration[] = [
 	...migrations0014,
 	...migrations0015,
 	...migrations0016,
-	...migrations0017
+	...migrations0017,
+	...migrations0018,
+	...migrations0019,
+	...migrations0020,
+	...migrations0021,
+	...migrations0022
 ];

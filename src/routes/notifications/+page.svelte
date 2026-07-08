@@ -1,10 +1,11 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
-	import { formatDateTime } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
 	let { data } = $props();
 
+	const { formatDate, formatDateTime } = useDateFormat();
 	const unread = $derived(data.notifications.filter((n) => !n.readAt).length);
 </script>
 

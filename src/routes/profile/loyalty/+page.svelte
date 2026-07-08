@@ -3,11 +3,13 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDateTime } from '$lib/dateFormat';
 	import { escapeHtml } from '$lib/escapeHtml';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
+
+	const { formatDateTime } = useDateFormat();
 
 	function formatBalance(value: unknown): string {
 		if (value == null) return '—';

@@ -15,6 +15,7 @@ import {
 	tripExpenseAttachments,
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
+import { nowIso } from '$lib/server/tz';
 
 export type KitExpense = Row<typeof tripExpenses>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
@@ -278,7 +279,7 @@ export function createExpenseAttachmentLink(
 ): ExpenseAttachmentLinkRow {
 	const db = getDb();
 	const id = db.reserveAutoIncSync(tripExpenseAttachments.name)!;
-	const now = new Date().toISOString();
+	const now = nowIso();
 	const row = {
 		id,
 		expense_id: toBigInt(expenseId),

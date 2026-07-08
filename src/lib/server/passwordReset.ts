@@ -1,15 +1,14 @@
 import { randomBytes, createHash } from 'node:crypto';
-import { DateTime } from 'luxon';
 import * as usersRepo from './repositories/usersRepo';
 import { hashPassword, invalidateAllSessions } from './auth';
-import { nowIso } from './tz';
+import { nowIso, utcIsoAfter } from './tz';
 
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
 const TOKEN_TTL_MINUTES = 60;
 
 export function createPasswordResetToken(userId: number) {
 	const token = randomBytes(32).toString('base64url');
-	const expiresAt = DateTime.utc().plus({ minutes: TOKEN_TTL_MINUTES }).toISO()!;
+	const expiresAt = utcIsoAfter({ minutes: TOKEN_TTL_MINUTES });
 	usersRepo.createPasswordResetToken({
 		token_hash: th(token),
 		user_id: BigInt(userId),

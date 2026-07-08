@@ -90,6 +90,31 @@
 			<input type="hidden" name="reminderType" value={reminderType} />
 		</div>
 
+		<div class="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
+			{#if reminderType === 'trip'}
+				<Autocomplete
+					name="refId"
+					label="Trip (optional)"
+					value=""
+					valueId={null}
+					placeholder="Search trips by name or destination"
+					fetchSuggestions={fetchTrips}
+					disabled={submitting}
+					errors={form?.errors ?? {}}
+				/>
+			{:else}
+				<Autocomplete
+					name="refId"
+					label="Document (optional)"
+					value=""
+					valueId={null}
+					placeholder="Search documents by type"
+					fetchSuggestions={fetchDocuments}
+					disabled={submitting}
+					errors={form?.errors ?? {}}
+				/>
+			{/if}
+		</div>
 		<TextField
 			name="name"
 			label="Name"
@@ -113,40 +138,10 @@
 			label="Description"
 			value={form?.values?.description ?? ''}
 			placeholder="Optional notes"
+			class="sm:col-span-2"
 			disabled={submitting}
 			errors={form?.errors ?? {}}
 		/>
-		<div class="sm:col-span-2">
-			<h3 class="subsection-title">Link (optional)</h3>
-			<p class="mt-1 field-help">
-				Optionally associate this reminder with a specific {reminderType}.
-			</p>
-			<div class="mt-3">
-				{#if reminderType === 'trip'}
-					<Autocomplete
-						name="refId"
-						label="Trip"
-						value=""
-						valueId={null}
-						placeholder="Search trips by name or destination"
-						fetchSuggestions={fetchTrips}
-						disabled={submitting}
-						errors={form?.errors ?? {}}
-					/>
-				{:else}
-					<Autocomplete
-						name="refId"
-						label="Document"
-						value=""
-						valueId={null}
-						placeholder="Search documents by type"
-						fetchSuggestions={fetchDocuments}
-						disabled={submitting}
-						errors={form?.errors ?? {}}
-					/>
-				{/if}
-			</div>
-		</div>
 		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">
 			<CancelButton dirty={isDirty} onConfirm={() => goto('/profile/reminders')}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>

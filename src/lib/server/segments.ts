@@ -219,7 +219,7 @@ export function moveSegmentToDate(userId: number, tripId: number, segId: number,
 	});
 	if (!seg) throw error(404, 'Not found');
 	upsertRemindersForSegment(seg);
-	logAudit(userId, 'move_date', 'segment', segId, { targetDate });
+	logAudit(userId, 'move_date', 'segment', segId, { tripId, targetDate });
 	return seg;
 }
 
@@ -255,7 +255,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		payment_due_date: existing.paymentDueDate
 	});
 	upsertRemindersForSegment(copy);
-	logAudit(userId, 'duplicate', 'segment', copy.id, { sourceSegmentId: segId, sourceTripId: tripId });
+	logAudit(userId, 'duplicate', 'segment', copy.id, { tripId, sourceSegmentId: segId, sourceTripId: tripId });
 	return copy;
 }
 
@@ -276,6 +276,6 @@ export function setSegmentStatus(
 ) {
 	requireSegmentOnTrip(userId, tripId, segmentId);
 	const seg = updateSegmentStatus(segmentId, status);
-	logAudit(userId, 'update_status', 'segment', segmentId, { status });
+	logAudit(userId, 'update_status', 'segment', segmentId, { tripId, status });
 	return seg;
 }

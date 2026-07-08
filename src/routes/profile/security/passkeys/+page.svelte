@@ -2,13 +2,18 @@
 	import CancelButton from '$lib/components/CancelButton.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import { startRegistration as webauthnRegister } from '@simplewebauthn/browser';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+
+	const { formatDate, formatDateTime } = useDateFormat();
 
 	let { data } = $props();
 
 	let registering = $state(false);
 	let newName = $state('');
 	let regError = $state('');
+	let isDirty = $state(false);
 
 	async function startRegistration() {
 		regError = '';
@@ -51,7 +56,6 @@
 			{data.passkeys.length} passkey{data.passkeys.length === 1 ? '' : 's'} registered
 		</p>
 	</div>
-	<a href="/profile/security" class="btn btn-ghost ml-auto">Back to security</a>
 </header>
 
 <section class="card mt-6 p-5">
@@ -59,14 +63,17 @@
 	{#if !data.available}
 		<p class="text-sm text-amber-400">Passkeys require the ORIGIN environment variable to be set.</p>
 	{:else}
-		<div class="flex flex-wrap items-end gap-3">
+		<div class="space-y-4" oninput={() => (isDirty = true)}>
 			<div class="field">
 				<label class="label" for="passkeyName">Name (optional)</label>
 				<input id="passkeyName" bind:value={newName} placeholder="e.g. iPhone, YubiKey" class="input" />
 			</div>
-			<button class="btn btn-primary" onclick={startRegistration} disabled={registering}>
-				{registering ? 'Waiting…' : 'Add passkey'}
-			</button>
+			<div class="flex flex-wrap justify-end gap-2">
+				<CancelButton dirty={isDirty} onConfirm={() => goto('/profile/security')}>Cancel</CancelButton>
+				<button class="btn btn-primary" onclick={startRegistration} disabled={registering}>
+					{registering ? 'Waiting…' : 'Add passkey'}
+				</button>
+			</div>
 		</div>
 		{#if regError}
 			<p class="mt-2 text-sm text-red-400">{regError}</p>
@@ -92,7 +99,7 @@
 							<div class="list-title">{pk.name ?? 'Unnamed passkey'}</div>
 							<div class="meta mt-0.5">
 								{pk.deviceType ?? 'Unknown device'}
-								{#if pk.lastUsedAt}· Last used {new Date(pk.lastUsedAt).toLocaleDateString()}{/if}
+								{#if pk.lastUsedAt}· Last used {formatDate(pk.lastUsedAt)}{/if}
 							</div>
 						{/if}
 					</div>

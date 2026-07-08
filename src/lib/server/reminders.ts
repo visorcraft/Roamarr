@@ -120,23 +120,27 @@ export function cancelReminder(userId: number, reminderId: number) {
 	deleteReminder(reminderId);
 }
 
-export async function runDueReminders(now: Date) {
+export async function runDueReminders(now: Date): Promise<{ processed: number; sent: number }> {
 	// Claim both fresh 'pending' rows and any 'sending' rows orphaned by a prior crash.
 	// Ticks never overlap (single process + scheduler running-guard), so any due
 	// 'sending' row at tick start is stale and safe to re-grab — at-least-once delivery.
 	const claimed = listPendingRemindersBefore(now.toISOString()).filter(
 		(r) => r.status === 'pending' || r.status === 'sending'
 	);
+	let sent = 0;
 	for (const r of claimed) {
 		updateReminder(r.id, { status: 'sending' });
 		try {
 			await deliver(r.userId, messageFor(r));
 			markReminderSent(r.id, now.toISOString());
+			sent++;
 		} catch {
 			const next = r.attempts >= 5 ? 'sent' : 'pending';
 			updateReminder(r.id, { status: next, attempts: r.attempts + 1 });
+			if (next === 'sent') sent++;
 		}
 	}
+	return { processed: claimed.length, sent };
 }
 
 function messageFor(r: Reminder): { title: string; body: string; link: string } {

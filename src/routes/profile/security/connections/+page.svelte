@@ -1,5 +1,10 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import CancelButton from '$lib/components/CancelButton.svelte';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+
+	const { formatDate } = useDateFormat();
 
 	let { data, form } = $props();
 	let clientName = $state('');
@@ -7,6 +12,7 @@
 	let isPublic = $state(false);
 	let selectedScopes = $state<string[]>(['trips:read', 'profile:read']);
 	let dismissed = $state(false);
+	let isDirty = $state(false);
 	// The create action returns the freshly-minted credentials once; surface them
 	// (a confidential client's secret is never recoverable afterwards).
 	const created = $derived(
@@ -21,7 +27,6 @@
 		<h1 class="page-title">API connections</h1>
 		<p class="page-subtitle">Manage OAuth clients for AI assistants and integrations.</p>
 	</div>
-	<a href="/profile/security" class="btn btn-ghost ml-auto">Back to security</a>
 </header>
 
 {#if created}
@@ -47,7 +52,7 @@
 {:else}
 	<section class="card mt-6 p-5">
 		<h2 class="section-title mb-3">Create a client</h2>
-		<form method="POST" action="?/create" class="space-y-4">
+		<form method="POST" action="?/create" class="space-y-4" oninput={() => (isDirty = true)}>
 			<div class="field">
 				<label class="label" for="clientName">Client name</label>
 				<input id="clientName" name="clientName" bind:value={clientName} placeholder="e.g. Claude Desktop" class="input" />
@@ -83,7 +88,10 @@
 				<span class="font-medium">Public client</span>
 				<span class="text-muted"> — uses PKCE only, no secret (for apps that can't store one)</span>
 			</label>
-			<button class="btn btn-primary">Create client</button>
+			<div class="flex flex-wrap justify-end gap-2">
+				<CancelButton dirty={isDirty} onConfirm={() => goto('/profile/security')}>Cancel</CancelButton>
+				<button class="btn btn-primary">Create client</button>
+			</div>
 		</form>
 	</section>
 {/if}
@@ -121,8 +129,8 @@
 						<div class="list-title font-mono text-sm">{t.clientId}</div>
 						<div class="meta mt-0.5">Scopes: {t.scopes.join(', ')}</div>
 						<div class="meta mt-0.5">
-							Created {new Date(t.createdAt).toLocaleDateString()}
-							{#if t.lastUsedAt}· Last used {new Date(t.lastUsedAt).toLocaleDateString()}{/if}
+							Created {formatDate(t.createdAt)}
+							{#if t.lastUsedAt}· Last used {formatDate(t.lastUsedAt)}{/if}
 						</div>
 					</div>
 					<form method="POST" action="?/revoke">

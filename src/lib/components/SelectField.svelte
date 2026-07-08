@@ -41,6 +41,7 @@
 	<select
 		{id}
 		{name}
+		{value}
 		{required}
 		{disabled}
 		class={controlClass}

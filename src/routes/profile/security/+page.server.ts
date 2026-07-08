@@ -1,9 +1,7 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import QRCode from 'qrcode';
 import { requireUser } from '$lib/server/auth';
 import { setFlash } from '$lib/server/flash';
 import {
-	generateSecret,
 	getTwoFactorState,
 	enableTwoFactor,
 	disableTwoFactor,
@@ -13,15 +11,9 @@ import {
 import { verifyPassword } from '$lib/server/auth';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	const u = requireUser(locals);
 	const state = getTwoFactorState(u.id);
-	const setupSecret = url.searchParams.get('setup');
-	if (setupSecret && !state.enabled) {
-		const setup = generateSecret(u.email);
-		const qr = await QRCode.toDataURL(setup.otpauthUri, { width: 200, margin: 1 });
-		return { state, setup: { secret: setup.secret, otpauthUri: setup.otpauthUri, qr } };
-	}
 	return { state };
 };
 

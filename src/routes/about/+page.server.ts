@@ -8,10 +8,17 @@ import { appInfo } from '$lib/appInfo';
 import { getDatabasePath } from '$lib/server/paths';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ locals }) => {
+const ALLOWED_TABS = ['application', 'instance', 'licenses'] as const;
+type AboutTab = (typeof ALLOWED_TABS)[number];
+
+export const load: PageServerLoad = ({ locals, url }) => {
 	const user = requireUser(locals);
 	const isAdmin = user.role === 'admin';
 	const s = getSettings();
+	const tabParam = url.searchParams.get('tab') ?? 'application';
+	const tab: AboutTab = (ALLOWED_TABS as readonly string[]).includes(tabParam)
+		? (tabParam as AboutTab)
+		: 'application';
 
 	return {
 		app: appInfo,
@@ -27,6 +34,7 @@ export const load: PageServerLoad = ({ locals }) => {
 					groups: countGroups(),
 					notifications: countNotifications()
 				}
-			: null
+			: null,
+		tab
 	};
 };

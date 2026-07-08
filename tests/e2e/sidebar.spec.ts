@@ -79,6 +79,29 @@ test.describe('desktop sidebar', () => {
 		await expect(page.locator('a[href="/profile/visited/states"]')).toBeVisible();
 	});
 
+	test('only the matching submenu item is active on nested profile pages', async ({ page }) => {
+		await page.goto('/profile/contacts', { waitUntil: 'networkidle' });
+
+		const activeChildren = page.locator('#nav-item-children-profile a.app-nav-item-active');
+		await expect(activeChildren).toHaveCount(1);
+		await expect(page.locator('#nav-item-children-profile a[href="/profile/contacts"]')).toHaveClass(
+			/app-nav-item-active/
+		);
+		await expect(
+			page.locator('#nav-item-children-profile a[href="/profile"]')
+		).not.toHaveClass(/app-nav-item-active/);
+	});
+
+	test('highlights the specific sibling item instead of the parent prefix', async ({ page }) => {
+		await page.goto('/profile/loyalty', { waitUntil: 'networkidle' });
+
+		const meSection = page.locator('section[data-section="Me"]');
+		await expect(meSection.locator('a[href="/profile/loyalty"]')).toHaveClass(/app-nav-item-active/);
+		await expect(
+			meSection.locator('button[aria-controls="nav-item-children-profile"]')
+		).not.toHaveClass(/app-nav-item-active/);
+	});
+
 	test('unread notifications badge moves to Plan header when collapsed', async ({ page }) => {
 		// Start from a clean notification state so the badge count is predictable.
 		await page.goto('/notifications', { waitUntil: 'networkidle' });

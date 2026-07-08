@@ -51,7 +51,7 @@ export function upsertAttendee(
 
 	upsertAttendeeRepo(segmentId, companionId, status);
 
-	logAudit(userId, 'set_attendee_status', 'segment', segmentId, { companionId, status });
+	logAudit(userId, 'set_attendee_status', 'segment', segmentId, { tripId, companionId, status });
 }
 
 export function deleteAttendee(
@@ -65,7 +65,7 @@ export function deleteAttendee(
 
 	removeAttendeeBySegmentAndCompanion(segmentId, companionId);
 
-	logAudit(userId, 'remove_attendee', 'segment', segmentId, { companionId });
+	logAudit(userId, 'remove_attendee', 'segment', segmentId, { tripId, companionId });
 }
 
 export async function setAttendee(event: RequestEvent) {

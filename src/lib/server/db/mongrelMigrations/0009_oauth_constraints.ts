@@ -10,9 +10,10 @@ import {
 	parentExists
 } from '@visorcraft/mongreldb-kit';
 import { oauthClients } from '../mongrelSchema';
+import { nowIso } from '../../tz';
 
 function isoNow(): string {
-	return new Date().toISOString();
+	return nowIso();
 }
 
 /**

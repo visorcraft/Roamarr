@@ -2,7 +2,9 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDate } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+
+	const { formatDate } = useDateFormat();
 
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);

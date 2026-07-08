@@ -1,4 +1,4 @@
-import { redirect, type Handle, isRedirect, type Redirect } from '@sveltejs/kit';
+import { redirect, error, type Handle, type HandleServerError, isRedirect, type Redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import { validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { isSetupComplete } from '$lib/server/settings';
@@ -41,6 +41,7 @@ function contentSecurityPolicy() {
 function isAllowedDuringSetupIssue(path: string) {
 	return (
 		path === '/setup' ||
+		path === '/boot-error' ||
 		path.startsWith('/_app/') ||
 		path.startsWith('/static/') ||
 		path.startsWith('/maps/') ||
@@ -51,6 +52,37 @@ function isAllowedDuringSetupIssue(path: string) {
 		path === '/logo-transparent.png' ||
 		path === '/alt-logo-transparent.png'
 	);
+}
+
+function isAssetOrHealthPath(path: string) {
+	return (
+		path === '/boot-error' ||
+		path === '/health' ||
+		path === '/health/deep' ||
+		path.startsWith('/_app/') ||
+		path.startsWith('/static/') ||
+		path.startsWith('/maps/') ||
+		path === '/favicon.ico' ||
+		path === '/manifest.json' ||
+		path.startsWith('/icon-') ||
+		path === '/apple-touch-icon.png' ||
+		path === '/logo-transparent.png' ||
+		path === '/alt-logo-transparent.png'
+	);
+}
+
+/**
+ * Best-effort check of whether setup has already been completed. Returns
+ * `true` (i.e. assume configured) when the DB itself can't be probed — the
+ * safer default when something is broken, since re-exposing /setup on a
+ * configured instance is a security regression.
+ */
+function safeIsSetupComplete(): boolean {
+	try {
+		return isSetupComplete();
+	} catch {
+		return true;
+	}
 }
 
 function applySecurityHeaders(response: Response) {
@@ -77,8 +109,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 			event.locals.user = null;
 			event.locals.missingSecret = isMissingSecret();
 			event.locals.bootError = bootError;
-			if (!isAllowedDuringSetupIssue(path)) {
-				throw redirect(307, '/setup');
+
+			// Security invariant: once setup has been completed, the /setup
+			// wizard must NEVER be re-exposed — not even when migrations fail,
+			// the secret disappears, or any other boot error occurs. A
+			// configured instance shows a dedicated /boot-error page instead,
+			// so the admin-creation form cannot be used to take over a deployed
+			// instance that hit a transient (or permanent) boot problem.
+			const setupComplete = safeIsSetupComplete();
+			if (setupComplete) {
+				if (path !== '/boot-error' && !isAssetOrHealthPath(path)) {
+					throw redirect(307, '/boot-error');
+				}
+			} else {
+				if (!isAllowedDuringSetupIssue(path)) {
+					throw redirect(307, '/setup');
+				}
 			}
 			return applySecurityHeaders(await resolve(event));
 		}
@@ -125,6 +171,30 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return applySecurityHeaders(await resolve(event));
 	} catch (e) {
 		if (isRedirect(e)) return applySecurityHeaders(redirectResponse(e));
+
+		// Catch native engine errors (InvalidArgument, KitValidationError, NOT
+		// NULL violations, type mismatches) that escape repo-level wrappers.
+		// Convert to a clean 400 so the user sees a friendly error page, not
+		// a raw stack trace or 500.
+		const msg = e instanceof Error ? e.message : String(e);
+		if (
+			msg.includes('NOT NULL') ||
+			msg.includes('must be a') ||
+			msg.includes('InvalidArgument') ||
+			msg.includes('cannot be null')
+		) {
+			console.error('[hooks] engine error on', event.url.pathname, ':', msg);
+			throw error(400, 'The data couldn\'t be saved due to a validation issue. An administrator should check the server logs.');
+		}
 		throw e;
 	}
+};
+
+// Log unexpected errors server-side without exposing details to the client.
+// SvelteKit renders src/error.svelte with the status + a safe message.
+export const handleError: HandleServerError = ({ error, event }) => {
+	console.error('Unhandled server error:', error?.toString?.() ?? String(error), 'on', event.url.pathname);
+	return {
+		message: 'Something went wrong. Please try again.'
+	};
 };

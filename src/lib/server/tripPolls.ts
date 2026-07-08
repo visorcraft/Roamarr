@@ -4,7 +4,7 @@ import * as pollsRepo from './repositories/pollsRepo';
 import { logAudit } from './audit';
 import { requireEditableTrip, requireCompanionOnTrip } from './ownership';
 import { Validator } from './validation';
-import { bumpTripUpdatedAt } from './tz';
+import { bumpTripUpdatedAt } from './tripUpdatedAt';
 
 export type { Poll } from './repositories/pollsRepo';
 

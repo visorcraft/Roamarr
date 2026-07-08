@@ -1,5 +1,6 @@
 import { attachments } from '../db/mongrelSchema';
 import { getDb } from '../db';
+import { nowIso } from '../tz';
 import {
 	eq,
 	runSyncTxn,
@@ -67,7 +68,7 @@ function constraintKit() {
 export function createAttachment(input: AttachmentInsert): AttachmentRecord {
 	const db = getDb();
 	const id = db.reserveAutoIncSync(attachments.name)!;
-	const now = new Date().toISOString();
+	const now = nowIso();
 	const row = {
 		id,
 		owner_id: BigInt(input.ownerId),

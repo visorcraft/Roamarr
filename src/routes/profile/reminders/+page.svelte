@@ -3,8 +3,8 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDateTime } from '$lib/dateFormat';
 	import { escapeHtml } from '$lib/escapeHtml';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
@@ -13,10 +13,12 @@
 		{ id: 'to', label: 'To', type: 'date' }
 	];
 
-	const kindBadge: Record<string, string> = {
-		flight_checkin: '<span class="badge badge-brand">Flight check-in</span>',
-		document_expiry: '<span class="badge badge-amber">Document expiry</span>',
-		custom: '<span class="badge badge-slate">Custom</span>'
+	const { formatDateTime } = useDateFormat();
+
+	const kindLabel: Record<string, string> = {
+		flight_checkin: 'Flight check-in',
+		document_expiry: 'Document expiry',
+		custom: 'Custom'
 	};
 
 	const refTypeLabel: Record<string, string> = {
@@ -25,13 +27,10 @@
 		document: 'Document'
 	};
 
-	function statusBadge(status: string, sentAt: string | null): string {
-		if (status === 'sent') {
-			const stamp = sentAt ? ` · ${escapeHtml(formatDateTime(sentAt))}` : '';
-			return `<span class="badge badge-green">Sent${stamp}</span>`;
-		}
-		if (status === 'sending') return '<span class="badge badge-amber">Sending</span>';
-		return '<span class="badge badge-slate">Pending</span>';
+	function statusText(status: string): string {
+		if (status === 'sent') return '<span style="color: var(--theme-readable)">Sent</span>';
+		if (status === 'sending') return '<span style="color: var(--theme-warn, #b45309)">Sending</span>';
+		return '<span style="color: var(--theme-readable-muted)">Pending</span>';
 	}
 
 	const columns = [
@@ -40,13 +39,29 @@
 			name: 'Reminder',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
-				const name = row.name
-					? `<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.name)}</div>`
-					: '<div class="font-medium" style="color: var(--theme-readable-muted)">(unnamed)</div>';
-				const desc = row.description
-					? `<div class="text-xs" style="color: var(--theme-readable-muted)">${escapeHtml(row.description)}</div>`
-					: '';
-				return html(name + desc);
+				const raw = row.name ? String(row.name) : '';
+				const isDate = raw && Number.isFinite(Date.parse(raw));
+				const primary = raw
+					? (isDate
+							? `<span class="font-mono text-sm" style="color: var(--theme-readable)">${escapeHtml(formatDateTime(raw))}</span>`
+							: escapeHtml(raw))
+					: '<span style="color: var(--theme-readable-faint)">(unnamed)</span>';
+				const sub = row.description ? escapeHtml(String(row.description)) : '';
+				return html(
+					`<div class="font-medium" style="color: var(--theme-strong)">${primary}</div>` +
+						(sub
+							? `<div class="text-xs" style="color: var(--theme-readable-faint)">${sub}</div>`
+							: '')
+				);
+			}
+		},
+		{
+			id: 'refType',
+			name: 'For',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const refLabel = refTypeLabel[String(row.refType ?? '')] ?? String(row.refType ?? '');
+				return html(`<span style="color: var(--theme-readable)">${escapeHtml(refLabel)}</span>`);
 			}
 		},
 		{
@@ -55,12 +70,17 @@
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				const kind = String(row.kind ?? '');
-				const refLabel = refTypeLabel[String(row.refType ?? '')] ?? String(row.refType ?? '');
 				return html(
-					(kindBadge[kind] ?? `<span class="badge badge-slate">${escapeHtml(kind)}</span>`) +
-						`<div class="text-xs mt-0.5" style="color: var(--theme-readable-faint)">${escapeHtml(refLabel)}</div>`
+					`<div style="color: var(--theme-readable)">${escapeHtml(kindLabel[kind] ?? 'Custom')}</div>`
 				);
 			}
+		},
+		{
+			id: 'status',
+			name: 'Status',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(statusText(String(row.status)))
 		},
 		{
 			id: 'fireAt',
@@ -70,13 +90,6 @@
 				html(
 					`<span class="font-mono text-sm" style="color: var(--theme-readable-muted)">${escapeHtml(formatDateTime(String(row.fireAt)))}</span>`
 				)
-		},
-		{
-			id: 'status',
-			name: 'Status',
-			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(statusBadge(String(row.status), (row.sentAt as string | null) ?? null))
 		}
 	];
 

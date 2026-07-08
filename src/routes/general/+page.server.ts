@@ -13,6 +13,10 @@ import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geona
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import { SESSION_COOKIE_SAME_SITE_VALUES } from '$lib/server/db/mongrelSchema';
 import type { SessionCookieSameSite } from '$lib/server/db/mongrelSchema';
+import {
+	DATE_FORMAT_OPTIONS,
+	DATETIME_FORMAT_OPTIONS
+} from '$lib/dateFormat';
 import type { PageServerLoad } from './$types';
 
 function userFacingError(e: unknown, fallback: string): string {
@@ -23,12 +27,14 @@ function userFacingError(e: unknown, fallback: string): string {
 export function _saveAdminSettings(
 	userId: number,
 	i: {
-		instanceName: string;
-		allowRegistration: boolean;
-		defaultTimezone: string;
-		defaultCurrency: string;
-		defaultFlightCheckinLeadHours: number;
-		defaultDocumentExpiryLeadDays: number;
+		instanceName?: string;
+		allowRegistration?: boolean;
+		defaultTimezone?: string;
+		defaultCurrency?: string;
+		defaultDateFormat?: string;
+		defaultDatetimeFormat?: string;
+		defaultFlightCheckinLeadHours?: number;
+		defaultDocumentExpiryLeadDays?: number;
 		smtpHost?: string;
 		smtpPort?: number;
 		smtpSecurity?: string;
@@ -44,40 +50,61 @@ export function _saveAdminSettings(
 		oauthClientAllowList?: string[] | null;
 	}
 ) {
-	if (!nonNegativeInteger(i.defaultFlightCheckinLeadHours))
+	if (
+		i.defaultFlightCheckinLeadHours !== undefined &&
+		!nonNegativeInteger(i.defaultFlightCheckinLeadHours)
+	)
 		throw new Error('Default flight check-in lead must be a non-negative integer');
-	if (!nonNegativeInteger(i.defaultDocumentExpiryLeadDays))
+	if (
+		i.defaultDocumentExpiryLeadDays !== undefined &&
+		!nonNegativeInteger(i.defaultDocumentExpiryLeadDays)
+	)
 		throw new Error('Default document expiry lead must be a non-negative integer');
-	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
-	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
+	if (i.defaultCurrency !== undefined) {
+		const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
+		if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
+		i = { ...i, defaultCurrency: defaultCurrency.value };
+	}
+	if (i.defaultDateFormat !== undefined && !DATE_FORMAT_OPTIONS.some((o) => o.value === i.defaultDateFormat)) {
+		throw new Error('Invalid default date format');
+	}
+	if (
+		i.defaultDatetimeFormat !== undefined &&
+		!DATETIME_FORMAT_OPTIONS.some((o) => o.value === i.defaultDatetimeFormat)
+	) {
+		throw new Error('Invalid default date/time format');
+	}
 	if (
 		i.sessionCookieSameSite !== undefined &&
 		!SESSION_COOKIE_SAME_SITE_VALUES.includes(i.sessionCookieSameSite)
 	) {
 		throw new Error('Session cookie SameSite must be lax or strict');
 	}
-	const patch: Record<string, unknown> = {
-		instanceName: i.instanceName,
-		allowRegistration: i.allowRegistration,
-		defaultTimezone: i.defaultTimezone,
-		defaultCurrency: defaultCurrency.value,
-		defaultFlightCheckinLeadHours: i.defaultFlightCheckinLeadHours,
-		defaultDocumentExpiryLeadDays: i.defaultDocumentExpiryLeadDays,
-		smtpHost: i.smtpHost || null,
-		smtpPort: i.smtpPort ?? null,
-		smtpSecurity: i.smtpSecurity || null,
-		smtpUser: i.smtpUser || null,
-		smtpFrom: i.smtpFrom || null,
-		webhookUrl: i.webhookUrl || null,
-		mapsTileProvider: i.mapsTileProvider ?? 'openstreetmap',
-		mapsTileUrl: i.mapsTileUrl ?? null,
-		mapsTileAttribution: i.mapsTileAttribution ?? null,
-		mapsTileApiKey: i.mapsTileApiKey ?? null,
-		sessionCookieSameSite: i.sessionCookieSameSite ?? 'lax',
-		oauthClientAllowList: i.oauthClientAllowList ?? null
-	};
+	const patch: Record<string, unknown> = {};
+	if (i.instanceName !== undefined) patch.instanceName = i.instanceName;
+	if (i.allowRegistration !== undefined) patch.allowRegistration = i.allowRegistration;
+	if (i.defaultTimezone !== undefined) patch.defaultTimezone = i.defaultTimezone;
+	if (i.defaultCurrency !== undefined) patch.defaultCurrency = i.defaultCurrency;
+	if (i.defaultDateFormat !== undefined) patch.defaultDateFormat = i.defaultDateFormat;
+	if (i.defaultDatetimeFormat !== undefined) patch.defaultDatetimeFormat = i.defaultDatetimeFormat;
+	if (i.defaultFlightCheckinLeadHours !== undefined)
+		patch.defaultFlightCheckinLeadHours = i.defaultFlightCheckinLeadHours;
+	if (i.defaultDocumentExpiryLeadDays !== undefined)
+		patch.defaultDocumentExpiryLeadDays = i.defaultDocumentExpiryLeadDays;
+	if (i.smtpHost !== undefined) patch.smtpHost = i.smtpHost || null;
+	if (i.smtpPort !== undefined) patch.smtpPort = i.smtpPort ?? null;
+	if (i.smtpSecurity !== undefined) patch.smtpSecurity = i.smtpSecurity || null;
+	if (i.smtpUser !== undefined) patch.smtpUser = i.smtpUser || null;
+	if (i.smtpFrom !== undefined) patch.smtpFrom = i.smtpFrom || null;
+	if (i.webhookUrl !== undefined) patch.webhookUrl = i.webhookUrl || null;
+	if (i.mapsTileProvider !== undefined) patch.mapsTileProvider = i.mapsTileProvider ?? 'openstreetmap';
+	if (i.mapsTileUrl !== undefined) patch.mapsTileUrl = i.mapsTileUrl ?? null;
+	if (i.mapsTileAttribution !== undefined) patch.mapsTileAttribution = i.mapsTileAttribution ?? null;
+	if (i.sessionCookieSameSite !== undefined) patch.sessionCookieSameSite = i.sessionCookieSameSite ?? 'lax';
+	if (i.oauthClientAllowList !== undefined) patch.oauthClientAllowList = i.oauthClientAllowList ?? null;
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
-	if (i.mapsTileApiKey !== undefined) patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
+	if (i.mapsTileApiKey !== undefined)
+		patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
 	updateSettings(patch);
 	logAudit(userId, 'settings_update', 'settings', 1, {
 		changed: Object.keys(patch).filter((k) => k !== 'smtpPass'),
@@ -85,21 +112,123 @@ export function _saveAdminSettings(
 	});
 }
 
-export const load: PageServerLoad = ({ locals }) => {
+export const load: PageServerLoad = ({ locals, url }) => {
 	requireAdmin(locals);
 	const s = getSettings();
 	const stats = getAdminStats();
 	const recentLogs = listAuditLogs({ limit: 5 }).logs;
 	const mapSettings = getMapSettings();
-	return { settings: { ...s, smtpPass: s.smtpPass ? '********' : '' }, stats, recentLogs, mapSettings };
+	const allowedTabs = ['general', 'maps', 'email', 'webhook', 'oauth'] as const;
+	const tabParam = url?.searchParams.get('tab') ?? 'general';
+	const tab: (typeof allowedTabs)[number] = (allowedTabs as readonly string[]).includes(tabParam)
+		? (tabParam as (typeof allowedTabs)[number])
+		: 'general';
+	return {
+		settings: { ...s, smtpPass: s.smtpPass ? '********' : '' },
+		stats,
+		recentLogs,
+		mapSettings,
+		tab
+	};
 };
 
 function parseLead(value: FormDataEntryValue | null, fallback: number): number {
-	const n = Number(value);
+	const s = String(value ?? '').trim();
+	if (s === '') return fallback;
+	const n = Number(s);
 	return Number.isNaN(n) ? fallback : n;
 }
 
+const TAB_REDIRECTS = {
+	general: '/general?tab=general',
+	maps: '/general?tab=maps',
+	email: '/general?tab=email',
+	webhook: '/general?tab=webhook',
+	oauth: '/general?tab=oauth'
+} as const;
+
 export const actions: Actions = {
+	saveGeneral: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const sessionCookieSameSite = String(f.get('sessionCookieSameSite') || 'lax');
+		if (!SESSION_COOKIE_SAME_SITE_VALUES.includes(sessionCookieSameSite as SessionCookieSameSite)) {
+			return fail(400, { error: 'Invalid SameSite value' });
+		}
+		_saveAdminSettings(u.id, {
+			instanceName: String(f.get('instanceName') || 'Roamarr'),
+			allowRegistration: f.get('allowRegistration') === 'on',
+			defaultTimezone: String(f.get('defaultTimezone') || 'UTC'),
+			defaultCurrency: String(f.get('defaultCurrency') || ''),
+			defaultDateFormat: String(f.get('defaultDateFormat') || 'yyyy-MM-dd'),
+			defaultDatetimeFormat: String(f.get('defaultDatetimeFormat') || 'yyyy-MM-dd h:mm a'),
+			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
+			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
+			sessionCookieSameSite: sessionCookieSameSite as SessionCookieSameSite
+		});
+		setFlash(cookies, 'General settings saved.');
+		throw redirect(303, TAB_REDIRECTS.general);
+	},
+
+	saveMaps: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const mapsTileProvider = String(f.get('mapsTileProvider') || 'openstreetmap');
+		if (!(MAP_TILE_PROVIDERS as readonly string[]).includes(mapsTileProvider)) {
+			return fail(400, { error: 'Invalid tile provider' });
+		}
+		const tileApiKey = String(f.get('mapsTileApiKey') || '');
+		_saveAdminSettings(u.id, {
+			mapsTileProvider: mapsTileProvider as MapTileProvider,
+			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
+			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
+			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined
+		});
+		setFlash(cookies, 'Map settings saved.');
+		throw redirect(303, TAB_REDIRECTS.maps);
+	},
+
+	saveEmail: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const pass = String(f.get('smtpPass') || '');
+		const clearSmtpPass = f.get('clearSmtpPass') === 'on';
+		_saveAdminSettings(u.id, {
+			smtpHost: String(f.get('smtpHost') || '') || undefined,
+			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
+			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,
+			smtpUser: String(f.get('smtpUser') || '') || undefined,
+			smtpPass: clearSmtpPass ? null : pass && pass !== '********' ? pass : undefined,
+			smtpFrom: String(f.get('smtpFrom') || '') || undefined
+		});
+		setFlash(cookies, 'Email settings saved.');
+		throw redirect(303, TAB_REDIRECTS.email);
+	},
+
+	saveWebhook: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		_saveAdminSettings(u.id, {
+			webhookUrl: String(f.get('webhookUrl') || '') || undefined
+		});
+		setFlash(cookies, 'Webhook settings saved.');
+		throw redirect(303, TAB_REDIRECTS.webhook);
+	},
+
+	saveOauth: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const allowListRaw = String(f.get('oauthClientAllowList') || '')
+			.split('\n')
+			.map((s) => s.trim())
+			.filter(Boolean);
+		_saveAdminSettings(u.id, {
+			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
+		});
+		setFlash(cookies, 'OAuth client settings saved.');
+		throw redirect(303, TAB_REDIRECTS.oauth);
+	},
+
 	testNotification: async ({ locals, cookies, getClientAddress }) => {
 		const u = requireAdmin(locals);
 		const limit = checkRateLimit(getClientAddress(), 'settings_test_notification');
@@ -112,8 +241,9 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(400, { error: userFacingError(e, 'Failed to send test notification') });
 		}
-		throw redirect(303, '/general');
+		throw redirect(303, TAB_REDIRECTS.general);
 	},
+
 	testEmail: async ({ locals, cookies, getClientAddress }) => {
 		const u = requireAdmin(locals);
 		const limit = checkRateLimit(getClientAddress(), 'settings_test_email');
@@ -132,9 +262,12 @@ export const actions: Actions = {
 		} catch (e) {
 			return fail(400, { error: userFacingError(e, 'Failed to send test email') });
 		}
-		throw redirect(303, '/general');
+		throw redirect(303, TAB_REDIRECTS.email);
 	},
-	save: async ({ request, locals, cookies }) => {
+
+	// Legacy alias kept so any external caller still posting to ?/save keeps
+	// working. New forms should target the per-tab action.
+	save: async ({ request, locals, cookies, url }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
 		const mapsTileProvider = String(f.get('mapsTileProvider') || 'openstreetmap');
@@ -157,6 +290,8 @@ export const actions: Actions = {
 			allowRegistration: f.get('allowRegistration') === 'on',
 			defaultTimezone: String(f.get('defaultTimezone') || 'UTC'),
 			defaultCurrency: String(f.get('defaultCurrency') || ''),
+			defaultDateFormat: String(f.get('defaultDateFormat') || 'yyyy-MM-dd'),
+			defaultDatetimeFormat: String(f.get('defaultDatetimeFormat') || 'yyyy-MM-dd h:mm a'),
 			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
@@ -174,7 +309,8 @@ export const actions: Actions = {
 			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
 		});
 		setFlash(cookies, 'Settings saved.');
-		throw redirect(303, '/general');
+		const tab = url.searchParams.get('tab') ?? 'general';
+		throw redirect(303, `/general?tab=${tab}`);
 	},
 	// Idempotent: re-checks what's already downloaded and only fetches the missing
 	// pieces, so re-enabling after a disable (or a failed asset) resumes cleanly.

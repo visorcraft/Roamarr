@@ -1,11 +1,7 @@
-import { DateTime } from 'luxon';
-import * as tripsRepo from './repositories/tripsRepo';
+import { DateTime, type DurationLike } from 'luxon';
 
 export const nowIso = () => DateTime.utc().toISO()!;
-
-export const bumpTripUpdatedAt = (tripId: number) => {
-	tripsRepo.updateTrip(tripId, { updatedAt: nowIso() });
-};
+export const utcIsoAfter = (duration: DurationLike) => DateTime.utc().plus(duration).toISO()!;
 
 export const localToUtc = (localIso: string, tz: string) =>
 	DateTime.fromISO(localIso, { zone: tz }).toUTC().toISO()!;

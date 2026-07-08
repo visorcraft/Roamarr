@@ -141,7 +141,7 @@ test('load includes recent audit log entries for admins', () => {
 		defaultDocumentExpiryLeadDays: 90
 	});
 
-	const data = load({ locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals } as any) as {
+	const data = load({ locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals, url: new URL('http://x/general') } as any) as {
 		recentLogs: { action: string }[];
 	};
 	expect(data.recentLogs).toHaveLength(1);
@@ -164,9 +164,9 @@ test('save action sets a flash cookie and redirects', async () => {
 		})
 	});
 	const locals = { user: { id: Number(u.id), role: 'admin' } } as App.Locals;
-	await expect(actions.save({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(actions.save({ request, locals, cookies, url: new URL('http://x/general') } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/general'
+		location: '/general?tab=general'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Settings saved.', expect.any(Object));
 });

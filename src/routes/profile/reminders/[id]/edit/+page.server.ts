@@ -57,7 +57,8 @@ export const actions: Actions = {
 
 		const f = await request.formData();
 		const v = new Validator();
-		const name = v.requiredString(f.get('name'), 'name', { max: 200 });
+		// Name is optional on edit — system-generated reminders may stay unnamed.
+		const name = v.optionalString(f.get('name'), 'name', { max: 200 });
 		const description = v.optionalString(f.get('description'), 'description', { max: 2000 });
 
 		const fireAtLocal = String(f.get('fireAt') ?? '').trim();

@@ -58,6 +58,24 @@ test('updateSettings patches the singleton row', () => {
 	expect(raw.smtp_port).toBe(587n);
 });
 
+test('nullable lead defaults do not mask explicit zero', () => {
+	updateSettings({ defaultFlightCheckinLeadHours: 0, defaultDocumentExpiryLeadDays: 0 });
+	let s = getSettings();
+	expect(s.defaultFlightCheckinLeadHours).toBe(0);
+	expect(s.defaultDocumentExpiryLeadDays).toBe(0);
+
+	(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
+		.updateTable(settings)
+		.set({
+			default_flight_checkin_lead_hours: null,
+			default_document_expiry_lead_days: null
+		})
+		.executeSync();
+	s = getSettings();
+	expect(s.defaultFlightCheckinLeadHours).toBe(24);
+	expect(s.defaultDocumentExpiryLeadDays).toBe(90);
+});
+
 test('ensureDefaultBenefitTemplates seeds once and is idempotent', () => {
 	ensureDefaultBenefitTemplates();
 	expect(listBenefitTemplates()).toHaveLength(3);

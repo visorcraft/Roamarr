@@ -3,7 +3,10 @@
 	import { SEG } from '$lib/segmentLabels';
 	import Icon from '$lib/components/Icon.svelte';
 	import { formatDestination } from '$lib/tripDestination';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import type { PageData } from './$types';
+
+	const { formatDate, formatTime } = useDateFormat();
 
 	let { data }: { data: PageData } = $props();
 
@@ -28,21 +31,7 @@
 	const segmentList = $derived(data.segments as SegmentRow[]);
 
 	function fmtTime(iso: string | null | undefined, tz = 'UTC') {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { timeStyle: 'short', timeZone: tz }).format(new Date(iso));
-		} catch {
-			return '';
-		}
-	}
-
-	function fmtDateLong(iso: string | null | undefined) {
-		if (!iso) return '';
-		try {
-			return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(`${iso}T12:00:00`));
-		} catch {
-			return iso;
-		}
+		return formatTime(iso, tz);
 	}
 
 	function tripDays(start: string | null | undefined, end: string | null | undefined) {
@@ -64,7 +53,7 @@
 				const dt = DateTime.fromISO(s.startAt, { zone: 'utc' }).setZone(s.startTz ?? 'UTC');
 				if (dt.isValid) {
 					key = dt.toISODate()!;
-					label = dt.toFormat('EEEE, MMMM d, yyyy');
+					label = formatDate(dt.toISODate()!);
 				}
 			}
 			const existing = index.get(key);
@@ -109,9 +98,9 @@
 			{/if}
 			{#if trip.startDate || trip.endDate}
 				<span class="print-meta-item inline-flex items-center gap-1.5">
-					{fmtDateLong(trip.startDate) || '—'}
+					{formatDate(trip.startDate) || '—'}
 					<span class="text-slate-400">→</span>
-					{fmtDateLong(trip.endDate) || '—'}
+					{formatDate(trip.endDate) || '—'}
 				</span>
 			{/if}
 			{#if days}

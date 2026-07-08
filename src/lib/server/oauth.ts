@@ -5,6 +5,7 @@ import { oauthClients, oauthCodes, oauthTokens } from './db/mongrelSchema';
 import { logAudit } from './audit';
 import { getUserById } from './repositories/usersRepo';
 import { getSettings } from './settings';
+import { nowIso, utcIsoAfter } from './tz';
 import type { Row } from '@visorcraft/mongreldb-kit';
 
 export type Scope =
@@ -108,7 +109,7 @@ export function createClient(userId: number, input: CreateClientInput): { client
 		client_secret_hash: plaintextSecret ? sha256(plaintextSecret) : null,
 		redirect_uris: JSON.stringify(input.redirectUris),
 		scopes: JSON.stringify(input.scopes),
-		created_at: new Date().toISOString(),
+		created_at: nowIso(),
 		created_by_user_id: BigInt(userId)
 	} as any).executeSync();
 
@@ -146,7 +147,7 @@ export function createAuthorizationCode(params: {
 	redirectUri: string;
 }): { code: string; redirectUri: string } {
 	const code = randomToken(32);
-	const expiresAt = new Date(Date.now() + CODE_TTL_SEC * 1000).toISOString();
+	const expiresAt = utcIsoAfter({ seconds: CODE_TTL_SEC });
 	kit.insertInto(oauthCodes).values({
 		code_hash: sha256(code),
 		client_id: params.clientId,
@@ -215,7 +216,7 @@ export function exchangeAuthorizationCode(params: {
 
 	kit
 		.updateTable(oauthCodes)
-		.set({ used_at: new Date().toISOString() })
+		.set({ used_at: nowIso() })
 		.where(kitEq(oauthCodes.id, row.id))
 		.executeSync();
 
@@ -247,7 +248,7 @@ export function refreshAccessToken(params: {
 
 	kit
 		.updateTable(oauthTokens)
-		.set({ revoked_at: new Date().toISOString() })
+		.set({ revoked_at: nowIso() })
 		.where(kitEq(oauthTokens.id, row.id))
 		.executeSync();
 
@@ -266,17 +267,16 @@ function issueTokens(params: {
 }): TokenResult {
 	const accessToken = randomToken(32);
 	const refreshToken = randomToken(32);
-	const now = Date.now();
 	kit.insertInto(oauthTokens).values({
 		access_token_hash: sha256(accessToken),
 		refresh_token_hash: sha256(refreshToken),
 		client_id: params.clientId,
 		user_id: BigInt(params.userId),
 		scopes: JSON.stringify(params.scopes),
-		expires_at: new Date(now + ACCESS_TTL_SEC * 1000).toISOString(),
-		refresh_expires_at: new Date(now + REFRESH_TTL_SEC * 1000).toISOString(),
+		expires_at: utcIsoAfter({ seconds: ACCESS_TTL_SEC }),
+		refresh_expires_at: utcIsoAfter({ seconds: REFRESH_TTL_SEC }),
 		revoked_at: null,
-		created_at: new Date().toISOString(),
+		created_at: nowIso(),
 		last_used_at: null
 	} as any).executeSync();
 
@@ -312,7 +312,7 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 
 	kit
 		.updateTable(oauthTokens)
-		.set({ last_used_at: new Date().toISOString() })
+		.set({ last_used_at: nowIso() })
 		.where(kitEq(oauthTokens.id, row.id))
 		.executeSync();
 
@@ -327,7 +327,7 @@ export function revokeTokensForUser(userId: number): number {
 	// updateTable returns the affected rows (Row[]), not a count.
 	const rows = kit
 		.updateTable(oauthTokens)
-		.set({ revoked_at: new Date().toISOString() })
+		.set({ revoked_at: nowIso() })
 		.where(kitEq(oauthTokens.user_id, BigInt(userId)))
 		.executeSync();
 	return rows.length;
@@ -339,7 +339,7 @@ export function revokeTokensForUser(userId: number): number {
  * scheduler alongside the session/challenge purges.
  */
 export function purgeExpiredOauth(): { codes: number; tokens: number } {
-	const now = new Date().toISOString();
+	const now = nowIso();
 	const codes = kit.deleteFrom(oauthCodes).where(kitLt(oauthCodes.expires_at, now)).executeSync();
 	const tokens = kit
 		.deleteFrom(oauthTokens)
@@ -357,7 +357,7 @@ export function revokeTokenForUser(userId: number, token: string): boolean {
 	if (Number(row.user_id) !== userId) return false;
 	kit
 		.updateTable(oauthTokens)
-		.set({ revoked_at: new Date().toISOString() })
+		.set({ revoked_at: nowIso() })
 		.where(kitEq(oauthTokens.id, row.id))
 		.executeSync();
 	return true;
@@ -372,7 +372,7 @@ export function revokeTokenByIdForUser(userId: number, tokenId: number): boolean
 	if (Number(row.user_id) !== userId) return false;
 	kit
 		.updateTable(oauthTokens)
-		.set({ revoked_at: new Date().toISOString() })
+		.set({ revoked_at: nowIso() })
 		.where(kitEq(oauthTokens.id, row.id))
 		.executeSync();
 	return true;

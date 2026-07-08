@@ -21,13 +21,21 @@ const KEEP_RUNS = 100;
 export async function runTick(now: Date) {
 	const run = startSchedulerRun();
 	try {
-		await runDueReminders(now);
-		await runFareChecks(now);
-		await refreshWeatherCache(now);
-		purgeExpiredSessions();
-		purgeExpiredChallenges();
-		purgeExpiredOauth();
-		finishSchedulerRun(run.id, { success: true });
+		const reminders = await runDueReminders(now);
+		const fareChecks = await runFareChecks(now);
+		const weatherCache = await refreshWeatherCache(now);
+		const sessions = purgeExpiredSessions();
+		const challenges = purgeExpiredChallenges();
+		const oauth = purgeExpiredOauth();
+		finishSchedulerRun(run.id, {
+			success: true,
+			summary: {
+				reminders,
+				fareChecks,
+				weatherCache,
+				purges: { sessions, challenges, oauth }
+			}
+		});
 	} catch (e) {
 		console.error('[scheduler]', e);
 		finishSchedulerRun(run.id, {

@@ -59,6 +59,7 @@ export async function addAttachment(
 	}
 
 	logAudit(userId, 'create', 'trip_expense_attachment', link.id, {
+		tripId: expense.tripId,
 		expenseId,
 		attachmentId: attachment.id,
 		filename: file.name
@@ -87,11 +88,12 @@ export async function readAttachment(
 }
 
 export async function deleteAttachment(userId: number, linkId: number): Promise<void> {
-	const { link } = requireAttachmentLinkForEdit(userId, linkId);
+	const { link, tripId } = requireAttachmentLinkForEdit(userId, linkId);
 	const attachmentId = link.attachmentId;
 	const attachment = await deleteGenericAttachment(attachmentId);
 	expensesRepo.deleteExpenseAttachmentLink(link.id);
 	logAudit(userId, 'delete', 'trip_expense_attachment', linkId, {
+		tripId,
 		expenseId: link.expenseId,
 		attachmentId,
 		filename: attachment.filename

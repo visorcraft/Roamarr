@@ -50,19 +50,6 @@ test('load returns 2FA state', async () => {
 	expect(result).toEqual({ state: { enabled: false, enabledAt: null, backupCodesRemaining: 0 } });
 });
 
-test('load returns setup QR when requested', async () => {
-	const kit = kitDb();
-	const u = makeUser(kit, { email: 'u@x.c' });
-	const result = (await load({
-		locals: { user: u },
-		url: new URL('http://localhost/profile/security?setup=1')
-	} as any)) as { state: { enabled: boolean }; setup: { secret: string; qr: string } };
-	expect(result.state.enabled).toBe(false);
-	expect(result.setup).toBeDefined();
-	expect(result.setup.secret).toMatch(/^[A-Z2-7]+$/);
-	expect(result.setup.qr).toMatch(/^data:image\/png;base64,/);
-});
-
 test('enable action confirms TOTP and returns backup codes', async () => {
 	const kit = kitDb();
 	const password = 'correcthorse';

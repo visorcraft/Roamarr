@@ -36,7 +36,10 @@ test('load returns app info and hides admin-only details for regular users', () 
 		calendar_token: null,
 		calendar_token_expires_at: null
 	});
-	const result = load({ locals: { user: { id: Number(user.id), role: 'user' } } } as any) as {
+	const result = load({
+		locals: { user: { id: Number(user.id), role: 'user' } },
+		url: new URL('http://localhost/about')
+	} as any) as {
 		app: { name: string; version: string };
 		isAdmin: boolean;
 		databasePath: string | null;
@@ -67,7 +70,10 @@ test('load includes instance stats for admins', () => {
 		start_at: new Date().toISOString()
 	} as any);
 
-	const result = load({ locals: { user: { id: Number(admin.id), role: 'admin' } } } as any) as {
+	const result = load({
+		locals: { user: { id: Number(admin.id), role: 'admin' } },
+		url: new URL('http://localhost/about')
+	} as any) as {
 		isAdmin: boolean;
 		databasePath: string | null;
 		stats: { users: number; trips: number; segments: number };

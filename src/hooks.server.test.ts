@@ -7,6 +7,16 @@ vi.mock('./lib/server/db', async () => {
 	return ctx;
 });
 
+const bootMock = vi.hoisted(() => ({
+	missingSecret: false,
+	bootError: undefined as string | undefined
+}));
+vi.mock('./lib/server/boot', async () => ({
+	bootApp: () => {},
+	isMissingSecret: () => bootMock.missingSecret,
+	getBootError: () => bootMock.bootError
+}));
+
 import { handle } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
@@ -199,4 +209,44 @@ test('redirects users who must reset password', async () => {
 	).catch((e: any) => e);
 	expect(res.status).toBe(302);
 	expect(res.headers.get('location')).toBe('/profile/change-password');
+});
+
+test('security invariant: boot error on a CONFIGURED instance never redirects to /setup', async () => {
+	updateSettings({ setupComplete: true });
+	bootMock.bootError = 'migration 99 failed: boom';
+	try {
+		const res: any = await run('/');
+		expect(res.status).toBe(307);
+		expect(res.headers.get('location')).toBe('/boot-error');
+
+		// Even hitting /setup directly must not stay there — fall through to
+		// /boot-error so the admin-creation wizard cannot be re-exposed.
+		const setupRes: any = await run('/setup');
+		expect(setupRes.headers.get('location')).toBe('/boot-error');
+	} finally {
+		bootMock.bootError = undefined;
+	}
+});
+
+test('security invariant: boot error on a fresh (unconfigured) instance still uses /setup', async () => {
+	updateSettings({ setupComplete: false });
+	bootMock.bootError = 'migration failed during first boot';
+	try {
+		const res: any = await run('/');
+		expect(res.status).toBe(307);
+		expect(res.headers.get('location')).toBe('/setup');
+	} finally {
+		bootMock.bootError = undefined;
+	}
+});
+
+test('security invariant: missing secret on a configured instance uses /boot-error', async () => {
+	updateSettings({ setupComplete: true });
+	bootMock.missingSecret = true;
+	try {
+		const res: any = await run('/');
+		expect(res.headers.get('location')).toBe('/boot-error');
+	} finally {
+		bootMock.missingSecret = false;
+	}
 });

@@ -7,6 +7,7 @@ import { getUserById } from './repositories/usersRepo';
 import { loadTripFor } from '../../routes/trips/shared';
 import { weatherCodeSummary } from '$lib/weatherCodes';
 import { checkRateLimit } from './rateLimit';
+import { nowIso } from './tz';
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
 const FORECAST_DAYS = 14;
@@ -149,7 +150,7 @@ function upsertCache(locationKeyStr: string, forDate: string, payload: string): 
 			)
 		)
 		.executeSync();
-	const now = new Date().toISOString();
+	const now = nowIso();
 	if (existing.length > 0) {
 		kit
 			.updateTable(weatherCache)
@@ -184,7 +185,7 @@ function singleDayPayload(daily: OpenMeteoDaily, i: number): string {
  * Each unique destination coordinate is fetched once; failures for one location
  * do not block other locations and are logged without throwing.
  */
-export async function refreshWeatherCache(now: Date = new Date()): Promise<void> {
+export async function refreshWeatherCache(now: Date = new Date()): Promise<{ refreshed: number }> {
 	const today = DateTime.fromJSDate(now).startOf('day');
 	const horizonEnd = today.plus({ days: FORECAST_DAYS - 1 });
 
@@ -219,6 +220,7 @@ export async function refreshWeatherCache(now: Date = new Date()): Promise<void>
 			console.error('[weather] refresh cache failed for', key, e);
 		}
 	}
+	return { refreshed: seen.size };
 }
 
 export async function getCachedForecast(

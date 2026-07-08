@@ -5,7 +5,7 @@ import {
 	SESSION_COOKIE_SAME_SITE_VALUES
 } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
-import type { Row, Update } from '@visorcraft/mongreldb-kit';
+import type { Row, Update, Insert } from '@visorcraft/mongreldb-kit';
 
 export type SessionCookieSameSite = (typeof SESSION_COOKIE_SAME_SITE_VALUES)[number];
 
@@ -16,6 +16,8 @@ export type Settings = {
 	allowRegistration: boolean;
 	defaultTimezone: string;
 	defaultCurrency: string;
+	defaultDateFormat: string;
+	defaultDatetimeFormat: string;
 	defaultFlightCheckinLeadHours: number;
 	defaultDocumentExpiryLeadDays: number;
 	smtpHost: string | null;
@@ -55,6 +57,8 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	allowRegistration: 'allow_registration',
 	defaultTimezone: 'default_timezone',
 	defaultCurrency: 'default_currency',
+	defaultDateFormat: 'default_date_format',
+	defaultDatetimeFormat: 'default_datetime_format',
 	defaultFlightCheckinLeadHours: 'default_flight_checkin_lead_hours',
 	defaultDocumentExpiryLeadDays: 'default_document_expiry_lead_days',
 	smtpHost: 'smtp_host',
@@ -92,8 +96,12 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		allowRegistration: row.allow_registration,
 		defaultTimezone: row.default_timezone,
 		defaultCurrency: row.default_currency,
-		defaultFlightCheckinLeadHours: Number(row.default_flight_checkin_lead_hours),
-		defaultDocumentExpiryLeadDays: Number(row.default_document_expiry_lead_days),
+		defaultDateFormat: (row.default_date_format as unknown as string) || 'yyyy-MM-dd',
+		defaultDatetimeFormat: (row.default_datetime_format as unknown as string) || 'yyyy-MM-dd h:mm a',
+		defaultFlightCheckinLeadHours:
+			row.default_flight_checkin_lead_hours == null ? 24 : Number(row.default_flight_checkin_lead_hours),
+		defaultDocumentExpiryLeadDays:
+			row.default_document_expiry_lead_days == null ? 90 : Number(row.default_document_expiry_lead_days),
 		smtpHost: nullableText(row.smtp_host),
 		smtpPort: row.smtp_port == null || row.smtp_port === 0n ? null : Number(row.smtp_port),
 		smtpSecurity: nullableText(row.smtp_security),
@@ -187,6 +195,89 @@ const DEFAULT_BENEFIT_TEMPLATES: BenefitTemplateInput[] = [
 	}
 ];
 
+function settingsRowNeedsRepair(row: Record<string, unknown>): boolean {
+	for (const col of settings.columns) {
+		if (settings.primaryKey.includes(col.name)) continue;
+		const v = row[col.name];
+		if (v === null || v === undefined) {
+			if (!col.nullable) return true;
+		} else {
+			// Accept any value whose JS type matches the column's storage type.
+			// `json` columns accept any JSON-serializable value (string, number,
+			// boolean, array, object). Unknown storage types are accepted.
+			const ok =
+				(col.storageType === 'bool' && typeof v === 'boolean') ||
+				(col.storageType === 'int64' && typeof v === 'bigint') ||
+				(col.storageType === 'float64' && typeof v === 'number') ||
+				(col.storageType === 'text' && typeof v === 'string') ||
+				(col.storageType === 'timestamp' && typeof v === 'string') ||
+				(col.storageType === 'date' && typeof v === 'string') ||
+				(col.storageType === 'bytes' && v instanceof Uint8Array) ||
+				(col.storageType === 'json') ||
+				(col.storageType === 'json_native') ||
+				!['bool', 'int64', 'float64', 'text', 'timestamp', 'date', 'bytes', 'json', 'json_native'].includes(col.storageType);
+			if (!ok) return true;
+		}
+	}
+	return false;
+}
+
+function rebuildSettingsRow(existing: Record<string, unknown>): void {
+	// Hardcoded defaults for every non-nullable column. We can't rely on
+	// col.default at runtime because the engine sentinel (null/0n) may
+	// interfere with the kit's default-resolution path. These values MUST
+	// stay in sync with mongrelSchema.ts.
+	const HARDCODED_DEFAULTS: Record<string, unknown> = {
+		id: existing.id ?? 1n,
+		instance_name: 'Roamarr',
+		setup_complete: false,
+		allow_registration: false,
+		default_timezone: 'UTC',
+		default_currency: 'USD',
+		default_date_format: 'yyyy-MM-dd',
+		default_datetime_format: 'yyyy-MM-dd h:mm a',
+		default_flight_checkin_lead_hours: 24n,
+		default_document_expiry_lead_days: 90n,
+		maps_enabled: false,
+		maps_tile_provider: 'openstreetmap',
+		session_cookie_same_site: 'lax',
+		smtp_host: null,
+		smtp_port: null,
+		smtp_security: null,
+		smtp_user: null,
+		smtp_pass: null,
+		smtp_from: null,
+		webhook_url: null,
+		maps_geonames_imported_at: null,
+		maps_tile_url: null,
+		maps_tile_attribution: null,
+		maps_tile_api_key: null,
+		oauth_client_allow_list: null
+	};
+
+	const rebuilt: Record<string, unknown> = {};
+	for (const col of settings.columns) {
+		const current = existing[col.name];
+		const def = HARDCODED_DEFAULTS[col.name];
+
+		// Keep the current value if it's valid; otherwise use the hardcoded default
+		const ok = current !== null && current !== undefined &&
+			((col.storageType === 'bool' && typeof current === 'boolean') ||
+				(col.storageType === 'int64' && typeof current === 'bigint') ||
+				(col.storageType === 'float64' && typeof current === 'number') ||
+				(col.storageType === 'text' && typeof current === 'string') ||
+				(col.storageType === 'timestamp' && typeof current === 'string') ||
+				(col.storageType === 'date' && typeof current === 'string') ||
+				(col.storageType === 'bytes' && current instanceof Uint8Array) ||
+				(col.storageType === 'json') ||
+				(col.storageType === 'json_native'));
+		rebuilt[col.name] = ok ? current : def;
+	}
+
+	kit.deleteFrom(settings).where(eq(settings.id, rebuilt.id as bigint)).executeSync();
+	kit.insertInto(settings).values(rebuilt as Insert<typeof settings>).executeSync();
+}
+
 export function getSettings(): Settings {
 	const rows = kit.selectFrom(settings).executeSync();
 	if (rows.length === 0) {
@@ -194,6 +285,18 @@ export function getSettings(): Settings {
 			.insertInto(settings)
 			.values({
 				id: 1n,
+				instance_name: 'Roamarr',
+				setup_complete: false,
+				allow_registration: false,
+				default_timezone: 'UTC',
+				default_currency: 'USD',
+				default_date_format: 'yyyy-MM-dd',
+				default_datetime_format: 'yyyy-MM-dd h:mm a',
+				default_flight_checkin_lead_hours: 24n,
+				default_document_expiry_lead_days: 90n,
+				maps_enabled: false,
+				maps_tile_provider: 'openstreetmap',
+				session_cookie_same_site: 'lax',
 				smtp_host: null,
 				smtp_port: null,
 				smtp_security: null,
@@ -204,17 +307,59 @@ export function getSettings(): Settings {
 				maps_geonames_imported_at: null,
 				maps_tile_url: null,
 				maps_tile_attribution: null,
-				maps_tile_api_key: null
-			})
+				maps_tile_api_key: null,
+				oauth_client_allow_list: null
+			} as Insert<typeof settings>)
 			.executeSync();
+		return getSettings();
+	}
+	const row = rows[0] as Record<string, unknown>;
+	if (settingsRowNeedsRepair(row)) {
+		rebuildSettingsRow(row);
 		return getSettings();
 	}
 	return toSettingsRow(rows[0]);
 }
 
 export function updateSettings(patch: SettingsPatch): void {
-	getSettings(); // ensure the singleton settings row exists before patching
-	kit.updateTable(settings).set(toKitSettingsPatch(patch)).executeSync();
+	const rows = kit.selectFrom(settings).executeSync();
+	if (rows.length === 0) {
+		getSettings();
+		return updateSettings(patch);
+	}
+
+	// Don't use kit.updateTable — it validates the WHOLE merged row and fails
+	// if any pre-existing column has a wrong-typed value. Instead, read the
+	// current row, merge the patch, fix any bad values, then delete +
+	// re-insert. insertInto only validates the new row, which is clean.
+	const current = rows[0] as Record<string, unknown>;
+	const kitPatch = toKitSettingsPatch(patch);
+	const merged: Record<string, unknown> = { ...current, ...kitPatch };
+
+	// Fix any wrong-typed values using the same hardcoded defaults
+	const HARDCODED_DEFAULTS: Record<string, unknown> = {
+		instance_name: 'Roamarr',
+		setup_complete: false,
+		allow_registration: false,
+		default_timezone: 'UTC',
+		default_currency: 'USD',
+		default_date_format: 'yyyy-MM-dd',
+		default_datetime_format: 'yyyy-MM-dd h:mm a',
+		default_flight_checkin_lead_hours: 24n,
+		default_document_expiry_lead_days: 90n,
+		maps_enabled: false,
+		maps_tile_provider: 'openstreetmap',
+		session_cookie_same_site: 'lax'
+	};
+	for (const [key, def] of Object.entries(HARDCODED_DEFAULTS)) {
+		const v = merged[key];
+		if (v === null || v === undefined) {
+			merged[key] = def;
+		}
+	}
+
+	kit.deleteFrom(settings).where(eq(settings.id, current.id as bigint)).executeSync();
+	kit.insertInto(settings).values(merged as Insert<typeof settings>).executeSync();
 }
 
 export function ensureDefaultBenefitTemplates(): void {

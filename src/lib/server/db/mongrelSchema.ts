@@ -92,7 +92,8 @@ export const schedulerRuns = table('scheduler_runs', {
 		timestamp('started_at'),
 		timestamp('finished_at', { nullable: true }),
 		bool('success', { default: staticDefault(false) }),
-		text('error_message', { nullable: true })
+		text('error_message', { nullable: true }),
+		text('summary_json', { nullable: true })
 	],
 	primaryKey: 'id',
 	indexes: [index(['started_at'], { name: 'scheduler_runs_started_idx' })]
@@ -178,8 +179,8 @@ export const settings = table('settings', {
 		bool('allow_registration', { default: staticDefault(false) }),
 		text('default_timezone', { default: staticDefault('UTC') }),
 		text('default_currency', { default: staticDefault('USD') }),
-		int('default_flight_checkin_lead_hours', { default: staticDefault(24n) }),
-		int('default_document_expiry_lead_days', { default: staticDefault(90n) }),
+		int('default_flight_checkin_lead_hours', { nullable: true, default: staticDefault(24n) }),
+		int('default_document_expiry_lead_days', { nullable: true, default: staticDefault(90n) }),
 		text('smtp_host', { nullable: true }),
 		int('smtp_port', { nullable: true }),
 		text('smtp_security', { enumValues: [...SMTP_SECURITY_MODES], nullable: true }),
@@ -200,7 +201,9 @@ export const settings = table('settings', {
 			enumValues: [...SESSION_COOKIE_SAME_SITE_VALUES],
 			default: staticDefault('lax')
 		}),
-		json('oauth_client_allow_list', { nullable: true })
+		json('oauth_client_allow_list', { nullable: true }),
+		text('default_date_format', { nullable: true, default: staticDefault('yyyy-MM-dd') }),
+		text('default_datetime_format', { nullable: true, default: staticDefault('yyyy-MM-dd h:mm a') })
 	],
 	primaryKey: 'id'
 });

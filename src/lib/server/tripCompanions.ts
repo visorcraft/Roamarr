@@ -12,7 +12,7 @@ import { withTripAction } from '$lib/server/actions';
 import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
-import { bumpTripUpdatedAt } from './tz';
+import { bumpTripUpdatedAt } from './tripUpdatedAt';
 
 export interface TripCompanion {
 	id: number;

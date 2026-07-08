@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDateTime } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { escapeHtml } from '$lib/escapeHtml';
 	import type { AuditLogFilters } from './+page.server';
 
 	let { data } = $props<{ data: { filters: AuditLogFilters } }>();
+	const { formatDate, formatDateTime } = useDateFormat();
 
 	let grid: any = $state();
 	let tableQuery = $state<Record<string, string>>({});
@@ -23,12 +25,6 @@
 		{ id: 'from', label: 'From', type: 'date', value: data.filters?.from ?? '' },
 		{ id: 'to', label: 'To', type: 'date', value: data.filters?.to ?? '' }
 	] as GridFilter[]);
-
-	function truncateMeta(value: unknown): string {
-		const text = JSON.stringify(value);
-		if (text.length <= 200) return text;
-		return text.slice(0, 200) + '…';
-	}
 
 	function exportQuery(): string {
 		const params = new URLSearchParams();
@@ -60,7 +56,7 @@
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
 					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(
-						formatDateTime(String(row.createdAt), { dateStyle: 'short', timeStyle: 'medium' })
+						formatDateTime(String(row.createdAt))
 					)}</span>`
 				)
 		},
@@ -81,27 +77,18 @@
 			name: 'Action',
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(`<span class="badge badge-slate">${escapeHtml(row.action)}</span>`)
-		},
-		{
-			id: 'entity',
-			name: 'Entity',
-			sort: false,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(
-					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(row.entityType)}:${escapeHtml(
-						row.entityId
-					)}</span>`
-				)
-		},
-		{
-			id: 'details',
-			name: 'Details',
-			sort: false,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(`<code class="code-chip px-2 py-1">${escapeHtml(truncateMeta(row.meta))}</code>`)
+				html(`<span class="font-mono text-xs" style="color: var(--theme-readable)">${escapeHtml(row.action)}</span>`)
 		}
 	];
+
+	const actions = [{ id: 'view', label: 'View' }];
+
+	async function handleAction(e: Event) {
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'view') {
+			goto(`/audit-logs/${row.id}`);
+		}
+	}
 </script>
 
 <header class="page-header">
@@ -116,5 +103,5 @@
 		<span></span>
 		<a href={exportQuery()} class="btn btn-primary">Export CSV</a>
 	</div>
-	<GridTable bind:this={grid} {columns} {fetchData} {filters} emptyMessage="No audit events match." onquerychange={handleQueryChange} />
+	<GridTable bind:this={grid} {columns} {fetchData} {filters} {actions} emptyMessage="No audit events match." onaction={handleAction} onquerychange={handleQueryChange} />
 </section>

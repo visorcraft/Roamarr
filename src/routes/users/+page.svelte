@@ -3,8 +3,8 @@
 	import { goto } from '$app/navigation';
 	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
-	import { formatDateTime } from '$lib/dateFormat';
 	import { escapeHtml } from '$lib/escapeHtml';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
 	let { form }: { form: { error?: string; success?: boolean; email?: string; generatedPassword?: string } | null } = $props();
 	let grid: any = $state();
@@ -13,6 +13,8 @@
 		{ id: 'from', label: 'From', type: 'date' },
 		{ id: 'to', label: 'To', type: 'date' }
 	];
+
+	const { formatDateTime } = useDateFormat();
 
 	const columns = [
 		{
@@ -31,27 +33,27 @@
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.role === 'admin'
-					? html('<span class="badge badge-brand">Admin</span>')
-					: html('<span class="badge badge-slate">User</span>')
+					? html('<span style="color: var(--theme-readable)">Admin</span>')
+					: html('<span style="color: var(--theme-readable-muted)">User</span>')
 		},
 		{
 			id: 'status',
 			name: 'Status',
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
-				const badges: string[] = [];
+				const parts: string[] = [];
 				if (row.disabled) {
-					badges.push('<span class="badge badge-red">Disabled</span>');
+					parts.push('<span style="color: var(--theme-danger, #b91c1c)">Disabled</span>');
 				} else {
-					badges.push('<span class="badge badge-green">Active</span>');
+					parts.push('<span style="color: var(--theme-readable)">Active</span>');
 				}
 				if (row.mustResetPassword) {
-					badges.push('<span class="badge badge-amber">Password reset required</span>');
+					parts.push('<span style="color: var(--theme-warn, #b45309)">Password reset required</span>');
 				}
 				if (row.twoFactorEnabled) {
-					badges.push('<span class="badge badge-brand">2FA enabled</span>');
+					parts.push('<span style="color: var(--theme-readable)">2FA enabled</span>');
 				}
-				return html(badges.join(' '));
+				return html(parts.join(', '));
 			}
 		},
 		{

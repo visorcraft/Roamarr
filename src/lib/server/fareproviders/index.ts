@@ -17,6 +17,7 @@ import {
 import { deliver } from '../notify';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
 import { stub } from './stub';
+import { nowIso } from '../tz';
 
 type FareResult = { ok: boolean; summary: string; raw?: unknown };
 
@@ -97,7 +98,7 @@ export async function testProvider(userId: number, providerId: number): Promise<
 		status: 'active',
 		lastCheckedAt: null,
 		lastResultJson: null,
-		createdAt: new Date().toISOString()
+		createdAt: nowIso()
 	};
 	return provider.check(dummyWatch, p.apiKey ?? '', AbortSignal.timeout(CHECK_TIMEOUT_MS));
 }
@@ -191,7 +192,7 @@ export async function checkWatch(userId: number, watchId: number): Promise<FareR
 	return res;
 }
 
-export async function runFareChecks(now: Date) {
+export async function runFareChecks(now: Date): Promise<{ checked: number }> {
 	const rows = listActiveFareWatches();
 	for (const row of rows) {
 		const w = row;
@@ -206,4 +207,5 @@ export async function runFareChecks(now: Date) {
 			await applyResult(w, p, res, now);
 		}
 	}
+	return { checked: rows.length };
 }

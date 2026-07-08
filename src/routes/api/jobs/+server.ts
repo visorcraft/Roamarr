@@ -23,7 +23,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		startedAt: r.startedAt,
 		finishedAt: r.finishedAt,
 		success: r.success,
-		errorMessage: r.errorMessage
+		errorMessage: r.errorMessage,
+		summary: r.summary
 	}));
 	const total = countSchedulerRuns(params.search, params.from, params.to);
 	return json({ rows, total });

@@ -4,8 +4,10 @@
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import CancelButton from '$lib/components/CancelButton.svelte';
-	import { formatDateTime } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import type { PageData } from './$types';
+
+	const { formatDateTime } = useDateFormat();
 
 	let { data, form }: {
 		data: PageData;

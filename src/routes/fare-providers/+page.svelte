@@ -29,7 +29,7 @@
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
-					`<span class="badge badge-slate">${escapeHtml(providerLabel.get(String(row.providerKey)) || row.providerKey)}</span>`
+					`<span style="color: var(--theme-readable)">${escapeHtml(providerLabel.get(String(row.providerKey)) || String(row.providerKey))}</span>`
 				)
 		},
 		{
@@ -38,8 +38,8 @@
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.enabled
-					? html('<span class="badge badge-green">Enabled</span>')
-					: html('<span class="badge badge-slate">Disabled</span>')
+					? html('<span style="color: var(--theme-readable)">Enabled</span>')
+					: html('<span style="color: var(--theme-readable-faint)">Disabled</span>')
 		}
 	];
 

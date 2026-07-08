@@ -1,166 +1,161 @@
 <script lang="ts">
-	import CancelButton from '$lib/components/CancelButton.svelte';
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
+	import { escapeHtml } from '$lib/escapeHtml';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
-	let { data, form } = $props();
+	let grid: any = $state();
+	let deleteError: string | null = $state(null);
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
 
-	let editingId = $state<number | null>(null);
-	let dirtyIds = $state<Record<number, boolean>>({});
+	const { formatDate } = useDateFormat();
 
 	const typeLabel: Record<string, string> = {
 		passport: 'Passport',
-		drivers_license: "Driver's license",
+		drivers_license: 'Driver\u2019s license',
 		global_entry: 'Global Entry',
 		visa: 'Visa'
 	};
 
-	const companionNameById = $derived(
-		new Map(data.companions.map((c) => [c.id, c.name]))
-	);
+	const EXPIRY_WARN_DAYS = 30;
+
+	function expiryTone(expiresOn: string | null): 'danger' | 'warn' | null {
+		if (!expiresOn) return null;
+		const days = Math.floor((Date.parse(expiresOn + 'T12:00:00Z') - Date.now()) / 86_400_000);
+		if (!Number.isFinite(days)) return null;
+		if (days < 0) return 'danger';
+		if (days <= EXPIRY_WARN_DAYS) return 'warn';
+		return null;
+	}
+
+	function expiryText(expiresOn: string | null): string {
+		if (!expiresOn) return '<span style="color: var(--theme-readable-faint)">—</span>';
+		const tone = expiryTone(expiresOn);
+		const label = escapeHtml(formatDate(expiresOn));
+		const days = Math.floor((Date.parse(expiresOn + 'T12:00:00Z') - Date.now()) / 86_400_000);
+		let suffix = '';
+		if (Number.isFinite(days)) {
+			if (days < 0) suffix = ' · expired';
+			else if (days <= EXPIRY_WARN_DAYS) suffix = ` · ${days}d`;
+		}
+		const color =
+			tone === 'danger'
+				? 'var(--theme-danger, #b91c1c)'
+				: tone === 'warn'
+					? 'var(--theme-warn, #b45309)'
+					: 'var(--theme-readable-muted)';
+		return `<span style="color: ${color}">${label}${escapeHtml(suffix)}</span>`;
+	}
+
+	const columns = [
+		{
+			id: 'type',
+			name: 'Type',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<span style="color: var(--theme-readable)">${escapeHtml(typeLabel[String(row.type)] ?? String(row.type))}</span>`
+				)
+		},
+		{
+			id: 'number',
+			name: 'Number',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.number
+					? html(`<span class="font-mono text-sm" style="color: var(--theme-readable-muted)">${escapeHtml(row.number)}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		},
+		{
+			id: 'issuingAuthority',
+			name: 'Issuing authority',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.issuingAuthority
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(row.issuingAuthority)}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		},
+		{
+			id: 'companionName',
+			name: 'Owner',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.companionName
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(row.companionName)}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">Me</span>')
+		},
+		{
+			id: 'expiresOn',
+			name: 'Expires',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => html(expiryText((row.expiresOn as string | null) ?? null))
+		}
+	];
+
+	const actions = [
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'delete',
+			label: 'Delete',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: 'Delete document',
+			confirmMessage: (row: Record<string, unknown>) =>
+				`Delete this ${row.type}? This cannot be undone.`,
+			confirmLabel: 'Delete'
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/travel-documents?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load documents: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	async function handleAction(e: Event) {
+		deleteError = null;
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'edit') {
+			goto(`/profile/documents/${row.id}/edit`);
+		} else if (action === 'delete') {
+			const res = await fetch(`/api/travel-documents/${row.id}`, { method: 'DELETE' });
+			if (res.ok) {
+				grid?.reload();
+			} else {
+				const body = await res.json().catch(() => ({ error: 'Delete failed.' }));
+				deleteError = body.error ?? 'Delete failed.';
+			}
+		}
+	}
 </script>
 
 <header class="page-header">
 	<div>
 		<h1 class="page-title">Travel documents</h1>
-		<p class="page-subtitle">
-			{data.documents.length} document{data.documents.length === 1 ? '' : 's'} on file
-		</p>
+		<p class="page-subtitle">Passports, licenses, visas, and trusted-traveler cards. Expiry highlighted when within 30 days.</p>
 	</div>
 </header>
 
-{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
-
-{#if data.documents.length}
-	<section class="card mt-6 p-5">
-		<h2 class="section-title mb-3">Your documents</h2>
-		<ul class="list-stack">
-			{#each data.documents as d (d.id)}
-				<li class="list-item">
-					{#if editingId === d.id}
-						<form method="POST" action="?/update" class="grid gap-3 sm:grid-cols-2" oninput={() => (dirtyIds[d.id] = true)}>
-							<input type="hidden" name="id" value={d.id} />
-							<div class="field">
-								<label class="label" for="type-{d.id}">Type</label>
-								<select id="type-{d.id}" name="type" class="select" value={d.type}>
-									<option value="passport">Passport</option>
-									<option value="drivers_license">Driver's license</option>
-									<option value="global_entry">Global Entry</option>
-									<option value="visa">Visa</option>
-								</select>
-							</div>
-							<div class="field">
-								<label class="label" for="number-{d.id}">Number</label>
-								<input id="number-{d.id}" name="number" value={d.number ?? ''} placeholder="Document number" class="input" />
-							</div>
-							<div class="field">
-								<label class="label" for="issuingAuthority-{d.id}">Issuing authority</label>
-								<input id="issuingAuthority-{d.id}" name="issuingAuthority" value={d.issuingAuthority ?? ''} placeholder="e.g. U.S. Department of State" class="input" />
-							</div>
-							<div class="field">
-								<label class="label" for="expiresOn-{d.id}">Expires on</label>
-								<input id="expiresOn-{d.id}" name="expiresOn" type="date" value={d.expiresOn ?? ''} class="input" />
-							</div>
-							<div class="field">
-								<label class="label" for="companionId-{d.id}">Companion</label>
-								<select id="companionId-{d.id}" name="companionId" class="select" value={d.companionId ?? ''}>
-									<option value="">Me (owner)</option>
-									{#each data.companions as c (c.id)}
-										<option value={c.id}>{c.name}</option>
-									{/each}
-								</select>
-							</div>
-							<div class="field sm:col-span-2">
-								<label class="label" for="notes-{d.id}">Notes</label>
-								<input id="notes-{d.id}" name="notes" value={d.notes ?? ''} placeholder="Optional notes" class="input" />
-							</div>
-							<div class="flex items-center justify-end gap-2 sm:col-span-2">
-								<CancelButton dirty={dirtyIds[d.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
-								<button class="btn btn-primary">Save</button>
-							</div>
-						</form>
-					{:else}
-						<div class="flex items-start gap-3">
-							<span class="list-icon">
-								<Icon name="document" class="h-4.5 w-4.5" />
-							</span>
-							<div class="min-w-0 flex-1">
-								<div class="flex items-center gap-2">
-									<span class="badge badge-slate">{typeLabel[d.type] ?? d.type}</span>
-									{#if d.issuingAuthority}<span class="truncate text-sm text-slate-400">{d.issuingAuthority}</span>{/if}
-								</div>
-								<div class="mt-1 font-mono text-xs text-slate-300">{d.number ?? '—'}</div>
-								<div class="meta mt-0.5 flex flex-wrap items-center gap-x-3">
-									{#if d.companionId}
-										<span class="meta-strong">{companionNameById.get(d.companionId) ?? 'Companion'}</span>
-									{:else}
-										<span>Me</span>
-									{/if}
-									{#if d.expiresOn}<span>Expires <span class="meta-strong">{d.expiresOn}</span></span>{/if}
-									{#if d.notes}<span class="truncate">{d.notes}</span>{/if}
-								</div>
-							</div>
-							<div class="flex gap-1">
-								<button type="button" class="btn btn-primary" onclick={() => { editingId = d.id; dirtyIds[d.id] = false; }}>Edit</button>
-								<form method="POST" action="?/delete">
-									<input type="hidden" name="id" value={d.id} />
-									<ConfirmButton class="btn btn-danger" message="Delete this travel document?">Delete</ConfirmButton>
-								</form>
-							</div>
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
-{:else}
-	<EmptyState message="No documents yet — add one below.">
-		{#snippet icon()}
-			<Icon name="document" class="h-6 w-6" />
-		{/snippet}
-	</EmptyState>
-{/if}
-
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Add document</h2>
-	<form method="POST" action="?/add" class="grid gap-4 sm:grid-cols-2">
-		<div class="field">
-			<label class="label" for="type">Type</label>
-			<select id="type" name="type" class="select">
-				<option value="passport">Passport</option>
-				<option value="drivers_license">Driver's license</option>
-				<option value="global_entry">Global Entry</option>
-				<option value="visa">Visa</option>
-			</select>
+<section class="card mt-8 p-5 sm:p-6">
+	{#if deleteError}
+		<div class="notice notice-error mb-4">
+			{deleteError}
 		</div>
-		<div class="field">
-			<label class="label" for="number">Number</label>
-			<input id="number" name="number" placeholder="Document number" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="issuingAuthority">Issuing authority</label>
-			<input id="issuingAuthority" name="issuingAuthority" placeholder="e.g. U.S. Department of State" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="expiresOn">Expires on</label>
-			<input id="expiresOn" name="expiresOn" type="date" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="companionId">Companion</label>
-			<select id="companionId" name="companionId" class="select">
-				<option value="">Me (owner)</option>
-				{#each data.companions as c (c.id)}
-					<option value={c.id}>{c.name}</option>
-				{/each}
-			</select>
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="notes">Notes</label>
-			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
-		</div>
-		<div class="flex justify-end sm:col-span-2">
-			<button class="btn btn-primary">Add document</button>
-		</div>
-	</form>
+	{/if}
+	<GridTable
+		bind:this={grid}
+		{columns}
+		{fetchData}
+		{actions}
+		filters={dateFilters}
+		addHref="/profile/documents/new"
+		addLabel="Add document"
+		emptyMessage="No travel documents saved yet."
+		onaction={handleAction}
+	/>
 </section>

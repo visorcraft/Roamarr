@@ -5,6 +5,7 @@
 	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { COUNTRIES } from '$lib/countries';
 	import { countryContinent, continentSortKey } from '$lib/countryContinents';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { escapeHtml } from '$lib/escapeHtml';
 	import { US_STATES, usStateDisplayCode } from '$lib/usStates';
 
@@ -23,6 +24,7 @@
 	const tableRows = $derived((data.tableRows ?? data.rows) as Record<string, unknown>[]);
 	const editingRow = $derived(tableRows.find((row) => row.code === editingCode));
 	let tableError: string | null = $state(null);
+	const { formatDate } = useDateFormat();
 	const dateFilters: GridFilter[] = [
 		{ id: 'from', label: 'From', type: 'date' },
 		{ id: 'to', label: 'To', type: 'date' }
@@ -43,20 +45,26 @@
 			id: 'firstVisitedOn',
 			name: 'First visited',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.firstVisitedOn ?? '-')
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.firstVisitedOn
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(formatDate(String(row.firstVisitedOn)))}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
 		},
 		{
 			id: 'lastVisitedOn',
 			name: 'Last visited',
 			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.lastVisitedOn ?? '-')
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.lastVisitedOn
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(formatDate(String(row.lastVisitedOn)))}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
 		},
 		{
 			id: 'source',
 			name: 'Source',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(`<span class="badge badge-slate">${escapeHtml(row.source)}</span>`)
+				html(`<span style="color: var(--theme-readable)">${escapeHtml(row.source)}</span>`)
 		}
 	]);
 

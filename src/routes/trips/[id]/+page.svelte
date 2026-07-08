@@ -15,7 +15,8 @@
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
 	import { renderMarkdown } from '$lib/markdown';
-	import { formatDateTime, formatDate, formatTime } from '$lib/dateFormat';
+	import { formatTime } from '$lib/dateFormat';
+	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { formatDestination } from '$lib/tripDestination';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
@@ -28,6 +29,9 @@
 	import GlobeModal from '$lib/components/GlobeModal.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
+
+	const { formatDate, formatDateTime } = useDateFormat();
+
 	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
 	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
 	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents', 'tools'] as const;
@@ -209,7 +213,7 @@
 			const dt = segmentLocalDateTime(s);
 			if (dt) {
 				key = dt.toISODate()!;
-				label = dt.toFormat('EEEE, MMMM d, yyyy');
+				label = formatDate(dt.toISODate()!);
 			}
 			const existing = index.get(key);
 			if (existing != null) groups[existing].segments.push(s);
@@ -605,7 +609,7 @@
 						{#each data.weather.days as d (d.date)}
 							{@const icon = weatherIconForCode(d.code)}
 							<div class="min-w-[110px] shrink-0 rounded-lg bg-surface2 p-3 text-center ring-1 ring-inset ring-white/5">
-								<div class="text-xs font-medium text-muted">{new Date(d.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+								<div class="text-xs font-medium text-muted">{formatDate(d.date)}</div>
 								{#if icon}
 									<div class="mx-auto my-1 flex h-7 items-center justify-center text-ink">
 										<Icon name={icon} class="h-6 w-6" />
@@ -1602,7 +1606,7 @@
 							<li class="list-item">
 								<div class="flex items-center justify-between gap-3">
 									<span class="subsection-title">{c.displayName}</span>
-									<span class="text-xs text-slate-500">{new Date(c.createdAt).toLocaleString()}</span>
+									<span class="text-xs text-slate-500">{formatDateTime(c.createdAt)}</span>
 								</div>
 								<p class="mt-1 text-sm text-slate-300 whitespace-pre-wrap">{c.body}</p>
 								{#if c.userId === data.user?.id}

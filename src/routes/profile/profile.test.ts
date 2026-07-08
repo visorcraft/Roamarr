@@ -19,15 +19,17 @@ const remindersMock = vi.hoisted(() => ({
 }));
 vi.mock('$lib/server/reminders', () => remindersMock);
 
-import { _addDocument as addDocument } from './documents/+page.server';
+import { addDocument } from '$lib/server/travelDocuments';
 import { updateLoyaltyProgram as updateProgram } from '$lib/server/loyaltyPrograms';
 import {
 	_updateProfile,
-	_updatePassword,
-	_changeEmail,
-	_regenerateUserCalendarToken,
 	actions
 } from './+page.server';
+import { _updatePassword, _changeEmail, _regenerateUserCalendarToken } from '$lib/server/profileActions';
+import { actions as emailActions } from './email/+page.server';
+import { actions as passwordActions } from './security/password/+page.server';
+import { actions as calendarActions } from './calendar/+page.server';
+import { actions as contactsActions } from './contacts/+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
 import { users, travelDocuments, loyaltyPrograms, sessions, auditLogs, emergencyContacts } from '$lib/server/db/mongrelSchema';
 import { decrypt } from '$lib/server/crypto';
@@ -121,7 +123,6 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		documentExpiryLeadDays: 60,
 		emailNotifications: true,
 		webhookNotifications: false,
-		themeId: 'vibes',
 		defaultCurrency: 'eur'
 	});
 	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
@@ -129,7 +130,6 @@ test('update profile changes display name, timezone and reminder leads', () => {
 	expect(row.timezone).toBe('America/New_York');
 	expect(Number(row.flight_checkin_lead_hours)).toBe(48);
 	expect(Number(row.document_expiry_lead_days)).toBe(60);
-	expect(row.theme_id).toBe('vibes');
 	expect(row.default_currency).toBe('EUR');
 });
 
@@ -143,7 +143,6 @@ test('update profile rejects invalid timezone', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels',
 			defaultCurrency: 'USD'
 		})
 	).toThrow('Invalid timezone');
@@ -159,7 +158,6 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels',
 			defaultCurrency: 'USD'
 		})
 	).toThrow('Flight check-in lead must be a non-negative integer');
@@ -171,26 +169,9 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 1.5,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels',
 			defaultCurrency: 'USD'
 		})
 	).toThrow('Document expiry lead must be a non-negative integer');
-});
-
-test('update profile rejects invalid theme', () => {
-	const u = makeUser(kit, { email: 'p-theme@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
-	expect(() =>
-		_updateProfile(u.id, {
-			displayName: 'P',
-			timezone: 'UTC',
-			flightCheckinLeadHours: 24,
-			documentExpiryLeadDays: 90,
-			emailNotifications: true,
-			webhookNotifications: true,
-			themeId: 'not-a-theme',
-			defaultCurrency: 'USD'
-		})
-	).toThrow('Invalid theme');
 });
 
 test('update profile rejects invalid default currency', () => {
@@ -203,7 +184,6 @@ test('update profile rejects invalid default currency', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			themeId: 'midnight-travels',
 			defaultCurrency: 'US Dollar'
 		})
 	).toThrow('Default currency must be a 3-letter currency code');
@@ -319,8 +299,7 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 			displayName: 'Ada',
 			timezone: 'UTC',
 			flightCheckinLeadHours: '24',
-			documentExpiryLeadDays: '90',
-			themeId: 'red-velvet'
+			documentExpiryLeadDays: '90'
 		})
 	});
 	const locals = { user: u } as App.Locals;
@@ -329,7 +308,7 @@ test('updateProfile action sets a flash cookie and redirects', async () => {
 		location: '/profile'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Profile updated.', expect.any(Object));
-	expect(kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!.theme_id).toBe('red-velvet');
+	expect(kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!.display_name).toBe('Ada');
 });
 
 test('updatePassword action sets a flash cookie and redirects', async () => {
@@ -345,9 +324,9 @@ test('updatePassword action sets a flash cookie and redirects', async () => {
 		})
 	});
 	const locals = { user: u } as App.Locals;
-	await expect(actions.updatePassword({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(passwordActions.updatePassword({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/security/password'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Password changed.', expect.any(Object));
 });
@@ -388,9 +367,9 @@ test('regenerateCalendarToken action sets a flash cookie and redirects', async (
 		body: new URLSearchParams({ calendarExpiresAt: '2030-01-01T00:00:00Z' })
 	});
 	const locals = { user: u } as App.Locals;
-	await expect(actions.regenerateCalendarToken({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(calendarActions.regenerateCalendarToken({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/calendar'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Calendar feed URL regenerated.', expect.any(Object));
 	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
@@ -460,9 +439,9 @@ test('changeEmail action sets a flash cookie and redirects', async () => {
 		})
 	});
 	const locals = { user: u } as App.Locals;
-	await expect(actions.changeEmail({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(emailActions.changeEmail({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/email'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Email changed.', expect.any(Object));
 	expect(kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!.email).toBe('changed@x.c');
@@ -483,9 +462,9 @@ test('addEmergencyContact action creates a contact and redirects', async () => {
 		})
 	});
 	const locals = { user: u } as unknown as App.Locals;
-	await expect(actions.addEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(contactsActions.addEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/contacts'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Emergency contact added.', expect.any(Object));
 	const row = kit.selectFrom(emergencyContacts).executeSync()[0]!;
@@ -509,9 +488,9 @@ test('updateEmergencyContact action edits a contact and redirects', async () => 
 		})
 	});
 	const locals = { user: u } as unknown as App.Locals;
-	await expect(actions.updateEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(contactsActions.updateEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/contacts'
 	});
 	const row = kit.selectFrom(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.name).toBe('New Name');
@@ -528,9 +507,9 @@ test('deleteEmergencyContact action removes a contact and redirects', async () =
 		body: new URLSearchParams({ id: String(c.id) })
 	});
 	const locals = { user: u } as unknown as App.Locals;
-	await expect(actions.deleteEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
+	await expect(contactsActions.deleteEmergencyContact({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile'
+		location: '/profile/contacts'
 	});
 	expect(kit.selectFrom(emergencyContacts).where(eq(emergencyContacts.id, BigInt(c.id))).executeSync()[0]).toBeUndefined();
 });
@@ -543,13 +522,13 @@ test('emergency contact actions reject invalid contact ids', async () => {
 		method: 'POST',
 		body: new URLSearchParams({ id: 'not-a-number', name: 'X' })
 	});
-	const updateResult = await actions.updateEmergencyContact({ request: updateRequest, locals: { user: u }, cookies } as any);
+	const updateResult = await contactsActions.updateEmergencyContact({ request: updateRequest, locals: { user: u }, cookies } as any);
 	expect(updateResult?.status).toBe(400);
 
 	const deleteRequest = new Request('http://x/profile', {
 		method: 'POST',
 		body: new URLSearchParams({ id: 'not-a-number' })
 	});
-	const deleteResult = await actions.deleteEmergencyContact({ request: deleteRequest, locals: { user: u }, cookies } as any);
+	const deleteResult = await contactsActions.deleteEmergencyContact({ request: deleteRequest, locals: { user: u }, cookies } as any);
 	expect(deleteResult?.status).toBe(400);
 });

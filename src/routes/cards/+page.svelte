@@ -28,8 +28,8 @@
 			name: 'Network',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
-				const label = escapeHtml(networkLabel[String(row.network)] ?? row.network);
-				return html(`<span class="badge badge-slate">${label}</span>`);
+				const label = networkLabel[String(row.network)] ?? String(row.network);
+				return html(`<span style="color: var(--theme-readable)">${escapeHtml(label)}</span>`);
 			}
 		},
 		{

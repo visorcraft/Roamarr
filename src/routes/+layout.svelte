@@ -10,8 +10,22 @@
 	import { installPickerInputs } from '$lib/pickerInput';
 	import { installFieldErrorA11y } from '$lib/fieldErrorA11y';
 	import type { ToastVariant } from '$lib/toast';
+	import { provideDateFormat } from '$lib/dateFormatContext.svelte';
+	import { isActive as routeIsActive, activeChildHref, activeItemHref } from '$lib/navActive';
 
 	let { data, children } = $props();
+
+	// Provide the instance's chosen date/time formats to all descendants via
+	// Svelte context. Use a reactive getter object so updates to layout data
+	// (e.g., admin changes the format in /general and routes back) propagate.
+	provideDateFormat({
+		get dateFormat() {
+			return data.dateFormat;
+		},
+		get datetimeFormat() {
+			return data.datetimeFormat;
+		}
+	});
 	let open = $state(false);
 	let userMenuDetails = $state<HTMLDetailsElement | null>(null);
 	let hamburgerButton = $state<HTMLButtonElement | null>(null);
@@ -162,20 +176,18 @@
 		if (!browser) return;
 		const path = page.url.pathname;
 		for (const section of visibleSections) {
-			if (section.items.some((item) => itemActive(item))) {
+			const activeItem = activeItemHref(path, section.items);
+			if (activeItem !== null) {
 				// Read expansion state without tracking it; this effect should only
 				// react to route changes, not to manual toggles.
 				if (!untrack(() => isExpanded(section.label))) {
 					expanded[section.label] = true;
 					writeStoredSections(expanded);
 				}
-			}
-			for (const item of section.items) {
-				if (item.children?.some((child) => isActive(child.href))) {
-					if (!untrack(() => isItemExpanded(item.label))) {
-						expandedItems[item.label] = true;
-						writeStoredItems(expandedItems);
-					}
+				const item = section.items.find((i) => i.href === activeItem);
+				if (item?.children && !untrack(() => isItemExpanded(item.label))) {
+					expandedItems[item.label] = true;
+					writeStoredItems(expandedItems);
 				}
 			}
 		}
@@ -281,6 +293,17 @@
 		{
 			label: 'Me',
 			items: [
+				{
+					href: '/profile',
+					label: 'Profile',
+					icon: 'user',
+					children: [
+						{ href: '/profile', label: 'Account' },
+						{ href: '/profile/contacts', label: 'Emergency contacts' },
+						{ href: '/profile/notifications', label: 'SMTP' },
+						{ href: '/profile/security', label: 'Security' }
+					]
+				},
 				{ href: '/profile/documents', label: 'Documents', icon: 'document' },
 				{ href: '/profile/reminders', label: 'Reminders', icon: 'reminder' },
 				{ href: '/profile/loyalty', label: 'Loyalty', icon: 'loyalty' },
@@ -292,9 +315,7 @@
 						{ href: '/profile/visited/countries', label: 'Countries' },
 						{ href: '/profile/visited/states', label: 'U.S. States' }
 					]
-				},
-				{ href: '/profile/notifications', label: 'SMTP', icon: 'notification' },
-				{ href: '/profile/security', label: 'Security', icon: 'star' }
+				}
 			]
 		},
 		{
@@ -327,6 +348,9 @@
 	const path = $derived(page.url.pathname);
 	const standalone = $derived(!data.user || /^\/(login|setup|register|share)(\/|$)/.test(path));
 	const visibleSections = $derived(SECTIONS.filter((s) => !s.admin || data.user?.role === 'admin'));
+	const activeItems = $derived(
+		Object.fromEntries(visibleSections.map((s) => [s.label, activeItemHref(path, s.items)]))
+	);
 	const initials = $derived(
 		(data.user?.displayName ?? '?')
 			.split(/\s+/)
@@ -335,8 +359,7 @@
 			.join('')
 			.toUpperCase()
 	);
-	const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
-	const itemActive = (item: NavItem) => isActive(item.href) || !!item.children?.some((child) => isActive(child.href));
+	const isActive = (href: string) => routeIsActive(path, href);
 </script>
 
 {#snippet brand(size: 'sm' | 'lg')}
@@ -395,12 +418,6 @@
 					<Icon name="user" class="h-4.5 w-4.5" />
 					<span>Profile</span>
 				</a>
-				{#if data.user?.role === 'admin'}
-					<a href="/general" class="app-user-menu-item" onclick={closeUserMenu}>
-						<Icon name="settings" class="h-4.5 w-4.5" />
-						<span>General</span>
-					</a>
-				{/if}
 				<form method="POST" action="/logout">
 					<button class="app-user-menu-item app-user-menu-button w-full" type="submit" onclick={closeUserMenu}>
 						<Icon name="logout" class="h-4.5 w-4.5" />
@@ -482,7 +499,7 @@
 						</button>
 						<div id={sectionItemsId} class="app-nav-section-items space-y-1" class:hidden={!sectionExpanded}>
 							{#each section.items as item (item.href)}
-								{@const active = itemActive(item)}
+								{@const active = activeItems[section.label] === item.href}
 								{#if item.children}
 									{@const itemExpanded = isItemExpanded(item.label)}
 									{@const childrenId = itemChildrenId(item.label)}
@@ -506,18 +523,21 @@
 										/>
 									</button>
 									{#if itemExpanded}
+										{@const activeChild = active ? activeChildHref(path, item.children) : null}
 										<div id={childrenId} class="ml-8 space-y-1">
 											{#each item.children as child (child.href)}
+												{@const childActive = activeChild === child.href}
 												<a
 													href={child.href}
 													onclick={() => (open = false)}
-													aria-current={isActive(child.href) ? 'page' : undefined}
-													class="flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition {isActive(child.href)
+													aria-current={childActive ? 'page' : undefined}
+													class="flex items-center rounded-lg px-3 py-1.5 text-sm font-medium transition {childActive
 														? 'app-nav-item-active'
 														: 'app-nav-item'}"
-												>
-													{child.label}
-												</a>
+													>
+														{child.label}
+													</a>
+
 											{/each}
 										</div>
 									{/if}

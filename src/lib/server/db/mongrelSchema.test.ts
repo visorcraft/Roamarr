@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { schema } from './mongrelSchema';
 import { openKitDatabase } from './mongrel';
+import { nowIso, utcIsoAfter } from '../tz';
 
 describe('mongrelSchema', () => {
 	test('has 55 tables', () => {
@@ -60,6 +61,26 @@ describe('mongrelSchema', () => {
 	] as const)('table %s has primary key %j', (tableName, expectedPk) => {
 		const table = schema.table(tableName);
 		expect(table.primaryKey).toEqual(expectedPk);
+	});
+
+	test('timestamp defaults and helper timestamps are UTC ISO strings', () => {
+		const utcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+		expect(nowIso()).toMatch(utcPattern);
+		expect(utcIsoAfter({ minutes: 5 })).toMatch(utcPattern);
+
+		const offenders: string[] = [];
+		for (const table of schema.tablesList()) {
+			for (const col of table.columns) {
+				if (col.storageType !== 'timestamp') continue;
+				if (col.default && col.default.kind !== 'now') {
+					offenders.push(`${table.name}.${col.name} default:${col.default.kind}`);
+				}
+				if (col.generated && col.generated !== 'now') {
+					offenders.push(`${table.name}.${col.name} generated:${col.generated}`);
+				}
+			}
+		}
+		expect(offenders).toEqual([]);
 	});
 
 	describe('openKitDatabase', () => {

@@ -16,12 +16,14 @@ describe('parseTableParams', () => {
 	});
 
 	it('parses all params', () => {
-		const p = parseTableParams(url('page=3&limit=10&search=foo&sort=email&dir=desc'));
+		const p = parseTableParams(url('page=3&limit=10&search=foo&sort=email&dir=desc&from=2024-01-01&to=2024-01-31'));
 		expect(p.page).toBe(3);
 		expect(p.limit).toBe(10);
 		expect(p.search).toBe('foo');
 		expect(p.sort).toBe('email');
 		expect(p.dir).toBe('desc');
+		expect(p.from).toBe('2024-01-01');
+		expect(p.to).toBe('2024-01-31');
 	});
 
 	it('normalizes search to lowercase and trims', () => {
@@ -75,6 +77,12 @@ describe('parseTableParams', () => {
 		const p = parseTableParams(url('search=' + long));
 		expect(p.search).toBe('a'.repeat(200));
 	});
+
+	it('ignores invalid date filters', () => {
+		const p = parseTableParams(url('from=bad&to=2024/02/30'));
+		expect(p.from).toBe('');
+		expect(p.to).toBe('');
+	});
 });
 
 describe('buildTableQuery', () => {
@@ -83,8 +91,8 @@ describe('buildTableQuery', () => {
 	});
 
 	it('builds a full query', () => {
-		expect(buildTableQuery({ page: 2, search: 'foo', sort: 'email', dir: 'desc' })).toBe(
-			'page=2&search=foo&sort=email&dir=desc'
+		expect(buildTableQuery({ page: 2, search: 'foo', sort: 'email', dir: 'desc', from: '2024-01-01', to: '2024-01-31' })).toBe(
+			'page=2&search=foo&sort=email&dir=desc&from=2024-01-01&to=2024-01-31'
 		);
 	});
 

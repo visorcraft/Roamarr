@@ -4,9 +4,12 @@ export interface TableParams {
 	search: string;
 	sort: string | null;
 	dir: 'asc' | 'desc';
+	from: string;
+	to: string;
+	[key: string]: string | number | null;
 }
 
-export const DEFAULT_PAGE_SIZE = 25;
+export const DEFAULT_PAGE_SIZE = 10;
 export const MAX_PAGE_SIZE = 100;
 
 function parsePositiveInt(raw: string | null, fallback: number): number {
@@ -15,6 +18,11 @@ function parsePositiveInt(raw: string | null, fallback: number): number {
 		return fallback;
 	}
 	return value;
+}
+
+function parseDate(raw: string | null): string {
+	const value = (raw ?? '').trim();
+	return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
 }
 
 export function parseTableParams(url: URL, allowedSorts?: string[]): TableParams {
@@ -30,7 +38,9 @@ export function parseTableParams(url: URL, allowedSorts?: string[]): TableParams
 		limit: Math.min(parsePositiveInt(limitRaw, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
 		search: (url.searchParams.get('search') ?? '').trim().toLowerCase().slice(0, 200),
 		sort,
-		dir: (url.searchParams.get('dir') ?? 'asc') === 'desc' ? 'desc' : 'asc'
+		dir: (url.searchParams.get('dir') ?? 'asc') === 'desc' ? 'desc' : 'asc',
+		from: parseDate(url.searchParams.get('from')),
+		to: parseDate(url.searchParams.get('to'))
 	};
 }
 
@@ -42,6 +52,10 @@ export function buildTableQuery(params: Partial<TableParams>): string {
 	if (params.sort) {
 		p.set('sort', params.sort);
 		p.set('dir', params.dir ?? 'asc');
+	}
+	for (const [key, value] of Object.entries(params)) {
+		if (['page', 'limit', 'search', 'sort', 'dir'].includes(key)) continue;
+		if (typeof value === 'string' && value) p.set(key, value);
 	}
 	return p.toString();
 }

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { html } from 'gridjs';
-	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { formatDateTime } from '$lib/dateFormat';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { escapeHtml } from '$lib/escapeHtml';
@@ -12,10 +12,16 @@
 		return `${(ms / 1000).toFixed(1)}s`;
 	}
 
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
+
 	const columns = [
 		{
 			id: 'startedAt',
 			name: 'Started',
+			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
 					`<span class="whitespace-nowrap" style="color: var(--theme-readable-muted)">${escapeHtml(
@@ -82,5 +88,5 @@
 </header>
 
 <section class="card mt-8 p-5 sm:p-6">
-	<GridTable {columns} {fetchData} pageSize={50} emptyMessage="No scheduler runs recorded yet." />
+	<GridTable {columns} {fetchData} filters={dateFilters} emptyMessage="No scheduler runs recorded yet." />
 </section>

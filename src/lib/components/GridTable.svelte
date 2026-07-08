@@ -19,6 +19,14 @@
 		confirmMessage?: (row: Record<string, unknown>) => string;
 	}
 
+	export interface GridFilter {
+		id: string;
+		label: string;
+		type?: 'text' | 'date';
+		placeholder?: string;
+		value?: string;
+	}
+
 	function escapeHtml(value: unknown): string {
 		return String(value)
 			.replace(/&/g, '&amp;')
@@ -35,6 +43,9 @@
 			search?: string;
 			sort?: string;
 			dir?: 'asc' | 'desc';
+			from?: string;
+			to?: string;
+			[key: string]: string | number | undefined;
 		};
 	}
 
@@ -43,26 +54,38 @@
 		fetchData: (opts: FetchOpts) => Promise<{ rows: Record<string, unknown>[]; total: number }>;
 		actions?: GridAction[];
 		pageSize?: number;
+		filters?: GridFilter[];
 		addHref?: string;
 		addLabel?: string;
 		emptyMessage?: string;
+		onadd?: () => void;
 		onaction?: (e: CustomEvent<{ action: string; row: Record<string, unknown> }>) => void;
+		onquerychange?: (e: CustomEvent<Record<string, string>>) => void;
 	}
 
 	let {
 		columns,
 		fetchData,
 		actions = [],
-		pageSize = 25,
+		pageSize = 10,
+		filters = [],
 		addHref,
 		addLabel = 'Add',
 		emptyMessage = 'No records found',
-		onaction
+		onadd,
+		onaction,
+		onquerychange
 	}: Props = $props();
 
 	let wrapper: HTMLDivElement | undefined = $state();
 	let pendingAction: { action: string; row: Record<string, unknown> } | null = $state(null);
+	let selectedPageSize = $state(10);
+	let searchInput = $state('');
+	let searchTerm = '';
+	let filterValues = $state<Record<string, string>>({});
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	const rowById = new Map<string, Record<string, unknown>>();
+	const pageSizeOptions = $derived([...new Set([10, 25, 50, 100, pageSize])].sort((a, b) => a - b));
 
 	const actionColumn = $derived(
 		actions.length
@@ -97,13 +120,161 @@
 		} as T;
 	}
 
-	const gridColumns = $derived((actionColumn ? [...columns, actionColumn] : columns).map(wrapFormatter));
+	const gridColumns = $derived(
+		(actionColumn ? [...columns, actionColumn] : columns).map((col) => {
+			const next: any = { ...col, sort: col.sort === true ? {} : false };
+			return wrapFormatter(next);
+		})
+	);
 
 	let grid: any;
 
 	export function reload() {
-		grid?.updateConfig({}).forceRender();
+		grid?.updateConfig({ server: serverConfig() }).forceRender();
+		schedulePageSizeControlInstall();
 	}
+
+	async function loadData(opts: FetchOpts) {
+		const res = await fetchData(opts);
+		rowById.clear();
+		for (const r of res.rows) {
+			if (r.id != null) rowById.set(String(r.id), r);
+		}
+		schedulePageSizeControlInstall();
+		return { data: res.rows, total: res.total };
+	}
+
+	function serverConfig() {
+		return {
+			url: queryParams(),
+			data: loadData
+		};
+	}
+
+	function queryParams() {
+		const params: Record<string, string> = {};
+		if (searchTerm) params.search = searchTerm;
+		for (const filter of filters) {
+			const value = filterValues[filter.id]?.trim();
+			if (value) params[filter.id] = value;
+		}
+		return params;
+	}
+
+	function notifyQueryChange() {
+		const detail = queryParams();
+		const event = new CustomEvent('querychange', { detail, bubbles: true });
+		wrapper?.dispatchEvent(event);
+		onquerychange?.(event);
+	}
+
+	function paginationConfig() {
+		return {
+			limit: selectedPageSize,
+			server: {
+				url: (prev: Record<string, unknown>, page: number, limit: number) => {
+					prev.page = page;
+					prev.limit = limit;
+					return prev;
+				}
+			}
+		};
+	}
+
+	function setPageSize(value: number) {
+		selectedPageSize = value;
+		grid?.updateConfig({ pagination: paginationConfig() }).forceRender();
+		schedulePageSizeControlInstall();
+	}
+
+	function applyTableQuery() {
+		searchTerm = searchInput.trim();
+		grid?.updateConfig({ server: serverConfig(), pagination: paginationConfig() }).forceRender();
+		notifyQueryChange();
+		schedulePageSizeControlInstall();
+	}
+
+	function handleSearchInput(e: Event) {
+		searchInput = (e.currentTarget as HTMLInputElement).value;
+		if (searchTimer) clearTimeout(searchTimer);
+		if (!searchInput.trim()) {
+			applyTableQuery();
+			return;
+		}
+		searchTimer = setTimeout(applyTableQuery, 250);
+	}
+
+	function handleFilterInput(e: Event, filter: GridFilter) {
+		filterValues = { ...filterValues, [filter.id]: (e.currentTarget as HTMLInputElement).value };
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(applyTableQuery, filter.type === 'date' ? 0 : 250);
+	}
+
+	function schedulePageSizeControlInstall() {
+		queueMicrotask(installPageSizeControl);
+		setTimeout(installPageSizeControl, 0);
+		setTimeout(installPageSizeControl, 50);
+		setTimeout(installPageSizeControl, 150);
+	}
+
+	function installPageSizeControl() {
+		const pagination = wrapper?.querySelector('.gridjs-pagination');
+		if (!pagination) return;
+		formatPaginationSummary(pagination);
+		let control = pagination.querySelector('.grid-table-page-size');
+		if (!control) {
+			control = document.createElement('label');
+			control.className = 'grid-table-page-size';
+			const label = document.createElement('span');
+			label.textContent = 'Rows';
+			const select = document.createElement('select');
+			select.className = 'select select-compact grid-table-page-size-select';
+			select.dataset.gridPageSize = 'true';
+			control.append(label, select);
+		}
+		const select = control.querySelector('select') as HTMLSelectElement;
+		select.replaceChildren(
+			...pageSizeOptions.map((option) => {
+				const el = document.createElement('option');
+				el.value = String(option);
+				el.textContent = String(option);
+				return el;
+			})
+		);
+		select.value = String(selectedPageSize);
+		const summary = pagination.querySelector('.gridjs-summary');
+		const pages = pagination.querySelector('.gridjs-pages');
+		pagination.insertBefore(control, summary?.nextSibling ?? pages);
+
+		const prev = pagination.querySelector('.gridjs-pages-button-prev');
+		const next = pagination.querySelector('.gridjs-pages-button-next');
+		prev?.setAttribute('aria-label', 'Previous page');
+		prev?.setAttribute('title', 'Previous page');
+		next?.setAttribute('aria-label', 'Next page');
+		next?.setAttribute('title', 'Next page');
+	}
+
+	function formatPaginationSummary(pagination: Element) {
+		const summary = pagination.querySelector('.gridjs-summary');
+		const text = summary?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+		const match = text.match(/^Showing\s+(\d+)(?:\s+to\s+|\s*-\s*)(\d+)\s+of\s+(\d+)/i);
+		if (!summary || !match) return;
+		const [, from, to, total] = match;
+		summary.replaceChildren(
+			document.createTextNode('Showing '),
+			Object.assign(document.createElement('b'), { textContent: `${from}-${to}` }),
+			document.createTextNode(' of '),
+			Object.assign(document.createElement('b'), { textContent: total })
+		);
+	}
+
+	$effect(() => {
+		selectedPageSize = pageSize;
+	});
+
+	$effect(() => {
+		filterValues = Object.fromEntries(filters.map((filter) => [filter.id, filter.value ?? '']));
+	});
 
 	$effect(() => {
 		const container = wrapper;
@@ -111,6 +282,7 @@
 		let cancelled = false;
 		let gridInstance: any;
 		container.addEventListener('click', handleClick);
+		container.addEventListener('change', handleChange);
 
 		(async () => {
 			const { Grid } = await import('gridjs');
@@ -141,38 +313,28 @@
 					error: 'gridjs-error'
 				},
 				language: {
-					noRecordsFound: emptyMessage
-				},
-				server: {
-					url: {},
-					data: async (opts: FetchOpts) => {
-						const res = await fetchData(opts);
-						rowById.clear();
-						for (const r of res.rows) {
-							if (r.id != null) rowById.set(String(r.id), r);
-						}
-						return { data: res.rows, total: res.total };
+					noRecordsFound: emptyMessage,
+					pagination: {
+						previous: '‹',
+						next: '›',
+						showing: 'Showing',
+						to: '-',
+						results: '\u00a0'
 					}
 				},
-				search: {
-					server: {
-						url: (prev: Record<string, unknown>, keyword: string) => {
-							prev.search = keyword;
-							return prev;
-						}
-					}
-				},
+				server: serverConfig(),
 				sort: {
 					multiColumn: false,
 					server: {
 						url: (
 							prev: Record<string, unknown>,
-							cols: { id: string; direction: 'asc' | 'desc' }[]
+							cols: { index: number; direction: 1 | -1 }[]
 						) => {
 							const c = cols[0];
-							if (c && c.id !== '__actions') {
-								prev.sort = c.id;
-								prev.dir = c.direction;
+							const col = c ? gridColumns[c.index] : undefined;
+							if (c && col?.sort && col.id !== '__actions') {
+								prev.sort = col.id;
+								prev.dir = c.direction === 1 ? 'asc' : 'desc';
 							} else {
 								delete prev.sort;
 								delete prev.dir;
@@ -181,25 +343,19 @@
 						}
 					}
 				},
-				pagination: {
-					limit: pageSize,
-					server: {
-						url: (prev: Record<string, unknown>, page: number, limit: number) => {
-							prev.page = page;
-							prev.limit = limit;
-							return prev;
-						}
-					}
-				}
+				pagination: paginationConfig()
 			} as any).render(container);
 			grid = gridInstance;
+			schedulePageSizeControlInstall();
 		})();
 
 		return () => {
 			cancelled = true;
 			gridInstance?.destroy();
 			grid = undefined;
+			if (searchTimer) clearTimeout(searchTimer);
 			container.removeEventListener('click', handleClick);
+			container.removeEventListener('change', handleChange);
 		};
 	});
 
@@ -211,6 +367,7 @@
 
 	function handleClick(e: MouseEvent) {
 		const target = e.target as HTMLElement;
+		if (target.closest('.gridjs-pages-button, .gridjs-th-sort')) schedulePageSizeControlInstall();
 		const button = target.closest('[data-action]') as HTMLElement | null;
 		if (!button) return;
 		const actionId = button.dataset.action;
@@ -226,6 +383,11 @@
 		} else {
 			dispatchAction({ action: actionId, row });
 		}
+	}
+
+	function handleChange(e: Event) {
+		const select = (e.target as HTMLElement).closest('[data-grid-page-size]') as HTMLSelectElement | null;
+		if (select) setPageSize(Number(select.value));
 	}
 
 	function confirmAction() {
@@ -268,11 +430,36 @@
 </script>
 
 <div class="space-y-4">
-	<div class="flex items-center justify-between gap-4">
+	<div class="grid-table-toolbar flex flex-wrap items-center justify-start gap-3">
+		<label class="gridjs-search grid-table-search">
+			<span class="label">Search</span>
+			<input
+				type="search"
+				value={searchInput}
+				placeholder="Search"
+				aria-label="Search table"
+				class="gridjs-search-input"
+				oninput={handleSearchInput}
+			/>
+		</label>
+		{#each filters as filter (filter.id)}
+			<label class="grid-table-filter">
+				<span class="label">{filter.label}</span>
+				<input
+					type={filter.type ?? 'text'}
+					value={filterValues[filter.id] ?? ''}
+					placeholder={filter.placeholder ?? ''}
+					aria-label={filter.label}
+					class="gridjs-search-input grid-table-filter-input"
+					oninput={(e) => handleFilterInput(e, filter)}
+					onchange={(e) => handleFilterInput(e, filter)}
+				/>
+			</label>
+		{/each}
 		{#if addHref}
 			<a href={addHref} class="btn btn-primary">{addLabel}</a>
-		{:else}
-			<span></span>
+		{:else if onadd}
+			<button type="button" class="btn btn-primary" onclick={onadd}>{addLabel}</button>
 		{/if}
 	</div>
 	<div bind:this={wrapper} class="grid-table-wrapper"></div>

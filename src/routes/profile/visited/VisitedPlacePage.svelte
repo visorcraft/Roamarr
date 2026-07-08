@@ -1,7 +1,11 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+	import { html } from 'gridjs';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { COUNTRIES } from '$lib/countries';
 	import { countryContinent, continentSortKey } from '$lib/countryContinents';
+	import { escapeHtml } from '$lib/escapeHtml';
 	import { US_STATES, usStateDisplayCode } from '$lib/usStates';
 
 	let { data, form, kind }: { data: any; form?: { error?: string } | null; kind: 'country' | 'state' } = $props();
@@ -16,8 +20,58 @@
 	const plural = $derived(isCountry ? 'countries' : 'U.S. states');
 	const listLabel = $derived(isCountry ? 'Country List' : 'State List');
 	const visitedCodes = $derived(new Set<string>(data.visitedCodes));
-	const rowsStart = $derived(data.totalRows === 0 ? 0 : (data.page - 1) * 20 + 1);
-	const rowsEnd = $derived(Math.min(data.page * 20, data.totalRows));
+	const tableRows = $derived((data.tableRows ?? data.rows) as Record<string, unknown>[]);
+	const editingRow = $derived(tableRows.find((row) => row.code === editingCode));
+	let tableError: string | null = $state(null);
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
+
+	const columns = $derived([
+		{
+			id: 'name',
+			name: isCountry ? 'Country' : 'State',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.name)}</div>` +
+						`<div class="text-xs" style="color: var(--theme-readable-faint)">${escapeHtml(row.displayCode)}</div>`
+				)
+		},
+		{
+			id: 'firstVisitedOn',
+			name: 'First visited',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.firstVisitedOn ?? '-')
+		},
+		{
+			id: 'lastVisitedOn',
+			name: 'Last visited',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => String(row.lastVisitedOn ?? '-')
+		},
+		{
+			id: 'source',
+			name: 'Source',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(`<span class="badge badge-slate">${escapeHtml(row.source)}</span>`)
+		}
+	]);
+
+	const tableActions = $derived([
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'remove',
+			label: 'Remove',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: `Remove visited ${noun}`,
+			confirmMessage: (row: Record<string, unknown>) => `Remove ${row.name}?`,
+			confirmLabel: 'Remove'
+		}
+	]);
 
 	function href(params: Record<string, string | number | null>) {
 		const search = new URLSearchParams();
@@ -30,6 +84,70 @@
 		}
 		const qs = search.toString();
 		return qs ? `${pageHref}?${qs}` : pageHref;
+	}
+
+	function compareValue(row: Record<string, unknown>, key: string) {
+		return String(row[key] ?? '').toLowerCase();
+	}
+
+	async function fetchData(opts: FetchOpts) {
+		const search = String(opts.url.search ?? '').trim().toLowerCase();
+		const from = String(opts.url.from ?? '');
+		const to = String(opts.url.to ?? '');
+		const sort = opts.url.sort;
+		const dir = opts.url.dir === 'desc' ? -1 : 1;
+		const page = Number(opts.url.page ?? 0);
+		const limit = Number(opts.url.limit ?? 25);
+		let rows = [...tableRows];
+		if (search) {
+			rows = rows.filter((row) =>
+				['name', 'code', 'displayCode', 'firstVisitedOn', 'lastVisitedOn', 'source'].some((key) =>
+					compareValue(row, key).includes(search)
+				)
+			);
+		}
+		if (from || to) {
+			rows = rows.filter((row) => {
+				const first = String(row.firstVisitedOn ?? row.lastVisitedOn ?? '');
+				const last = String(row.lastVisitedOn ?? row.firstVisitedOn ?? '');
+				if (!first || !last) return false;
+				return (!from || last >= from) && (!to || first <= to);
+			});
+		}
+		if (sort) {
+			rows.sort((a, b) => compareValue(a, sort).localeCompare(compareValue(b, sort)) * dir);
+		}
+		return { rows: rows.slice(page * limit, page * limit + limit), total: rows.length };
+	}
+
+	function startAdding() {
+		tableError = null;
+		editingCode = null;
+		adding = true;
+	}
+
+	async function postAction(action: string, code: string) {
+		const body = new FormData();
+		body.set('returnTo', data.currentPath);
+		body.set('code', code);
+		const res = await fetch(`?/${action}`, { method: 'POST', body });
+		if (!res.ok) {
+			tableError = `${action === 'unmark' ? 'Remove' : 'Update'} failed.`;
+			return;
+		}
+		editingCode = null;
+		await invalidateAll();
+	}
+
+	async function handleTableAction(e: Event) {
+		tableError = null;
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'edit') {
+			adding = false;
+			editingCode = String(row.code);
+		} else if (action === 'remove') {
+			await postAction('unmark', String(row.code));
+		}
 	}
 
 	type Country = (typeof COUNTRIES)[number];
@@ -76,21 +194,10 @@
 
 {#if data.tab === 'visits'}
 	<section class="card visited-tab-panel p-5 sm:p-6">
-		<div class="flex flex-wrap items-center gap-3">
-			<form method="GET" action={pageHref} class="flex flex-wrap items-center gap-2">
-				<input class="input w-64" type="search" name="q" value={data.q} placeholder={`Search ${plural}...`} />
-				<button class="btn btn-secondary" type="submit">Search</button>
-				{#if data.q}<a class="btn btn-ghost" href={pageHref}>Clear</a>{/if}
-			</form>
-			{#if !adding}
-				<button type="button" class="btn btn-primary ml-auto" onclick={() => (adding = true)}>
-					Add Visit
-				</button>
-			{/if}
-		</div>
+		{#if tableError}<p class="notice notice-error mb-4">{tableError}</p>{/if}
 
 		{#if adding}
-			<form method="POST" action="?/mark" class="mt-5 grid gap-3 sm:grid-cols-4">
+			<form method="POST" action="?/mark" class="mb-5 grid gap-3 sm:grid-cols-4">
 				<input type="hidden" name="returnTo" value={data.currentPath} />
 				<label class="field sm:col-span-2">
 					<span class="label">{isCountry ? 'Country' : 'U.S. state'}</span>
@@ -116,81 +223,39 @@
 			</form>
 		{/if}
 
-		<div class="mt-5 overflow-x-auto">
-			<table class="table min-w-[44rem]">
-				<thead>
-					<tr>
-						<th>{isCountry ? 'Country' : 'State'}</th>
-						<th>First visited</th>
-						<th>Last visited</th>
-						<th>Source</th>
-						<th class="text-right">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.rows as row (row.code)}
-						{#if editingCode === row.code}
-							<tr>
-								<td colspan="5" class="table-expanded-cell">
-									<form method="POST" action="?/update" class="grid gap-3 sm:grid-cols-5">
-										<input type="hidden" name="returnTo" value={data.currentPath} />
-										<input type="hidden" name="code" value={row.code} />
-										<div class="sm:col-span-2">
-											<p class="list-title">{row.name}</p>
-											<p class="meta">{row.displayCode}</p>
-										</div>
-										<label class="field">
-											<span class="label">First visited</span>
-											<input type="date" name="firstVisitedOn" value={row.firstVisitedOn ?? ''} class="input" />
-										</label>
-										<label class="field">
-											<span class="label">Last visited</span>
-											<input type="date" name="lastVisitedOn" value={row.lastVisitedOn ?? ''} class="input" />
-										</label>
-										<div class="flex items-end justify-end gap-2">
-											<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingCode = null)}>Cancel</button>
-											<button class="btn btn-primary btn-sm">Save</button>
-										</div>
-									</form>
-								</td>
-							</tr>
-						{:else}
-							<tr>
-								<td>
-									<p class="font-semibold">{row.name}</p>
-									<p class="meta">{row.displayCode}</p>
-								</td>
-								<td>{row.firstVisitedOn ?? '-'}</td>
-								<td>{row.lastVisitedOn ?? '-'}</td>
-								<td><span class="badge badge-slate">{row.source}</span></td>
-								<td>
-									<div class="flex justify-end gap-2">
-										<button type="button" class="btn btn-primary btn-sm" onclick={() => (editingCode = row.code)}>Edit</button>
-										<form method="POST" action="?/unmark">
-											<input type="hidden" name="returnTo" value={data.currentPath} />
-											<input type="hidden" name="code" value={row.code} />
-											<ConfirmButton class="btn btn-danger btn-sm" message={`Remove ${row.name}?`}>Remove</ConfirmButton>
-										</form>
-									</div>
-								</td>
-							</tr>
-						{/if}
-					{:else}
-						<tr>
-							<td colspan="5" class="text-center">No visited {plural} found.</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+		{#if editingRow}
+			<form method="POST" action="?/update" class="mb-5 grid gap-3 sm:grid-cols-5">
+				<input type="hidden" name="returnTo" value={data.currentPath} />
+				<input type="hidden" name="code" value={editingRow.code as string} />
+				<div class="sm:col-span-2">
+					<p class="list-title">{editingRow.name as string}</p>
+					<p class="meta">{editingRow.displayCode as string}</p>
+				</div>
+				<label class="field">
+					<span class="label">First visited</span>
+					<input type="date" name="firstVisitedOn" value={(editingRow.firstVisitedOn as string | null) ?? ''} class="input" />
+				</label>
+				<label class="field">
+					<span class="label">Last visited</span>
+					<input type="date" name="lastVisitedOn" value={(editingRow.lastVisitedOn as string | null) ?? ''} class="input" />
+				</label>
+				<div class="flex items-end justify-end gap-2">
+					<button type="button" class="btn btn-ghost btn-sm" onclick={() => (editingCode = null)}>Cancel</button>
+					<button class="btn btn-primary btn-sm">Save</button>
+				</div>
+			</form>
+		{/if}
 
-		<div class="mt-4 flex flex-wrap items-center gap-3">
-			<p class="meta">Showing {rowsStart}-{rowsEnd} of {data.totalRows}</p>
-			<div class="ml-auto flex gap-2">
-				<a class="btn btn-ghost btn-sm {data.page <= 1 ? 'pointer-events-none opacity-50' : ''}" href={href({ page: data.page - 1 })}>Previous</a>
-				<a class="btn btn-ghost btn-sm {data.page >= data.totalPages ? 'pointer-events-none opacity-50' : ''}" href={href({ page: data.page + 1 })}>Next</a>
-			</div>
-		</div>
+		<GridTable
+			{columns}
+			{fetchData}
+			actions={tableActions}
+			filters={dateFilters}
+			addLabel="Add Visit"
+			onadd={!adding ? startAdding : undefined}
+			emptyMessage={`No visited ${plural} found.`}
+			onaction={handleTableAction}
+		/>
 	</section>
 {:else}
 	<section class="card visited-tab-panel p-5 sm:p-6">

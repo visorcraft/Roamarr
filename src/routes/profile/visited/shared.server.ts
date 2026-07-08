@@ -91,6 +91,7 @@ export function loadVisitedPage(kind: PlaceKind, url: URL, locals: App.Locals) {
 	return {
 		kind,
 		rows: rows.slice(start, start + PAGE_SIZE),
+		tableRows: rows,
 		page: safePage,
 		totalPages,
 		totalRows: rows.length,

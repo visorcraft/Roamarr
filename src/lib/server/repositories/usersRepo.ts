@@ -37,6 +37,8 @@ export interface ListUsersOptions {
 	sortDir?: 'asc' | 'desc';
 	limit?: number;
 	offset?: number;
+	from?: string;
+	to?: string;
 }
 
 const USER_SORT_KEY_MAP: Record<NonNullable<ListUsersOptions['sortBy']>, keyof KitUser> = {
@@ -57,6 +59,7 @@ export function listUsers(opts: ListUsersOptions = {}): KitUser[] {
 				u.role.toLowerCase().includes(q)
 		);
 	}
+	rows = rows.filter((u) => matchesDateRange(u.created_at, opts.from, opts.to));
 	const sortBy = opts.sortBy ?? 'email';
 	const sortDir = opts.sortDir ?? 'asc';
 	rows = rows.slice().sort((a, b) => compareRows(a, b, USER_SORT_KEY_MAP[sortBy], sortDir));
@@ -65,16 +68,23 @@ export function listUsers(opts: ListUsersOptions = {}): KitUser[] {
 	return rows.slice(offset, offset + limit);
 }
 
-export function countUsers(search?: string): number {
-	if (!search?.trim()) {
+function matchesDateRange(value: string, from?: string, to?: string): boolean {
+	const date = value.slice(0, 10);
+	return (!from || date >= from) && (!to || date <= to);
+}
+
+export function countUsers(search?: string, from?: string, to?: string): number {
+	if (!search?.trim() && !from && !to) {
 		return Number(kit.selectFrom(users).selectCount().executeSync());
 	}
-	const q = search.trim().toLowerCase();
+	const q = search?.trim().toLowerCase();
 	return listAllUsers().filter(
 		(u) =>
-			u.email.toLowerCase().includes(q) ||
-			(u.display_name?.toLowerCase().includes(q) ?? false) ||
-			u.role.toLowerCase().includes(q)
+			matchesDateRange(u.created_at, from, to) &&
+			(!q ||
+				u.email.toLowerCase().includes(q) ||
+				(u.display_name?.toLowerCase().includes(q) ?? false) ||
+				u.role.toLowerCase().includes(q))
 	).length;
 }
 

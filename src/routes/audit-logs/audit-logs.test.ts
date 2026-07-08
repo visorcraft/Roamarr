@@ -175,7 +175,7 @@ test('load rate limits CSV export', () => {
 	}
 });
 
-test('load initializes userId filter from URL for dropdown', () => {
+test('load preserves userId filter from URL for direct links and exports', () => {
 	const admin = makeUser('admin-user-filter@x.c', 'Admin', 'admin');
 	const target = makeUser('target@x.c', 'Target');
 	const result = load(

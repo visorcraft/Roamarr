@@ -10,7 +10,7 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 	requireAdmin(locals);
 	const limit = checkRateLimit(getClientAddress(), 'api:users:list');
 	if (!limit.allowed) throw error(429, 'Too many requests');
-	const { page, limit: pageSize, search, sort, dir } = parseTableParams(url, [
+	const { page, limit: pageSize, search, sort, dir, from, to } = parseTableParams(url, [
 		'email',
 		'displayName',
 		'role',
@@ -21,6 +21,8 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 		search,
 		sortBy: sort as 'email' | 'displayName' | 'role' | 'createdAt' | undefined,
 		sortDir: dir,
+		from,
+		to,
 		limit: pageSize,
 		offset
 	});
@@ -35,6 +37,6 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 		createdAt: u.created_at,
 		twoFactorEnabled: twoFactorEnabled.has(Number(u.id))
 	}));
-	const total = usersRepo.countUsers(search);
+	const total = usersRepo.countUsers(search, from, to);
 	return json({ rows, total });
 };

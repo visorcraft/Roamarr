@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { html } from 'gridjs';
 	import { goto } from '$app/navigation';
-	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
 	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
 	import { escapeHtml } from '$lib/escapeHtml';
@@ -9,6 +9,10 @@
 	let { form }: { form: { error?: string; success?: boolean; email?: string; generatedPassword?: string } | null } = $props();
 	let grid: any = $state();
 	let deleteError: string | null = $state(null);
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
 
 	const columns = [
 		{
@@ -130,6 +134,7 @@
 		{columns}
 		{fetchData}
 		{actions}
+		filters={dateFilters}
 		addHref="/users/new"
 		addLabel="Create user"
 		emptyMessage="No users found."

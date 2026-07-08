@@ -15,6 +15,7 @@ import { GET } from './+server';
 import { makeAdmin, makeUser } from '../../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
 import { userTwoFactor, users } from '$lib/server/db/mongrelSchema';
+import { eq } from '@visorcraft/mongreldb-kit';
 
 beforeEach(() => {
 	ctx.kit.deleteFrom(users).executeSync();
@@ -63,6 +64,30 @@ test('returns paginated users with two-factor status', async () => {
 		twoFactorEnabled: true
 	});
 	expect(row.createdAt).toBeDefined();
+});
+
+test('date filters users by joined date', async () => {
+	const admin = makeAdmin(ctx.kit);
+	const old = makeUser(ctx.kit, { email: 'old@example.com', displayName: 'Old' });
+	const current = makeUser(ctx.kit, { email: 'current@example.com', displayName: 'Current' });
+	ctx.kit
+		.updateTable(users)
+		.set({ created_at: '2024-01-15T12:00:00.000Z' } as never)
+		.where(eq(users.id, BigInt(old.id)))
+		.executeSync();
+	ctx.kit
+		.updateTable(users)
+		.set({ created_at: '2024-02-15T12:00:00.000Z' } as never)
+		.where(eq(users.id, BigInt(current.id)))
+		.executeSync();
+
+	const res = await GET(makeEvent('/api/users?from=2024-02-15&to=2024-02-15', admin));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows).toHaveLength(1);
+	expect(body.rows[0].email).toBe('current@example.com');
 });
 
 test('rejects unauthenticated requests', async () => {

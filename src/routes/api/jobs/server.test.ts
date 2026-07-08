@@ -108,6 +108,24 @@ test('search filters scheduler runs', async () => {
 	});
 });
 
+test('date filters scheduler runs by started date', async () => {
+	const admin = makeAdmin(ctx.kit);
+	makeSchedulerRun(ctx.kit, {
+		startedAt: '2024-01-01T12:00:00Z'
+	});
+	const run2 = makeSchedulerRun(ctx.kit, {
+		startedAt: '2024-02-01T12:00:00Z'
+	});
+
+	const res = await GET(makeEvent('/api/jobs?from=2024-02-01&to=2024-02-01', admin));
+	expect(res.status).toBe(200);
+
+	const body = await res.json();
+	expect(body.total).toBe(1);
+	expect(body.rows).toHaveLength(1);
+	expect(body.rows[0].id).toBe(run2.id);
+});
+
 test('explicit asc sort returns oldest first', async () => {
 	const admin = makeAdmin(ctx.kit);
 	const run1 = makeSchedulerRun(ctx.kit, {

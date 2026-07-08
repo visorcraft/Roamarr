@@ -416,6 +416,13 @@ export interface ListSchedulerRunsOptions {
 	sortDir?: 'asc' | 'desc';
 	limit?: number;
 	offset?: number;
+	from?: string;
+	to?: string;
+}
+
+function matchesSchedulerRunDateRange(row: SchedulerRunRow, from?: string, to?: string): boolean {
+	const date = row.startedAt.slice(0, 10);
+	return (!from || date >= from) && (!to || date <= to);
 }
 
 export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): SchedulerRunRow[] {
@@ -428,6 +435,7 @@ export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): Schedule
 	if (q) {
 		rows = rows.filter((r) => schedulerRunMatchesSearch(r, q));
 	}
+	rows = rows.filter((r) => matchesSchedulerRunDateRange(r, opts.from, opts.to));
 	const sortBy = opts.sortBy ?? 'startedAt';
 	const sortDir = opts.sortDir ?? 'desc';
 	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
@@ -436,16 +444,16 @@ export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): Schedule
 	return rows.slice(offset, offset + limit);
 }
 
-export function countSchedulerRuns(search?: string): number {
-	if (!search?.trim()) {
+export function countSchedulerRuns(search?: string, from?: string, to?: string): number {
+	if (!search?.trim() && !from && !to) {
 		return Number(kit.selectFrom(kitSchedulerRuns).selectCount().executeSync());
 	}
-	const q = search.trim().toLowerCase();
+	const q = search?.trim().toLowerCase();
 	return kit
 		.selectFrom(kitSchedulerRuns)
 		.executeSync()
 		.map(toSchedulerRunRow)
-		.filter((r) => schedulerRunMatchesSearch(r, q))
+		.filter((r) => matchesSchedulerRunDateRange(r, from, to) && (!q || schedulerRunMatchesSearch(r, q)))
 		.length;
 }
 

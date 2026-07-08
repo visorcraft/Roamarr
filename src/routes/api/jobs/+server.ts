@@ -14,6 +14,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		search: params.search,
 		sortBy: (params.sort as 'startedAt' | null) ?? 'startedAt',
 		sortDir: dir,
+		from: params.from,
+		to: params.to,
 		limit: params.limit,
 		offset
 	}).map((r) => ({
@@ -23,6 +25,6 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		success: r.success,
 		errorMessage: r.errorMessage
 	}));
-	const total = countSchedulerRuns(params.search);
+	const total = countSchedulerRuns(params.search, params.from, params.to);
 	return json({ rows, total });
 };

@@ -11,11 +11,13 @@ const renderFn = vi.fn();
 vi.mock('gridjs', () => ({
 	html: vi.fn((s: string) => ({ __html: s })),
 	Grid: class {
-		config: unknown;
+		config: Record<string, unknown>;
 		constructor(config: unknown) {
-			this.config = config;
+			this.config = { ...(config as Record<string, unknown>), store: { dispatch: vi.fn() } };
 		}
 		render(el: HTMLElement) {
+			el.innerHTML =
+				'<div class="gridjs-footer"><div class="gridjs-pagination"><div class="gridjs-summary">Showing <b>1</b> to <b>4</b> of <b>4</b> results</div><div class="gridjs-pages"><button class="gridjs-pages-button-prev">‹</button><button class="gridjs-pages-button-next">›</button></div></div></div>';
 			renderFn(el, this);
 			return this;
 		}
@@ -67,8 +69,13 @@ describe('GridTable', () => {
 		await new Promise((resolve) => setTimeout(resolve, 0));
 
 		expect(document.body.querySelector('.grid-table-wrapper')).toBeTruthy();
+		expect(lastConfig().pagination.limit).toBe(10);
 		expect(document.body.innerHTML).toContain('href="/add"');
 		expect(document.body.textContent).toContain('New item');
+		expect([...document.body.querySelector('.grid-table-toolbar')!.children].map((el) => el.tagName)).toEqual([
+			'LABEL',
+			'A'
+		]);
 	});
 
 	it('returns an html object from the action column formatter', async () => {
@@ -190,6 +197,138 @@ describe('GridTable', () => {
 		expect(forceRender).toHaveBeenCalledOnce();
 	});
 
+	it('passes the selected page size to Grid.js and updates it from the selector', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
+			pageSize: 50
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		expect(config.pagination.limit).toBe(50);
+		expect(config.pagination.server.url({}, 2, 50)).toEqual({ page: 2, limit: 50 });
+
+		const grid = lastGridInstance();
+		const updateConfig = vi.spyOn(grid, 'updateConfig').mockReturnValue(grid);
+		const forceRender = vi.spyOn(grid, 'forceRender').mockReturnValue(grid);
+		const select = document.body.querySelector('select') as HTMLSelectElement | null;
+		expect(select).toBeTruthy();
+		expect(select!.closest('.gridjs-pagination')).toBeTruthy();
+		expect(document.body.querySelector('.gridjs-pagination')?.textContent).toContain('Rows');
+		expect(document.body.querySelector('.gridjs-summary')?.textContent).toBe('Showing 1-4 of 4');
+
+		select!.value = '10';
+		select!.dispatchEvent(new Event('change', { bubbles: true }));
+
+		expect(updateConfig).toHaveBeenCalledWith({
+			pagination: expect.objectContaining({ limit: 10 })
+		});
+		expect(forceRender).toHaveBeenCalledOnce();
+	});
+
+	it('keeps only explicitly sortable columns sortable', async () => {
+		mountTable({
+			columns: [
+				{ id: 'name', name: 'Name', sort: true },
+				{ id: 'notes', name: 'Notes' }
+			],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A', notes: 'B' }], total: 1 }),
+			actions: [{ id: 'edit', label: 'Edit' }]
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		expect(config.columns.map((col: { sort?: unknown }) => col.sort)).toEqual([{}, false, false]);
+	});
+
+	it('passes toolbar search to Grid.js server config and clears it', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 })
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		expect(config.server.url).toEqual({});
+
+		const grid = lastGridInstance();
+		const updateConfig = vi.spyOn(grid, 'updateConfig').mockReturnValue(grid);
+		const forceRender = vi.spyOn(grid, 'forceRender').mockReturnValue(grid);
+		const input = document.body.querySelector('input[type="search"]') as HTMLInputElement | null;
+		expect(input).toBeTruthy();
+
+		input!.value = 'live';
+		input!.dispatchEvent(new Event('input', { bubbles: true }));
+		await new Promise((resolve) => setTimeout(resolve, 275));
+		let nextConfig = updateConfig.mock.calls.at(-1)?.[0] as any;
+		expect(nextConfig.server.url).toEqual({ search: 'live' });
+		expect(forceRender).toHaveBeenCalledOnce();
+
+		input!.value = '';
+		input!.dispatchEvent(new Event('input', { bubbles: true }));
+		nextConfig = updateConfig.mock.calls.at(-1)?.[0] as any;
+		expect(nextConfig.server.url).toEqual({});
+		expect(forceRender).toHaveBeenCalledTimes(2);
+	});
+
+	it('passes configured toolbar filters to Grid.js server config', async () => {
+		const onquerychange = vi.fn();
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
+			filters: [
+				{ id: 'from', label: 'From', type: 'date' },
+				{ id: 'entityType', label: 'Entity type', placeholder: 'e.g. trip', value: 'trip' }
+			],
+			onquerychange
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const grid = lastGridInstance();
+		const updateConfig = vi.spyOn(grid, 'updateConfig').mockReturnValue(grid);
+		const forceRender = vi.spyOn(grid, 'forceRender').mockReturnValue(grid);
+		const from = document.body.querySelector('input[aria-label="From"]') as HTMLInputElement | null;
+		expect(from).toBeTruthy();
+		expect((document.body.querySelector('input[aria-label="Entity type"]') as HTMLInputElement).value).toBe('trip');
+
+		from!.value = '2024-01-01';
+		from!.dispatchEvent(new Event('input', { bubbles: true }));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const nextConfig = updateConfig.mock.calls.at(-1)?.[0] as any;
+		expect(nextConfig.server.url).toEqual({ from: '2024-01-01', entityType: 'trip' });
+		expect(onquerychange.mock.calls.at(-1)?.[0].detail).toEqual({ from: '2024-01-01', entityType: 'trip' });
+		expect(forceRender).toHaveBeenCalledOnce();
+	});
+
+	it('translates Grid.js sort indexes to table query keys', async () => {
+		mountTable({
+			columns: [
+				{ id: 'displayName', name: 'User', sort: true },
+				{ id: 'status', name: 'Status', sort: false },
+				{ id: 'createdAt', name: 'Joined', sort: true }
+			],
+			fetchData: async () => ({ rows: [{ id: 1, displayName: 'A' }], total: 1 }),
+			actions: [{ id: 'edit', label: 'Edit' }]
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		expect(config.sort.server.url({ page: 2 }, [{ index: 0, direction: 1 }])).toEqual({
+			page: 2,
+			sort: 'displayName',
+			dir: 'asc'
+		});
+		expect(config.sort.server.url({ page: 2 }, [{ index: 2, direction: -1 }])).toEqual({
+			page: 2,
+			sort: 'createdAt',
+			dir: 'desc'
+		});
+		expect(config.sort.server.url({ sort: 'displayName', dir: 'asc' }, [{ index: 1, direction: 1 }])).toEqual({});
+		expect(config.sort.server.url({ sort: 'displayName', dir: 'asc' }, [{ index: 3, direction: 1 }])).toEqual({});
+	});
+
 	it('configures gridjs with theme-safe classNames', async () => {
 		mountTable({
 			columns: [{ id: 'name', name: 'Name' }],
@@ -218,5 +357,12 @@ describe('GridTable', () => {
 		expect(config.className.loading).toBe('gridjs-loading');
 		expect(config.className.notfound).toBe('gridjs-notfound');
 		expect(config.className.error).toBe('gridjs-error');
+		expect(config.language.pagination).toMatchObject({
+			previous: '‹',
+			next: '›',
+			showing: 'Showing',
+			to: '-',
+			results: '\u00a0'
+		});
 	});
 });

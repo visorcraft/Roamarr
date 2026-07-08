@@ -27,7 +27,7 @@ import {
 } from './+page.server';
 import { _updatePassword, _changeEmail, _regenerateUserCalendarToken } from '$lib/server/profileActions';
 import { actions as emailActions } from './email/+page.server';
-import { actions as passwordActions } from './security/password/+page.server';
+import { actions as passwordActions } from './security/+page.server';
 import { actions as calendarActions } from './calendar/+page.server';
 import { actions as contactsActions } from './contacts/+page.server';
 import { upsertRemindersForDocument } from '$lib/server/reminders';
@@ -326,7 +326,7 @@ test('updatePassword action sets a flash cookie and redirects', async () => {
 	const locals = { user: u } as App.Locals;
 	await expect(passwordActions.updatePassword({ request, locals, cookies } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/profile/security/password'
+		location: '/profile/security?tab=password'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Password changed.', expect.any(Object));
 });

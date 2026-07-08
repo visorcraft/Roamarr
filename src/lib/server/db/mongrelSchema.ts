@@ -527,7 +527,8 @@ export const loyaltyPrograms = table('loyalty_programs', {
 		text('program_name'),
 		text('membership_number', { nullable: true }),
 		int('balance', { nullable: true }),
-		text('notes', { nullable: true })
+		text('notes', { nullable: true }),
+		timestamp('balance_updated_at', { nullable: true })
 	],
 	primaryKey: 'id',
 	indexes: [index(['user_id'], { name: 'loyalty_user_idx' })],
@@ -722,11 +723,12 @@ export const reminders = table('reminders', {
 		text('status', { enumValues: [...REMINDER_STATUSES], default: staticDefault('pending') }),
 		int('attempts', { default: staticDefault(0n) }),
 		timestamp('sent_at', { nullable: true }),
+		text('name', { nullable: true }),
+		text('description', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() })
 	],
 	primaryKey: 'id',
-	unique: [unique(['kind', 'ref_type', 'ref_id'], { name: 'rem_source_uq' })],
-	indexes: [index(['status', 'fire_at'], { name: 'rem_due_idx' })],
+	indexes: [index(['status', 'fire_at'], { name: 'rem_due_idx' }), index(['user_id'], { name: 'rem_user_idx' })],
 	foreignKeys: [
 		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_reminders_user_id_users', onDelete: 'cascade' })
 	]

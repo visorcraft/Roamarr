@@ -28,6 +28,8 @@ export interface ReminderRow {
 	status: 'pending' | 'sending' | 'sent';
 	attempts: number;
 	sentAt: string | null;
+	name: string | null;
+	description: string | null;
 	createdAt: string;
 }
 
@@ -72,6 +74,8 @@ function toReminderRow(row: KitReminder): ReminderRow {
 		status: row.status as ReminderRow['status'],
 		attempts: Number(row.attempts),
 		sentAt: row.sent_at,
+		name: row.name ?? null,
+		description: row.description ?? null,
 		createdAt: row.created_at
 	};
 }
@@ -111,7 +115,7 @@ function schedulerRunMatchesSearch(row: SchedulerRunRow, q: string): boolean {
 // Reminders
 
 export type CreateReminderInput = Pick<ReminderRow, 'userId' | 'kind' | 'refType' | 'refId' | 'fireAt'> &
-	Partial<Pick<ReminderRow, 'status' | 'attempts' | 'sentAt'>>;
+	Partial<Pick<ReminderRow, 'status' | 'attempts' | 'sentAt' | 'name' | 'description'>>;
 
 export type UpdateReminderInput = Partial<Omit<ReminderRow, 'id' | 'createdAt'>>;
 
@@ -122,6 +126,75 @@ export function listRemindersForUser(userId: number): ReminderRow[] {
 		.orderBy(kitDesc(kitReminders.fire_at), kitDesc(kitReminders.id))
 		.executeSync();
 	return rows.map(toReminderRow);
+}
+
+export interface ListRemindersOptions {
+	search?: string;
+	sortBy?: 'fireAt' | 'status' | 'kind' | 'name' | 'createdAt';
+	sortDir?: 'asc' | 'desc';
+	from?: string;
+	to?: string;
+	statuses?: Array<ReminderRow['status']>;
+	limit?: number;
+	offset?: number;
+}
+
+function matchesReminderDateRange(value: string, from?: string, to?: string): boolean {
+	const date = value.slice(0, 10);
+	return (!from || date >= from) && (!to || date <= to);
+}
+
+export function listReminders(userId: number, opts: ListRemindersOptions = {}): ReminderRow[] {
+	let rows = listRemindersForUser(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(r) =>
+				(r.name?.toLowerCase().includes(q) ?? false) ||
+				(r.description?.toLowerCase().includes(q) ?? false) ||
+				r.kind.toLowerCase().includes(q) ||
+				r.status.toLowerCase().includes(q)
+		);
+	}
+	if (opts.statuses && opts.statuses.length) {
+		const set = new Set(opts.statuses);
+		rows = rows.filter((r) => set.has(r.status));
+	}
+	rows = rows.filter((r) => matchesReminderDateRange(r.fireAt, opts.from, opts.to));
+	const sortBy = opts.sortBy ?? 'fireAt';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countReminders(
+	userId: number,
+	opts: { search?: string; from?: string; to?: string; statuses?: Array<ReminderRow['status']> } = {}
+): number {
+	const q = opts.search?.trim().toLowerCase();
+	const hasFilters = Boolean(q || opts.from || opts.to || (opts.statuses && opts.statuses.length));
+	if (!hasFilters) {
+		return Number(
+			kit
+				.selectFrom(kitReminders)
+				.where(kitEq(kitReminders.user_id, toBigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	const set = opts.statuses && opts.statuses.length ? new Set(opts.statuses) : null;
+	return listRemindersForUser(userId).filter(
+		(r) =>
+			matchesReminderDateRange(r.fireAt, opts.from, opts.to) &&
+			(!set || set.has(r.status)) &&
+			(!q ||
+				(r.name?.toLowerCase().includes(q) ?? false) ||
+				(r.description?.toLowerCase().includes(q) ?? false) ||
+				r.kind.toLowerCase().includes(q) ||
+				r.status.toLowerCase().includes(q))
+	).length;
 }
 
 export function listPendingRemindersBefore(fireAt: string): ReminderRow[] {
@@ -173,7 +246,9 @@ export function createReminder(input: CreateReminderInput): ReminderRow {
 			fire_at: input.fireAt,
 			status: input.status ?? 'pending',
 			attempts: BigInt(input.attempts ?? 0),
-			sent_at: input.sentAt ?? null
+			sent_at: input.sentAt ?? null,
+			name: input.name ?? null,
+			description: input.description ?? null
 		} as Insert<typeof kitReminders>)
 		.executeSync();
 	return toReminderRow(row);
@@ -206,6 +281,47 @@ export function updateReminder(id: number, patch: UpdateReminderInput): Reminder
 	if (patch.status !== undefined) merged.status = patch.status;
 	if (patch.attempts !== undefined) merged.attempts = BigInt(patch.attempts);
 	if (patch.sentAt !== undefined) merged.sent_at = patch.sentAt ?? null;
+	if (patch.name !== undefined) merged.name = patch.name ?? null;
+	if (patch.description !== undefined) merged.description = patch.description ?? null;
+
+	const updated = kit
+		.updateTable(kitReminders)
+		.set(merged)
+		.where(kitEq(kitReminders.id, toBigInt(id)))
+		.executeSync();
+	const row = updated[0];
+	if (!row) return null;
+	return toReminderRow(row);
+}
+
+/**
+ * User-facing edit. Updates only descriptive/scheduling fields. Never touches
+ * status / sent_at / attempts — once a reminder has fired, editing its name,
+ * description, fire_at, or ref must NOT re-arm it. Only the scheduler marks
+ * reminders sent; only delete + recreate can make a fired reminder fire again.
+ */
+export function updateReminderUserFields(
+	id: number,
+	patch: {
+		name?: string | null;
+		description?: string | null;
+		fireAt?: string;
+		kind?: ReminderRow['kind'];
+		refType?: ReminderRow['refType'];
+		refId?: number;
+	}
+): ReminderRow | null {
+	const existing = kit.selectFrom(kitReminders).where(kitEq(kitReminders.id, toBigInt(id))).executeSync()[0];
+	if (!existing) return null;
+
+	const { id: _existingId, ...existingRest } = existing;
+	const merged: Update<typeof kitReminders> = { ...existingRest };
+	if (patch.kind !== undefined) merged.kind = patch.kind;
+	if (patch.refType !== undefined) merged.ref_type = patch.refType;
+	if (patch.refId !== undefined) merged.ref_id = toBigInt(patch.refId);
+	if (patch.fireAt !== undefined) merged.fire_at = patch.fireAt;
+	if (patch.name !== undefined) merged.name = patch.name ?? null;
+	if (patch.description !== undefined) merged.description = patch.description ?? null;
 
 	const updated = kit
 		.updateTable(kitReminders)

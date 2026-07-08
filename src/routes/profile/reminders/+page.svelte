@@ -1,84 +1,144 @@
 <script lang="ts">
-	import CancelButton from '$lib/components/CancelButton.svelte';
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
+	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
 	import { formatDateTime } from '$lib/dateFormat';
-	import { toDatetimeLocal } from '$lib/segments/datetimeLocal';
+	import { escapeHtml } from '$lib/escapeHtml';
 
-	let { data } = $props();
-	let editingId = $state<number | null>(null);
-	let dirtyIds = $state<Record<number, boolean>>({});
+	let grid: any = $state();
+	let deleteError: string | null = $state(null);
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
 
-	const kindLabel: Record<string, string> = {
-		flight_checkin: 'Flight check-in',
-		document_expiry: 'Document expiry',
-		custom: 'Custom'
+	const kindBadge: Record<string, string> = {
+		flight_checkin: '<span class="badge badge-brand">Flight check-in</span>',
+		document_expiry: '<span class="badge badge-amber">Document expiry</span>',
+		custom: '<span class="badge badge-slate">Custom</span>'
 	};
+
+	const refTypeLabel: Record<string, string> = {
+		trip: 'Trip',
+		segment: 'Segment',
+		document: 'Document'
+	};
+
+	function statusBadge(status: string, sentAt: string | null): string {
+		if (status === 'sent') {
+			const stamp = sentAt ? ` · ${escapeHtml(formatDateTime(sentAt))}` : '';
+			return `<span class="badge badge-green">Sent${stamp}</span>`;
+		}
+		if (status === 'sending') return '<span class="badge badge-amber">Sending</span>';
+		return '<span class="badge badge-slate">Pending</span>';
+	}
+
+	const columns = [
+		{
+			id: 'name',
+			name: 'Reminder',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const name = row.name
+					? `<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.name)}</div>`
+					: '<div class="font-medium" style="color: var(--theme-readable-muted)">(unnamed)</div>';
+				const desc = row.description
+					? `<div class="text-xs" style="color: var(--theme-readable-muted)">${escapeHtml(row.description)}</div>`
+					: '';
+				return html(name + desc);
+			}
+		},
+		{
+			id: 'kind',
+			name: 'Type',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const kind = String(row.kind ?? '');
+				const refLabel = refTypeLabel[String(row.refType ?? '')] ?? String(row.refType ?? '');
+				return html(
+					(kindBadge[kind] ?? `<span class="badge badge-slate">${escapeHtml(kind)}</span>`) +
+						`<div class="text-xs mt-0.5" style="color: var(--theme-readable-faint)">${escapeHtml(refLabel)}</div>`
+				);
+			}
+		},
+		{
+			id: 'fireAt',
+			name: 'When',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<span class="font-mono text-sm" style="color: var(--theme-readable-muted)">${escapeHtml(formatDateTime(String(row.fireAt)))}</span>`
+				)
+		},
+		{
+			id: 'status',
+			name: 'Status',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(statusBadge(String(row.status), (row.sentAt as string | null) ?? null))
+		}
+	];
+
+	const actions = [
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'delete',
+			label: 'Delete',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: 'Delete reminder',
+			confirmMessage: (row: Record<string, unknown>) =>
+				`Delete ${row.name ? `"${row.name}"` : 'this reminder'}? This cannot be undone.`,
+			confirmLabel: 'Delete'
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/reminders?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load reminders: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	async function handleAction(e: Event) {
+		deleteError = null;
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'edit') {
+			goto(`/profile/reminders/${row.id}/edit`);
+		} else if (action === 'delete') {
+			const res = await fetch(`/api/reminders/${row.id}`, { method: 'DELETE' });
+			if (res.ok) {
+				grid?.reload();
+			} else {
+				const body = await res.json().catch(() => ({ error: 'Delete failed.' }));
+				deleteError = body.error ?? 'Delete failed.';
+			}
+		}
+	}
 </script>
 
 <header class="page-header">
 	<div>
 		<h1 class="page-title">Reminders</h1>
-		<p class="page-subtitle">Scheduled alerts for trips and documents.</p>
+		<p class="page-subtitle">Scheduled alerts for trips, flights, and travel documents.</p>
 	</div>
 </header>
 
-{#if data.reminders.length}
-	<ul class="mt-6 space-y-3">
-		{#each data.reminders as r (r.id)}
-			<li class="card p-4">
-				{#if editingId === r.id}
-					<form method="POST" action="?/update" class="min-w-0" oninput={() => (dirtyIds[r.id] = true)}>
-						<input type="hidden" name="id" value={r.id} />
-						<div class="field">
-							<label class="label" for={`fireAt-${r.id}`}>Fire at</label>
-							<input
-								id={`fireAt-${r.id}`}
-								name="fireAt"
-								type="datetime-local"
-								value={toDatetimeLocal(r.fireAt, data.timezone)}
-								class="input"
-								required
-							/>
-						</div>
-						<div class="mt-3 flex justify-end gap-2">
-							<CancelButton dirty={dirtyIds[r.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
-							<button class="btn btn-primary">Update</button>
-						</div>
-					</form>
-				{:else}
-					<div class="flex flex-wrap items-start justify-between gap-3">
-						<div class="min-w-0">
-							<div class="flex flex-wrap items-center gap-2">
-								<span class="badge badge-slate">{kindLabel[r.kind] ?? r.kind}</span>
-								<span class="badge {r.status === 'pending' ? 'badge-brand' : 'badge-slate'}">{r.status}</span>
-							</div>
-							<p class="mt-1 font-mono text-sm text-muted">{formatDateTime(r.fireAt)}</p>
-						</div>
-						<div class="action-row gap-1">
-							<button
-								type="button"
-								class="btn btn-primary"
-								onclick={() => { editingId = r.id; dirtyIds[r.id] = false; }}
-							>
-								Edit
-							</button>
-							{#if r.status === 'pending'}
-								<form method="POST" action="?/cancel">
-									<input type="hidden" name="id" value={r.id} />
-									<ConfirmButton class="btn btn-danger" message="Delete this reminder?">Delete</ConfirmButton>
-								</form>
-							{/if}
-						</div>
-					</div>
-				{/if}
-			</li>
-		{/each}
-	</ul>
-{:else}
-	<EmptyState
-		message="No reminders scheduled. Reminders are created from a trip's Tools tab."
-		actionHref="/trips"
-		actionLabel="Browse trips"
+<section class="card mt-8 p-5 sm:p-6">
+	{#if deleteError}
+		<div class="notice notice-error mb-4">
+			{deleteError}
+		</div>
+	{/if}
+	<GridTable
+		bind:this={grid}
+		{columns}
+		{fetchData}
+		{actions}
+		filters={dateFilters}
+		addHref="/profile/reminders/new"
+		addLabel="Add reminder"
+		emptyMessage="No reminders scheduled."
+		onaction={handleAction}
 	/>
-{/if}
+</section>

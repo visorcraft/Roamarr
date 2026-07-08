@@ -13,6 +13,7 @@ import { encrypt, decrypt } from '$lib/server/crypto';
 import { sanitizeLast4 } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
 import { compareRows } from '$lib/server/sortUtils';
+import { nowIso } from '$lib/server/tz';
 import type { Row, Insert, Update, ColumnSpec } from '@visorcraft/mongreldb-kit';
 
 function toBigInt(id: number): bigint {
@@ -212,6 +213,7 @@ export interface LoyaltyProgram {
 	membershipNumber: string | null;
 	balance: number | null;
 	notes: string | null;
+	balanceUpdatedAt: string | null;
 }
 
 export interface LoyaltyProgramInput {
@@ -228,7 +230,8 @@ function toLoyaltyProgram(row: Row<typeof loyaltyPrograms>): LoyaltyProgram {
 		programName: row.program_name,
 		membershipNumber: nullableText(row.membership_number),
 		balance: optionalNumber(row.balance),
-		notes: nullableText(row.notes)
+		notes: nullableText(row.notes),
+		balanceUpdatedAt: nullableText(row.balance_updated_at)
 	};
 }
 
@@ -268,6 +271,55 @@ export function listLoyaltyPrograms(userId: number): LoyaltyProgram[] {
 	return rows.map(toLoyaltyProgram);
 }
 
+export interface ListLoyaltyProgramsOptions {
+	search?: string;
+	sortBy?: 'programName' | 'membershipNumber' | 'balance' | 'balanceUpdatedAt';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+}
+
+export function listLoyaltyProgramsPaginated(
+	userId: number,
+	opts: ListLoyaltyProgramsOptions = {}
+): LoyaltyProgram[] {
+	let rows = listLoyaltyPrograms(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(p) =>
+				p.programName.toLowerCase().includes(q) ||
+				(p.membershipNumber?.toLowerCase().includes(q) ?? false) ||
+				(p.notes?.toLowerCase().includes(q) ?? false)
+		);
+	}
+	const sortBy = opts.sortBy ?? 'programName';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countLoyaltyPrograms(userId: number, search?: string): number {
+	if (!search?.trim()) {
+		return Number(
+			kit
+				.selectFrom(loyaltyPrograms)
+				.where(eq(loyaltyPrograms.user_id, toBigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	const q = search.trim().toLowerCase();
+	return listLoyaltyPrograms(userId).filter(
+		(p) =>
+			p.programName.toLowerCase().includes(q) ||
+			(p.membershipNumber?.toLowerCase().includes(q) ?? false) ||
+			(p.notes?.toLowerCase().includes(q) ?? false)
+	).length;
+}
+
 export function getLoyaltyProgramById(id: number, userId: number): LoyaltyProgram | null {
 	const rows = kit
 		.selectFrom(loyaltyPrograms)
@@ -283,14 +335,17 @@ export function getLoyaltyProgramById(id: number, userId: number): LoyaltyProgra
 
 export function createLoyaltyProgram(userId: number, input: LoyaltyProgramInput): LoyaltyProgram {
 	validateLoyaltyProgramInput(input);
+	const kitInput = toKitLoyaltyProgramInput(input);
+	if (input.balance != null) {
+		kitInput.balance_updated_at = nowIso();
+	}
 	const row = kit
 		.insertInto(loyaltyPrograms)
 		.values({
 			user_id: toBigInt(userId),
-			...toKitLoyaltyProgramInput(input)
+			...kitInput
 		} as Insert<typeof loyaltyPrograms>)
 		.executeSync();
-	logAudit(userId, 'create', 'loyalty_program', idFromBigInt(row.id));
 	return toLoyaltyProgram(row);
 }
 
@@ -302,9 +357,15 @@ export function updateLoyaltyProgram(
 	validateLoyaltyProgramInput(input);
 	const existing = getLoyaltyProgramById(id, userId);
 	if (!existing) throw error(404, 'Not found');
+	const kitInput = toKitLoyaltyProgramInput(input);
+	const newBalance = input.balance ?? null;
+	const oldBalance = existing.balance ?? null;
+	if (newBalance !== oldBalance) {
+		kitInput.balance_updated_at = nowIso();
+	}
 	const rows = kit
 		.updateTable(loyaltyPrograms)
-		.set(toKitLoyaltyProgramInput(input))
+		.set(kitInput)
 		.where(
 			and(
 				eq(loyaltyPrograms.id, toBigInt(id)),
@@ -313,14 +374,12 @@ export function updateLoyaltyProgram(
 		)
 		.executeSync();
 	const updated = rows[0] ? toLoyaltyProgram(rows[0]) : null;
-	logAudit(userId, 'update', 'loyalty_program', id);
 	return updated;
 }
 
 export function deleteLoyaltyProgram(id: number, userId: number): bigint {
 	const existing = getLoyaltyProgramById(id, userId);
 	if (!existing) throw error(404, 'Not found');
-	logAudit(userId, 'delete', 'loyalty_program', id);
 	return kit
 		.deleteFrom(loyaltyPrograms)
 		.where(eq(loyaltyPrograms.id, toBigInt(id)))
@@ -674,6 +733,74 @@ export function listInsurancePolicies(userId: number): InsurancePolicy[] {
 		.orderBy(desc(insurancePolicies.id))
 		.executeSync();
 	return rows.map(toInsurancePolicy);
+}
+
+export interface ListInsurancePoliciesOptions {
+	search?: string;
+	sortBy?: 'provider' | 'policyNumber' | 'startDate' | 'endDate';
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+	from?: string;
+	to?: string;
+}
+
+function matchesInsuranceDateRange(value: string | null, from?: string, to?: string): boolean {
+	if (!from && !to) return true;
+	if (!value) return false;
+	const date = value.slice(0, 10);
+	return (!from || date >= from) && (!to || date <= to);
+}
+
+export function listInsurancePoliciesPaginated(
+	userId: number,
+	opts: ListInsurancePoliciesOptions = {}
+): InsurancePolicy[] {
+	let rows = listInsurancePolicies(userId);
+	const q = opts.search?.trim().toLowerCase();
+	if (q) {
+		rows = rows.filter(
+			(p) =>
+				p.provider.toLowerCase().includes(q) ||
+				(p.policyNumber?.toLowerCase().includes(q) ?? false) ||
+				(p.coverageSummary?.toLowerCase().includes(q) ?? false) ||
+				(p.notes?.toLowerCase().includes(q) ?? false)
+		);
+	}
+	rows = rows.filter((p) => matchesInsuranceDateRange(p.startDate, opts.from, opts.to));
+	const sortBy = opts.sortBy ?? 'provider';
+	const sortDir = opts.sortDir ?? 'asc';
+	rows = rows.slice().sort((a, b) => compareRows(a, b, sortBy, sortDir));
+	const offset = opts.offset ?? 0;
+	const limit = opts.limit ?? rows.length;
+	return rows.slice(offset, offset + limit);
+}
+
+export function countInsurancePolicies(
+	userId: number,
+	search?: string,
+	from?: string,
+	to?: string
+): number {
+	if (!search?.trim() && !from && !to) {
+		return Number(
+			kit
+				.selectFrom(insurancePolicies)
+				.where(eq(insurancePolicies.user_id, toBigInt(userId)))
+				.selectCount()
+				.executeSync()
+		);
+	}
+	const q = search?.trim().toLowerCase();
+	return listInsurancePolicies(userId).filter(
+		(p) =>
+			matchesInsuranceDateRange(p.startDate, from, to) &&
+			(!q ||
+				p.provider.toLowerCase().includes(q) ||
+				(p.policyNumber?.toLowerCase().includes(q) ?? false) ||
+				(p.coverageSummary?.toLowerCase().includes(q) ?? false) ||
+				(p.notes?.toLowerCase().includes(q) ?? false))
+	).length;
 }
 
 export function getInsurancePolicyById(id: number, userId: number): InsurancePolicy | null {

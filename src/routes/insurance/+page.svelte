@@ -1,163 +1,138 @@
 <script lang="ts">
-	import CancelButton from '$lib/components/CancelButton.svelte';
-	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
-	import EmptyState from '$lib/components/EmptyState.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import { html } from 'gridjs';
+	import { goto } from '$app/navigation';
+	import GridTable, { type FetchOpts, type GridFilter } from '$lib/components/GridTable.svelte';
+	import { buildTableQuery } from '$lib/tableParams';
+	import { formatDate } from '$lib/dateFormat';
+	import { escapeHtml } from '$lib/escapeHtml';
 
-	let { data } = $props();
-	let editingId = $state<number | null>(null);
-	let dirtyIds = $state<Record<number, boolean>>({});
+	let grid: any = $state();
+	let deleteError: string | null = $state(null);
+	const dateFilters: GridFilter[] = [
+		{ id: 'from', label: 'From', type: 'date' },
+		{ id: 'to', label: 'To', type: 'date' }
+	];
 
-	const tripName: Record<number, string> = $derived(
-		Object.fromEntries(data.trips.map((t) => [t.id, t.name]))
-	);
+	const columns = [
+		{
+			id: 'provider',
+			name: 'Provider',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				html(
+					`<div class="font-medium" style="color: var(--theme-strong)">${escapeHtml(row.provider)}</div>` +
+						(row.policyNumber
+							? `<div class="text-xs" style="color: var(--theme-readable-faint)">${escapeHtml(row.policyNumber)}</div>`
+							: '')
+				)
+		},
+		{
+			id: 'coverage',
+			name: 'Coverage',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) => {
+				const parts: string[] = [];
+				if (row.coverageAmount != null) {
+					parts.push(
+						`<span class="font-mono text-sm">${escapeHtml(row.coverageAmount)} ${escapeHtml(row.currency)}</span>`
+					);
+				}
+				if (row.coverageSummary) {
+					parts.push(
+						`<div class="text-xs" style="color: var(--theme-readable-muted)">${escapeHtml(row.coverageSummary)}</div>`
+					);
+				}
+				return html(parts.length ? parts.join('') : '<span style="color: var(--theme-readable-faint)">—</span>');
+			}
+		},
+		{
+			id: 'tripName',
+			name: 'Trip',
+			sort: false,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.tripName
+					? html(`<span class="badge badge-brand">${escapeHtml(row.tripName)}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		},
+		{
+			id: 'startDate',
+			name: 'Start',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.startDate
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(formatDate(String(row.startDate)))}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		},
+		{
+			id: 'endDate',
+			name: 'End',
+			sort: true,
+			formatter: (_cell: unknown, row: Record<string, unknown>) =>
+				row.endDate
+					? html(`<span style="color: var(--theme-readable-muted)">${escapeHtml(formatDate(String(row.endDate)))}</span>`)
+					: html('<span style="color: var(--theme-readable-faint)">—</span>')
+		}
+	];
+
+	const actions = [
+		{ id: 'edit', label: 'Edit' },
+		{
+			id: 'delete',
+			label: 'Delete',
+			variant: 'danger' as const,
+			confirm: true,
+			confirmTitle: 'Delete policy',
+			confirmMessage: (row: Record<string, unknown>) =>
+				`Delete ${row.provider}? This cannot be undone.`,
+			confirmLabel: 'Delete'
+		}
+	];
+
+	async function fetchData(opts: FetchOpts) {
+		const res = await fetch(`/api/insurance?${buildTableQuery(opts.url)}`);
+		if (!res.ok) throw new Error(`Failed to load policies: ${res.status}`);
+		return res.json() as Promise<{ rows: Record<string, unknown>[]; total: number }>;
+	}
+
+	async function handleAction(e: Event) {
+		deleteError = null;
+		const { action, row } = (e as CustomEvent<{ action: string; row: Record<string, unknown> }>).detail;
+		if (action === 'edit') {
+			goto(`/insurance/${row.id}/edit`);
+		} else if (action === 'delete') {
+			const res = await fetch(`/api/insurance/${row.id}`, { method: 'DELETE' });
+			if (res.ok) {
+				grid?.reload();
+			} else {
+				const body = await res.json().catch(() => ({ error: 'Delete failed.' }));
+				deleteError = body.error ?? 'Delete failed.';
+			}
+		}
+	}
 </script>
 
 <header class="page-header">
 	<div>
 		<h1 class="page-title">Insurance policies</h1>
-		<p class="page-subtitle">
-			{data.policies.length} polic{data.policies.length === 1 ? 'y' : 'ies'} on file
-		</p>
+		<p class="page-subtitle">Travel insurance providers, coverage, and linked trips.</p>
 	</div>
 </header>
 
-{#if data.policies.length}
-	<section class="card mt-6 p-5">
-		<h2 class="section-title mb-3">Your policies</h2>
-		<ul class="list-stack">
-			{#each data.policies as p (p.id)}
-				<li class="list-item">
-					{#if editingId === p.id}
-						<form method="POST" action="?/update" class="min-w-0" oninput={() => (dirtyIds[p.id] = true)}>
-							<input type="hidden" name="id" value={p.id} />
-							<div class="grid gap-4 sm:grid-cols-2">
-								<div class="field">
-									<label class="label" for={`provider-${p.id}`}>Provider</label>
-									<input id={`provider-${p.id}`} name="provider" value={p.provider} class="input" required />
-								</div>
-								<div class="field">
-									<label class="label" for={`policyNumber-${p.id}`}>Policy #</label>
-									<input id={`policyNumber-${p.id}`} name="policyNumber" value={p.policyNumber ?? ''} class="input" />
-								</div>
-								<div class="field sm:col-span-2">
-									<label class="label" for={`coverageSummary-${p.id}`}>Coverage summary</label>
-									<textarea id={`coverageSummary-${p.id}`} name="coverageSummary" class="textarea">{p.coverageSummary ?? ''}</textarea>
-								</div>
-								<div class="field">
-									<label class="label" for={`coverageAmount-${p.id}`}>Coverage (cents)</label>
-									<input id={`coverageAmount-${p.id}`} name="coverageAmount" type="number" value={p.coverageAmount ?? ''} class="input" />
-								</div>
-								<div class="field">
-									<label class="label" for={`tripId-${p.id}`}>Trip</label>
-									<select id={`tripId-${p.id}`} name="tripId" class="select">
-										<option value="" selected={p.tripId == null}>No trip</option>
-										{#each data.trips as t (t.id)}
-											<option value={t.id} selected={p.tripId === t.id}>{t.name}</option>
-										{/each}
-									</select>
-								</div>
-								<div class="field">
-									<label class="label" for={`startDate-${p.id}`}>Start date</label>
-									<input id={`startDate-${p.id}`} name="startDate" type="date" value={p.startDate ?? ''} class="input" />
-								</div>
-								<div class="field">
-									<label class="label" for={`endDate-${p.id}`}>End date</label>
-									<input id={`endDate-${p.id}`} name="endDate" type="date" value={p.endDate ?? ''} class="input" />
-								</div>
-								<div class="field sm:col-span-2">
-									<label class="label" for={`notes-${p.id}`}>Notes</label>
-									<input id={`notes-${p.id}`} name="notes" value={p.notes ?? ''} class="input" />
-								</div>
-							</div>
-							<div class="mt-3 flex justify-end gap-2">
-								<CancelButton dirty={dirtyIds[p.id] ?? false} onConfirm={() => (editingId = null)}>Cancel</CancelButton>
-								<button class="btn btn-primary">Update</button>
-							</div>
-						</form>
-					{:else}
-						<div class="flex items-start justify-between gap-3">
-							<div class="flex items-start gap-3 min-w-0 flex-1">
-								<span class="list-icon">
-									<Icon name="insurance" class="h-4.5 w-4.5" />
-								</span>
-								<div class="min-w-0 flex-1">
-									<div class="flex items-center gap-2">
-										<span class="list-title">{p.provider}</span>
-										{#if p.tripId != null}<span class="badge badge-brand">{tripName[p.tripId] ?? `Trip ${p.tripId}`}</span>{/if}
-									</div>
-									{#if p.coverageSummary}<div class="mt-1 text-sm text-slate-400">{p.coverageSummary}</div>{/if}
-									<div class="meta mt-1 flex flex-wrap items-center gap-x-3">
-										{#if p.policyNumber}<span class="meta-strong">{p.policyNumber}</span>{/if}
-										{#if p.coverageAmount != null}<span>Coverage <span class="font-mono text-slate-300">{p.coverageAmount} {p.currency}</span></span>{/if}
-										{#if p.startDate || p.endDate}<span class="meta-strong">{p.startDate || '—'} → {p.endDate || '—'}</span>{/if}
-									</div>
-									{#if p.notes}<div class="meta mt-0.5 truncate">{p.notes}</div>{/if}
-								</div>
-							</div>
-							<div class="action-row gap-1">
-								<button type="button" class="btn btn-primary" onclick={() => { editingId = p.id; dirtyIds[p.id] = false; }}>Edit</button>
-								<form method="POST" action="?/delete">
-									<input type="hidden" name="id" value={p.id} />
-									<ConfirmButton class="btn btn-danger" message="Delete this insurance policy?">Delete</ConfirmButton>
-								</form>
-							</div>
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	</section>
-{:else}
-	<EmptyState message="No insurance policies yet — add one below.">
-		{#snippet icon()}
-			<Icon name="insurance" class="h-6 w-6" />
-		{/snippet}
-	</EmptyState>
-{/if}
-
-<section class="card mt-6 p-5">
-	<h2 class="section-title mb-3">Add policy</h2>
-	<form method="POST" action="?/add" class="grid gap-4 sm:grid-cols-2">
-		<div class="field">
-			<label class="label" for="provider">Provider</label>
-			<input id="provider" name="provider" placeholder="e.g. Allianz" class="input" required />
+<section class="card mt-8 p-5 sm:p-6">
+	{#if deleteError}
+		<div class="notice notice-error mb-4">
+			{deleteError}
 		</div>
-		<div class="field">
-			<label class="label" for="policyNumber">Policy #</label>
-			<input id="policyNumber" name="policyNumber" placeholder="Policy number" class="input" />
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="coverageSummary">Coverage summary</label>
-			<textarea id="coverageSummary" name="coverageSummary" placeholder="What's covered" class="textarea"></textarea>
-		</div>
-		<div class="field">
-			<label class="label" for="coverageAmount">Coverage (cents)</label>
-			<input id="coverageAmount" name="coverageAmount" type="number" placeholder="0" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="tripId">Trip</label>
-			<select id="tripId" name="tripId" class="select">
-				<option value="">No trip</option>
-				{#each data.trips as t (t.id)}
-					<option value={t.id}>{t.name}</option>
-				{/each}
-			</select>
-		</div>
-		<div class="field">
-			<label class="label" for="startDate">Start date</label>
-			<input id="startDate" name="startDate" type="date" class="input" />
-		</div>
-		<div class="field">
-			<label class="label" for="endDate">End date</label>
-			<input id="endDate" name="endDate" type="date" class="input" />
-		</div>
-		<div class="field sm:col-span-2">
-			<label class="label" for="notes">Notes</label>
-			<input id="notes" name="notes" placeholder="Optional notes" class="input" />
-		</div>
-		<div class="flex justify-end sm:col-span-2">
-			<button class="btn btn-primary">Add policy</button>
-		</div>
-	</form>
+	{/if}
+	<GridTable
+		bind:this={grid}
+		{columns}
+		{fetchData}
+		{actions}
+		filters={dateFilters}
+		addHref="/insurance/new"
+		addLabel="Add policy"
+		emptyMessage="No insurance policies saved yet."
+		onaction={handleAction}
+	/>
 </section>

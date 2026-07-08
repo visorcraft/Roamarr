@@ -14,7 +14,7 @@ import {
 	updateCardBenefit,
 	deleteCardBenefit
 } from '$lib/server/repositories/profileRepo';
-import { _addPolicy as addPolicy, _updatePolicy as updatePolicy } from '../insurance/+page.server';
+import { addPolicy, updatePolicy } from '$lib/server/insurancePolicies';
 import { users, trips, cards, cardBenefits, insurancePolicies } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import { makeKitUser } from '../../../tests/kitHelpers';

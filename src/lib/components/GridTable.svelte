@@ -58,6 +58,7 @@
 		addHref?: string;
 		addLabel?: string;
 		emptyMessage?: string;
+		getRowId?: (row: Record<string, unknown>) => unknown;
 		onadd?: () => void;
 		onaction?: (e: CustomEvent<{ action: string; row: Record<string, unknown> }>) => void;
 		onquerychange?: (e: CustomEvent<Record<string, string>>) => void;
@@ -72,6 +73,7 @@
 		addHref,
 		addLabel = 'Add',
 		emptyMessage = 'No records found',
+		getRowId = (row: Record<string, unknown>) => row.id,
 		onadd,
 		onaction,
 		onquerychange
@@ -91,21 +93,29 @@
 		actions.length
 			? {
 					id: '__actions',
-					name: '',
+					name: 'Actions',
 					sort: false,
 					data: (row: Record<string, unknown>) => row,
 					formatter: (_cell: unknown, row: Record<string, unknown>) => {
-						const buttons = actions
+						const rowId = rowKey(row);
+						const options = actions
 							.map(
 								(a) =>
-									`<button type="button" class="btn btn-sm ${a.variant ? `btn-${escapeHtml(a.variant)}` : 'btn-primary'}" data-action="${escapeHtml(a.id)}" data-row-id="${escapeHtml(row.id)}">${escapeHtml(a.label)}</button>`
+									`<option value="${escapeHtml(a.id)}">${escapeHtml(a.label)}</option>`
 							)
-							.join(' ');
-						return html(buttons);
+							.join('');
+						return html(
+							`<select class="select select-compact grid-table-action-select" aria-label="Actions" data-grid-action-select="true" data-row-id="${escapeHtml(rowId)}"><option value="" selected>Actions</option>${options}</select>`
+						);
 					}
 				}
 			: null
 	);
+
+	function rowKey(row: Record<string, unknown>) {
+		const id = getRowId(row);
+		return id == null ? '' : String(id);
+	}
 
 	function wrapFormatter<T extends GridColumn>(col: T): T {
 		if (!col.formatter) return col;
@@ -138,7 +148,8 @@
 		const res = await fetchData(opts);
 		rowById.clear();
 		for (const r of res.rows) {
-			if (r.id != null) rowById.set(String(r.id), r);
+			const id = rowKey(r);
+			if (id) rowById.set(id, r);
 		}
 		schedulePageSizeControlInstall();
 		return { data: res.rows, total: res.total };
@@ -369,10 +380,11 @@
 		const target = e.target as HTMLElement;
 		if (target.closest('.gridjs-pages-button, .gridjs-th-sort')) schedulePageSizeControlInstall();
 		const button = target.closest('[data-action]') as HTMLElement | null;
-		if (!button) return;
-		const actionId = button.dataset.action;
-		const rowIdRaw = button.dataset.rowId;
-		if (!actionId || rowIdRaw == null) return;
+		if (button) triggerAction(button.dataset.action, button.dataset.rowId);
+	}
+
+	function triggerAction(actionId: string | undefined, rowIdRaw: string | undefined) {
+		if (!actionId || !rowIdRaw) return;
 		const row = rowById.get(String(rowIdRaw));
 		if (!row) return;
 		const action = actions.find((a) => a.id === actionId);
@@ -386,7 +398,14 @@
 	}
 
 	function handleChange(e: Event) {
-		const select = (e.target as HTMLElement).closest('[data-grid-page-size]') as HTMLSelectElement | null;
+		const target = e.target as HTMLElement;
+		const actionSelect = target.closest('[data-grid-action-select]') as HTMLSelectElement | null;
+		if (actionSelect) {
+			triggerAction(actionSelect.value, actionSelect.dataset.rowId);
+			actionSelect.value = '';
+			return;
+		}
+		const select = target.closest('[data-grid-page-size]') as HTMLSelectElement | null;
 		if (select) setPageSize(Number(select.value));
 	}
 

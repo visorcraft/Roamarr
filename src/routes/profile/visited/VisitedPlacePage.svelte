@@ -251,6 +251,7 @@
 			{fetchData}
 			actions={tableActions}
 			filters={dateFilters}
+			getRowId={(row) => row.code}
 			addLabel="Add Visit"
 			onadd={!adding ? startAdding : undefined}
 			emptyMessage={`No visited ${plural} found.`}

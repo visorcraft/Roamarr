@@ -90,12 +90,15 @@ describe('GridTable', () => {
 		const config = lastConfig();
 		const actionColumn = config.columns[config.columns.length - 1];
 		expect(actionColumn.id).toBe('__actions');
+		expect(actionColumn.name).toBe('Actions');
 
 		const result = actionColumn.formatter(null, { id: 1, name: 'A' });
-		expect(result).toEqual({ __html: expect.stringContaining('data-action="edit"') });
+		expect(result).toEqual({ __html: expect.stringContaining('data-grid-action-select="true"') });
+		expect(result.__html).toContain('<option value="" selected>Actions</option>');
+		expect(result.__html).toContain('<option value="edit">Edit</option>');
 	});
 
-	it('escapes action and row values when building action buttons', async () => {
+	it('escapes action and row values when building action dropdowns', async () => {
 		mountTable({
 			columns: [{ id: 'name', name: 'Name' }],
 			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
@@ -107,12 +110,12 @@ describe('GridTable', () => {
 		const actionColumn = config.columns[config.columns.length - 1];
 		const result = actionColumn.formatter(null, { id: '2\'&3', name: 'A' }) as { __html: string };
 
-		expect(result.__html).toContain('data-action="edit&quot;x"');
-		expect(result.__html).toContain('>Edit &lt;script&gt;<');
+		expect(result.__html).toContain('value="edit&quot;x"');
+		expect(result.__html).toContain('>Edit &lt;script&gt;</option>');
 		expect(result.__html).toContain('data-row-id="2&#39;&amp;3"');
 	});
 
-	it('dispatches an action event when a delegated action button is clicked', async () => {
+	it('dispatches an action event when a delegated action dropdown changes', async () => {
 		const fetchData = vi.fn(async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }));
 		mountTable({
 			columns: [{ id: 'name', name: 'Name' }],
@@ -136,15 +139,49 @@ describe('GridTable', () => {
 			fired = e as CustomEvent;
 		});
 
-		const button = container.querySelector('button[data-action="edit"]') as HTMLElement | null;
-		expect(button).toBeTruthy();
-		button!.click();
+		const select = container.querySelector('[data-grid-action-select]') as HTMLSelectElement | null;
+		expect(select).toBeTruthy();
+		select!.value = 'edit';
+		select!.dispatchEvent(new Event('change', { bubbles: true }));
 
 		expect(fired).toBeTruthy();
 		expect(fired!.detail).toEqual({ action: 'edit', row: { id: 1, name: 'A' } });
+		expect(select!.value).toBe('');
 	});
 
-	it('dispatches the action event exactly once when Enter is pressed on an action button', async () => {
+	it('uses the configured row id when dispatching dropdown actions', async () => {
+		const row = { code: 'FR', name: 'France' };
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [row], total: 1 }),
+			actions: [{ id: 'edit', label: 'Edit' }],
+			getRowId: (r: Record<string, unknown>) => r.code
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		await config.server.data({ url: {} });
+
+		const container = renderFn.mock.lastCall![0] as HTMLDivElement;
+		const actionColumn = config.columns[config.columns.length - 1];
+		const htmlResult = actionColumn.formatter(null, row) as { __html: string };
+		container.innerHTML = htmlResult.__html;
+
+		let fired: CustomEvent | null = null;
+		container.addEventListener('action', (e) => {
+			fired = e as CustomEvent;
+		});
+
+		const select = container.querySelector('[data-grid-action-select]') as HTMLSelectElement;
+		expect(select.dataset.rowId).toBe('FR');
+		select.value = 'edit';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+
+		expect(fired).toBeTruthy();
+		expect(fired!.detail).toEqual({ action: 'edit', row });
+	});
+
+	it('dispatches the action event exactly once when an action dropdown changes', async () => {
 		const fetchData = vi.fn(async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }));
 		mountTable({
 			columns: [{ id: 'name', name: 'Name' }],
@@ -167,17 +204,51 @@ describe('GridTable', () => {
 			fired.push(e as CustomEvent);
 		});
 
-		const button = container.querySelector('button[data-action="edit"]') as HTMLElement | null;
-		expect(button).toBeTruthy();
-		button!.focus();
-		// Real buttons fire a native click on Enter/Space; jsdom does not, so we fire
-		// the resulting click explicitly and verify the wrapper keydown handler no
-		// longer adds a second dispatch.
-		button!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		button!.click();
+		const select = container.querySelector('[data-grid-action-select]') as HTMLSelectElement | null;
+		expect(select).toBeTruthy();
+		select!.value = 'edit';
+		select!.dispatchEvent(new Event('change', { bubbles: true }));
 
 		expect(fired).toHaveLength(1);
 		expect(fired[0].detail).toEqual({ action: 'edit', row: { id: 1, name: 'A' } });
+	});
+
+	it('uses the existing confirm modal for confirming dropdown actions', async () => {
+		const onaction = vi.fn();
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
+			actions: [
+				{
+					id: 'delete',
+					label: 'Delete',
+					confirm: true,
+					confirmTitle: 'Delete item',
+					confirmMessage: () => 'Delete A?',
+					confirmLabel: 'Delete'
+				}
+			],
+			onaction
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		await config.server.data({ url: {} });
+
+		const container = renderFn.mock.lastCall![0] as HTMLDivElement;
+		const actionColumn = config.columns[config.columns.length - 1];
+		const htmlResult = actionColumn.formatter(null, { id: 1, name: 'A' }) as { __html: string };
+		container.innerHTML = htmlResult.__html;
+
+		const select = container.querySelector('[data-grid-action-select]') as HTMLSelectElement;
+		select.value = 'delete';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		flushSync();
+
+		expect(document.body.textContent).toContain('Delete A?');
+		(document.body.querySelector('.btn-danger') as HTMLButtonElement).click();
+
+		expect(onaction.mock.calls[0][0].detail).toEqual({ action: 'delete', row: { id: 1, name: 'A' } });
 	});
 
 	it('exposes a reload method that updates and force-renders the grid', async () => {

@@ -1794,6 +1794,11 @@ button.card:hover,
 	.grid-table-page-size-select {
 		width: auto;
 	}
+	.grid-table-action-select {
+		width: auto;
+		min-width: 7rem;
+		max-width: 100%;
+	}
 	.grid-host *,
 	.grid-host *::before,
 	.grid-host *::after {

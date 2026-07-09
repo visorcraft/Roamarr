@@ -29,7 +29,8 @@
 }
 
 .trip-modern .trip-modern-day-body::before {
-	left: 8.8rem;
+	left: 9.45rem;
+	z-index: 1;
 	background: color-mix(in oklab, var(--theme-brand) 16%, var(--trip-modern-line));
 }
 
@@ -217,7 +218,7 @@
 	}
 
 	.trip-modern .trip-modern-day-body::before {
-		left: 4rem;
+		left: 3rem;
 	}
 
 	.trip-modern .trip-modern-segment:not(.trip-modern-segment-active)::after {

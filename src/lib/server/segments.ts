@@ -223,11 +223,6 @@ export function moveSegmentToDate(userId: number, tripId: number, segId: number,
 	return seg;
 }
 
-function shiftUtcBy24h(iso: string | null) {
-	if (!iso) return null;
-	return DateTime.fromISO(iso, { zone: 'utc' }).plus({ hours: 24 }).toUTC().toISO()!;
-}
-
 export function duplicateSegment(userId: number, tripId: number, segId: number) {
 	const existing = requireSegmentOnTrip(userId, tripId, segId);
 	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
@@ -236,9 +231,9 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		trip_id: BigInt(tripId),
 		type: existing.type,
 		title: existing.title,
-		start_at: shiftUtcBy24h(existing.startAt)!,
+		start_at: existing.startAt!,
 		start_tz: existing.startTz,
-		end_at: shiftUtcBy24h(existing.endAt),
+		end_at: existing.endAt,
 		end_tz: existing.endTz ?? existing.startTz,
 		location: existing.location,
 		country_code: existing.countryCode,
@@ -250,7 +245,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		card_id: existing.cardId != null ? BigInt(existing.cardId) : null,
 		details_json: existing.detailsJson,
 		meeting_point: existing.meetingPoint,
-		meeting_at: shiftUtcBy24h(existing.meetingAt),
+		meeting_at: existing.meetingAt,
 		payment_status: existing.paymentStatus,
 		payment_due_date: existing.paymentDueDate
 	});

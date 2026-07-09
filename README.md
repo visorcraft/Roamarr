@@ -101,8 +101,13 @@ Roamarr can:
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
-- Connect external clients via OAuth and expose an MCP/AI integration endpoint
-  for tool access.
+- Connect external clients via OAuth (58 read/write scopes, PKCE, refresh-token
+  rotation) and expose an MCP/AI integration endpoint with 108 tools, 17
+  prompts, and 9 resource templates — covering trips, segments, expenses, polls,
+  companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
+  templates, and profile preferences. Destructive operations require an explicit
+  `confirm: true`; sensitive fields (PAN, policy/member/document numbers, notes)
+  are stripped on every AI-bound response.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
   jobs, backups, restores, demo data, instance stats, health checks, database
   maintenance (integrity check, compaction, flush, and doctor), and map
@@ -336,8 +341,11 @@ expired-session cleanup, and run pruning without duplicate starts or
 overlapping ticks.
 
 Routes stay thin. Server-side business logic lives under `src/lib/server/`.
-Authorization is centralized in sharing and ownership helpers, while public
-share and calendar-feed routes expose only a reduced viewer projection.
+Trip access is centralized in three ownership helpers — `requireOwnedTrip`
+(owner only), `requireEditableTrip` (owner + edit-share), and
+`requireViewableTrip` (owner + any share) — so MCP tools, route actions, and
+resource reads all share one consistent authorization layer. Public share and
+calendar-feed routes expose only a reduced `viewerProjection`.
 
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and

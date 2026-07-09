@@ -299,6 +299,8 @@
 
 		tripActionError = null;
 		tripActionMessage = null;
+		const x = window.scrollX;
+		const y = window.scrollY;
 
 		const res = await fetch(form.action, {
 			method: form.method?.toUpperCase() || 'POST',
@@ -324,6 +326,8 @@
 		await invalidateAll();
 		await tick();
 		after?.();
+		await tick();
+		window.scrollTo(x, y);
 	}
 
 	function handleReminderSubmit(event: SubmitEvent) {

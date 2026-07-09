@@ -51,6 +51,10 @@ function validateVote(pollId: number, companionId: number, optionId: number) {
 	const option = pollsRepo.getOptionById(optionId);
 	if (!option || option.pollId !== pollId) throw error(404, 'Option not found');
 
+	// companionId null = trip-owner vote. The companion FK is now
+	// nullable so the owner can vote on their own polls without a
+	// placeholder companion row. A non-null companionId must belong
+	// to the trip (helper throws 404 otherwise).
 	requireCompanionOnTrip(companionId, poll.tripId);
 
 	return poll;

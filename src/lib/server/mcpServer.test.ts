@@ -90,12 +90,12 @@ describe('mcpServer', () => {
 		// The dispatch wraps helper errors into an isError:true response
 		// (per the codex batch 2 hardening) so the promise resolves
 		// instead of rejecting. Assert on isError + the 404 message.
-		const result = await client.callTool({
+		const result = (await client.callTool({
 			name: 'roamarr_packing_list_build',
 			arguments: { tripId: otherTrip.id }
-		});
+		})) as { isError?: boolean; content?: Array<{ text: string }> };
 		expect(result.isError).toBe(true);
-		const text = String((result.content?.[0] as { text: string })?.text ?? '');
+		const text = String(result.content?.[0]?.text ?? '');
 		expect(text).toMatch(/404|Not found/);
 	});
 

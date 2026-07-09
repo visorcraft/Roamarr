@@ -2604,17 +2604,24 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
 				const { castVote, getPollById } = await import('./repositories/pollsRepo');
 				const { requireCompanionOnTrip } = await import('./ownership');
+				const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
 				const pollId = Number(args.pollId);
 				const poll = getPollById(pollId);
 				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
 				requireOwnedTrip(userId, poll.tripId);
-				// companionId: positive int = companion id; null/missing = the
-				// trip owner. Use requireCompanionOnTrip to verify the
-				// companion actually belongs to this trip before recording
-				// a vote in their name.
-				const companionId = args.companionId != null ? Number(args.companionId) : null;
-				if (companionId != null) requireCompanionOnTrip(companionId, poll.tripId);
-				castVote(pollId, Number(args.optionId), companionId ?? 0);
+				// companionId: positive int = companion id; null/missing =
+				// the trip owner. The trip-owner vote is recorded against
+				// a "self" companion row (auto-created on first use) so
+				// the FK constraint is satisfied and the vote is
+				// associated with the owner for vote-counting purposes.
+				let companionId: number | null;
+				if (args.companionId == null) {
+					companionId = getOrCreateOwnerCompanion(userId, poll.tripId).id;
+				} else {
+					companionId = Number(args.companionId);
+					requireCompanionOnTrip(companionId, poll.tripId);
+				}
+				castVote(pollId, Number(args.optionId), companionId);
 				logAudit(userId, 'mcp_poll_vote', 'trip_poll', pollId, { optionId: args.optionId, companionId });
 				return textResult({ ok: true, pollId });
 			}

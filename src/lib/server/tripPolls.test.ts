@@ -124,6 +124,28 @@ test('changing vote replaces previous vote and keeps one per companion', () => {
 	expect(rows).toHaveLength(1);
 });
 
+test('owner can vote via getOrCreateOwnerCompanion (no manual companion row)', async () => {
+	const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
+	const u = makeUser('owner@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const poll = createTripPoll(Number(u.id), t.id, 'Solo?', ['Yes', 'No']);
+	const optionYes = poll.options.find((o) => o.label === 'Yes')!;
+
+	// The MCP layer auto-creates an "owner" companion when no
+	// companionId is supplied. The vote should succeed and be
+	// associated with that companion row.
+	const selfCompanion = getOrCreateOwnerCompanion(Number(u.id), t.id);
+	expect(selfCompanion.name).toBe('owner@x.c');
+	castVote(Number(u.id), poll.id, selfCompanion.id, optionYes.id);
+
+	const refreshed = listPollsWithVotes(t.id).find((p) => p.id === poll.id)!;
+	expect(refreshed.options.find((o) => o.id === optionYes.id)!.voteCount).toBe(1);
+
+	// Idempotent: re-fetching the owner companion returns the same row.
+	const again = getOrCreateOwnerCompanion(Number(u.id), t.id);
+	expect(again.id).toBe(selfCompanion.id);
+});
+
 test('deletePoll removes poll, options, and votes and logs audit', () => {
 	const u = makeUser('d@x.c');
 	const t = makeTrip(Number(u.id), 'T');

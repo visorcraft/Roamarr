@@ -13,6 +13,7 @@ import { requireEditableTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
 import { bumpTripUpdatedAt } from './tripUpdatedAt';
+import { getUserById } from './repositories/usersRepo';
 
 export interface TripCompanion {
 	id: number;
@@ -209,6 +210,25 @@ function buildCompanionValues(input: CompanionInput): Record<string, unknown> {
 		accessibility_needs: input.accessibilityNeeds ?? null,
 		room_notes: input.roomNotes ?? null
 	};
+}
+
+// Get-or-create a "self" companion for the trip owner. Used by MCP
+// tools that record owner-attributed actions (e.g. a poll vote by the
+// trip owner without a separate companion row). The companion is named
+// after the user and lives in the existing 'adult' category; the
+// lookup matches on the user's display name to ensure idempotency
+// without needing a new schema column or enum value.
+export function getOrCreateOwnerCompanion(userId: number, tripId: number) {
+	const user = getUserById(userId);
+	const name = user?.display_name ?? 'Trip owner';
+	const existing = listTripCompanions(tripId).find(
+		(c) => c.name === name
+	);
+	if (existing) return existing;
+	return insertTripCompanion(userId, tripId, {
+		name,
+		category: 'adult'
+	});
 }
 
 export function insertTripCompanion(userId: number, tripId: number, input: CompanionInput) {

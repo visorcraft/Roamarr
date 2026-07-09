@@ -19,6 +19,7 @@
 		{
 			id: 'provider',
 			name: 'Provider',
+			width: '112px',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
@@ -31,6 +32,7 @@
 		{
 			id: 'coverage',
 			name: 'Coverage',
+			width: '288px',
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				const parts: string[] = [];
@@ -50,6 +52,7 @@
 		{
 			id: 'tripName',
 			name: 'Trip',
+			width: '208px',
 			sort: false,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.tripName
@@ -59,6 +62,7 @@
 		{
 			id: 'startDate',
 			name: 'Start',
+			width: '112px',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.startDate
@@ -68,6 +72,7 @@
 		{
 			id: 'endDate',
 			name: 'End',
+			width: '112px',
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				row.endDate

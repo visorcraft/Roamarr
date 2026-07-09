@@ -1817,6 +1817,16 @@ button.card:hover,
 		min-width: 7rem;
 		max-width: 100%;
 	}
+	.gridjs-th[data-column-id='startDate'],
+	.gridjs-td[data-column-id='startDate'],
+	.gridjs-th[data-column-id='endDate'],
+	.gridjs-td[data-column-id='endDate'] {
+		white-space: nowrap;
+	}
+	.gridjs-th[data-column-id='__actions'],
+	.gridjs-td[data-column-id='__actions'] {
+		white-space: nowrap;
+	}
 	.grid-host *,
 	.grid-host *::before,
 	.grid-host *::after {

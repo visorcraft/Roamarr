@@ -5,6 +5,7 @@
 	export interface GridColumn {
 		id: string;
 		name: string;
+		width?: string;
 		formatter?: (cell: unknown, row: Record<string, unknown>) => string | ReturnType<typeof html>;
 		sort?: boolean;
 	}
@@ -94,6 +95,7 @@
 			? {
 					id: '__actions',
 					name: 'Actions',
+					width: '136px',
 					sort: false,
 					data: (row: Record<string, unknown>) => row,
 					formatter: (_cell: unknown, row: Record<string, unknown>) => {

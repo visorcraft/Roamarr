@@ -85,7 +85,7 @@
 .trip-modern-toolbar {
 	display: grid;
 	grid-template-columns: minmax(12rem, 17rem) minmax(12rem, 1fr) auto;
-	align-items: center;
+	align-items: start;
 	gap: 0.8rem;
 	padding: 1rem 0 1.25rem;
 }
@@ -222,6 +222,10 @@
 
 .trip-modern-day-card + .trip-modern-day-card {
 	margin-top: 1.25rem;
+}
+
+.trip-modern-main:not(.trip-modern-main-board) .trip-modern-panel + .trip-modern-day-card {
+	margin-top: 1rem;
 }
 
 .trip-modern-day-head {

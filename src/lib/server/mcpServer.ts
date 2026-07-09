@@ -2387,7 +2387,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_profile_update': {
 				if (!hasScope(scopes, 'profile-prefs:write')) return scopeError('profile-prefs:write');
-				const { updateUser } = await import('./repositories/usersRepo');
+				const { updateUser, getUserById } = await import('./repositories/usersRepo');
+				// updateUser is a full-row set: undefined fields become NULL
+				// in the kit. Read the existing user and merge so omitted
+				// fields are preserved.
+				const existing = getUserById(userId);
+				if (!existing) return { content: [{ type: 'text' as const, text: 'User not found' }], isError: true };
 				// Validate integers inline; do not round-trip through Number +
 				// BigInt (precision loss for large ints). Lead hours/days are
 				// small in practice but enforce bounds to be safe.
@@ -2408,11 +2413,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					expiryDays = BigInt(v);
 				}
 				updateUser(userId, {
-					timezone: args.timezone as string | undefined,
-					default_currency: args.defaultCurrency as string | undefined,
-					flight_checkin_lead_hours: leadHours,
-					document_expiry_lead_days: expiryDays,
-					theme_id: args.themeId as string | undefined
+					timezone: (args.timezone as string | undefined) ?? existing.timezone,
+					default_currency: (args.defaultCurrency as string | undefined) ?? existing.default_currency,
+					flight_checkin_lead_hours: leadHours ?? existing.flight_checkin_lead_hours,
+					document_expiry_lead_days: expiryDays ?? existing.document_expiry_lead_days,
+					theme_id: (args.themeId as string | undefined) ?? existing.theme_id
 				});
 				logAudit(userId, 'mcp_profile_update', 'user', userId, {});
 				return textResult({ ok: true });

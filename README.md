@@ -36,9 +36,9 @@
       <sub><b>Dashboard</b> — trips, reminders, documents, and recent activity.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/trip-itinerary-people.png" alt="Roamarr trip people tab with companions, attendees, and sharing controls" />
+      <img src="docs/screenshots/trip-itinerary-people.png" alt="Roamarr trip people tab with two travel companions" />
       <br />
-      <sub><b>Trip people</b> — companions, attendees, and itinerary sharing.</sub>
+      <sub><b>Trip people</b> — companions and traveler assignments.</sub>
     </td>
   </tr>
   <tr>
@@ -55,10 +55,29 @@
   </tr>
   <tr>
     <td width="50%">
+      <img src="docs/screenshots/trip-prep.png" alt="Roamarr trip prep tab with a Thailand travel checklist" />
+      <br />
+      <sub><b>Trip prep</b> — shared checklists for every pre-departure task.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/documents.png" alt="Roamarr travel documents page with a passport and expiry date" />
+      <br />
+      <sub><b>Travel documents</b> — passports, visas, licenses, and expiry tracking.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/reminders.png" alt="Roamarr reminders page with a pending Thailand trip checklist reminder" />
+      <br />
+      <sub><b>Reminders</b> — scheduled trip, flight, and document alerts.</sub>
+    </td>
+    <td width="50%">
       <img src="docs/screenshots/loyalty.png" alt="Roamarr loyalty programs page with airline and hotel membership balances" />
       <br />
       <sub><b>Loyalty programs</b> — memberships, balances, notes, and travel rewards.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="docs/screenshots/insurance.png" alt="Roamarr insurance policies page with coverage dates, policy numbers, and add-policy controls" />
       <br />
@@ -113,7 +132,7 @@ Roamarr can:
   maintenance (integrity check, compaction, flush, and doctor), and map
   configuration (GeoNames city import and raster tile providers).
 - Surface license text, runtime credits, package attribution, and app version
-  details from the Settings -> About area.
+  details from the About page.
 
 ## Your itinerary, under your roof
 
@@ -304,15 +323,15 @@ Chromium first with `npm run test:e2e:install`, then run the suite with
 
 ### Application settings
 
-After the first setup flow, use Settings for:
+After the first setup flow, use the admin pages for:
 
 - Instance name, public registration, and admin controls.
 - SMTP delivery, signed webhooks, and per-user notification channels.
 - Fare provider accounts and connection tests.
 - Backups, restores, scheduled jobs, audit logs, health information, database
   maintenance, and demo data.
-- About, project license, third-party package credits, and runtime component
-  acknowledgements.
+- Project license, third-party package credits, runtime component
+  acknowledgements, and app details on the About page.
 
 Use Profile for:
 
@@ -321,9 +340,11 @@ Use Profile for:
   country/state list toggles.
 - Security settings: TOTP authenticator setup, backup codes, and WebAuthn
   passkey management.
-- Calendar feed token management.
 - Per-user theme selection, including High Contrast.
 - OAuth client management (for users creating connected clients).
+
+Use each trip's Share page for user/group access, public links, and calendar
+feed URL management.
 
 ## Architecture
 

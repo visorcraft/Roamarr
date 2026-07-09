@@ -242,7 +242,7 @@ describe('mcpServer', () => {
 			const { setBudget } = await import('./tripBudgets');
 			setBudget(trip.id, 'lodging', 1000, 'USD');
 
-			const { client } = await connect(userId, ['trips:read']);
+			const { client } = await connect(userId, ['budgets:read']);
 			const res = await readPrompt(client, 'budget-overview', { tripId: String(trip.id) });
 			const text = promptText(res);
 			expect(text).toContain('lodging');

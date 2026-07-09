@@ -180,7 +180,7 @@ Possible error codes: `invalid_client`, `invalid_grant`,
 `unsupported_grant_type`. Rate limiting on `/oauth/token` and `/oauth/revoke`
 returns HTTP 429.
 
-## Admin: client allow-list
+## Admin: client allow-list {#admin-client-allow-list}
 
 Admins can lockdown which client IDs are allowed to be authorized at all. Visit
 **Settings → General → OAuth clients**. The textarea accepts one client ID per

@@ -312,6 +312,7 @@ export const oauthClients = table('oauth_clients', {
 		text('client_secret_hash', { nullable: true }),
 		text('redirect_uris'),
 		text('scopes'),
+		bool('requires_reauth', { default: staticDefault(false) }),
 		timestamp('created_at', { default: nowDefault() }),
 		int('created_by_user_id', { nullable: true })
 	],

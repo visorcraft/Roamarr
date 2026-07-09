@@ -187,7 +187,6 @@ export function updateSegment(
 
 export function moveSegmentToDate(userId: number, tripId: number, segId: number, targetDate: string) {
 	const existing = requireSegmentOnTrip(userId, tripId, segId);
-
 	const start = DateTime.fromISO(existing.startAt, { zone: 'utc' });
 	const startLocal = start.setZone(existing.startTz || 'UTC');
 	const targetLocalDate = DateTime.fromISO(targetDate, { zone: existing.startTz || 'UTC' });
@@ -261,6 +260,42 @@ export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
 	const seg = updateSegmentRepo(segmentId, { status, updated_at: nowIso() });
 	if (!seg) throw error(404, 'Not found');
 	return seg;
+}
+
+// Partial segment update for MCP clients. Only the user-facing fields are
+// accepted: title, startAt, endAt, cityName, countryCode. Internal fields
+// (status, type, trip_id, etc.) are not exposed.
+export function patchSegment(
+	userId: number,
+	segId: number,
+	patch: {
+		title?: string;
+		startAt?: string;
+		endAt?: string | null;
+		cityName?: string | null;
+		countryCode?: string | null;
+	}
+) {
+	// Resolve segment first to get tripId; ownership check follows.
+	const seg = getSegmentById(segId);
+	if (!seg) throw error(404, 'Segment not found');
+	const verified = requireSegmentOnTrip(userId, seg.tripId, segId);
+	const repoPatch: Record<string, unknown> = { updated_at: nowIso() };
+	if (patch.title !== undefined) repoPatch.title = patch.title;
+	if (patch.startAt !== undefined) {
+		repoPatch.start_at = patch.startAt;
+		// Treat incoming ISO as UTC; preserves prior tz column untouched.
+	}
+	if (patch.endAt !== undefined) repoPatch.end_at = patch.endAt;
+	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
+	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
+	const updated = updateSegmentRepo(verified.id, repoPatch);
+	if (!updated) throw error(404, 'Segment not found');
+	// Refresh reminders so flight_checkin arms against the new startAt
+	// (or the segment is un-armed if the type changed implicitly). Done
+	// after the update to ensure the patch is committed.
+	upsertRemindersForSegment(updated);
+	return updated;
 }
 
 export function setSegmentStatus(

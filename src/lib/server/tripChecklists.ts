@@ -5,7 +5,8 @@ import {
 	listItemsForChecklist,
 	createChecklistItem,
 	updateChecklistItem,
-	deleteChecklistItem as repoDeleteChecklistItem
+	deleteChecklistItem as repoDeleteChecklistItem,
+	getChecklistItemTripId
 } from './repositories/tripMiscRepo';
 import { requireCompanionOnTrip, requireEditableTrip } from './ownership';
 import { logAudit } from './audit';
@@ -84,6 +85,28 @@ export function deleteItem(userId: number, tripId: number, itemId: number) {
 	logAudit(userId, 'checklist_item_delete', 'trip_checklist_item', itemId, { tripId });
 }
 
+export function toggleItemById(userId: number, itemId: number) {
+	const tripId = getChecklistItemTripId(itemId);
+	if (tripId == null) throw error(404, 'Item not found');
+	requireEditableTrip(userId, tripId);
+	const checklist = getOrCreateChecklist(tripId);
+	const existing = listItemsForChecklist(checklist.id).find((i) => i.id === itemId);
+	if (!existing) throw error(404, 'Item not found');
+	const updated = updateChecklistItem(itemId, { packed: !existing.packed });
+	if (!updated) throw error(404, 'Item not found');
+	logAudit(userId, 'checklist_item_toggle', 'trip_checklist_item', itemId, { tripId, packed: updated.packed });
+	return updated;
+}
+
+export function deleteItemById(userId: number, itemId: number) {
+	const tripId = getChecklistItemTripId(itemId);
+	if (tripId == null) throw error(404, 'Item not found');
+	requireEditableTrip(userId, tripId);
+	const deleted = repoDeleteChecklistItem(itemId);
+	if (deleted === 0) throw error(404, 'Item not found');
+	logAudit(userId, 'checklist_item_delete', 'trip_checklist_item', itemId, { tripId });
+}
+
 export function setAllItemsPacked(userId: number, tripId: number, packed: boolean) {
 	requireEditableTrip(userId, tripId);
 	const checklist = getOrCreateChecklist(tripId);
@@ -92,6 +115,19 @@ export function setAllItemsPacked(userId: number, tripId: number, packed: boolea
 		updateChecklistItem(item.id, { packed });
 	}
 	logAudit(userId, 'checklist_set_all', 'trip_checklist', checklist.id, { tripId, packed });
+}
+
+export function renameItem(userId: number, itemId: number, text: string) {
+	const validator = new Validator();
+	const itemText = validator.requiredString(text, 'text', { max: ITEM_TEXT_MAX });
+	if (!validator.ok()) throw error(400, validator.failMessage());
+	const tripId = getChecklistItemTripId(itemId);
+	if (tripId == null) throw error(404, 'Item not found');
+	requireEditableTrip(userId, tripId);
+	const updated = updateChecklistItem(itemId, { text: itemText! });
+	if (!updated) throw error(404, 'Item not found');
+	logAudit(userId, 'checklist_item_update', 'trip_checklist_item', itemId, { tripId });
+	return updated;
 }
 
 export async function addChecklistItem({ locals, params, request }: RequestEvent) {

@@ -28,18 +28,8 @@ import {
 	ALL_SCOPES,
 	type Scope
 } from '$lib/server/oauth';
+import { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
 import type { PageServerLoad } from './$types';
-
-const SCOPE_DESCRIPTIONS: Record<string, string> = {
-	'trips:read': 'View trips and itinerary',
-	'trips:write': 'Create and update trips',
-	'packing:write': 'Manage packing lists',
-	'budgets:write': 'Manage budgets and expenses',
-	'places:read': 'View visited places',
-	'places:write': 'Mark visited places',
-	'reminders:write': 'Create reminders',
-	'profile:read': 'Read profile info'
-};
 
 function securityUrl(tab: string) {
 	return `/profile/security?tab=${tab}`;

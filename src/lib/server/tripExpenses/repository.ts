@@ -121,3 +121,27 @@ export function deleteTripExpense(userId: number, expenseId: number) {
 	expensesRepo.deleteExpense(expenseId);
 	logAudit(userId, 'delete', 'trip_expense', expenseId, { tripId: expense.tripId });
 }
+
+export function updateTripExpense(
+	userId: number,
+	expenseId: number,
+	patch: {
+		description?: string;
+		amount?: number;
+		currency?: string;
+		category?: string;
+	}
+) {
+	const existing = expensesRepo.getExpenseById(expenseId);
+	if (!existing) throw error(404, 'Expense not found');
+	requireEditableTrip(userId, existing.tripId);
+	const repoPatch: Parameters<typeof expensesRepo.updateExpense>[1] = {};
+	if (patch.description !== undefined) repoPatch.description = patch.description;
+	if (patch.amount !== undefined) repoPatch.amount = patch.amount;
+	if (patch.currency !== undefined) repoPatch.currency = patch.currency;
+	if (patch.category !== undefined) repoPatch.category = patch.category;
+	const updated = expensesRepo.updateExpense(expenseId, repoPatch);
+	if (!updated) throw error(404, 'Expense not found');
+	logAudit(userId, 'update', 'trip_expense', expenseId, { tripId: existing.tripId });
+	return updated;
+}

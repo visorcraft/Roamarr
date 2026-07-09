@@ -22,8 +22,9 @@ The main **Settings** page holds instance-wide configuration:
 - **Notification channels / recent activity** — per-account toggles and log.
 - **OAuth clients** — server-side allow-list of permitted client IDs. Empty
   allows any client; populated restricts authorization to listed IDs. See
-  [OAuth 2.1 integration](./oauth.md#admin-client-allow-list) for the
-  rotation procedure and interaction with the per-user API connections page.
+  [OAuth 2.1 integration](./oauth.md) (section "Admin: client allow-list")
+  for the rotation procedure and interaction with the per-user API
+  connections page.
 
 ## User management — Settings → Users
 

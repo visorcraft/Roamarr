@@ -7,6 +7,16 @@ Roamarr exposes a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server so AI assistants (Claude Desktop, etc.) can interact with your
 trips, segments, packing lists, budgets, and visited places.
 
+The canonical list of tools, prompts, resources, and supported scopes is
+returned by `GET /.well-known/mcp.json`. The tables below cover the original
+14 tools; the expansion adds 46 more (62 total) covering segments, expenses,
+wallet (cards/loyalty/insurance), travel documents, sharing, groups,
+calendar, contacts, profile preferences, notifications, user SMTP, packing
+templates, trip templates, companions, polls, journal, home tasks,
+medications, important items, entry requirements, comments, and search. See
+[OAuth 2.1 integration](./oauth.md) for the full scope list and token
+lifecycle.
+
 ## Overview
 
 - **MCP endpoint:** `POST /mcp` (Streamable HTTP, stateless JSON-RPC).

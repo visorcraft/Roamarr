@@ -198,6 +198,20 @@ export function deleteChecklistItem(id: number): number {
 	return Number(deleted);
 }
 
+export function getChecklistItemTripId(itemId: number): number | null {
+	const item = kit
+		.selectFrom(tripChecklistItems)
+		.where(eq(tripChecklistItems.id, kitId(itemId)))
+		.executeSync()[0];
+	if (!item) return null;
+	const checklist = kit
+		.selectFrom(tripChecklists)
+		.where(eq(tripChecklists.id, kitId(Number(item.checklist_id))))
+		.executeSync()[0];
+	if (!checklist) return null;
+	return Number(checklist.trip_id);
+}
+
 // ============================================================================
 // Journal entries
 // ============================================================================

@@ -37,7 +37,12 @@ export const load: PageServerLoad = ({ locals, url, getClientAddress }) => {
 	if (!codeChallenge) throw error(400, 'code_challenge is required');
 
 	const requestedScopes = scope.split(/\s+/).filter(Boolean);
-	const grantedScopes = validateScopes(requestedScopes, client.scopes.length > 0 ? client.scopes : ALL_SCOPES);
+	// Empty client.scopes = "no permission". Previously fell back to ALL_SCOPES,
+	// which silently granted every newly-added scope on subsequent re-auth.
+	// That fallback is gone: a client without explicit scopes can request
+	// nothing, and the consent UI shows the empty list.
+	const allowedScopes = client.scopes;
+	const grantedScopes = validateScopes(requestedScopes, allowedScopes);
 
 	return {
 		client,
@@ -72,7 +77,7 @@ export const actions: Actions = {
 		if (!client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 
 		const requested = scopeStr.split(/\s+/).filter(Boolean);
-		const scopes = validateScopes(requested, client.scopes.length > 0 ? client.scopes : ALL_SCOPES);
+		const scopes = validateScopes(requested, client.scopes);
 		const { code, redirectUri: ru } = createAuthorizationCode({
 			userId: u.id,
 			clientId,

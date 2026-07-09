@@ -7,8 +7,10 @@ import { listGroupsForUser } from '$lib/server/sharing';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { normalizeEmail } from '$lib/server/users';
 import { parseTripId } from '$lib/server/params';
+import { setFlash } from '$lib/server/flash';
 import type { PageServerLoad } from './$types';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+import { regenerateCalendarToken, revokeCalendarToken } from '../../shared';
 
 type SharePermission = import('$lib/server/repositories/tripsRepo').SharePermission;
 const SHARE_PERMISSIONS: SharePermission[] = ['read', 'edit'];
@@ -121,7 +123,10 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const publicShareUrl = t.publicToken
 		? `${url.origin}/share/${encodeURIComponent(t.publicToken)}`
 		: null;
-	return { trip: t, shares, groups: myGroups, publicShareUrl };
+	const feedUrl = t.calendarToken
+		? `${url.origin}/trips/${t.id}/calendar/feed?token=${encodeURIComponent(t.calendarToken)}`
+		: null;
+	return { trip: t, shares, groups: myGroups, publicShareUrl, feedUrl };
 };
 
 export const actions: Actions = {
@@ -193,5 +198,20 @@ export const actions: Actions = {
 		if (!Number.isFinite(shareId)) return fail(400, { error: 'Invalid share' });
 		_setShowDetails(u.id, parseTripId(params), shareId, showDetails);
 		throw redirect(303, `/trips/${params.id}/share`);
+	},
+	regenerateCalendarFeed: async ({ request, locals, params, cookies }) => {
+		const u = requireUser(locals);
+		const tripId = parseTripId(params);
+		const expiresAt = String((await request.formData()).get('calendarExpiresAt') || '');
+		regenerateCalendarToken(u.id, tripId, expiresAt || null);
+		setFlash(cookies, 'Calendar feed URL generated.');
+		throw redirect(303, `/trips/${tripId}/share`);
+	},
+	revokeCalendarFeed: async ({ locals, params, cookies }) => {
+		const u = requireUser(locals);
+		const tripId = parseTripId(params);
+		revokeCalendarToken(u.id, tripId);
+		setFlash(cookies, 'Calendar feed URL revoked.');
+		throw redirect(303, `/trips/${tripId}/share`);
 	}
 };

@@ -29,7 +29,7 @@
 
 	const { formatDate, formatDateTime } = useDateFormat();
 
-	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
+	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents';
 	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
 	type ViewMode = 'timeline' | 'list' | 'board';
 	type SegmentPanelTab = 'details' | 'travelers' | 'notes' | 'reminders';
@@ -46,7 +46,7 @@
 		createdAt: string;
 	};
 
-	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents', 'tools'] as const;
+	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents'] as const;
 	const VIEW_MODES: ViewMode[] = ['timeline', 'list', 'board'];
 	const SEGMENT_PANEL_TABS: { id: SegmentPanelTab; label: string }[] = [
 		{ id: 'details', label: 'Details' },
@@ -478,7 +478,6 @@
 	const hasPeopleTab = $derived(isEditor || peopleItemCount > 0 || (data.owner === true && (data.emergencyContacts?.length ?? 0) > 0));
 	const hasNotesTab = $derived(isEditor || notesItemCount > 0);
 	const hasDocumentsTab = $derived(isEditor || documentsItemCount > 0 || (data.availablePolicies?.length ?? 0) > 0);
-	const hasToolsTab = $derived(isEditor);
 	const tripTabs = $derived(
 		([
 			{ id: 'itinerary', label: 'Itinerary', icon: 'calendar', count: segmentList.length, visible: true },
@@ -486,8 +485,7 @@
 			{ id: 'money', label: 'Budget', icon: 'budget', count: moneyItemCount, visible: hasMoneyTab },
 			{ id: 'people', label: 'People', icon: 'users', count: peopleItemCount, visible: hasPeopleTab },
 			{ id: 'notes', label: 'Notes', icon: 'edit', count: notesItemCount, visible: hasNotesTab },
-			{ id: 'documents', label: 'Documents', icon: 'document', count: documentsItemCount, visible: hasDocumentsTab },
-			{ id: 'tools', label: 'Tools', icon: 'settings', count: null, visible: hasToolsTab }
+			{ id: 'documents', label: 'Documents', icon: 'document', count: documentsItemCount, visible: hasDocumentsTab }
 		] satisfies TripTabLink[]).filter((tab) => tab.visible)
 	);
 	const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
@@ -785,8 +783,6 @@
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
 		{:else if activeTab === 'documents'}
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Documents</h2></div>{#if data.documentLinks?.length}<div class="trip-modern-list">{#each data.documentLinks as link (link.id)}<div class="trip-modern-list-row"><div><a href={link.url} target="_blank" rel="noopener noreferrer" class="link">{link.label}</a>{#if link.notes}<p class="trip-modern-panel-muted text-sm">{link.notes}</p>{/if}</div></div>{/each}</div>{:else}<p class="trip-modern-empty">No documents linked yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addDocumentLink" class="trip-modern-form-grid"><input name="label" class="input text-sm" placeholder="Label" required /><input name="url" type="url" class="input text-sm" placeholder="https://…" required /><input name="notes" class="input text-sm" placeholder="Notes (optional)" /><button class="btn btn-primary btn-sm justify-self-end">Add document</button></form>{/if}</section>
-		{:else if activeTab === 'tools'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Tools</h2></div><div class="grid gap-4 lg:grid-cols-2"><div class="subpanel"><h3 class="subsection-title mb-2">Calendar feed</h3>{#if data.feedUrl}<p class="code-chip mb-3">{data.feedUrl}</p><CopyButton text={data.feedUrl} class="btn btn-secondary btn-sm" label="Copy feed URL" />{:else if isEditor}<form method="POST" action="?/regenerateCalendarFeed" class="trip-modern-form-grid"><input name="calendarExpiresAt" type="datetime-local" class="input text-sm" /><button class="btn btn-primary btn-sm">Generate feed URL</button></form>{:else}<p class="trip-modern-panel-muted">No feed URL generated.</p>{/if}</div><div class="subpanel"><h3 class="subsection-title mb-2">Quick links</h3><nav class="grid gap-2"><a href={`/trips/${trip.id}/calendar`} class="nav-link">Download calendar</a><a href={`/trips/${trip.id}/print`} class="nav-link">Print itinerary</a>{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="nav-link">Edit trip info</a>{/if}{#if data.owner === true}<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>{/if}</nav></div></div></section>
 		{/if}
 	</div>
 

@@ -34,8 +34,6 @@ import {
 	deleteImportantItemAction
 } from '$lib/server/tripImportantItems';
 import {
-	regenerateCalendarFeed,
-	revokeCalendarFeed,
 	duplicate,
 	toggleArchive,
 	toggleFavorite,
@@ -64,8 +62,6 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 };
 
 export const actions: Actions = {
-	regenerateCalendarFeed,
-	revokeCalendarFeed,
 	duplicate,
 	toggleArchive,
 	toggleFavorite,

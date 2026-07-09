@@ -24,7 +24,8 @@ import {
 	projectCard,
 	projectLoyalty,
 	projectInsurance,
-	projectTravelDocument
+	projectTravelDocument,
+	requireConfirm
 } from './mcpHelpers';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
@@ -254,20 +255,69 @@ const PROMPTS: readonly PromptEntry[] = [
 		scope: 'trips:read',
 		requiresTrip: true,
 		requiresTripArgument: true,
-		build({ tripId, trip }) {
-			const docs = trip && Array.isArray((trip as { documents?: unknown[] }).documents) ? (trip as { documents: unknown[] }).documents.length : 0;
-			return textOut('Upcoming checklist', { tripId, prepNotes: 'see trip view for details', knownDocs: docs });
+		async build({ userId, tripId }) {
+			// Real data: aggregate travel-doc status, packing %, home tasks.
+			const { listTravelDocuments } = await import('./repositories/profileRepo');
+			const { loadChecklist } = await import('./tripChecklists');
+			const { listHomeTasksForTrip } = await import('./repositories/tripMiscRepo');
+			const { getUserById } = await import('./repositories/usersRepo');
+			const user = getUserById(userId);
+			const leadDays = Number(user?.document_expiry_lead_days ?? 90);
+			const today = new Date().toISOString().slice(0, 10);
+			const cutoff = new Date(Date.now() + leadDays * 86400_000).toISOString().slice(0, 10);
+			const docs = listTravelDocuments(userId);
+			const expiringSoon = docs.filter((d) => d.expiresOn && d.expiresOn >= today && d.expiresOn <= cutoff);
+			const expired = docs.filter((d) => d.expiresOn && d.expiresOn < today);
+			const checklist = loadChecklist(tripId);
+			const total = checklist.items.length;
+			const packed = checklist.items.filter((i) => i.packed).length;
+			const packingPct = total > 0 ? Math.round((packed / total) * 100) : 0;
+			const tasks = listHomeTasksForTrip(tripId);
+			const openTasks = tasks.filter((t) => !t.done);
+			return textOut('Upcoming checklist', {
+				tripId,
+				documents: {
+					expiringSoon: expiringSoon.map((d) => ({ type: d.type, expiresOn: d.expiresOn })),
+					expired: expired.map((d) => ({ type: d.type, expiresOn: d.expiresOn })),
+					windowDays: leadDays
+				},
+				packing: { total, packed, percent: packingPct },
+				homeTasks: { open: openTasks.length, total: tasks.length, items: openTasks.map((t) => ({ title: t.text, dueDate: t.dueDate })) }
+			});
 		}
 	},
 	{
 		name: 'expense-summary',
-		description: 'Per-trip expense breakdown (private numbers, scoped projection).',
+		description: 'Per-trip expense breakdown by category (counts, totals in cents).',
 		arguments: [TRIP_ID_ARG],
 		scope: 'expenses:read',
 		requiresTrip: true,
 		requiresTripArgument: true,
-		build({ tripId }) {
-			return textOut('Expense summary', { tripId, message: 'Use roamarr_expense_list for the full data; this is a summary placeholder.' });
+		async build({ tripId }) {
+			// Real data: aggregate listExpensesForTrip by category.
+			const { listExpensesForTrip } = await import('./repositories/expensesRepo');
+			const { listBudgetsWithSpent } = await import('./tripBudgets');
+			const expenses = listExpensesForTrip(tripId);
+			const budgets = listBudgetsWithSpent(tripId, expenses);
+			const byCategory: Record<string, { count: number; totalCents: number; currency: string }> = {};
+			for (const e of expenses) {
+				const cat = e.category ?? 'other';
+				const key = `${cat}:${e.currency}`;
+				const cur = byCategory[key] ?? { count: 0, totalCents: 0, currency: e.currency };
+				cur.count++;
+				cur.totalCents += e.amount;
+				byCategory[key] = cur;
+			}
+			const totalCount = expenses.length;
+			const totalCents = expenses.reduce((s, e) => s + e.amount, 0);
+			return textOut('Expense summary', {
+				tripId,
+				totals: { count: totalCount, amountCents: totalCents },
+				byCategory: Object.fromEntries(
+					Object.entries(byCategory).map(([k, v]) => [k, { category: k.split(':')[0], count: v.count, totalCents: v.totalCents, currency: v.currency }])
+				),
+				budgets: budgets.map((b) => ({ category: b.category, amountCents: b.amount, spentCents: b.spent, currency: b.currency }))
+			});
 		}
 	},
 	{
@@ -547,7 +597,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a segment. Cancels its reminders.',
 				inputSchema: {
 					type: 'object',
-					properties: { segmentId: { type: 'number' } },
+					properties: { segmentId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['segmentId']
 				}
 			},
@@ -657,7 +708,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete an expense.',
 				inputSchema: {
 					type: 'object',
-					properties: { expenseId: { type: 'number' } },
+					properties: { expenseId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['expenseId']
 				}
 			},
@@ -687,7 +739,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a packing checklist item.',
 				inputSchema: {
 					type: 'object',
-					properties: { itemId: { type: 'number' } },
+					properties: { itemId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['itemId']
 				}
 			},
@@ -722,7 +775,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a reminder by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { reminderId: { type: 'number' } },
+					properties: { reminderId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['reminderId']
 				}
 			},
@@ -759,7 +813,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a card by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { cardId: { type: 'number' } },
+					properties: { cardId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['cardId']
 				}
 			},
@@ -798,7 +853,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a loyalty program by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { loyaltyId: { type: 'number' } },
+					properties: { loyaltyId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['loyaltyId']
 				}
 			},
@@ -840,7 +896,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete an insurance policy by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { insuranceId: { type: 'number' } },
+					properties: { insuranceId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['insuranceId']
 				}
 			},
@@ -882,7 +939,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a travel document by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { docId: { type: 'number' } },
+					properties: { docId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['docId']
 				}
 			},
@@ -926,7 +984,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a doc link by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { linkId: { type: 'number' } },
+					properties: { linkId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['linkId']
 				}
 			},
@@ -973,7 +1032,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Revoke a share by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { shareId: { type: 'number' } },
+					properties: { shareId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['shareId']
 				}
 			},
@@ -1010,8 +1070,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						groupId: { type: 'number' },
-						userId: { type: 'number' }
-					},
+						userId: { type: 'number' },
+					
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['groupId', 'userId']
 				}
 			},
@@ -1062,7 +1123,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete an emergency contact by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { contactId: { type: 'number' } },
+					properties: { contactId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['contactId']
 				}
 			},
@@ -1125,7 +1187,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			{
 				name: 'roamarr_user_smtp_clear',
 				description: 'Clear your SMTP override.',
-				inputSchema: { type: 'object', properties: {} }
+				inputSchema: { type: 'object', properties: {
+				confirm: { type: "boolean", description: "Must be true to confirm destructive action" },} }
 			},
 			// ---- Round 3: depth + UX ----
 			{
@@ -1147,7 +1210,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a packing template.',
 				inputSchema: {
 					type: 'object',
-					properties: { templateId: { type: 'number' } },
+					properties: { templateId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['templateId']
 				}
 			},
@@ -1179,7 +1243,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a trip template.',
 				inputSchema: {
 					type: 'object',
-					properties: { templateId: { type: 'number' } },
+					properties: { templateId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['templateId']
 				}
 			},
@@ -1224,7 +1289,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a companion by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { companionId: { type: 'number' } },
+					properties: { companionId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['companionId']
 				}
 			},
@@ -1268,7 +1334,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a poll by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { pollId: { type: 'number' } },
+					properties: { pollId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['pollId']
 				}
 			},
@@ -1313,7 +1380,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a journal entry by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { entryId: { type: 'number' } },
+					properties: { entryId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['entryId']
 				}
 			},
@@ -1353,7 +1421,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a home task by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { taskId: { type: 'number' } },
+					properties: { taskId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['taskId']
 				}
 			},
@@ -1384,7 +1453,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a medication by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { medicationId: { type: 'number' } },
+					properties: { medicationId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['medicationId']
 				}
 			},
@@ -1415,7 +1485,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete an important item by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { itemId: { type: 'number' } },
+					properties: { itemId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['itemId']
 				}
 			},
@@ -1460,7 +1531,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete an entry requirement by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { requirementId: { type: 'number' } },
+					properties: { requirementId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['requirementId']
 				}
 			},
@@ -1490,7 +1562,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Delete a comment by id.',
 				inputSchema: {
 					type: 'object',
-					properties: { commentId: { type: 'number' } },
+					properties: { commentId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['commentId']
 				}
 			},
@@ -1684,6 +1757,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_segment_delete': {
 				if (!hasScope(scopes, 'segments:write')) return scopeError('segments:write');
+				const confirmErr = requireConfirm(args, 'roamarr_segment_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteSegment } = await import('./segments');
 				const segId = Number(args.segmentId);
 				const segRow = segmentsRepo.getSegmentById(segId);
@@ -1809,6 +1884,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_expense_delete': {
 				if (!hasScope(scopes, 'expenses:write')) return scopeError('expenses:write');
+				const confirmErr = requireConfirm(args, 'roamarr_expense_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteTripExpense } = await import('./tripExpenses/repository');
 				const id = Number(args.expenseId);
 				deleteTripExpense(userId, id);
@@ -1833,6 +1910,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_packing_item_delete': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
+				const confirmErr = requireConfirm(args, 'roamarr_packing_item_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteItemById } = await import('./tripChecklists');
 				const itemId = Number(args.itemId);
 				deleteItemById(userId, itemId);
@@ -1893,6 +1972,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_reminder_delete': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
+				const confirmErr = requireConfirm(args, 'roamarr_reminder_delete');
+				if (confirmErr) return confirmErr;
 				const { cancelReminder } = await import('./reminders');
 				cancelReminder(userId, Number(args.reminderId));
 				logAudit(userId, 'mcp_reminder_delete', 'reminder', Number(args.reminderId), {});
@@ -1929,6 +2010,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_card_delete': {
 				if (!hasScope(scopes, 'cards:write')) return scopeError('cards:write');
+				const confirmErr = requireConfirm(args, 'roamarr_card_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteCard, getCardById } = await import('./repositories/profileRepo');
 				const id = Number(args.cardId);
 				if (!getCardById(id, userId)) return { content: [{ type: 'text' as const, text: 'Card not found' }], isError: true };
@@ -1966,6 +2049,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_loyalty_delete': {
 				if (!hasScope(scopes, 'loyalty:write')) return scopeError('loyalty:write');
+				const confirmErr = requireConfirm(args, 'roamarr_loyalty_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteLoyaltyProgram, getLoyaltyProgramById } = await import('./repositories/profileRepo');
 				const id = Number(args.loyaltyId);
 				if (!getLoyaltyProgramById(id, userId)) return { content: [{ type: 'text' as const, text: 'Loyalty program not found' }], isError: true };
@@ -2006,6 +2091,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_insurance_delete': {
 				if (!hasScope(scopes, 'insurance:write')) return scopeError('insurance:write');
+				const confirmErr = requireConfirm(args, 'roamarr_insurance_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteInsurancePolicy, getInsurancePolicyById } = await import('./repositories/profileRepo');
 				const id = Number(args.insuranceId);
 				if (!getInsurancePolicyById(id, userId)) return { content: [{ type: 'text' as const, text: 'Insurance not found' }], isError: true };
@@ -2047,6 +2134,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_travel_doc_delete': {
 				if (!hasScope(scopes, 'travel-docs:write')) return scopeError('travel-docs:write');
+				const confirmErr = requireConfirm(args, 'roamarr_travel_doc_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteTravelDocument, getTravelDocumentById } = await import('./repositories/profileRepo');
 				const id = Number(args.docId);
 				if (!getTravelDocumentById(id, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true };
@@ -2091,6 +2180,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_doc_link_delete': {
 				if (!hasScope(scopes, 'doc-links:write')) return scopeError('doc-links:write');
+				const confirmErr = requireConfirm(args, 'roamarr_doc_link_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteDocumentLink, getDocumentLinkById } = await import('./repositories/tripMiscRepo');
 				const id = Number(args.linkId);
 				const existing = getDocumentLinkById(id);
@@ -2163,6 +2254,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_share_revoke': {
 				if (!hasScope(scopes, 'sharing:write')) return scopeError('sharing:write');
+				const confirmErr = requireConfirm(args, 'roamarr_share_revoke');
+				if (confirmErr) return confirmErr;
 				const { deleteShare, getShareById } = await import('./repositories/tripsRepo');
 				const id = Number(args.shareId);
 				const existing = getShareById(id);
@@ -2201,6 +2294,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_group_member_remove': {
 				if (!hasScope(scopes, 'sharing:write')) return scopeError('sharing:write');
+				const confirmErr = requireConfirm(args, 'roamarr_group_member_remove');
+				if (confirmErr) return confirmErr;
 				const { removeGroupMember } = await import('./repositories/tripsRepo');
 				const { requireOwnedGroup } = await import('./ownership');
 				const groupId = Number(args.groupId);
@@ -2253,6 +2348,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_contact_delete': {
 				if (!hasScope(scopes, 'contacts:write')) return scopeError('contacts:write');
+				const confirmErr = requireConfirm(args, 'roamarr_contact_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteEmergencyContact, getEmergencyContactById } = await import('./repositories/profileRepo');
 				const id = Number(args.contactId);
 				if (!getEmergencyContactById(id, userId)) return { content: [{ type: 'text' as const, text: 'Contact not found' }], isError: true };
@@ -2359,6 +2456,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_user_smtp_clear': {
 				if (!hasScope(scopes, 'user-smtp:write')) return scopeError('user-smtp:write');
+				const confirmErr = requireConfirm(args, 'roamarr_user_smtp_clear');
+				if (confirmErr) return confirmErr;
 				const { deleteUserSmtpOverride } = await import('./smtpConfig');
 				deleteUserSmtpOverride(userId);
 				logAudit(userId, 'mcp_user_smtp_clear', 'user_smtp_override', userId, {});
@@ -2379,6 +2478,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_packing_template_delete': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
+				const confirmErr = requireConfirm(args, 'roamarr_packing_template_delete');
+				if (confirmErr) return confirmErr;
 				const { deletePackingTemplateForUser } = await import('./repositories/templatesRepo');
 				// Owner-scoped delete prevents IDOR: only the template's
 				// owner can remove it.
@@ -2412,6 +2513,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_template_delete': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
+				const confirmErr = requireConfirm(args, 'roamarr_trip_template_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteTripTemplateForUser } = await import('./repositories/templatesRepo');
 				const id = Number(args.templateId);
 				const n = deleteTripTemplateForUser(id, userId);
@@ -2455,6 +2558,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_companion_delete': {
 				if (!hasScope(scopes, 'companions:write')) return scopeError('companions:write');
+				const confirmErr = requireConfirm(args, 'roamarr_companion_delete');
+				if (confirmErr) return confirmErr;
 				const { getCompanionTripId, removeTripCompanion } = await import('./tripCompanions');
 				const id = Number(args.companionId);
 				const tripId = getCompanionTripId(id);
@@ -2500,6 +2605,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_poll_delete': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
+				const confirmErr = requireConfirm(args, 'roamarr_poll_delete');
+				if (confirmErr) return confirmErr;
 				const { getPollById, deletePoll } = await import('./repositories/pollsRepo');
 				const poll = getPollById(Number(args.pollId));
 				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
@@ -2543,6 +2650,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_journal_delete': {
 				if (!hasScope(scopes, 'journal:write')) return scopeError('journal:write');
+				const confirmErr = requireConfirm(args, 'roamarr_journal_delete');
+				if (confirmErr) return confirmErr;
 				const { getJournalEntryById, deleteJournalEntry } = await import('./repositories/tripMiscRepo');
 				const e = getJournalEntryById(Number(args.entryId));
 				if (!e) return { content: [{ type: 'text' as const, text: 'Entry not found' }], isError: true };
@@ -2583,6 +2692,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_home_task_delete': {
 				if (!hasScope(scopes, 'home-tasks:write')) return scopeError('home-tasks:write');
+				const confirmErr = requireConfirm(args, 'roamarr_home_task_delete');
+				if (confirmErr) return confirmErr;
 				const { getHomeTaskById, deleteHomeTask } = await import('./repositories/tripMiscRepo');
 				const t = getHomeTaskById(Number(args.taskId));
 				if (!t) return { content: [{ type: 'text' as const, text: 'Task not found' }], isError: true };
@@ -2613,6 +2724,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_medication_delete': {
 				if (!hasScope(scopes, 'medications:write')) return scopeError('medications:write');
+				const confirmErr = requireConfirm(args, 'roamarr_medication_delete');
+				if (confirmErr) return confirmErr;
 				const { getMedicationById, deleteMedication } = await import('./repositories/tripMiscRepo');
 				const m = getMedicationById(Number(args.medicationId));
 				if (!m) return { content: [{ type: 'text' as const, text: 'Medication not found' }], isError: true };
@@ -2645,6 +2758,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_important_item_delete': {
 				if (!hasScope(scopes, 'items:write')) return scopeError('items:write');
+				const confirmErr = requireConfirm(args, 'roamarr_important_item_delete');
+				if (confirmErr) return confirmErr;
 				const { getImportantItemById, deleteImportantItem } = await import('./repositories/tripMiscRepo');
 				const i = getImportantItemById(Number(args.itemId));
 				if (!i) return { content: [{ type: 'text' as const, text: 'Item not found' }], isError: true };
@@ -2700,6 +2815,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_entry_requirement_delete': {
 				if (!hasScope(scopes, 'requirements:write')) return scopeError('requirements:write');
+				const confirmErr = requireConfirm(args, 'roamarr_entry_requirement_delete');
+				if (confirmErr) return confirmErr;
 				const { getEntryRequirementById, deleteEntryRequirement } = await import('./repositories/tripMiscRepo');
 				const r = getEntryRequirementById(Number(args.requirementId));
 				if (!r) return { content: [{ type: 'text' as const, text: 'Requirement not found' }], isError: true };
@@ -2726,6 +2843,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_comment_delete': {
 				if (!hasScope(scopes, 'comments:write')) return scopeError('comments:write');
+				const confirmErr = requireConfirm(args, 'roamarr_comment_delete');
+				if (confirmErr) return confirmErr;
 				const { deleteComment } = await import('./repositories/tripsRepo');
 				const id = Number(args.commentId);
 				const n = deleteComment(userId, id);

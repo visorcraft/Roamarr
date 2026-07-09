@@ -114,3 +114,18 @@ export async function tryTool(fn: () => Promise<unknown> | unknown) {
 		};
 	}
 }
+
+// Confirmation guard for destructive tools. Every delete-style tool
+// must require `confirm: true` so an AI agent can't accidentally drop a
+// row on a misread. Returns an isError response if the guard fails;
+// returns null on success.
+export function requireConfirm(args: Record<string, unknown>, toolName: string) {
+	if (args.confirm === true) return null;
+	return {
+		content: [{
+			type: 'text' as const,
+			text: `Destructive action '${toolName}' requires confirm: true. Pass { "confirm": true } to proceed.`
+		}],
+		isError: true
+	};
+}

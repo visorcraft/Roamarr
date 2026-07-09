@@ -40,7 +40,7 @@
 			} catch {
 				// Globe still renders (texture + borders) without city dots.
 			}
-			g.flyTo(lat, lng, 1.8);
+			g.flyTo(lat, lng, 1.26);
 			g.on('select', (e: CustomEvent) => {
 				const d = e.detail;
 				readout =
@@ -138,6 +138,17 @@
 		position: relative;
 		width: 100%;
 		height: min(70vh, 620px);
+	}
+	.globe-modal-stage :global(.ecg-city-label) {
+		color: #fff;
+		font-size: 0.9rem;
+		font-weight: 600;
+		line-height: 1;
+		text-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.95),
+			0 -1px 2px rgba(0, 0, 0, 0.9),
+			1px 0 2px rgba(0, 0, 0, 0.9),
+			-1px 0 2px rgba(0, 0, 0, 0.9);
 	}
 	.globe-modal-loading {
 		position: absolute;

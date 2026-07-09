@@ -477,3 +477,19 @@ test('addAttachment action uploads a receipt and redirects', async () => {
 
 	expect(kit.selectFrom(tripExpenseAttachments).where(eq(tripExpenseAttachments.expense_id, BigInt(e.id))).executeSync()).toHaveLength(1);
 });
+
+test('uploadTripPoster action stores the selected image and redirects', async () => {
+	const u = makeUser(kit, { email: 'poster-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const pngMagic = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+	const f = new FormData();
+	f.set('file', new File([Buffer.concat([pngMagic, Buffer.from('hello')])], 'poster.png', { type: 'image/png' }));
+
+	await expect(actions.uploadTripPoster(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const row = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0];
+	expect(row.poster_attachment_id).not.toBeNull();
+});

@@ -78,6 +78,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		startDate: trip.startDate,
 		endDate: trip.endDate,
 		status: trip.status,
+		posterAttachmentId: trip.posterAttachmentId,
 		createdAt: trip.createdAt,
 		archived: trip.archived,
 		favorite: trip.favorite,

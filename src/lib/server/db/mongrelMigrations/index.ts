@@ -21,6 +21,7 @@ import { migrations as migrations0019 } from './0019_settings_backfill_defaults'
 import { migrations as migrations0020 } from './0020_nullable_settings_leads';
 import { migrations as migrations0021 } from './0021_settings_catchup_repair';
 import { migrations as migrations0022 } from './0022_scheduler_run_summary';
+import { migrations as migrations0023 } from './0023_trip_poster_attachment';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -47,5 +48,6 @@ export const migrations: Migration[] = [
 	...migrations0019,
 	...migrations0020,
 	...migrations0021,
-	...migrations0022
+	...migrations0022,
+	...migrations0023
 ];

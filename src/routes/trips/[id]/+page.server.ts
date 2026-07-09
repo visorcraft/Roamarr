@@ -50,6 +50,7 @@ import {
 	deleteCommentAction,
 	shareItineraryWithContactAction,
 	addAttachmentAction,
+	uploadTripPosterAction,
 	saveTripTemplateAction,
 	markVisitedPlacesAction
 } from '$lib/server/tripMetaActions';
@@ -99,6 +100,7 @@ export const actions: Actions = {
 	deleteBudget: deleteBudgetAction,
 	shareItineraryWithContact: shareItineraryWithContactAction,
 	addAttachment: addAttachmentAction,
+	uploadTripPoster: uploadTripPosterAction,
 	saveTripTemplate: saveTripTemplateAction,
 	markVisitedPlaces: markVisitedPlacesAction,
 	addHomeTask: addHomeTaskAction,

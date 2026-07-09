@@ -44,6 +44,7 @@ export interface Trip {
 	calendarTokenExpiresAt: string | null;
 	baseCurrency: string;
 	status: TripStatus;
+	posterAttachmentId: number | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -110,6 +111,7 @@ export function toTrip(row: KitTrip): Trip {
 		calendarTokenExpiresAt: row.calendar_token_expires_at,
 		baseCurrency: row.base_currency,
 		status: row.status as TripStatus,
+		posterAttachmentId: row.poster_attachment_id == null ? null : num(row.poster_attachment_id),
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
 	};
@@ -192,6 +194,7 @@ export interface CreateTripInput {
 	calendarTokenExpiresAt?: string | null;
 	baseCurrency?: string;
 	status?: TripStatus;
+	posterAttachmentId?: number | null;
 }
 
 export type UpdateTripInput = Partial<Omit<CreateTripInput, 'name'>> & { name?: string; updatedAt?: string };
@@ -220,7 +223,8 @@ export function createTrip(ownerId: number, input: CreateTripInput): Trip {
 			calendar_token: input.calendarToken ?? null,
 			calendar_token_expires_at: input.calendarTokenExpiresAt ?? null,
 			base_currency: input.baseCurrency ?? 'USD',
-			status: input.status ?? 'booked'
+			status: input.status ?? 'booked',
+			poster_attachment_id: input.posterAttachmentId != null ? kitId(input.posterAttachmentId) : null
 		} as Insert<typeof trips>)
 		.executeSync();
 	return toTrip(row);
@@ -248,6 +252,7 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	if (patch.calendarTokenExpiresAt !== undefined) set.calendar_token_expires_at = patch.calendarTokenExpiresAt;
 	if (patch.baseCurrency !== undefined) set.base_currency = patch.baseCurrency;
 	if (patch.status !== undefined) set.status = patch.status;
+	if (patch.posterAttachmentId !== undefined) set.poster_attachment_id = patch.posterAttachmentId != null ? kitId(patch.posterAttachmentId) : null;
 	if (patch.updatedAt !== undefined) set.updated_at = patch.updatedAt;
 
 	const updated = kit.updateTable(trips).set(set).where(kitEq(trips.id, kitId(id))).executeSync();

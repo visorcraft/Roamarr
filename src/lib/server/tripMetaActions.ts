@@ -13,6 +13,7 @@ import {
 import { addComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
+import { uploadTripPoster } from './tripPoster';
 import { saveTripTemplate } from './tripTemplates';
 import { autoMarkFromTrip } from './visitedPlaces';
 import { setFlash } from './flash';
@@ -161,6 +162,14 @@ export async function addAttachmentAction(event: RequestEvent) {
 	const file = formData.get('file');
 	if (!(file instanceof File)) throw error(400, 'File is required');
 	await addAttachment(user.id, expenseIdResult.value, file);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function uploadTripPosterAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const file = formData.get('file');
+	if (!(file instanceof File) || file.size === 0) throw error(400, 'Image is required');
+	await uploadTripPoster(user.id, tripId, file);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

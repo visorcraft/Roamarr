@@ -172,7 +172,8 @@ export function makeTrip(
 			calendar_token: (over.calendarToken as string) ?? `cal-trip-${n}`,
 			calendar_token_expires_at: (over.calendarTokenExpiresAt as string | null) ?? null,
 			base_currency: (over.baseCurrency as string) ?? 'USD',
-			status: (over.status as any) ?? 'booked'
+			status: (over.status as any) ?? 'booked',
+			poster_attachment_id: over.posterAttachmentId ? BigInt(over.posterAttachmentId as number) : null
 		} as any)
 		.executeSync();
 	return {
@@ -198,6 +199,7 @@ export function makeTrip(
 		calendarTokenExpiresAt: row.calendar_token_expires_at,
 		baseCurrency: row.base_currency,
 		status: row.status,
+		posterAttachmentId: nullableFk(row.poster_attachment_id),
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
 	};

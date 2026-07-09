@@ -426,6 +426,7 @@ export const trips = table('trips', {
 		timestamp('calendar_token_expires_at', { nullable: true }),
 		text('base_currency', { default: staticDefault('USD') }),
 		text('status', { enumValues: [...TRIP_STATUSES], default: staticDefault('booked') }),
+		int('poster_attachment_id', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
 		timestamp('updated_at', { generated: 'now' })
 	],

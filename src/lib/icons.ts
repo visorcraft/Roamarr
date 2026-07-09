@@ -21,6 +21,7 @@ export type IconName =
 	| 'location'
 	| 'arrow-right'
 	| 'chevron-down'
+	| 'upload'
 	| 'import'
 	| 'export'
 	| 'user'
@@ -81,6 +82,7 @@ export const ICON_PATHS: Record<IconName, string> = {
 		'<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>',
 	'arrow-right': '<path d="M5 12h14"/><path d="m13 7 6 5-6 5"/>',
 	'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+	upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
 	import: '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/>',
 	export: '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M7 9l5-5 5 5"/><path d="M12 4v12"/>',
 	user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',

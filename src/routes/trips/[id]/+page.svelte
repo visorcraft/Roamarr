@@ -53,6 +53,7 @@
 	let moveSegmentDateForm = $state<HTMLFormElement | null>(null);
 	let moveSegmentIdInput = $state<HTMLInputElement | null>(null);
 	let moveTargetDateInput = $state<HTMLInputElement | null>(null);
+	let posterFileInput = $state<HTMLInputElement | null>(null);
 
 	function toggleType(type: SegmentType) {
 		const next = new Set(selectedTypes);
@@ -224,6 +225,7 @@
 	const trip = $derived(data.trip);
 	const isEditor = $derived(data.editor === true);
 	const ownerTrip = $derived(data.owner === true ? (trip as Trip) : undefined);
+	const posterUrl = $derived(trip.posterAttachmentId ? `/trips/${trip.id}/poster?v=${trip.posterAttachmentId}` : null);
 	const baseCurrency = $derived(ownerTrip?.baseCurrency ?? (trip as Trip).baseCurrency ?? 'USD');
 	const segmentList = $derived(
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
@@ -241,6 +243,15 @@
 		if (!(target instanceof HTMLElement)) return;
 		if (target.closest('button, a, input, select, textarea, label, [role="button"], form')) return;
 		toggleSegmentId(id);
+	}
+
+	function choosePoster() {
+		if (isEditor) posterFileInput?.click();
+	}
+
+	function submitPoster(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		if (input.files?.length) input.form?.requestSubmit();
 	}
 
 	function startSegmentDrag(segmentId: number, dateKey: string, event: DragEvent) {
@@ -432,14 +443,33 @@
 			</a>
 
 			<div class="flex flex-col gap-6 sm:flex-row sm:items-end">
-				{#if !(data.nextCity && data.tileConfig)}
-					<div class="trip-poster grid place-items-center">
-						<div class="text-center">
-							<Icon name="location" class="trip-poster-icon mx-auto h-8 w-8" />
-							<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{posterInitials(trip.name, trip.destinationCityName)}</p>
-						</div>
-					</div>
-				{/if}
+				<form method="POST" action="?/uploadTripPoster" enctype="multipart/form-data" class="trip-poster-form">
+					<button
+						type="button"
+						class="trip-poster {posterUrl ? 'trip-poster--image' : ''} grid place-items-center"
+						onclick={choosePoster}
+						disabled={!isEditor}
+						aria-label={isEditor ? (posterUrl ? 'Replace trip poster image' : 'Upload trip poster image') : 'Trip poster'}
+					>
+						{#if posterUrl}
+							<img src={posterUrl} alt="" class="trip-poster-img" />
+							{#if isEditor}
+								<span class="trip-poster-upload-chip">
+									<Icon name="upload" class="h-3.5 w-3.5" />
+									Replace
+								</span>
+							{/if}
+						{:else}
+							<div class="text-center">
+								<Icon name={isEditor ? 'upload' : 'location'} class="trip-poster-icon mx-auto h-8 w-8" />
+								<p class="trip-poster-initials mt-2 font-display text-2xl font-bold">{isEditor ? 'Upload' : posterInitials(trip.name, trip.destinationCityName)}</p>
+							</div>
+						{/if}
+					</button>
+					{#if isEditor}
+						<input bind:this={posterFileInput} type="file" name="file" accept="image/jpeg,image/png,image/webp" class="sr-only" onchange={submitPoster} />
+					{/if}
+				</form>
 
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">

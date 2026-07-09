@@ -11,7 +11,7 @@ import {
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
-import { requireOwnedTrip, requireEditableTrip, requireOwnedGroup } from './ownership';
+import { requireOwnedTrip, requireEditableTrip, requireViewableTrip, requireOwnedGroup } from './ownership';
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { loadTripFor } from '../../routes/trips/shared';
 import { viewerProjection } from './sharing';
@@ -131,7 +131,12 @@ const PROMPTS: readonly PromptEntry[] = [
 		description: 'Brief summary of all upcoming trips.',
 		scope: 'trips:read',
 		build({ userId }) {
-			const all = tripsRepo.listTripsForUser(userId);
+			// Include shared trips so the caller sees everything they have
+			// access to (matches roamarr_trip_list and the web UI).
+			const all = tripsRepo
+				.listViewableTripIdsForUser(userId)
+				.map((id) => tripsRepo.getTripById(id))
+				.filter((t): t is NonNullable<typeof t> => t !== null);
 			const today = new Date().toISOString().slice(0, 10);
 			const upcoming = all
 				.filter((t) => t.startDate && t.startDate >= today && !t.archived)
@@ -367,7 +372,12 @@ const PROMPTS: readonly PromptEntry[] = [
 		description: 'Polls with no votes yet across your active trips (waiting on input).',
 		scope: 'polls:read',
 		async build({ userId }) {
-			const trips = tripsRepo.listTripsForUser(userId);
+			// Include shared trips so editors/viewers see polls on trips that
+			// have been shared with them (matches roamarr_trip_list).
+			const trips = tripsRepo
+				.listViewableTripIdsForUser(userId)
+				.map((id) => tripsRepo.getTripById(id))
+				.filter((t): t is NonNullable<typeof t> => t !== null);
 			const { listPollsForTrip } = await import('./repositories/pollsRepo');
 			// Outstanding = no votes cast yet. The schema has no
 			// closedAt, so "unanswered" is the closest signal.
@@ -1604,7 +1614,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			switch (name) {
 				case 'roamarr_trip_list': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
-				const trips = tripsRepo.listTripsForUser(userId);
+				// Include shared trips, matching what the user sees in the web
+				// UI. The previous impl used listTripsForUser (owner-only),
+				// which silently hid trips shared with the calling user.
+				const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
+				const trips = tripIds
+					.map((id) => tripsRepo.getTripById(id))
+					.filter((t): t is NonNullable<typeof t> => t !== null);
 				return textResult(trips.map((t) => ({
 					id: t.id, name: t.name, destination: t.destination,
 					destinationCountryCode: t.destinationCountryCode,
@@ -1635,7 +1651,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const validation = validateToolInput(args as Record<string, unknown>);
 				if (!validation.ok) return textResult({ error: validation.error });
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				// Editors of shared trips can update trip metadata, matching
+				// the web UI /trips/[id]/edit save action (requireEditableTrip).
+				requireEditableTrip(userId, tripId);
 				const updated = tripsRepo.updateTrip(tripId, {
 					name: args.name as string | undefined,
 					destination: args.destination as string | undefined,
@@ -1704,7 +1722,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_budget_update': {
 				if (!hasScope(scopes, 'budgets:read')) return scopeError('budgets:read');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				const { listExpensesForTrip } = await import('./repositories/expensesRepo');
 				const expenses = listExpensesForTrip(tripId);
 				const budgets = listBudgetsWithSpent(tripId, expenses);
@@ -1712,7 +1730,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_upcoming_summary': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
-				const all = tripsRepo.listTripsForUser(userId);
+				// Include shared trips (matches roamarr_trip_list semantics).
+				const all = tripsRepo
+					.listViewableTripIdsForUser(userId)
+					.map((id) => tripsRepo.getTripById(id))
+					.filter((t): t is NonNullable<typeof t> => t !== null);
 				const today = new Date().toISOString().slice(0, 10);
 				const upcoming = all
 					.filter((t) => t.startDate && t.startDate >= today && !t.archived)
@@ -1748,7 +1770,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { upsertCustomReminder } = await import('./reminders');
 				const tripId = Number(args.tripId);
 				const offset = Number(args.offsetMinutes ?? 60);
-				const t = requireOwnedTrip(userId, tripId);
+				// Editors of shared trips can attach their own custom
+				// trip-start reminders; the reminder is scoped to userId.
+				const t = requireEditableTrip(userId, tripId);
 				if (!t.startDate) return textResult({ error: 'Trip has no start date' });
 				const startAt = `${t.startDate}T09:00:00Z`;
 				upsertCustomReminder(userId, 'trip', tripId, startAt, offset);
@@ -1864,7 +1888,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { listTripExpenses } = await import('./tripExpenses/repository');
 				const { clampLimit, encodeCursor, decodeCursor } = await import('./mcpHelpers');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				const all = listTripExpenses(tripId);
 				const limit = clampLimit(args.limit);
 				// Cursor is an opaque base64 of the last-seen primary key.
@@ -1938,12 +1962,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { listRemindersForUser } = await import('./reminders');
 				const { clampLimit, encodeCursor, decodeCursor } = await import('./mcpHelpers');
 				const { listSegmentsForTrip } = await import('./repositories/segmentsRepo');
-				const { requireOwnedTrip } = await import('./ownership');
+				const { requireViewableTrip } = await import('./ownership');
 				const all = listRemindersForUser(userId);
 				// When tripId is given, include trip-level reminders AND
 				// segment-level reminders whose segment belongs to that trip.
 				const tripId = args.tripId != null ? Number(args.tripId) : null;
-				if (tripId != null) requireOwnedTrip(userId, tripId);
+				if (tripId != null) requireViewableTrip(userId, tripId);
 				const segIds = new Set(tripId != null ? listSegmentsForTrip(tripId).map((s) => s.id) : []);
 				const filtered = tripId != null
 					? all.filter((r) =>
@@ -2019,7 +2043,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const id = Number(args.cardId);
 				const existing = getCardById(id, userId);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Card not found' }], isError: true };
-				updateCard(id, userId, { network: existing.network, last4: existing.last4, nickname: String(args.label ?? existing.nickname) });
+				// updateCard is a full-row replace; carry over notes so a
+				// partial update (e.g. renaming) does not wipe them.
+				updateCard(id, userId, {
+					network: existing.network,
+					last4: existing.last4,
+					nickname: String(args.label ?? existing.nickname),
+					notes: existing.notes
+				});
 				logAudit(userId, 'mcp_card_update', 'card', id, {});
 				return textResult({ ok: true, cardId: id });
 			}
@@ -2053,11 +2084,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'loyalty:write')) return scopeError('loyalty:write');
 				const { updateLoyaltyProgram, getLoyaltyProgramById } = await import('./repositories/profileRepo');
 				const id = Number(args.loyaltyId);
-				if (!getLoyaltyProgramById(id, userId)) return { content: [{ type: 'text' as const, text: 'Loyalty program not found' }], isError: true };
-				const existing = getLoyaltyProgramById(id, userId)!;
+				const existing = getLoyaltyProgramById(id, userId);
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Loyalty program not found' }], isError: true };
+				// updateLoyaltyProgram is a full-row replace; carry over
+				// balance and notes so a partial update does not wipe the
+				// tracked points balance or reset balance_updated_at.
 				updateLoyaltyProgram(id, userId, {
 					programName: (args.programName as string) ?? existing.programName,
-					membershipNumber: (args.memberNumber as string) ?? existing.membershipNumber
+					membershipNumber: (args.memberNumber as string) ?? existing.membershipNumber,
+					balance: existing.balance,
+					notes: existing.notes
 				});
 				logAudit(userId, 'mcp_loyalty_update', 'loyalty_program', id, {});
 				return textResult({ ok: true, loyaltyId: id });
@@ -2094,11 +2130,20 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'insurance:write')) return scopeError('insurance:write');
 				const { updateInsurancePolicy, getInsurancePolicyById } = await import('./repositories/profileRepo');
 				const id = Number(args.insuranceId);
-				if (!getInsurancePolicyById(id, userId)) return { content: [{ type: 'text' as const, text: 'Insurance not found' }], isError: true };
-				const existing = getInsurancePolicyById(id, userId)!;
+				const existing = getInsurancePolicyById(id, userId);
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Insurance not found' }], isError: true };
+				// updateInsurancePolicy is a full-row replace; carry over
+				// coverage / date / trip linkage so a partial update does
+				// not silently wipe coverage details or detach the policy.
 				updateInsurancePolicy(id, userId, {
 					provider: (args.provider as string) ?? existing.provider,
 					policyNumber: (args.policyNumber as string) ?? existing.policyNumber ?? null,
+					coverageSummary: existing.coverageSummary,
+					coverageAmount: existing.coverageAmount,
+					currency: existing.currency,
+					startDate: existing.startDate,
+					endDate: existing.endDate,
+					tripId: existing.tripId,
 					notes: (args.notes as string) ?? existing.notes ?? null
 				});
 				logAudit(userId, 'mcp_insurance_update', 'insurance_policy', id, {});
@@ -2136,13 +2181,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'travel-docs:write')) return scopeError('travel-docs:write');
 				const { updateTravelDocument, getTravelDocumentById } = await import('./repositories/profileRepo');
 				const id = Number(args.docId);
-				if (!getTravelDocumentById(id, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true };
-				const existing = getTravelDocumentById(id, userId)!;
+				const existing = getTravelDocumentById(id, userId);
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true };
+				// updateTravelDocument is a full-row replace; carry over
+				// notes and companionId so a partial update does not wipe
+				// user notes or detach the document from its companion.
 				updateTravelDocument(id, userId, {
 					type: existing.type,
 					issuingAuthority: (args.issuer as string) ?? existing.issuingAuthority,
 					number: (args.number as string) ?? existing.number,
-					expiresOn: (args.expiresOn as string) ?? existing.expiresOn
+					expiresOn: (args.expiresOn as string) ?? existing.expiresOn,
+					notes: existing.notes,
+					companionId: existing.companionId
 				});
 				logAudit(userId, 'mcp_travel_doc_update', 'travel_document', id, {});
 				return textResult({ ok: true, docId: id });
@@ -2162,7 +2212,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'doc-links:read')) return scopeError('doc-links:read');
 				const { listDocumentLinksForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listDocumentLinksForTrip(tripId) });
 			}
 			case 'roamarr_doc_link_create': {
@@ -2352,11 +2402,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'contacts:write')) return scopeError('contacts:write');
 				const { updateEmergencyContact, getEmergencyContactById } = await import('./repositories/profileRepo');
 				const id = Number(args.contactId);
-				if (!getEmergencyContactById(id, userId)) return { content: [{ type: 'text' as const, text: 'Contact not found' }], isError: true };
+				const existing = getEmergencyContactById(id, userId);
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Contact not found' }], isError: true };
+				// updateEmergencyContact is a full-row replace (it always sets
+				// relationship/phone/email/isPrimary). Merge from existing so
+				// omitted args preserve the current values instead of being
+				// wiped to null / demoted from primary.
 				updateEmergencyContact(id, userId, {
-					name: (args.name as string) ?? undefined,
-					phone: (args.phone as string) ?? undefined,
-					email: (args.email as string) ?? undefined
+					name: (args.name as string) ?? existing.name,
+					relationship: existing.relationship,
+					phone: (args.phone as string) ?? existing.phone,
+					email: (args.email as string) ?? existing.email,
+					isPrimary: existing.isPrimary
 				});
 				logAudit(userId, 'mcp_contact_update', 'emergency_contact', id, {});
 				return textResult({ ok: true, contactId: id });
@@ -2435,11 +2492,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_notification_channels_update': {
 				if (!hasScope(scopes, 'notifications:write')) return scopeError('notifications:write');
 				const { updateUser } = await import('./repositories/usersRepo');
-				updateUser(userId, {
-					email_notifications: args.emailNotifications != null ? Boolean(args.emailNotifications) : undefined,
-					webhook_notifications: args.webhookNotifications != null ? Boolean(args.webhookNotifications) : undefined
-				});
-				logAudit(userId, 'mcp_notification_channels_update', 'user', userId, {});
+				// updateUser's patch treats explicit `undefined` as SQL NULL
+				// (the kit merges {...existing, ...patch} then stores null for
+				// undefined cells). Only set keys the caller actually supplied
+				// so a single-channel update does not null the other column.
+				const patch: Record<string, unknown> = {};
+				if (args.emailNotifications != null) patch.email_notifications = Boolean(args.emailNotifications);
+				if (args.webhookNotifications != null) patch.webhook_notifications = Boolean(args.webhookNotifications);
+				if (Object.keys(patch).length === 0) {
+					return textResult({ ok: true, unchanged: true });
+				}
+				updateUser(userId, patch);
+				logAudit(userId, 'mcp_notification_channels_update', 'user', userId, patch);
 				return textResult({ ok: true });
 			}
 			case 'roamarr_user_smtp_get': {
@@ -2523,12 +2587,22 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_template_apply': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
-				// Apply by duplicating the trip that backs the template.
-				const t = tripsRepo.getTripById(Number(args.templateId));
-				if (!t) return { content: [{ type: 'text' as const, text: 'Template trip not found' }], isError: true };
+				// Look up the trip_template row (NOT the trips table — the
+				// previous impl passed templateId to tripsRepo.getTripById,
+				// which silently ignored templates and duplicated whatever
+				// trip happened to share the id). Verify the caller owns the
+				// template before applying it; duplicateTrip then re-checks
+				// ownership of the source trip referenced by the template.
+				const { getTripTemplateById } = await import('./repositories/templatesRepo');
+				const tpl = getTripTemplateById(Number(args.templateId));
+				if (!tpl) return { content: [{ type: 'text' as const, text: 'Template not found' }], isError: true };
+				if (tpl.userId !== userId) return { content: [{ type: 'text' as const, text: 'Template not found' }], isError: true };
+				if (tpl.sourceTripId == null) {
+					return { content: [{ type: 'text' as const, text: 'Template has no source trip to apply' }], isError: true };
+				}
 				const { duplicateTrip } = await import('../../routes/trips/shared');
-				const copy = duplicateTrip(userId, t.id);
-				logAudit(userId, 'mcp_trip_template_apply', 'trip', copy.id, { templateId: t.id });
+				const copy = duplicateTrip(userId, tpl.sourceTripId);
+				logAudit(userId, 'mcp_trip_template_apply', 'trip', copy.id, { templateId: tpl.id, sourceTripId: tpl.sourceTripId });
 				return textResult({ id: copy.id, name: copy.name });
 			}
 			case 'roamarr_trip_template_delete': {
@@ -2546,7 +2620,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'companions:read')) return scopeError('companions:read');
 				const { listTripCompanions } = await import('./tripCompanions');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listTripCompanions(tripId) });
 			}
 			case 'roamarr_companion_create': {
@@ -2592,41 +2666,48 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'polls:read')) return scopeError('polls:read');
 				const { listPollsForTrip } = await import('./repositories/pollsRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, polls: listPollsForTrip(tripId) });
 			}
 			case 'roamarr_poll_create': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
-				const { createPoll } = await import('./repositories/pollsRepo');
+				// Route through createTripPoll so the same validation as the
+				// web UI applies (question length, 2-10 options, per-option
+				// length, bumpTripUpdatedAt, audit). The previous impl
+				// called the low-level repo createPoll directly and let
+				// callers mint polls with empty questions or 1 option.
+				const { createTripPoll } = await import('./tripPolls');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
 				const options = Array.isArray(args.options) ? args.options.map((o) => String(o)) : [];
-				const p = createPoll(tripId, String(args.question ?? ''), options);
+				const p = createTripPoll(userId, tripId, String(args.question ?? ''), options);
 				logAudit(userId, 'mcp_poll_create', 'trip_poll', p.id, { tripId });
 				return textResult({ id: p.id, options: p.options });
 			}
 			case 'roamarr_poll_cast_vote': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
-				const { castVote, getPollById } = await import('./repositories/pollsRepo');
+				// Route through tripPolls.castVote so requireEditableTrip
+				// (owner OR editor) is enforced, matching the web UI.
+				// The previous impl called requireOwnedTrip directly, which
+				// blocked editors of shared trips from voting.
+				const { getPollById } = await import('./repositories/pollsRepo');
+				const { castVote } = await import('./tripPolls');
 				const { requireCompanionOnTrip } = await import('./ownership');
 				const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
 				const pollId = Number(args.pollId);
 				const poll = getPollById(pollId);
 				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
-				requireOwnedTrip(userId, poll.tripId);
 				// companionId: positive int = companion id; null/missing =
-				// the trip owner. The trip-owner vote is recorded against
-				// a "self" companion row (auto-created on first use) so
-				// the FK constraint is satisfied and the vote is
-				// associated with the owner for vote-counting purposes.
-				let companionId: number | null;
+				// the trip owner / editor. The self-companion is recorded
+				// against the calling user (via user_id) so the FK and the
+				// (poll_id, companion_id) uniqueness are satisfied per-user.
+				let companionId: number;
 				if (args.companionId == null) {
 					companionId = getOrCreateOwnerCompanion(userId, poll.tripId).id;
 				} else {
 					companionId = Number(args.companionId);
 					requireCompanionOnTrip(companionId, poll.tripId);
 				}
-				castVote(pollId, Number(args.optionId), companionId);
+				castVote(userId, pollId, companionId, Number(args.optionId));
 				logAudit(userId, 'mcp_poll_vote', 'trip_poll', pollId, { optionId: args.optionId, companionId });
 				return textResult({ ok: true, pollId });
 			}
@@ -2634,11 +2715,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
 				const confirmErr = requireConfirm(args, 'roamarr_poll_delete');
 				if (confirmErr) return confirmErr;
-				const { getPollById, deletePoll } = await import('./repositories/pollsRepo');
-				const poll = getPollById(Number(args.pollId));
-				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
-				requireOwnedTrip(userId, poll.tripId);
-				deletePoll(Number(args.pollId));
+				// Route through tripPolls.removeTripPoll so requireEditableTrip
+				// + bumpTripUpdatedAt + canonical audit apply, matching the
+				// web UI. The previous impl used requireOwnedTrip and skipped
+				// bumpTripUpdatedAt.
+				const { removeTripPoll } = await import('./tripPolls');
+				removeTripPoll(userId, Number(args.pollId));
 				logAudit(userId, 'mcp_poll_delete', 'trip_poll', Number(args.pollId), {});
 				return textResult({ ok: true, pollId: Number(args.pollId) });
 			}
@@ -2646,7 +2728,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'journal:read')) return scopeError('journal:read');
 				const { listJournalEntriesForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listJournalEntriesForTrip(tripId) });
 			}
 			case 'roamarr_journal_create': {
@@ -2691,7 +2773,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'home-tasks:read')) return scopeError('home-tasks:read');
 				const { listHomeTasksForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listHomeTasksForTrip(tripId) });
 			}
 			case 'roamarr_home_task_create': {
@@ -2733,7 +2815,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'medications:read')) return scopeError('medications:read');
 				const { listMedicationsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listMedicationsForTrip(tripId) });
 			}
 			case 'roamarr_medication_create': {
@@ -2765,7 +2847,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'items:read')) return scopeError('items:read');
 				const { listImportantItemsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listImportantItemsForTrip(tripId) });
 			}
 			case 'roamarr_important_item_create': {
@@ -2799,7 +2881,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'requirements:read')) return scopeError('requirements:read');
 				const { listEntryRequirementsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listEntryRequirementsForTrip(tripId) });
 			}
 			case 'roamarr_entry_requirement_create': {
@@ -2856,7 +2938,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'comments:read')) return scopeError('comments:read');
 				const { listCommentsForTrip } = await import('./repositories/tripsRepo');
 				const tripId = Number(args.tripId);
-				requireOwnedTrip(userId, tripId);
+				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, items: listCommentsForTrip(tripId) });
 			}
 			case 'roamarr_comment_create': {
@@ -3062,7 +3144,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const { getCompanionTripId } = await import('./tripCompanions');
 			const tripId = getCompanionTripId(Number(companionMatch[1]));
 			if (tripId == null) throw new Error('Companion not found');
-			requireOwnedTrip(userId, tripId);
+			requireViewableTrip(userId, tripId);
 			const { listTripCompanions } = await import('./tripCompanions');
 			const c = listTripCompanions(tripId).find((x) => x.id === Number(companionMatch[1]));
 			if (!c) throw new Error('Companion not found');
@@ -3106,14 +3188,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const { getPollById } = await import('./repositories/pollsRepo');
 			const p = getPollById(Number(pollMatch[1]));
 			if (!p) throw new Error('Poll not found');
-			requireOwnedTrip(userId, p.tripId);
+			requireViewableTrip(userId, p.tripId);
 			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ poll: p }) }] };
 		}
 		const journalMatch = JOURNAL_URI_RE.exec(uri);
 		if (journalMatch) {
 			if (!hasScope(scopes, 'journal:read')) throw new Error('Missing scope: journal:read');
 			const tripId = Number(journalMatch[1]);
-			requireOwnedTrip(userId, tripId);
+			requireViewableTrip(userId, tripId);
 			const { listJournalEntriesForTrip } = await import('./repositories/tripMiscRepo');
 			const date = journalMatch[2];
 			const entry = listJournalEntriesForTrip(tripId).find((e) => e.entryDate === date);
@@ -3126,7 +3208,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const { getFareWatchById } = await import('./repositories/travelDataRepo');
 			const w = getFareWatchById(Number(fareMatch[1]));
 			if (!w) throw new Error('Fare watch not found');
-			requireOwnedTrip(userId, w.tripId);
+			requireViewableTrip(userId, w.tripId);
 			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ fareWatch: w }) }] };
 		}
 		throw new Error(`Unknown resource URI: ${uri}`);

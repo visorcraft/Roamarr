@@ -18,6 +18,7 @@ import { getUserById } from './repositories/usersRepo';
 export interface TripCompanion {
 	id: number;
 	tripId: number;
+	userId: number | null;
 	name: string;
 	category: CompanionCategory;
 	dietary: string | null;
@@ -40,6 +41,7 @@ function toCompanion(row: Record<string, unknown>): TripCompanion {
 	return {
 		id: Number(row.id),
 		tripId: Number(row.trip_id),
+		userId: row.user_id == null ? null : Number(row.user_id),
 		name: row.name as string,
 		category: row.category as CompanionCategory,
 		dietary: (row.dietary as string | null) ?? null,
@@ -212,23 +214,39 @@ function buildCompanionValues(input: CompanionInput): Record<string, unknown> {
 	};
 }
 
-// Get-or-create a "self" companion for the trip owner. Used by MCP
-// tools that record owner-attributed actions (e.g. a poll vote by the
-// trip owner without a separate companion row). The companion is named
-// after the user and lives in the existing 'adult' category; the
-// lookup matches on the user's display name to ensure idempotency
-// without needing a new schema column or enum value.
+// Get-or-create the "self" companion that links a trip editor (typically the
+// trip owner) to a row in trip_companions. Used by MCP tools that record
+// owner-attributed actions (e.g. a poll vote by the trip owner without a
+// separate companion row). The lookup keys on `user_id`, which is unique per
+// (trip, user) at the schema level — this avoids the prior name-match approach
+// that could silently hijack an existing companion who happened to share the
+// user's display name, or collide across same-named editors on shared trips.
 export function getOrCreateOwnerCompanion(userId: number, tripId: number) {
 	const user = getUserById(userId);
 	const name = user?.display_name ?? 'Trip owner';
-	const existing = listTripCompanions(tripId).find(
-		(c) => c.name === name
-	);
-	if (existing) return existing;
-	return insertTripCompanion(userId, tripId, {
-		name,
-		category: 'adult'
-	});
+	const existing = kit
+		.selectFrom(tripCompanions)
+		.where(
+			kitAnd(
+				kitEq(tripCompanions.trip_id, BigInt(tripId)),
+				kitEq(tripCompanions.user_id, BigInt(userId))
+			)
+		)
+		.executeSync()[0];
+	if (existing) return toCompanion(existing);
+	const inserted = kit
+		.insertInto(tripCompanions)
+		.values({
+			trip_id: BigInt(tripId),
+			user_id: BigInt(userId),
+			name,
+			category: 'adult'
+		} as never)
+		.executeSync();
+	const companion = toCompanion(inserted);
+	bumpTripUpdatedAt(tripId);
+	logAudit(userId, 'create', 'trip_companion', companion.id, { tripId, name, self: true });
+	return companion;
 }
 
 export function insertTripCompanion(userId: number, tripId: number, input: CompanionInput) {

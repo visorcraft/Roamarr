@@ -1,5 +1,6 @@
 <script lang="ts">
 	import './trip-detail-modern.css';
+	import './trip-detail-modern-fixes.css';
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll, replaceState } from '$app/navigation';
 	import CopyButton from '$lib/components/CopyButton.svelte';
@@ -46,7 +47,6 @@
 	let editingId = $state<number | null>(null);
 	let activeTab = $state<TripTab>('itinerary');
 	let selectedTypes = $state<Set<SegmentType>>(new Set());
-	let selectedSegmentIds = $state<Set<number>>(new Set());
 	let segmentQuery = $state('');
 	let draggingSegmentId = $state<number | null>(null);
 	let draggingSegmentDate = $state<string | null>(null);
@@ -101,6 +101,8 @@
 		endTz?: string | null;
 		meetingPoint?: string | null;
 		meetingAt?: string | null;
+		createdAt?: string | null;
+		updatedAt?: string | null;
 	};
 
 	type SegmentRow = SharedSegment & {
@@ -232,22 +234,22 @@
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);
 
-	function toggleSegmentId(id: number) {
-		const next = new Set(selectedSegmentIds);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		selectedSegmentIds = next;
+	function isInteractiveSegmentTarget(event: MouseEvent | KeyboardEvent) {
+		const target = event.target;
+		const current = event.currentTarget;
+		if (!(target instanceof HTMLElement) || !(current instanceof HTMLElement)) return false;
+		const interactive = target.closest('button, a, input, select, textarea, label, form, summary');
+		return interactive instanceof HTMLElement && interactive !== current;
 	}
 
 	function handleSegmentCardClick(segment: SegmentRow, event: MouseEvent) {
-		const target = event.target;
-		if (!(target instanceof HTMLElement)) return;
-		if (target.closest('button, a, input, select, textarea, label, [role="button"], form')) return;
+		if (isInteractiveSegmentTarget(event)) return;
 		if (segment.id != null) focusedSegmentId = segment.id;
 	}
 
 	function handleSegmentKeydown(segment: SegmentRow, event: KeyboardEvent) {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
+		if (isInteractiveSegmentTarget(event)) return;
 		event.preventDefault();
 		if (segment.id != null) focusedSegmentId = segment.id;
 	}
@@ -424,8 +426,16 @@
 
 	function formatTripRange(start: string | null | undefined, end: string | null | undefined) {
 		if (!start && !end) return 'Flexible dates';
-		if (start && end) return `${formatDate(start)} – ${formatDate(end)}`;
-		return formatDate(start ?? end!);
+		const s = start ? DateTime.fromISO(start) : null;
+		const e = end ? DateTime.fromISO(end) : null;
+		if (s?.isValid && e?.isValid) {
+			if (s.hasSame(e, 'day')) return s.toFormat('LLL d, yyyy');
+			if (s.year === e.year && s.month === e.month) return `${s.toFormat('LLL d')} – ${e.toFormat('LLL d, yyyy')}`;
+			if (s.year === e.year) return `${s.toFormat('LLL d')} – ${e.toFormat('LLL d, yyyy')}`;
+			return `${s.toFormat('LLL d, yyyy')} – ${e.toFormat('LLL d, yyyy')}`;
+		}
+		const only = s?.isValid ? s : e?.isValid ? e : null;
+		return only ? only.toFormat('LLL d, yyyy') : start || end || 'Flexible dates';
 	}
 
 	function groupWeekday(key: string) {
@@ -515,6 +525,22 @@
 		const card = segment.cardId ? cardMap.get(segment.cardId) : null;
 		if (card) rows.push({ icon: 'card', label: 'Payment card', value: `${card.nickname}${card.last4 ? ` ····${card.last4}` : ''}` });
 		return rows;
+	}
+
+	function selectedCreatorName() {
+		return data.user?.displayName ?? 'you';
+	}
+
+	function formatCreatedDate(value: string) {
+		const dt = DateTime.fromISO(value);
+		return dt.isValid ? formatDate(dt.toISODate()!) : value;
+	}
+
+	function formatUpdatedDate(value: string) {
+		const dt = DateTime.fromISO(value);
+		if (!dt.isValid) return value;
+		if (dt.hasSame(DateTime.now(), 'day')) return `today at ${dt.toFormat('h:mm a')}`;
+		return formatDateTime(value);
 	}
 </script>
 
@@ -873,7 +899,7 @@
 							</button>
 						</header>
 
-						<div class="trip-modern-selected-summary">
+						<div class="trip-modern-selected-summary {segmentTypeClass(selectedSegment.type)}">
 							<span class="trip-modern-selected-node">
 								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-7 w-7">{@html SEG[selectedSegment.type as keyof typeof SEG]?.icon ?? ''}</svg>
 							</span>
@@ -934,14 +960,18 @@
 						{:else}
 							<div class="trip-modern-detail-list">
 								{#if isEditor && selectedSegment.id}
-									<form method="POST" action={`/trips/${trip.id}?/segmentReminder`} class="trip-modern-form-grid">
+									<form method="POST" action="?/segmentReminder" class="trip-modern-reminder-card">
 										<input type="hidden" name="segmentId" value={selectedSegment.id} />
-										<select name="offsetMinutes" class="input text-sm">
+										<label class="label" for="selected-reminder-offset">Remind me before this segment</label>
+										<select id="selected-reminder-offset" name="offsetMinutes" class="input text-sm">
 											{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}
 												<option value={offset.minutes}>{offset.label}</option>
 											{/each}
 										</select>
-										<button class="btn btn-primary btn-sm">Add reminder</button>
+										<button class="btn btn-primary btn-sm">
+											<Icon name="notification" class="h-4 w-4" />
+											Save reminder
+										</button>
 									</form>
 								{:else}
 									<p class="trip-modern-empty">Reminder tools are available to trip editors.</p>
@@ -969,15 +999,23 @@
 										Delete
 									</button>
 								</form>
-								<form method="POST" action={`/trips/${trip.id}?/segmentReminder`}>
-									<input type="hidden" name="segmentId" value={selectedSegment.id} />
-									<input type="hidden" name="offsetMinutes" value="60" />
-									<button class="btn btn-secondary">
-										<Icon name="reminder" class="h-4 w-4" />
-										Remind
-									</button>
-								</form>
+								<button type="button" class="btn btn-secondary" onclick={() => (segmentPanelTab = 'reminders')}>
+									<Icon name="notification" class="h-4 w-4" />
+									Add reminder
+								</button>
 							</div>
+						{/if}
+
+						{#if selectedSegment.createdAt || selectedSegment.updatedAt}
+							<p class="trip-modern-selected-footer">
+								{#if selectedSegment.createdAt}
+									<span>Created by {selectedCreatorName()} on {formatCreatedDate(selectedSegment.createdAt)}</span>
+								{/if}
+								{#if selectedSegment.createdAt && selectedSegment.updatedAt}<span> · </span>{/if}
+								{#if selectedSegment.updatedAt}
+									<span>Updated {formatUpdatedDate(selectedSegment.updatedAt)}</span>
+								{/if}
+							</p>
 						{/if}
 					{:else}
 						<div class="trip-modern-selected-empty">
@@ -1031,28 +1069,16 @@
 					{#if data.expenses?.length}<button type="button" class="btn btn-secondary btn-sm" onclick={exportExpensesCsv}>Export CSV</button>{/if}
 				</div>
 				<div class="grid gap-3 md:grid-cols-3">
-					<div class="metric-card">
-						<span class="metric-label">Expenses</span>
-						<p class="metric-value">{formatCents(data.stats?.totalExpenses ?? 0, data.stats?.totalExpensesCurrency ?? baseCurrency)}</p>
-					</div>
-					<div class="metric-card">
-						<span class="metric-label">Budget cap</span>
-						<p class="metric-value">{formatCents(data.stats?.budgetCap ?? 0, baseCurrency)}</p>
-					</div>
-					<div class="metric-card">
-						<span class="metric-label">Paid segments</span>
-						<p class="metric-value">{data.stats?.paidSegments ?? 0}/{data.stats?.totalSegments ?? segmentList.length}</p>
-					</div>
+					<div class="metric-card"><span class="metric-label">Expenses</span><p class="metric-value">{formatCents(data.stats?.totalExpenses ?? 0, data.stats?.totalExpensesCurrency ?? baseCurrency)}</p></div>
+					<div class="metric-card"><span class="metric-label">Budget cap</span><p class="metric-value">{formatCents(data.stats?.budgetCap ?? 0, baseCurrency)}</p></div>
+					<div class="metric-card"><span class="metric-label">Paid segments</span><p class="metric-value">{data.stats?.paidSegments ?? 0}/{data.stats?.totalSegments ?? segmentList.length}</p></div>
 				</div>
 				{#if categorySpending.length}
 					<div class="mt-5 trip-modern-list">
 						{#each categorySpending as c (c.category)}
 							<div class="trip-modern-list-row">
 								<span>{c.label}</span>
-								<div class="min-w-0 flex flex-1 items-center gap-3">
-									<div class="progress-track"><div class="progress-fill" style="width: {Math.round((c.amount / maxCategorySpend) * 100)}%;"></div></div>
-									<span class="font-mono text-sm">{formatCents(c.amount, baseCurrency)}</span>
-								</div>
+								<div class="min-w-0 flex flex-1 items-center gap-3"><div class="progress-track"><div class="progress-fill" style="width: {Math.round((c.amount / maxCategorySpend) * 100)}%;"></div></div><span class="font-mono text-sm">{formatCents(c.amount, baseCurrency)}</span></div>
 							</div>
 						{/each}
 					</div>
@@ -1060,13 +1086,7 @@
 				{#if data.expenses?.length}
 					<div class="mt-5 trip-modern-list">
 						{#each data.expenses as e (e.id)}
-							<div class="trip-modern-list-row">
-								<div>
-									<strong>{e.description}</strong>
-									<p class="trip-modern-panel-muted text-sm capitalize">{e.category} · paid by {settlementName(e.paidBy)}</p>
-								</div>
-								<span class="font-mono">{e.currency} {(e.amount / 100).toFixed(2)}</span>
-							</div>
+							<div class="trip-modern-list-row"><div><strong>{e.description}</strong><p class="trip-modern-panel-muted text-sm capitalize">{e.category} · paid by {settlementName(e.paidBy)}</p></div><span class="font-mono">{e.currency} {(e.amount / 100).toFixed(2)}</span></div>
 						{/each}
 					</div>
 				{:else}
@@ -1075,124 +1095,45 @@
 			</section>
 		{:else if activeTab === 'people'}
 			<section class="trip-modern-panel">
-				<div class="trip-modern-panel-head">
-					<h2 class="trip-modern-panel-title">Travelers</h2>
-					<span class="badge badge-slate badge-compact">{data.companions?.length ?? 0}</span>
-				</div>
+				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Travelers</h2><span class="badge badge-slate badge-compact">{data.companions?.length ?? 0}</span></div>
 				{#if data.companions?.length}
 					<div class="trip-modern-list">
 						{#each data.companions as c (c.id)}
-							<div class="trip-modern-list-row">
-								<div>
-									<strong>{c.name}</strong>
-									{#if c.notes}<p class="trip-modern-panel-muted text-sm">{c.notes}</p>{/if}
-								</div>
-								<span class="badge badge-slate badge-compact capitalize">{c.category}</span>
-							</div>
+							<div class="trip-modern-list-row"><div><strong>{c.name}</strong>{#if c.notes}<p class="trip-modern-panel-muted text-sm">{c.notes}</p>{/if}</div><span class="badge badge-slate badge-compact capitalize">{c.category}</span></div>
 						{/each}
 					</div>
 				{:else}
 					<p class="trip-modern-empty">No travelers yet.</p>
 				{/if}
 				{#if isEditor}
-					<form method="POST" action="?/addCompanion" class="trip-modern-form-inline">
-						<input name="name" class="input flex-1 text-sm" placeholder="Name" required />
-						<select name="category" class="input w-auto text-sm"><option value="adult">Adult</option><option value="child">Child</option><option value="other">Other</option></select>
-						<button class="btn btn-primary btn-sm">Add traveler</button>
-					</form>
+					<form method="POST" action="?/addCompanion" class="trip-modern-form-inline"><input name="name" class="input flex-1 text-sm" placeholder="Name" required /><select name="category" class="input w-auto text-sm"><option value="adult">Adult</option><option value="child">Child</option><option value="other">Other</option></select><button class="btn btn-primary btn-sm">Add traveler</button></form>
 				{/if}
 			</section>
 		{:else if activeTab === 'notes'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>
 				{#if data.journalEntries?.length}
-					<div class="trip-modern-list">
-						{#each data.journalEntries as entry (entry.id)}
-							<div class="trip-modern-list-row">
-								<div>
-									<strong>{entry.title}</strong>
-									<p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p>
-									<p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p>
-								</div>
-							</div>
-						{/each}
-					</div>
+					<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div></div>{/each}</div>
 				{/if}
 				{#if data.comments?.length}
-					<div class="mt-4 trip-modern-list">
-						{#each data.comments as c (c.id)}
-							<div class="trip-modern-list-row">
-								<div>
-									<strong>{c.displayName}</strong>
-									<p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p>
-									<p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p>
-								</div>
-							</div>
-						{/each}
-					</div>
+					<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p></div></div>{/each}</div>
 				{:else if !data.journalEntries?.length}
 					<p class="trip-modern-empty">No notes yet.</p>
 				{/if}
-				{#if isEditor}
-					<form method="POST" action="?/addComment" class="trip-modern-form-grid">
-						<textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea>
-						<button class="btn btn-primary btn-sm justify-self-end">Post note</button>
-					</form>
-				{/if}
+				{#if isEditor}<form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}
 			</section>
 		{:else if activeTab === 'documents'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Documents</h2></div>
-				{#if data.documentLinks?.length}
-					<div class="trip-modern-list">
-						{#each data.documentLinks as link (link.id)}
-							<div class="trip-modern-list-row">
-								<div>
-									<a href={link.url} target="_blank" rel="noopener noreferrer" class="link">{link.label}</a>
-									{#if link.notes}<p class="trip-modern-panel-muted text-sm">{link.notes}</p>{/if}
-								</div>
-							</div>
-						{/each}
-					</div>
-				{:else}
-					<p class="trip-modern-empty">No documents linked yet.</p>
-				{/if}
-				{#if isEditor}
-					<form method="POST" action="?/addDocumentLink" class="trip-modern-form-grid">
-						<input name="label" class="input text-sm" placeholder="Label" required />
-						<input name="url" type="url" class="input text-sm" placeholder="https://…" required />
-						<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
-						<button class="btn btn-primary btn-sm justify-self-end">Add document</button>
-					</form>
-				{/if}
+				{#if data.documentLinks?.length}<div class="trip-modern-list">{#each data.documentLinks as link (link.id)}<div class="trip-modern-list-row"><div><a href={link.url} target="_blank" rel="noopener noreferrer" class="link">{link.label}</a>{#if link.notes}<p class="trip-modern-panel-muted text-sm">{link.notes}</p>{/if}</div></div>{/each}</div>{:else}<p class="trip-modern-empty">No documents linked yet.</p>{/if}
+				{#if isEditor}<form method="POST" action="?/addDocumentLink" class="trip-modern-form-grid"><input name="label" class="input text-sm" placeholder="Label" required /><input name="url" type="url" class="input text-sm" placeholder="https://…" required /><input name="notes" class="input text-sm" placeholder="Notes (optional)" /><button class="btn btn-primary btn-sm justify-self-end">Add document</button></form>{/if}
 			</section>
 		{:else if activeTab === 'tools'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Tools</h2></div>
 				<div class="grid gap-4 lg:grid-cols-2">
-					<div class="subpanel">
-						<h3 class="subsection-title mb-2">Calendar feed</h3>
-						{#if data.feedUrl}
-							<p class="code-chip mb-3">{data.feedUrl}</p>
-							<CopyButton text={data.feedUrl} class="btn btn-secondary btn-sm" label="Copy feed URL" />
-						{:else if isEditor}
-							<form method="POST" action="?/regenerateCalendarFeed" class="trip-modern-form-grid">
-								<input name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
-								<button class="btn btn-primary btn-sm">Generate feed URL</button>
-							</form>
-						{:else}
-							<p class="trip-modern-panel-muted">No feed URL generated.</p>
-						{/if}
-					</div>
-					<div class="subpanel">
-						<h3 class="subsection-title mb-2">Quick links</h3>
-						<nav class="grid gap-2">
-							<a href={`/trips/${trip.id}/calendar`} class="nav-link">Download calendar</a>
-							<a href={`/trips/${trip.id}/print`} class="nav-link">Print itinerary</a>
-							{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="nav-link">Edit trip info</a>{/if}
-							{#if data.owner === true}<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>{/if}
-						</nav>
-					</div>
+					<div class="subpanel"><h3 class="subsection-title mb-2">Calendar feed</h3>{#if data.feedUrl}<p class="code-chip mb-3">{data.feedUrl}</p><CopyButton text={data.feedUrl} class="btn btn-secondary btn-sm" label="Copy feed URL" />{:else if isEditor}<form method="POST" action="?/regenerateCalendarFeed" class="trip-modern-form-grid"><input name="calendarExpiresAt" type="datetime-local" class="input text-sm" /><button class="btn btn-primary btn-sm">Generate feed URL</button></form>{:else}<p class="trip-modern-panel-muted">No feed URL generated.</p>{/if}</div>
+					<div class="subpanel"><h3 class="subsection-title mb-2">Quick links</h3><nav class="grid gap-2"><a href={`/trips/${trip.id}/calendar`} class="nav-link">Download calendar</a><a href={`/trips/${trip.id}/print`} class="nav-link">Print itinerary</a>{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="nav-link">Edit trip info</a>{/if}{#if data.owner === true}<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>{/if}</nav></div>
 				</div>
 			</section>
 		{/if}

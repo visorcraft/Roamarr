@@ -102,7 +102,7 @@ Roamarr can:
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
 - Connect external clients via OAuth (58 read/write scopes, PKCE, refresh-token
-  rotation) and expose an MCP/AI integration endpoint with 108 tools, 17
+  rotation) and expose an MCP/AI integration endpoint with 108 tools, 16
   prompts, and 9 resource templates — covering trips, segments, expenses, polls,
   companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
   templates, and profile preferences. Destructive operations require an explicit

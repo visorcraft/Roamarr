@@ -7,15 +7,15 @@ Roamarr exposes a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server so AI assistants (Claude Desktop, etc.) can interact with your
 trips, segments, packing lists, budgets, and visited places.
 
-The canonical list of tools, prompts, resources, and supported scopes is
-returned by `GET /.well-known/mcp.json`. The tables below cover the original
-14 tools; the expansion adds 46 more (62 total) covering segments, expenses,
-wallet (cards/loyalty/insurance), travel documents, sharing, groups,
-calendar, contacts, profile preferences, notifications, user SMTP, packing
-templates, trip templates, companions, polls, journal, home tasks,
-medications, important items, entry requirements, comments, and search. See
-[OAuth 2.1 integration](./oauth.md) for the full scope list and token
-lifecycle.
+`GET /.well-known/mcp.json` returns the MCP endpoint, auth metadata, and the
+supported OAuth scopes. After authorization, use MCP `tools/list`,
+`prompts/list`, and `resources/templates/list` for the live surface. The
+current server exposes 108 tools, 16 prompts, and 9 resource templates covering
+trips, segments, expenses, wallet data, travel documents, sharing, groups,
+calendar, contacts, profile preferences, notifications, user SMTP, templates,
+companions, polls, journal, home tasks, medications, important items, entry
+requirements, comments, and search. See [OAuth 2.1 integration](./oauth.md)
+for token lifecycle details.
 
 ## Overview
 
@@ -44,26 +44,24 @@ lifecycle.
    tool call.
 
 For token refresh, revocation, error codes, and the public-vs-confidential
-client distinction, see [OAuth 2.1 integration](./oauth.md). The scope table
-below is also reproduced there.
+client distinction, see [OAuth 2.1 integration](./oauth.md).
 
 ## Scopes
 
-| Scope | Allows |
-| --- | --- |
-| `trips:read` | List/view trips, itinerary, segments, map data |
-| `trips:write` | Create and update trips and segments |
-| `packing:write` | Manage packing templates and trip checklists |
-| `budgets:write` | Manage trip budgets and expenses |
-| `places:read` | View visited countries and U.S. states |
-| `places:write` | Mark/unmark visited countries and U.S. states |
-| `reminders:write` | Create and update reminders |
-| `profile:read` | Read non-sensitive profile and document-expiry summaries |
+Roamarr currently exposes 58 OAuth scopes. The canonical list is returned by
+`/.well-known/oauth-authorization-server` as `scopes_supported`, and the
+human-readable descriptions are rendered on **Profile -> Security -> API
+Clients** from `src/lib/oauthScopes.ts`.
 
-`trips:read` and `profile:read` form the minimal read-only set. The full
-automation bundle is all write scopes plus the reads.
+Use read/write pairs for the specific feature the client needs: trips,
+segments, packing, budgets, expenses, places, reminders, companions, sharing,
+calendar, templates, travel documents, document links, fare watches, polls,
+journal, important items, entry requirements, home tasks, medications, cards,
+loyalty, insurance, contacts, profile preferences, notifications, user SMTP,
+and comments. `profile:read` covers document-expiry summaries, and
+`search:read` covers global search.
 
-## Available tools
+## Core Tools
 
 | Tool | Required scope | Description |
 | --- | --- | --- |
@@ -82,6 +80,8 @@ automation bundle is all write scopes plus the reads.
 | `roamarr_places_unmark` | `places:write` | Remove a country or state from visited. |
 | `roamarr_reminder_add` | `reminders:write` | Add a reminder to a trip. |
 
+The full tool list is returned by MCP `tools/list` after authorization.
+
 ### Prompts
 
 Server-defined prompts return privacy-safe, structured summaries an AI
@@ -99,11 +99,20 @@ assistant can use as context:
 | `documents-checklist` | Travel documents and expiry summaries. |
 | `weather-overview` | Weather forecast for a trip destination (requires `tripId`). |
 | `places-visited` | Countries and U.S. states you have visited. |
+| `upcoming-checklist` | Pre-trip prep summary (requires `tripId`). |
+| `expense-summary` | Per-trip expense breakdown (requires `tripId`). |
+| `wallet-overview` | Counts for cards, loyalty, and insurance with numbers redacted. |
+| `doc-renewals` | Documents expiring soon, with numbers redacted. |
+| `poll-status` | Polls with no votes across active trips. |
+| `trip-budget-status` | Spent vs budget by category (requires `tripId`). |
 
 ### Resources
 
-Read-only `trip://<id>` URIs return structured trip data (trip + owner) via
-the same authorization checks as tools. Access requires `trips:read`.
+Resource templates are advertised only when the token has the matching read
+scope: `trip://{tripId}`, `companion://{companionId}`, `card://{cardId}`,
+`loyalty://{loyaltyId}`, `insurance://{insuranceId}`,
+`document://{documentId}`, `poll://{pollId}`,
+`journal://trip-{tripId}/{isoDate}`, and `fare-watch://{fareWatchId}`.
 
 ## Privacy and security
 

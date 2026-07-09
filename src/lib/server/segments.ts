@@ -226,35 +226,13 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 	const existing = requireSegmentOnTrip(userId, tripId, segId);
 	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
 
-	// Shift the duplicate +24h in the segment's local timezone, then
-	// re-emit as UTC. toISO with suppressMilliseconds:false forces the
-	// .000Z suffix the test contract expects.
-	const startLocal = DateTime.fromISO(existing.startAt!, { zone: 'utc' })
-		.setZone(existing.startTz || 'UTC')
-		.plus({ days: 1 });
-	const newStartUtc = startLocal.toUTC().toISO({ suppressMilliseconds: false })!;
-	const newEndUtc = existing.endAt
-		? DateTime.fromISO(existing.endAt, { zone: 'utc' })
-				.setZone(existing.startTz || 'UTC')
-				.plus({ days: 1 })
-				.toUTC()
-				.toISO({ suppressMilliseconds: false })!
-		: null;
-	const newMeetingUtc = existing.meetingAt
-		? DateTime.fromISO(existing.meetingAt, { zone: 'utc' })
-				.setZone(existing.startTz || 'UTC')
-				.plus({ days: 1 })
-				.toUTC()
-				.toISO({ suppressMilliseconds: false })!
-		: null;
-
 	const copy = createSegment({
 		trip_id: BigInt(tripId),
 		type: existing.type,
 		title: existing.title,
-		start_at: newStartUtc,
+		start_at: existing.startAt,
 		start_tz: existing.startTz,
-		end_at: newEndUtc,
+		end_at: existing.endAt,
 		end_tz: existing.endTz ?? existing.startTz,
 		location: existing.location,
 		country_code: existing.countryCode,
@@ -266,7 +244,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		card_id: existing.cardId != null ? BigInt(existing.cardId) : null,
 		details_json: existing.detailsJson,
 		meeting_point: existing.meetingPoint,
-		meeting_at: newMeetingUtc,
+		meeting_at: existing.meetingAt,
 		payment_status: existing.paymentStatus,
 		payment_due_date: existing.paymentDueDate
 	});

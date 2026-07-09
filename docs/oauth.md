@@ -32,10 +32,7 @@ of this foundation.
   "revocation_endpoint": "https://your-roamarr-origin/oauth/revoke",
   "mcp_endpoint": "https://your-roamarr-origin/mcp",
   "mcp_metadata_endpoint": "https://your-roamarr-origin/.well-known/mcp.json",
-  "scopes_supported": [
-    "trips:read", "trips:write", "packing:write", "budgets:write",
-    "places:read", "places:write", "reminders:write", "profile:read"
-  ],
+  "scopes_supported": ["trips:read", "trips:write", "...", "search:read"],
   "response_types_supported": ["code"],
   "grant_types_supported": ["authorization_code", "refresh_token"],
   "code_challenge_methods_supported": ["S256"],
@@ -47,20 +44,21 @@ Clients should fetch this dynamically rather than hard-code endpoint URLs.
 
 ## Scopes
 
-| Scope | Allows |
-| --- | --- |
-| `trips:read` | List/view trips, itinerary, segments, map data. |
-| `trips:write` | Create and update trips and segments. |
-| `packing:write` | Manage packing templates and trip checklists. |
-| `budgets:write` | Manage trip budgets and expenses. |
-| `places:read` | View visited countries and U.S. states. |
-| `places:write` | Mark/unmark visited countries and U.S. states. |
-| `reminders:write` | Create and update reminders. |
-| `profile:read` | Read non-sensitive profile and document-expiry summaries. |
+Roamarr currently exposes 58 scopes. Clients should fetch
+`scopes_supported` from discovery instead of hard-coding this list.
+Human-readable descriptions come from `src/lib/oauthScopes.ts` and are shown on
+**Profile -> Security -> API Clients**.
 
-`trips:read` and `profile:read` form the minimal read-only set. Roamarr will
-only ever return `viewerProjection`-style data through these scopes — no
-confirmation numbers, membership numbers, policy numbers, or notes are exposed.
+Most feature scopes are read/write pairs: trips, segments, packing, budgets,
+expenses, places, reminders, companions, sharing, calendar, templates, travel
+documents, document links, fare watches, polls, journal, important items, entry
+requirements, home tasks, medications, cards, loyalty, insurance, contacts,
+profile preferences, notifications, user SMTP, and comments. `profile:read`
+covers document-expiry summaries, and `search:read` covers global search.
+
+Roamarr only returns `viewerProjection`-style data through read scopes — no
+confirmation numbers, membership numbers, policy numbers, document numbers, or
+notes are exposed.
 
 ## Authorizing a client
 

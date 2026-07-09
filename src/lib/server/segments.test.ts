@@ -44,7 +44,7 @@ test('excluding current segment avoids self-overlap', () => {
 	expect(hasOverlappingSegment(t.id, s.id, '2026-01-01T10:00:00Z', '2026-01-01T12:00:00Z')).toBe(false);
 });
 
-test('duplicateSegment copies a segment shifted 24 hours and clears confirmation', () => {
+test('duplicateSegment copies a segment on the same day and clears confirmation', () => {
 	const u = makeUser(kit, { email: 'dup@x.c', passwordHash: 'x', displayName: 'O' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const c = makeCard(kit, u.id, { nickname: 'Travel', network: 'visa', last4: '1234' });
@@ -68,8 +68,8 @@ test('duplicateSegment copies a segment shifted 24 hours and clears confirmation
 	expect(copy.location).toBe(s.location);
 	expect(copy.startTz).toBe(s.startTz);
 	expect(copy.endTz).toBe(s.startTz);
-	expect(copy.startAt).toBe('2026-07-02T09:00:00.000Z');
-	expect(copy.endAt).toBe('2026-07-02T10:00:00.000Z');
+	expect(copy.startAt).toBe('2026-07-01T09:00:00Z');
+	expect(copy.endAt).toBe('2026-07-01T10:00:00Z');
 	expect(copy.confirmationNumber).toBeNull();
 	expect(copy.cardId).toBe(c.id);
 	expect(copy.detailsJson).toBe(s.detailsJson);
@@ -144,7 +144,7 @@ test('updateSegment stores and clears meeting info', () => {
 	expect(cleared.meetingAt).toBeNull();
 });
 
-test('duplicateSegment copies meeting point and shifts rally time by 24h', () => {
+test('duplicateSegment copies meeting point and rally time on the same day', () => {
 	const u = makeUser(kit, { email: 'dup-meet@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });
 	const s = makeSegment(kit, t.id, {
@@ -159,7 +159,7 @@ test('duplicateSegment copies meeting point and shifts rally time by 24h', () =>
 
 	const copy = duplicateSegment(u.id, t.id, s.id);
 	expect(copy.meetingPoint).toBe('Lobby');
-	expect(copy.meetingAt).toBe('2026-07-02T13:30:00.000Z');
+	expect(copy.meetingAt).toBe('2026-07-01T13:30:00Z');
 });
 
 test('moveSegmentToDate preserves local time, duration and rally offset', () => {

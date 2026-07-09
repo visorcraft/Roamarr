@@ -83,6 +83,11 @@
       <br />
       <sub><b>Insurance policies</b> — coverage details, policy dates, and trip protection.</sub>
     </td>
+    <td width="50%">
+      <img src="docs/screenshots/mcp-ai.png" alt="Live Roamarr MCP test creating a Kyoto trip and itinerary segment through an AI assistant" />
+      <br />
+      <sub><b>MCP / AI workflow</b> — live OAuth connection, trip creation, and itinerary updates.</sub>
+    </td>
   </tr>
 </table>
 

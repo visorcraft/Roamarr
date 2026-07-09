@@ -47,7 +47,7 @@ Clients should fetch this dynamically rather than hard-code endpoint URLs.
 Roamarr currently exposes 58 scopes. Clients should fetch
 `scopes_supported` from discovery instead of hard-coding this list.
 Human-readable descriptions come from `src/lib/oauthScopes.ts` and are shown on
-**Profile -> Security -> API Clients**.
+**Profile → Security → API Clients**.
 
 Most feature scopes are read/write pairs: trips, segments, packing, budgets,
 expenses, places, reminders, companions, sharing, calendar, templates, travel
@@ -64,7 +64,7 @@ notes are exposed.
 
 ### Step 1 — Create a client
 
-Sign in and visit **Profile → Security → API connections**. Provide:
+Sign in and visit **Profile → Security → API Clients**. Provide:
 
 - **Client name** — a human-readable label (e.g. "Claude Desktop").
 - **Redirect URIs** — one per line. Must match the URI your client opens after
@@ -80,17 +80,19 @@ secret** (confidential clients only). **The secret is shown exactly once** —
 copy it before navigating away. If you lose it, delete the client and create a
 new one.
 
-### Step 2 — Point your client at Roamarr's discovery URL
+### Step 2 — Configure the MCP and discovery URLs
 
-Configure your client (or hand-write code) to fetch:
+Use `https://your-origin/mcp` when the client asks for the MCP server URL. Use
+the following URL when it asks for OAuth discovery or issuer metadata:
 
 ```
-GET /.well-known/oauth-authorization-server
+https://your-origin/.well-known/oauth-authorization-server
 ```
 
-and use the returned `authorization_endpoint` and `token_endpoint` URLs. The
-discovery URL is also displayed on **Profile → Security** under "Setup
-instructions".
+The client should use the returned `authorization_endpoint` and
+`token_endpoint` values. The discovery URL is also displayed under **Setup
+instructions** on the API Clients tab. Roamarr uses manual client registration;
+it does not advertise a dynamic `registration_endpoint`.
 
 ### Step 3 — Run the authorization-code + PKCE flow
 
@@ -180,8 +182,8 @@ returns HTTP 429.
 
 ## Admin: client allow-list {#admin-client-allow-list}
 
-Admins can lockdown which client IDs are allowed to be authorized at all. Visit
-**Settings → General → OAuth clients**. The textarea accepts one client ID per
+Admins can lock down which client IDs are allowed to be authorized. Visit
+**Admin → General → OAuth clients**. The textarea accepts one client ID per
 line:
 
 - **Empty** → any client may be authorized (default for new instances).
@@ -225,15 +227,19 @@ curl -sS -X POST https://your-origin/oauth/token \
   -d client_secret=<client secret>
 ```
 
-Call the MCP endpoint:
+Initialize the MCP endpoint:
 
 ```sh
 curl -sS -X POST https://your-origin/mcp \
   -H "Authorization: Bearer <access token>" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0.0"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"my-client","version":"1.0.0"}}}'
 ```
+
+Keep the `Mcp-Session-Id` response header and send it with later MCP requests.
+See [MCP protocol smoke test](./mcp-ai.md#protocol-smoke-test) for the complete
+initialize, list, call, and close sequence.
 
 Revoke:
 

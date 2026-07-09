@@ -11,6 +11,7 @@ import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
 import { serializeTags } from '$lib/tags';
 import { citySelectionError } from '$lib/server/cities';
+import { setFlash } from '$lib/server/flash';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
@@ -30,7 +31,7 @@ export function _deleteTrip(userId: number, tripId: number) {
 }
 
 export const actions: Actions = {
-	save: async ({ request, locals, params }) => {
+	save: async ({ request, locals, params, cookies }) => {
 		const u = requireUser(locals);
 		const tripId = parseTripId(params);
 		requireEditableTrip(u.id, tripId);
@@ -112,6 +113,7 @@ export const actions: Actions = {
 			updatedAt: nowIso()
 		});
 		logAudit(u.id, 'trip_update', 'trip', tripId, { status, defaultVisibility });
+		setFlash(cookies, 'Trip updated.');
 		throw redirect(303, `/trips/${params.id}`);
 	},
 	delete: async ({ locals, params }) => {

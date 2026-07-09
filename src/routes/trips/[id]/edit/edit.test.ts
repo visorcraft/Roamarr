@@ -45,6 +45,7 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 		request: new Request('http://localhost/trips/1/edit', { method: 'POST', body: form }),
 		params,
 		locals: makeLocals({ id: userId }),
+		cookies: { set: vi.fn() },
 		url: new URL(`http://localhost/trips/${params.id}/edit`)
 	} as any;
 }
@@ -106,10 +107,12 @@ test('edit action updates a trip with valid data', async () => {
 		endDate: '2026-08-10',
 		notes: 'new notes'
 	});
-	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+	const event = makeEvent(form, { id: String(t.id) }, a.id);
+	await expect(actions.save(event)).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
+	expect(event.cookies.set).toHaveBeenCalledWith('flash', 'Trip updated.', expect.any(Object));
 	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBeNull();

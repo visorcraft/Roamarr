@@ -299,3 +299,17 @@ test('testEmail action returns 429 when rate limited', async () => {
 	expect(result.data.error).toMatch(/too many/i);
 	expect(result.data.retryAfter).toBeGreaterThan(0);
 });
+
+test('map download actions return 429 when rate limited', async () => {
+	const ip = '8.8.4.4';
+	for (let i = 0; i < 3; i++) checkRateLimit(ip, 'maps:texture-download', { maxAttempts: 3, windowMs: 60_000 });
+	const u = makeUser('maps-rl@x.c', 'Admin', 'admin');
+	const result = (await actions.reimportTexture({
+		locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+		cookies: { set: vi.fn() },
+		getClientAddress: () => ip
+	} as any)) as { status: number; data: { error: string; retryAfter?: number } };
+	expect(result.status).toBe(429);
+	expect(result.data.error).toMatch(/too many/i);
+	expect(result.data.retryAfter).toBeGreaterThan(0);
+});

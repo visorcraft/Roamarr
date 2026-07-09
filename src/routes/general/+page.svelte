@@ -224,11 +224,11 @@
 						/>
 						</div>
 					</div>
-				</section>
 
-				<div class="flex justify-end">
-					<button class="btn btn-primary">Save general settings</button>
-				</div>
+					<div class="mt-6 flex justify-end">
+						<button class="btn btn-primary">Save general settings</button>
+					</div>
+				</section>
 			</form>
 		{/if}
 
@@ -359,11 +359,11 @@
 							{/if}
 						</div>
 					</div>
-				</section>
 
-				<div class="flex justify-end">
-					<button class="btn btn-primary">Save map settings</button>
-				</div>
+					<div class="mt-6 flex justify-end">
+						<button class="btn btn-primary">Save map settings</button>
+					</div>
+				</section>
 			</form>
 		{/if}
 
@@ -432,12 +432,12 @@
 							<input id="smtpFrom" name="smtpFrom" value={s.smtpFrom ?? ''} placeholder="roamarr@example.com" class="input" />
 						</div>
 					</div>
-				</section>
 
-				<div class="flex flex-wrap justify-end gap-2">
-					<button class="btn btn-ghost" type="submit" formaction="?/testEmail">Send test email</button>
-					<button class="btn btn-primary">Save email settings</button>
-				</div>
+					<div class="mt-6 flex flex-wrap justify-end gap-2">
+						<button class="btn btn-ghost" type="submit" formaction="?/testEmail">Send test email</button>
+						<button class="btn btn-primary">Save email settings</button>
+					</div>
+				</section>
 			</form>
 		{/if}
 
@@ -461,12 +461,12 @@
 							/>
 						</div>
 					</div>
-				</section>
 
-				<div class="flex flex-wrap justify-end gap-2">
-					<button class="btn btn-ghost" type="submit" formaction="?/testNotification">Send test notification</button>
-					<button class="btn btn-primary">Save webhook settings</button>
-				</div>
+					<div class="mt-6 flex flex-wrap justify-end gap-2">
+						<button class="btn btn-ghost" type="submit" formaction="?/testNotification">Send test notification</button>
+						<button class="btn btn-primary">Save webhook settings</button>
+					</div>
+				</section>
 			</form>
 		{/if}
 
@@ -493,11 +493,11 @@
 							></textarea>
 						</div>
 					</div>
-				</section>
 
-				<div class="flex justify-end">
-					<button class="btn btn-primary">Save OAuth settings</button>
-				</div>
+					<div class="mt-6 flex justify-end">
+						<button class="btn btn-primary">Save OAuth settings</button>
+					</div>
+				</section>
 			</form>
 		{/if}
 

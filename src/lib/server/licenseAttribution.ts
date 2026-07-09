@@ -57,7 +57,7 @@ function countLines(text: string) {
 }
 
 function hrefFor(id: LicenseDocumentId) {
-	return id === 'project' ? '/settings/about/licenses' : `/settings/about/licenses?tab=${id}`;
+	return id === 'project' ? '/about/licenses' : `/about/licenses?tab=${id}`;
 }
 
 export function getLicenseDocuments(): LicenseDocument[] {

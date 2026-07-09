@@ -8,6 +8,9 @@ const outputPath = path.join(root, 'src/lib/server/licenseData.generated.json');
 
 const PROJECT_LICENSE_NAMES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING', 'COPYING.md'];
 const PACKAGE_LICENSE_RE = /^(licen[cs]e|copying|copyright|notice)(\..*)?$/i;
+const KNOWN_PACKAGE_LICENSES = {
+	'@visorcraft/mongreldb': 'MIT OR Apache-2.0'
+};
 
 function runtimeComponentsFor(lock) {
 	const components = [
@@ -25,7 +28,7 @@ function runtimeComponentsFor(lock) {
 		if (!existsSync(packageJsonPath)) continue;
 		const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 		const version = pkg.version ?? lock.packages?.[packagePath]?.version ?? 'unknown';
-		const license = licenseExpression(pkg);
+		const license = licenseExpression(pkg, packageName);
 		const url = normalizeRepository(pkg.repository, pkg.homepage, pkg.bugs);
 		if (packageName === '@visorcraft/mongreldb') {
 			components.push({
@@ -101,7 +104,8 @@ function normalizeRepository(repo, homepage, bugs) {
 	return url;
 }
 
-function licenseExpression(pkg) {
+function licenseExpression(pkg, packageName = pkg.name) {
+	if (packageName && KNOWN_PACKAGE_LICENSES[packageName]) return KNOWN_PACKAGE_LICENSES[packageName];
 	if (typeof pkg.license === 'string') return pkg.license;
 	if (pkg.license && typeof pkg.license.type === 'string') return pkg.license.type;
 	if (Array.isArray(pkg.licenses)) {
@@ -190,7 +194,7 @@ function packageRows(lock) {
 		const row = {
 			name: displayName,
 			version,
-			license: licenseExpression(pkg),
+			license: licenseExpression(pkg, displayName),
 			scope,
 			url: normalizeRepository(pkg.repository, pkg.homepage, pkg.bugs),
 			packagePath,

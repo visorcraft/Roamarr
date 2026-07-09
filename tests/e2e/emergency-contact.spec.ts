@@ -1,8 +1,8 @@
 import { test, expect } from './fixtures';
 
 test('add an emergency contact', async ({ page }) => {
-	await page.goto('/profile', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('Your profile');
+	await page.goto('/profile/contacts', { waitUntil: 'networkidle' });
+	await expect(page.locator('h1')).toContainText('Emergency contacts');
 
 	const name = `E2E Emergency ${Date.now()}`;
 	const form = page.locator('form[action="?/addEmergencyContact"]');

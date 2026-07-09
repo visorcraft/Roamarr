@@ -1,4 +1,4 @@
-import { test, expect, vi, beforeEach, afterAll } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({
 	kit: null as unknown as import('@visorcraft/mongreldb-kit').KitDatabase

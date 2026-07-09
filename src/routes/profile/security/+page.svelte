@@ -135,7 +135,7 @@
 					<p class="text-sm font-medium">Save these backup codes</p>
 					<p class="field-help mt-1">Each can be used once if you lose access to your authenticator. They won't be shown again.</p>
 					<div class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
-						{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center">{code}</span>{/each}
+						{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center text-ink">{code}</span>{/each}
 					</div>
 					<label class="mt-4 flex items-center gap-2 text-sm">
 						<input type="checkbox" bind:checked={savedAck} class="checkbox" />
@@ -188,7 +188,7 @@
 					<p class="text-sm font-medium">Save these backup codes</p>
 					<p class="field-help mt-1">Each can be used once if you lose access to your authenticator. They won't be shown again.</p>
 					<div class="mt-3 grid grid-cols-2 gap-2 font-mono text-sm">
-						{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center">{code}</span>{/each}
+						{#each backupCodes as code (code)}<span class="rounded bg-surface2 px-2 py-1 text-center text-ink">{code}</span>{/each}
 					</div>
 					<label class="mt-4 flex items-center gap-2 text-sm">
 						<input type="checkbox" bind:checked={savedAck} class="checkbox" />
@@ -210,7 +210,7 @@
 						Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.), or enter the secret manually.
 					</p>
 					<img src={data.setup.qr} alt="QR code" class="mx-auto rounded-lg border border-line" />
-					<div class="rounded-md bg-surface2 px-3 py-2 text-center font-mono text-sm">
+					<div class="rounded-md bg-surface2 px-3 py-2 text-center font-mono text-sm text-ink">
 						{data.setup.secret}
 					</div>
 					<input type="hidden" name="secret" value={data.setup.secret} />
@@ -299,12 +299,12 @@
 			<dl class="mt-3 space-y-2">
 				<div>
 					<dt class="label">Client ID</dt>
-					<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{created.clientId}</dd>
+					<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm text-ink">{created.clientId}</dd>
 				</div>
 				<div>
 					<dt class="label">Client Secret</dt>
 					{#if created.clientSecret}
-						<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{created.clientSecret}</dd>
+						<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm text-ink">{created.clientSecret}</dd>
 					{:else}
 						<dd class="mt-0.5 text-sm text-muted">Public client — authenticates with PKCE, no secret.</dd>
 					{/if}
@@ -413,7 +413,7 @@
 		</p>
 		<div class="mt-3">
 			<dt class="label">Discovery URL</dt>
-			<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm">{data.discoveryUrl}</dd>
+			<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm text-ink">{data.discoveryUrl}</dd>
 		</div>
 		<div class="mt-4 space-y-1 text-sm text-muted">
 			<p>1. Create a client above and save the client ID (and secret for confidential clients).</p>

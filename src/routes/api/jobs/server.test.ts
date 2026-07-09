@@ -64,7 +64,7 @@ test('returns paginated scheduler runs newest first by default', async () => {
 
 test('limit parameter limits the number of rows', async () => {
 	const admin = makeAdmin(ctx.kit);
-	const run1 = makeSchedulerRun(ctx.kit, { startedAt: '2024-01-01T00:00:00Z' });
+	makeSchedulerRun(ctx.kit, { startedAt: '2024-01-01T00:00:00Z' });
 	const run2 = makeSchedulerRun(ctx.kit, { startedAt: '2024-01-02T00:00:00Z' });
 	const run3 = makeSchedulerRun(ctx.kit, { startedAt: '2024-01-03T00:00:00Z' });
 

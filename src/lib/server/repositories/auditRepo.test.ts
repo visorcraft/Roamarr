@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as repo from './auditRepo';
 import * as usersRepo from './usersRepo';
 import { auditLogs } from '$lib/server/db/mongrelSchema';
@@ -112,4 +112,23 @@ test('listAuditLogs search respects limit and offset on filtered results', () =>
 	expect(result.total).toBe(5);
 	expect(result.logs[0].entityId).toBe(3);
 	expect(result.logs[1].entityId).toBe(2);
+});
+
+test('listAuditLogs search scans only the newest bounded window', () => {
+	const u = makeUser('audit-search-window@x.c');
+	insertLog(Number(u.id), 'trip.create', 'trip', 1, { name: 'needle' }, '2026-01-01T00:00:00Z');
+
+	const values = Array.from({ length: repo.AUDIT_SEARCH_SCAN_LIMIT }, (_, i) => ({
+		user_id: BigInt(u.id),
+		action: 'profile.update',
+		entity_type: 'profile',
+		entity_id: BigInt(i + 2),
+		meta_json: JSON.stringify({ idx: i }),
+		created_at: '2026-01-02T00:00:00Z'
+	}));
+	kitDb().insertInto(auditLogs).valuesMany(values as any).executeSync();
+
+	const result = repo.listAuditLogs({ search: 'needle', limit: 10, offset: 0 });
+	expect(result.logs).toHaveLength(0);
+	expect(result.total).toBe(0);
 });

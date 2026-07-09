@@ -6,11 +6,13 @@ import { tmpdir } from 'node:os';
 import { GET as healthGet } from './+server';
 import { GET as deepHealthGet } from './deep/+server';
 import { getDb, closeDb } from '$lib/server/db/index';
+import { resetRateLimit } from '$lib/server/rateLimit';
 
 let dbDir: string;
 let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
+	resetRateLimit();
 	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-test-'));
 	originalDatabasePath = process.env.DATABASE_PATH;
 	process.env.DATABASE_PATH = dbDir;
@@ -30,7 +32,10 @@ function healthEvent() {
 }
 
 function deepHealthEvent() {
-	return { request: new Request('http://localhost/health/deep') } as any;
+	return {
+		request: new Request('http://localhost/health/deep'),
+		getClientAddress: () => '127.0.0.1'
+	} as any;
 }
 
 test('health returns ok when db directory and scheduler are healthy', async () => {

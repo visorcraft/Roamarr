@@ -30,11 +30,7 @@
 {#if data.notifications.length}
 	<ul class="mt-6 space-y-3">
 		{#each data.notifications as n (n.id)}
-			<li
-				class="card flex items-start gap-3 p-4 {n.readAt
-					? ''
-					: 'ring-indigo-400/30 bg-indigo-500/[0.04]'}"
-			>
+			<li class="card flex items-start gap-3 p-4">
 				<span
 					class="mt-1.5 h-2 w-2 shrink-0 rounded-full {n.readAt
 						? 'bg-white/10'

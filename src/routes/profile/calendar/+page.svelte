@@ -20,7 +20,7 @@
 
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
-<section class="card p-5 sm:p-6">
+<section class="card mt-6 p-5 sm:p-6">
 	{#if data.feedUrl}
 		<p class="text-sm">Subscribe to all your trips with one calendar URL.</p>
 		<div class="mt-2 flex items-start gap-2">

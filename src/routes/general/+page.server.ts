@@ -24,6 +24,19 @@ function userFacingError(e: unknown, fallback: string): string {
 	return fallback;
 }
 
+const MAP_RATE_LIMITS = {
+	enable: { maxAttempts: 3, windowMs: 60_000 },
+	cities: { maxAttempts: 3, windowMs: 60_000 },
+	texture: { maxAttempts: 3, windowMs: 60_000 },
+	upload: { maxAttempts: 3, windowMs: 60_000 }
+} as const;
+
+function rateLimitFailure(ip: string, route: string, opts: { maxAttempts: number; windowMs: number }) {
+	const limit = checkRateLimit(ip, route, opts);
+	if (limit.allowed) return null;
+	return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });
+}
+
 export function _saveAdminSettings(
 	userId: number,
 	i: {
@@ -311,80 +324,88 @@ export const actions: Actions = {
 		setFlash(cookies, 'Settings saved.');
 		const tab = url.searchParams.get('tab') ?? 'general';
 		throw redirect(303, `/general?tab=${tab}`);
-	},
-	// Idempotent: re-checks what's already downloaded and only fetches the missing
-	// pieces, so re-enabling after a disable (or a failed asset) resumes cleanly.
-	enableMaps: async ({ locals, cookies }) => {
-		const u = requireAdmin(locals);
-		try {
-			const before = getMapSettings();
-			let imported = 0;
-			if (before.cityCount === 0) {
-				({ imported } = await importCitiesFromUrl());
+		},
+		// Idempotent: re-checks what's already downloaded and only fetches the missing
+		// pieces, so re-enabling after a disable (or a failed asset) resumes cleanly.
+		enableMaps: async ({ locals, cookies, getClientAddress }) => {
+			const u = requireAdmin(locals);
+			const limited = rateLimitFailure(getClientAddress(), 'maps:enable', MAP_RATE_LIMITS.enable);
+			if (limited) return limited;
+			try {
+				const before = getMapSettings();
+				let imported = 0;
+				if (before.cityCount === 0) {
+					({ imported } = await importCitiesFromUrl());
+				}
+				if (!hasMapTexture()) {
+					await importMapTexture();
+				}
+				updateSettings({ mapsEnabled: true });
+				logAudit(u.id, 'maps_enable', 'settings', 1, {
+					citiesImported: imported,
+					textureReady: hasMapTexture()
+				});
+				const parts = [
+					imported
+						? `${imported.toLocaleString()} cities imported`
+						: `${before.cityCount.toLocaleString()} cities already present`,
+					hasMapTexture() ? 'Earth texture ready' : 'texture missing'
+				];
+				setFlash(cookies, `Maps enabled (${parts.join(', ')}).`);
+			} catch (e) {
+				return fail(400, { error: userFacingError(e, 'Failed to enable maps') });
 			}
-			if (!hasMapTexture()) {
+			throw redirect(303, '/general');
+		},
+		disableMaps: async ({ locals, cookies }) => {
+			const u = requireAdmin(locals);
+			updateSettings({ mapsEnabled: false });
+			logAudit(u.id, 'maps_disable', 'settings', 1, {});
+			setFlash(cookies, 'Maps disabled. Downloaded data was kept; re-enable to re-check and resume.');
+			throw redirect(303, '/general');
+		},
+		reimportCities: async ({ locals, cookies, getClientAddress }) => {
+			const u = requireAdmin(locals);
+			const limited = rateLimitFailure(getClientAddress(), 'maps:cities-download', MAP_RATE_LIMITS.cities);
+			if (limited) return limited;
+			try {
+				const { imported } = await importCitiesFromUrl();
+				logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'download', imported });
+				setFlash(cookies, `GeoNames cities re-imported (${imported.toLocaleString()} cities).`);
+			} catch (e) {
+				return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
+			}
+			throw redirect(303, '/general');
+		},
+		reimportTexture: async ({ locals, cookies, getClientAddress }) => {
+			const u = requireAdmin(locals);
+			const limited = rateLimitFailure(getClientAddress(), 'maps:texture-download', MAP_RATE_LIMITS.texture);
+			if (limited) return limited;
+			try {
 				await importMapTexture();
+				logAudit(u.id, 'maps_texture_import', 'settings', 1, {});
+				setFlash(cookies, 'Earth texture re-imported.');
+			} catch (e) {
+				return fail(400, { error: userFacingError(e, 'Failed to import Earth texture') });
 			}
-			updateSettings({ mapsEnabled: true });
-			logAudit(u.id, 'maps_enable', 'settings', 1, {
-				citiesImported: imported,
-				textureReady: hasMapTexture()
-			});
-			const parts = [
-				imported
-					? `${imported.toLocaleString()} cities imported`
-					: `${before.cityCount.toLocaleString()} cities already present`,
-				hasMapTexture() ? 'Earth texture ready' : 'texture missing'
-			];
-			setFlash(cookies, `Maps enabled (${parts.join(', ')}).`);
-		} catch (e) {
-			return fail(400, { error: userFacingError(e, 'Failed to enable maps') });
+			throw redirect(303, '/general');
+		},
+		importGeonames: async ({ request, locals, cookies, getClientAddress }) => {
+			const u = requireAdmin(locals);
+			const limited = rateLimitFailure(getClientAddress(), 'maps:cities-upload', MAP_RATE_LIMITS.upload);
+			if (limited) return limited;
+			const f = await request.formData();
+			const file = f.get('cities1000');
+			if (!(file instanceof File) || file.size === 0) {
+				return fail(400, { error: 'cities1000.zip is required' });
+			}
+			try {
+				const { imported } = await importCitiesFromReadable(Readable.fromWeb(file.stream() as any));
+				logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'upload', imported });
+				setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities).`);
+			} catch (e) {
+				return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
+			}
+			throw redirect(303, '/general');
 		}
-		throw redirect(303, '/general');
-	},
-	disableMaps: async ({ locals, cookies }) => {
-		const u = requireAdmin(locals);
-		updateSettings({ mapsEnabled: false });
-		logAudit(u.id, 'maps_disable', 'settings', 1, {});
-		setFlash(cookies, 'Maps disabled. Downloaded data was kept; re-enable to re-check and resume.');
-		throw redirect(303, '/general');
-	},
-	reimportCities: async ({ locals, cookies }) => {
-		const u = requireAdmin(locals);
-		try {
-			const { imported } = await importCitiesFromUrl();
-			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'download', imported });
-			setFlash(cookies, `GeoNames cities re-imported (${imported.toLocaleString()} cities).`);
-		} catch (e) {
-			return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
-		}
-		throw redirect(303, '/general');
-	},
-	reimportTexture: async ({ locals, cookies }) => {
-		const u = requireAdmin(locals);
-		try {
-			await importMapTexture();
-			logAudit(u.id, 'maps_texture_import', 'settings', 1, {});
-			setFlash(cookies, 'Earth texture re-imported.');
-		} catch (e) {
-			return fail(400, { error: userFacingError(e, 'Failed to import Earth texture') });
-		}
-		throw redirect(303, '/general');
-	},
-	importGeonames: async ({ request, locals, cookies }) => {
-		const u = requireAdmin(locals);
-		const f = await request.formData();
-		const file = f.get('cities1000');
-		if (!(file instanceof File) || file.size === 0) {
-			return fail(400, { error: 'cities1000.zip is required' });
-		}
-		try {
-			const { imported } = await importCitiesFromReadable(Readable.fromWeb(file.stream() as any));
-			logAudit(u.id, 'geonames_import', 'settings', 1, { source: 'upload', imported });
-			setFlash(cookies, `GeoNames cities imported (${imported.toLocaleString()} cities).`);
-		} catch (e) {
-			return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
-		}
-		throw redirect(303, '/general');
-	}
 };

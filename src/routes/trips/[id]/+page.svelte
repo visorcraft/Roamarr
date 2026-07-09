@@ -71,17 +71,13 @@
 	function selectTripTab(tab: TripTab) {
 		activeTab = tab;
 		if (typeof window === 'undefined') return;
-		window.localStorage.setItem(`roamarr:trip:${trip.id}:tab`, tab);
 		replaceState(`${window.location.pathname}${window.location.search}#${tab}`, {});
 	}
 
 	onMount(() => {
 		const hashTab = window.location.hash.slice(1);
-		const savedTab = window.localStorage.getItem(`roamarr:trip:${trip.id}:tab`);
 		if (isTripTab(hashTab)) {
 			activeTab = hashTab;
-		} else if (isTripTab(savedTab)) {
-			activeTab = savedTab;
 		}
 	});
 
@@ -460,25 +456,25 @@
 
 					<div class="mt-3 flex flex-wrap gap-2">
 						{#if destinationLabel}
-							<span class="trip-meta-pill">
-								<Icon name="location" class="h-3.5 w-3.5 text-slate-500" />
+							<span class="badge badge-brand">
+								<Icon name="location" class="h-3.5 w-3.5" />
 								{destinationLabel}
 							</span>
 						{/if}
 						{#if trip.startDate || trip.endDate}
-							<span class="trip-meta-pill">
+							<span class="badge badge-brand">
 								<span class="font-mono leading-none">{trip.startDate || '—'}</span>
-								<Icon name="arrow-right" class="trip-meta-pill-arrow" />
+								<Icon name="arrow-right" class="h-3.5 w-3.5" />
 								<span class="font-mono leading-none">{trip.endDate || '—'}</span>
 							</span>
 						{/if}
 						{#if days}
-							<span class="trip-meta-pill">{days} day{days === 1 ? '' : 's'}</span>
+							<span class="badge badge-brand">{days} day{days === 1 ? '' : 's'}</span>
 						{/if}
 						{#if daysUntil != null}
-							<span class="trip-meta-pill">Starts in {daysUntil} day{daysUntil === 1 ? '' : 's'}</span>
+							<span class="badge badge-brand">Starts in {daysUntil} day{daysUntil === 1 ? '' : 's'}</span>
 						{/if}
-						<span class="trip-meta-pill">{segmentList.length} segment{segmentList.length === 1 ? '' : 's'}</span>
+						<span class="badge badge-brand">{segmentList.length} segment{segmentList.length === 1 ? '' : 's'}</span>
 					</div>
 				</div>
 

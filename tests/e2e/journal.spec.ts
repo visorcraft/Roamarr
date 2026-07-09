@@ -14,6 +14,7 @@ test('add a journal entry to a trip', async ({ page }) => {
 	await form.locator('textarea[name="body"]').fill('A journal entry created by the e2e suite.');
 	await form.locator('button:has-text("Add journal entry")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-notes').click();
 
 	await expect(page.getByText(title)).toBeVisible();
 });

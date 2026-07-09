@@ -17,6 +17,7 @@ test('add an expense to a trip', async ({ page }) => {
 
 	await form.locator('button:has-text("Add expense")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-money').click();
 
 	const expenseRow = page.locator('[data-testid="expense-list"] li', { hasText: description });
 	await expect(expenseRow).toBeVisible();
@@ -34,6 +35,7 @@ test('expense receipt uploads and downloads intact', async ({ page }) => {
 	await expenseForm.locator('input[name="amount"]').fill('50');
 	await expenseForm.locator('button:has-text("Add expense")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-money').click();
 
 	const pdfContent = '%PDF-1.4 test receipt content';
 	const buffer = Buffer.from(pdfContent);
@@ -44,6 +46,7 @@ test('expense receipt uploads and downloads intact', async ({ page }) => {
 	});
 	await page.locator('form[action="?/addAttachment"]').getByRole('button', { name: 'Upload' }).click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-money').click();
 
 	const expenseRow = page.locator('[data-testid="expense-list"] li', { hasText: description });
 	const receiptLink = expenseRow.getByRole('link', { name: 'receipt.pdf' });

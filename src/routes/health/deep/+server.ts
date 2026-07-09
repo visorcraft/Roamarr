@@ -5,8 +5,19 @@ import { getDatabasePath } from '$lib/server/db/paths';
 import { isSchedulerRunning } from '$lib/server/scheduler';
 import { getExistingDb } from '$lib/server/db/index';
 import { runReadOnlyDiagnosticQuery } from '$lib/server/db/sqlDiagnostics';
+import { checkRateLimit } from '$lib/server/rateLimit';
 
-export const GET: RequestHandler = async () => {
+const DEEP_HEALTH_RATE_LIMIT = { maxAttempts: 30, windowMs: 60_000 };
+
+export const GET: RequestHandler = async ({ getClientAddress }) => {
+	const limit = checkRateLimit(getClientAddress(), 'health:deep', DEEP_HEALTH_RATE_LIMIT);
+	if (!limit.allowed) {
+		return json(
+			{ error: 'Too many requests' },
+			{ status: 429, headers: { 'Retry-After': String(limit.retryAfter ?? 60) } }
+		);
+	}
+
 	let dbOk = false;
 	let details: Record<string, unknown> | undefined;
 

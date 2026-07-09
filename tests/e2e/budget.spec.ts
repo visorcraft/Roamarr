@@ -11,6 +11,7 @@ test('set a trip budget cap', async ({ page }) => {
 	await form.locator('input[name="amount"]').fill('2500');
 	await form.locator('button:has-text("Set cap")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-money').click();
 
 	await expect(page.getByText('USD 2500.00 remaining')).toBeVisible();
 });

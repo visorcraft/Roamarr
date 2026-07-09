@@ -14,8 +14,9 @@ test('add a fare provider account', async ({ page }) => {
 	await page.getByRole('button', { name: 'Add account', exact: true }).click();
 	await page.waitForURL('/fare-providers', { waitUntil: 'networkidle' });
 
-	await expect(page.getByText(label)).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Test' })).toBeVisible();
+	const row = page.locator('tbody tr', { hasText: label });
+	await expect(row).toBeVisible();
+	await expect(row.getByLabel('Actions')).toBeVisible();
 });
 
 test('rejects a fare provider account with an empty label', async ({ page }) => {

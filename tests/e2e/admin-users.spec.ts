@@ -46,7 +46,7 @@ test('sorts users and changes rows per page', async ({ page }) => {
 	await page.goto('/users', { waitUntil: 'networkidle' });
 	await Promise.all([
 		page.waitForResponse((res) => res.url().includes('/api/users') && res.url().includes(`search=${prefix}`)),
-		page.locator('.gridjs-search-input').fill(prefix)
+		page.getByRole('searchbox', { name: 'Search table' }).fill(prefix)
 	]);
 
 	const userHeader = page.locator('th.gridjs-th').filter({ hasText: 'User' });
@@ -73,8 +73,8 @@ test('sorts users and changes rows per page', async ({ page }) => {
 	await expect(page.locator('tbody tr .font-medium')).toHaveText([zName, aName]);
 
 	await Promise.all([
-		page.waitForResponse((res) => res.url().includes('/api/users') && res.url().includes('limit=10')),
-		page.getByLabel('Rows').selectOption('10')
+		page.waitForResponse((res) => res.url().includes('/api/users') && res.url().includes('limit=25')),
+		page.getByLabel('Rows').selectOption('25')
 	]);
 });
 

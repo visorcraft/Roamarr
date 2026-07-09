@@ -4,7 +4,6 @@
 import { KitDatabase, migrate } from '@visorcraft/mongreldb-kit';
 import { schema } from './mongrelSchema';
 import { migrations } from './mongrelMigrations/0001_initial';
-import { getDatabasePath } from './paths';
 
 export async function openKitDatabase(path: string): Promise<KitDatabase> {
 	const kit = await KitDatabase.open(path, schema);

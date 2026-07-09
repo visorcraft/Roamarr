@@ -12,6 +12,7 @@ test('add a checklist item to a trip', async ({ page }) => {
 	await form.locator('input[name="text"]').fill(item);
 	await form.locator('button:has-text("Add")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-prep').click();
 
 	await expect(page.getByText(item)).toBeVisible();
 });

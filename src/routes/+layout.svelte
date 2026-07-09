@@ -333,12 +333,18 @@
 				{ href: '/general', label: 'General', icon: 'settings' },
 				{ href: '/users', label: 'Users', icon: 'users' },
 				{ href: '/fare-providers', label: 'Fare providers', icon: 'card' },
-				{ href: '/jobs', label: 'Scheduled Jobs', icon: 'reminder' },
-				{ href: '/audit-logs', label: 'Audit log', icon: 'document' },
-				{ href: '/backup', label: 'Backup', icon: 'archive' },
-				{ href: '/maintenance', label: 'Maintenance', icon: 'settings' },
-				{ href: '/seed', label: 'Seed', icon: 'plus' },
-				{ href: '/about', label: 'About', icon: 'info' }
+				{
+					href: '/maintenance',
+					label: 'Maintenance',
+					icon: 'medical',
+					children: [
+						{ href: '/maintenance', label: 'Database Ops' },
+						{ href: '/jobs', label: 'Scheduled Jobs' },
+						{ href: '/audit-logs', label: 'Audit log' },
+						{ href: '/backup', label: 'Backup' },
+						{ href: '/seed', label: 'Seed' }
+					]
+				}
 			]
 		}
 	];

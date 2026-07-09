@@ -37,7 +37,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUserLocals } from '../../../../../tests/eventHelpers';
-import { makeUser, makeCompanion, makeTrip } from '../../../../../tests/helpers';
+import { makeUser, makeCompanion } from '../../../../../tests/helpers';
 import { createTrip } from '$lib/server/repositories/tripsRepo';
 
 function event(user: { id: number } | null, body?: FormData, clientAddress = '127.0.0.1') {

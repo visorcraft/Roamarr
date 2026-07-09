@@ -63,6 +63,7 @@
 			value={form?.values?.coverageSummary ?? ''}
 			placeholder="What's covered"
 			disabled={submitting}
+			class="sm:col-span-2"
 			errors={form?.errors ?? {}}
 		/>
 		<div class="grid gap-4 sm:grid-cols-2 sm:col-span-2">

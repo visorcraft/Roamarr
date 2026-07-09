@@ -6,8 +6,6 @@ import {
 	collapseSidebarSection
 } from './helpers';
 
-const STORAGE_KEY = 'roamarr.sidebar.sections';
-
 test.describe('desktop sidebar', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/', { waitUntil: 'networkidle' });
@@ -112,7 +110,7 @@ test.describe('desktop sidebar', () => {
 		}
 
 		// Seed an unread notification using the existing admin test action.
-		await page.goto('/settings', { waitUntil: 'networkidle' });
+		await page.goto('/general?tab=webhook', { waitUntil: 'networkidle' });
 		await page.getByRole('button', { name: 'Send test notification' }).click();
 		await page.waitForLoadState('networkidle');
 

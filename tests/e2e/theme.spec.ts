@@ -11,18 +11,18 @@ async function selectTheme(page: Page, labelText: string, value: string) {
 }
 
 test('change user theme', async ({ page }) => {
-	await page.goto('/profile', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('Your profile');
+	await page.goto('/profile/theme', { waitUntil: 'networkidle' });
+	await expect(page.locator('h1')).toContainText('Theme');
 
 	await selectTheme(page, 'High Contrast', 'high-contrast');
-	await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+	await page.getByRole('button', { name: 'Save theme', exact: true }).click();
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.locator('.theme-root')).toHaveAttribute('data-theme', 'high-contrast');
 
 	// Reset to the default so later test runs / local browsing start from Follow system.
 	await selectTheme(page, 'Follow system', 'system');
-	await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+	await page.getByRole('button', { name: 'Save theme', exact: true }).click();
 	await page.waitForLoadState('networkidle');
 
 	await expect(page.locator('.theme-root')).toHaveAttribute('data-theme', 'system');

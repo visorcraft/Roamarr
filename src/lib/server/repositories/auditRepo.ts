@@ -59,6 +59,8 @@ export interface AdminStats {
 	notifications: number;
 }
 
+export const AUDIT_SEARCH_SCAN_LIMIT = 10_000;
+
 function toBigInt(id: number): bigint {
 	return BigInt(id);
 }
@@ -179,7 +181,8 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 	if (where) {
 		rowsQuery = rowsQuery.where(where);
 	}
-	const rows = rowsQuery.executeSync();
+	// ponytail: bounded in-memory search; move search into DB if audit logs need deeper full-text lookup.
+	const rows = rowsQuery.limit(AUDIT_SEARCH_SCAN_LIMIT).executeSync();
 
 	const userIds = rows.map((r) => idFromBigInt(r.user_id));
 	const userMap = hydrateUsers(userIds);

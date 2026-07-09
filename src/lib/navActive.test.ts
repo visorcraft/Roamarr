@@ -50,7 +50,8 @@ describe('activeItemHref', () => {
 		{ href: '/trips', label: 'Trips' },
 		{ href: '/profile', label: 'Profile', children: [{ href: '/profile', label: 'Account' }] },
 		{ href: '/profile/loyalty', label: 'Loyalty' },
-		{ href: '/profile/visited', label: 'Visited', children: [{ href: '/profile/visited/countries', label: 'Countries' }] }
+		{ href: '/profile/visited', label: 'Visited', children: [{ href: '/profile/visited/countries', label: 'Countries' }] },
+		{ href: '/maintenance', label: 'Maintenance', children: [{ href: '/jobs', label: 'Scheduled Jobs' }] }
 	];
 
 	it('selects the exact item on /profile', () => {
@@ -68,6 +69,10 @@ describe('activeItemHref', () => {
 
 	it('selects the deepest matching item on /profile/visited/countries', () => {
 		expect(activeItemHref('/profile/visited/countries', items)).toBe('/profile/visited');
+	});
+
+	it('selects parent items from child-only route matches', () => {
+		expect(activeItemHref('/jobs', items)).toBe('/maintenance');
 	});
 
 	it('returns null when no item matches', () => {

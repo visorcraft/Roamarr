@@ -14,13 +14,13 @@ async function updatePassword(page: Page, currentPassword: string, newPassword: 
 }
 
 test('change password from profile', async ({ page }) => {
-	await page.goto('/profile', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('Your profile');
+	await page.goto('/profile/security', { waitUntil: 'networkidle' });
+	await expect(page.locator('h1')).toContainText('Security');
 
 	await updatePassword(page, ORIGINAL_PASSWORD, NEW_PASSWORD);
-	await expect(page.locator('h1')).toContainText('Your profile');
+	await expect(page.locator('h1')).toContainText('Security');
 
 	// Restore the shared admin password so subsequent test runs can log in.
 	await updatePassword(page, NEW_PASSWORD, ORIGINAL_PASSWORD);
-	await expect(page.locator('h1')).toContainText('Your profile');
+	await expect(page.locator('h1')).toContainText('Security');
 });

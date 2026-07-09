@@ -20,6 +20,7 @@ import { GET } from './+server';
 import { actions } from './+page.server';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { applyPendingRestore, getRestoreMarkerPath } from '$lib/server/restore';
+import { checkRateLimit, resetRateLimit } from '$lib/server/rateLimit';
 
 let testRoot: string;
 let originalDatabasePath: string | undefined;
@@ -75,6 +76,7 @@ async function extractArchive(archivePath: string, extractDir: string): Promise<
 }
 
 beforeEach(() => {
+	resetRateLimit();
 	testRoot = join(tmpdir(), `roamarr-backup-test-${Date.now()}`);
 	mkdirSync(testRoot, { recursive: true });
 	originalDatabasePath = process.env.DATABASE_PATH;
@@ -94,7 +96,7 @@ test('backup downloads a tar.gz archive of the database directory and attachment
 	mkdirSync(attachmentsDir, { recursive: true });
 	writeFileSync(join(attachmentsDir, 'sample.txt'), 'hello');
 
-	const res = await GET({ locals: adminLocals() } as any);
+	const res = await GET({ locals: adminLocals(), getClientAddress: () => '127.0.0.1' } as any);
 	expect(res.status).toBe(200);
 	expect(res.headers.get('Content-Disposition')).toContain('.mongreldb.tar.gz');
 
@@ -120,8 +122,70 @@ test('restore rejects an invalid archive', async () => {
 	const form = new FormData();
 	form.append('file', invalid);
 	const request = new Request('http://localhost/backup', { method: 'POST', body: form });
-	const result = await actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any);
+	const result = await actions.restore({
+		locals: adminLocals(),
+		request,
+		cookies: { set: vi.fn() },
+		getClientAddress: () => '127.0.0.1'
+	} as any);
 	expect(result?.status).toBe(400);
+});
+
+test('restore rejects oversized archives before extracting', async () => {
+	const dbDir = makeDbDir();
+	process.env.DATABASE_PATH = dbDir;
+
+	const large = new File([Buffer.from('x')], 'large.mongreldb.tar.gz', {
+		type: 'application/gzip'
+	});
+	Object.defineProperty(large, 'size', { value: 512 * 1024 * 1024 + 1 });
+	const form = new FormData();
+	form.append('file', large);
+	const result = await actions.restore({
+		locals: adminLocals(),
+		request: { formData: async () => form },
+		cookies: { set: vi.fn() },
+		getClientAddress: () => '127.0.0.1'
+	} as any);
+	expect(result?.status).toBe(400);
+	expect(result?.data.error).toContain('512 MB');
+});
+
+test('restore is rate limited before parsing the archive', async () => {
+	const dbDir = makeDbDir();
+	process.env.DATABASE_PATH = dbDir;
+	const ip = '7.7.7.7';
+	for (let i = 0; i < 3; i++) {
+		checkRateLimit(ip, 'backup:restore', { maxAttempts: 3, windowMs: 60_000 });
+	}
+
+	const invalid = new File([Buffer.from('not a valid tar.gz')], 'bad.mongreldb.tar.gz', {
+		type: 'application/gzip'
+	});
+	const form = new FormData();
+	form.append('file', invalid);
+	const request = new Request('http://localhost/backup', { method: 'POST', body: form });
+	const result = await actions.restore({
+		locals: adminLocals(),
+		request,
+		cookies: { set: vi.fn() },
+		getClientAddress: () => ip
+	} as any);
+	expect(result?.status).toBe(429);
+	expect(result?.data.retryAfter).toBeGreaterThan(0);
+});
+
+test('backup downloads are rate limited', async () => {
+	const dbDir = makeDbDir();
+	process.env.DATABASE_PATH = dbDir;
+	const ip = '6.6.6.6';
+	for (let i = 0; i < 3; i++) {
+		checkRateLimit(ip, 'backup:download', { maxAttempts: 3, windowMs: 60_000 });
+	}
+
+	await expect(GET({ locals: adminLocals(), getClientAddress: () => ip } as any)).rejects.toMatchObject({
+		status: 429
+	});
 });
 
 test('restore accepts a valid backup and writes a pending restore marker', async () => {
@@ -141,7 +205,12 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 	form.append('file', fileFrom(archivePath, 'backup.mongreldb.tar.gz'));
 	const request = new Request('http://localhost/backup', { method: 'POST', body: form });
 	await expect(
-		actions.restore({ locals: adminLocals(), request, cookies: { set: vi.fn() } } as any)
+		actions.restore({
+			locals: adminLocals(),
+			request,
+			cookies: { set: vi.fn() },
+			getClientAddress: () => '127.0.0.1'
+		} as any)
 	).rejects.toMatchObject({ status: 303, location: '/backup' });
 
 	const markerPath = getRestoreMarkerPath(targetDbDir);

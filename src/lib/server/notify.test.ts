@@ -68,6 +68,7 @@ test('POSTs JSON to webhookUrl when configured', async () => {
 	expect(fetches.length).toBe(1);
 	expect(fetches[0].url).toBe('https://hooks.example.com/roamarr');
 	expect(fetches[0].init.method).toBe('POST');
+	expect(fetches[0].init.redirect).toBe('manual');
 	const headers = fetches[0].init.headers as Record<string, string>;
 	expect(headers['Content-Type']).toBe('application/json');
 	expect(headers['X-Roamarr-Signature']).toMatch(/^[0-9a-f]{64}$/);

@@ -91,6 +91,7 @@ const webhookChannel: Channel = {
 		const { signature, timestamp } = signWebhookBody(body);
 		await fetch(s.webhookUrl, {
 			method: 'POST',
+			redirect: 'manual',
 			headers: {
 				'Content-Type': 'application/json',
 				'X-Roamarr-Signature': signature,

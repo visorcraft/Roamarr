@@ -27,8 +27,10 @@ test('rejects adding a non-existent group member without enumeration', async ({ 
 
 	// Open the group edit page to add a member.
 	const row = page.locator('.gridjs-tr', { hasText: name });
-	await row.getByRole('button', { name: 'Edit' }).click();
-	await page.waitForURL(/\/groups\/\d+\/edit/, { waitUntil: 'networkidle' });
+	await Promise.all([
+		page.waitForURL(/\/groups\/\d+\/edit/, { waitUntil: 'networkidle' }),
+		row.getByLabel('Actions').selectOption('edit')
+	]);
 
 	const addForm = page.locator('form[action="?/addMember"]');
 	await addForm.getByLabel('Add member', { exact: true }).fill('not-a-user@roamarr.test');

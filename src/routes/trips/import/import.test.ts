@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -12,6 +12,7 @@ import { trips, segments } from '$lib/server/db/mongrelSchema';
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeLocals } from '../../../../tests/eventHelpers';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
+import { checkRateLimit, resetRateLimit } from '$lib/server/rateLimit';
 
 function kitDb(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -27,7 +28,11 @@ function makeTestUser(email: string) {
 	});
 }
 
-function makeEvent(file: File, format = 'json', userId = 1) {
+beforeEach(() => {
+	resetRateLimit();
+});
+
+function makeEvent(file: File, format = 'json', userId = 1, ip = '127.0.0.1') {
 	const f = new FormData();
 	f.append('file', file);
 	f.append('format', format);
@@ -35,7 +40,8 @@ function makeEvent(file: File, format = 'json', userId = 1) {
 		request: new Request('http://localhost/trips/import', { method: 'POST', body: f }),
 		params: {},
 		locals: makeLocals({ id: userId }),
-		url: new URL('http://localhost/trips/import')
+		url: new URL('http://localhost/trips/import'),
+		getClientAddress: () => ip
 	} as any;
 }
 
@@ -91,10 +97,40 @@ test('rejects missing file', async () => {
 		request: new Request('http://localhost/trips/import', { method: 'POST', body: f }),
 		params: {},
 		locals: makeLocals({ id: 1 }),
-		url: new URL('http://localhost/trips/import')
+		url: new URL('http://localhost/trips/import'),
+		getClientAddress: () => '127.0.0.1'
 	} as any)) as { status: number; data: { error: string } };
 	expect(result.status).toBe(400);
 	expect(result.data.error).toContain('select a file');
+});
+
+test('rejects oversized import files', async () => {
+	const u = makeTestUser('large@x.c');
+	const file = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'trips.json', {
+		type: 'application/json'
+	});
+	const result = (await actions.default(makeEvent(file, 'json', Number(u.id)))) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toContain('5 MB');
+});
+
+test('rate limits imports before parsing the upload', async () => {
+	const ip = '8.8.8.8';
+	for (let i = 0; i < 5; i++) {
+		checkRateLimit(ip, 'trips:import', { maxAttempts: 5, windowMs: 60_000 });
+	}
+	const u = makeTestUser('limited@x.c');
+	const file = new File(['{"trips":[]}'], 'trips.json', { type: 'application/json' });
+	const result = (await actions.default(makeEvent(file, 'json', Number(u.id), ip))) as {
+		status: number;
+		data: { error: string; retryAfter?: number };
+	};
+	expect(result.status).toBe(429);
+	expect(result.data.error).toMatch(/too many/i);
+	expect(result.data.retryAfter).toBeGreaterThan(0);
 });
 
 test('rejects malformed JSON', async () => {

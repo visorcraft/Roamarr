@@ -3,11 +3,14 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { createGzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
-import type { RequestHandler } from '@sveltejs/kit';
+import { error, type RequestHandler } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
 import { getDatabasePath } from '$lib/server/db/paths';
 import { getAttachmentsPath } from '$lib/server/restore';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import tar from 'tar-fs';
+
+const BACKUP_DOWNLOAD_RATE_LIMIT = { maxAttempts: 3, windowMs: 60_000 };
 
 function backupFilename() {
 	const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -22,8 +25,10 @@ function cleanupTemp(path: string) {
 	}
 }
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, getClientAddress }) => {
 	requireAdmin(locals);
+	const limit = checkRateLimit(getClientAddress(), 'backup:download', BACKUP_DOWNLOAD_RATE_LIMIT);
+	if (!limit.allowed) throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
 
 	const dbPath = getDatabasePath();
 	const attachmentsPath = getAttachmentsPath(dbPath);

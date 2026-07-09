@@ -13,6 +13,7 @@ test('add a companion to a trip', async ({ page }) => {
 	await form.locator('select[name="category"]').selectOption('adult');
 	await form.locator('button:has-text("Add")').click();
 	await page.waitForLoadState('networkidle');
+	await page.locator('#trip-tab-people').click();
 
 	await expect(page.getByText(name)).toBeVisible();
 });

@@ -17,7 +17,6 @@ import {
 	fareWatches
 } from '$lib/server/db/mongrelSchema';
 import { encrypt, decrypt } from '$lib/server/crypto';
-import { nowIso } from '$lib/server/tz';
 import { compareRows } from '$lib/server/sortUtils';
 
 // ============================================================================

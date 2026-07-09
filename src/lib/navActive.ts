@@ -20,7 +20,7 @@ export function activeChildHref(path: string, children: NavChild[]): string | nu
 export function activeItemHref(path: string, items: NavItem[]): string | null {
 	let match: string | null = null;
 	for (const item of items) {
-		if (isActive(path, item.href)) {
+		if (isActive(path, item.href) || (item.children && activeChildHref(path, item.children))) {
 			if (!match || item.href.length > match.length) {
 				match = item.href;
 			}

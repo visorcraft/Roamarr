@@ -2,9 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	formatDate,
 	formatDateTime,
-	formatTime,
-	DEFAULT_DATE_FORMAT,
-	DEFAULT_DATETIME_FORMAT
+	formatTime
 } from './dateFormat';
 
 describe('formatDate', () => {

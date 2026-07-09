@@ -36,12 +36,12 @@
 			<p class="mt-2">
 				Roamarr encrypts sensitive data at rest with this key. Generate one with:
 			</p>
-			<pre class="mt-2 rounded bg-black/10 p-3 font-mono text-sm overflow-x-auto">openssl rand -base64 32</pre>
+			<pre class="mt-2 overflow-x-auto rounded bg-black/10 p-3 font-mono text-sm text-ink">openssl rand -base64 32</pre>
 			<p class="mt-2">
 				Then set it as the environment variable (or paste it into <code>.env</code>) and restart
 				the app:
 			</p>
-			<pre class="mt-2 rounded bg-black/10 p-3 font-mono text-sm overflow-x-auto">ROAMARR_SECRET=&lt;output-from-openssl&gt;</pre>
+			<pre class="mt-2 overflow-x-auto rounded bg-black/10 p-3 font-mono text-sm text-ink">ROAMARR_SECRET=&lt;output-from-openssl&gt;</pre>
 		</div>
 	{:else}
 		{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}

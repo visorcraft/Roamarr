@@ -60,7 +60,9 @@ export const actions: Actions = {
 		const redirectUri = String(f.get('redirect_uri') ?? '');
 		const codeChallenge = String(f.get('code_challenge') ?? '');
 		const state = String(f.get('state') ?? '');
-		const scopeStr = String(f.get('scopes') ?? '');
+		// Authorize form posts scopes as repeated fields (one per requested scope).
+		// A single get() returns only the first value, silently dropping the rest.
+		const scopeStr = f.getAll('scopes').map(String).join(' ');
 
 		const client = getClient(clientId);
 		if (!client) throw error(400, 'Unknown client');

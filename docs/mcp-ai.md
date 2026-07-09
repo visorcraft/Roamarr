@@ -11,16 +11,14 @@ trips, segments, packing lists, budgets, and visited places.
 
 - **MCP endpoint:** `POST /mcp` (Streamable HTTP, stateless JSON-RPC).
 - **Authentication:** OAuth 2.1 authorization-code flow with mandatory PKCE
-  (S256).
-- **Discovery:** `GET /.well-known/oauth-authorization-server` returns all
-  endpoint URLs and supported features.
+  (S256). Full protocol reference: [OAuth 2.1 integration](./oauth.md).
 
 ## Connecting an AI assistant
 
-1. **Create an OAuth client** at **Security → API connections → Create a
-   client**. Provide a name, one or more redirect URIs, and select the scopes
-   the assistant needs. Save the **Client ID** and **Client Secret** (shown
-   once).
+1. **Create an OAuth client** at **Profile → Security → API connections**.
+   Provide a name, one or more redirect URIs, and select the scopes the
+   assistant needs. Save the **Client ID** and (for confidential clients) the
+   **Client Secret** — the secret is shown once.
 
 2. **Point your AI client** at Roamarr's discovery URL:
    ```
@@ -34,6 +32,10 @@ trips, segments, packing lists, budgets, and visited places.
 4. **Call the MCP server:** the assistant sends a Bearer token with every
    `/mcp` request. Roamarr verifies the token, checks scopes, and routes the
    tool call.
+
+For token refresh, revocation, error codes, and the public-vs-confidential
+client distinction, see [OAuth 2.1 integration](./oauth.md). The scope table
+below is also reproduced there.
 
 ## Scopes
 

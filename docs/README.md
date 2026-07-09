@@ -52,7 +52,10 @@ segments, sharing, reminders, documents, and more.
 
 - [Visited places](./visited-places.md) — track countries and U.S. states.
 - [Weather](./weather.md) — trip-level and per-day forecasting via Open-Meteo.
-- [MCP / AI integration](./mcp-ai.md) — connect AI assistants over OAuth 2.1.
+- [OAuth 2.1 integration](./oauth.md) — generic OAuth 2.1 + PKCE reference:
+  scopes, endpoints, discovery, token lifecycle, allow-list.
+- [MCP / AI integration](./mcp-ai.md) — connect AI assistants over OAuth 2.1
+  (built on the OAuth foundation; lists available tools, prompts, resources).
 - [Per-user SMTP](./per-user-smtp.md) — send notifications from your own mailbox.
 
 ## Conventions

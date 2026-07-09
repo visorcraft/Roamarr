@@ -25,13 +25,28 @@
 }
 
 .trip-modern .trip-modern-day-body {
+	anchor-scope: --trip-timeline-start, --trip-timeline-end;
 	padding: 0.55rem 0.65rem 0.75rem 1rem;
 }
 
 .trip-modern .trip-modern-day-body::before {
+	top: anchor(--trip-timeline-start top, 2.1rem);
+	bottom: anchor(--trip-timeline-end bottom, 2.1rem);
 	left: 9.45rem;
 	z-index: 1;
 	background: color-mix(in oklab, var(--theme-brand) 16%, var(--trip-modern-line));
+}
+
+.trip-modern .trip-modern-segment:first-child .trip-modern-type-node {
+	anchor-name: --trip-timeline-start;
+}
+
+.trip-modern .trip-modern-segment:last-child .trip-modern-type-node {
+	anchor-name: --trip-timeline-end;
+}
+
+.trip-modern .trip-modern-segment:only-child .trip-modern-type-node {
+	anchor-name: --trip-timeline-start, --trip-timeline-end;
 }
 
 .trip-modern .trip-modern-segment {

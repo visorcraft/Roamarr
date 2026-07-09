@@ -1,4 +1,5 @@
 import * as repo from './repositories/travelDataRepo';
+import { getMapSettings } from './settings';
 
 export interface CityResult {
 	geonameId: number;
@@ -27,6 +28,22 @@ export function findCity(countryCode: string, name: string): CityResult | null {
 		lat: city.lat,
 		lng: city.lng
 	};
+}
+
+export function citySelectionError(
+	countryCode: string,
+	name: string,
+	lat: number | null | undefined,
+	lng: number | null | undefined
+): string | null {
+	const maps = getMapSettings();
+	if (!maps.mapsEnabled) return null;
+	if (maps.cityCount === 0) {
+		return 'Please ask your Roamarr administrator to use “Re-import city database” under General → Maps.';
+	}
+	if (!findCity(countryCode, name)) return 'Selected city was not found in the GeoNames database';
+	if (lat == null || lng == null) return 'City coordinates are missing';
+	return null;
 }
 
 export function searchCities(countryCode: string, query: string, limit = 20): CityResult[] {

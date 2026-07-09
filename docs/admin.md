@@ -20,9 +20,11 @@ The main **Settings** page holds instance-wide configuration:
 - **Webhook** — outbound URL with **Send test notification** (fans out to all
   enabled channels).
 - **Notification channels / recent activity** — per-account toggles and log.
-- **OAuth clients** — server-side allow-list of permitted client IDs for the
-  [MCP / AI integration](./mcp-ai.md). When the allow-list is empty, users can
-  authorize any client; populated lists restrict authorization to listed IDs.
+- **OAuth clients** — server-side allow-list of permitted client IDs. Empty
+  allows any client; populated restricts authorization to listed IDs. See
+  [OAuth 2.1 integration](./oauth.md) (section "Admin: client allow-list")
+  for the rotation procedure and interaction with the per-user API
+  connections page.
 
 ## User management — Settings → Users
 

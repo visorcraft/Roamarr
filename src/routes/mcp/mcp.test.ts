@@ -50,7 +50,7 @@ async function getAccessToken(userId: number, scopes: string[]): Promise<string>
 		getClientAddress: () => '127.0.0.1'
 	} as any);
 	const body = await res.json();
-	return body.accessToken;
+	return body.access_token;
 }
 
 function initRequest(token: string, body: unknown): Request {

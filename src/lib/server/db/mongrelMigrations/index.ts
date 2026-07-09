@@ -22,6 +22,8 @@ import { migrations as migrations0020 } from './0020_nullable_settings_leads';
 import { migrations as migrations0021 } from './0021_settings_catchup_repair';
 import { migrations as migrations0022 } from './0022_scheduler_run_summary';
 import { migrations as migrations0023 } from './0023_trip_poster_attachment';
+import { migrations as migrations0024 } from './0024_oauth_scope_hardening';
+import { migrations as migrations0025 } from './0025_trip_companions_user_id';
 
 // Central registry of all migrations, in version order. New migrations append
 // here; both the runtime singleton (`db/index.ts`) and test fixtures
@@ -49,5 +51,7 @@ export const migrations: Migration[] = [
 	...migrations0020,
 	...migrations0021,
 	...migrations0022,
-	...migrations0023
+	...migrations0023,
+	...migrations0024,
+	...migrations0025
 ];

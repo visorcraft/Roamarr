@@ -1,16 +1,6 @@
 <script lang="ts">
+	import { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
 	let { data } = $props();
-
-	const scopeDescriptions: Record<string, string> = {
-		'trips:read': 'View your trips, itinerary, segments, and map data',
-		'trips:write': 'Create and update trips and segments',
-		'packing:write': 'Manage packing templates and trip checklists',
-		'budgets:write': 'Manage trip budgets and expenses',
-		'places:read': 'View visited countries and U.S. states',
-		'places:write': 'Mark and unmark visited countries and U.S. states',
-		'reminders:write': 'Create and update reminders',
-		'profile:read': 'Read your profile and document expiry summaries'
-	};
 </script>
 
 <div class="mx-auto mt-16 max-w-md">
@@ -27,7 +17,7 @@
 				{#each data.scopes as scope (scope)}
 					<li class="flex items-start gap-2 text-sm text-slate-400">
 						<span class="mt-0.5 text-indigo-400">›</span>
-						<span>{scopeDescriptions[scope] ?? scope}</span>
+						<span>{SCOPE_DESCRIPTIONS[scope] ?? scope}</span>
 					</li>
 				{/each}
 			</ul>

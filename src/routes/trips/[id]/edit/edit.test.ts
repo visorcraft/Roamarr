@@ -14,6 +14,7 @@ import { makeUser, makeShare } from '../../../../../tests/helpers';
 import { _deleteTrip, actions } from './+page.server';
 import { createTrip } from '../../shared';
 import { addSegment } from '$lib/server/segments';
+import { updateSettings } from '$lib/server/settings';
 import {
 	users,
 	trips,
@@ -44,6 +45,7 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 		request: new Request('http://localhost/trips/1/edit', { method: 'POST', body: form }),
 		params,
 		locals: makeLocals({ id: userId }),
+		cookies: { set: vi.fn() },
 		url: new URL(`http://localhost/trips/${params.id}/edit`)
 	} as any;
 }
@@ -105,15 +107,44 @@ test('edit action updates a trip with valid data', async () => {
 		endDate: '2026-08-10',
 		notes: 'new notes'
 	});
-	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+	const event = makeEvent(form, { id: String(t.id) }, a.id);
+	await expect(actions.save(event)).rejects.toMatchObject({
 		status: 303,
 		location: `/trips/${t.id}`
 	});
+	expect(event.cookies.set).toHaveBeenCalledWith('flash', 'Trip updated.', expect.any(Object));
 	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
 	expect(updated.name).toBe('Updated');
 	expect(updated.destination).toBeNull();
 	expect(updated.destination_country_code).toBeNull();
 	expect(updated.destination_city_name).toBeNull();
+});
+
+test('edit action accepts a free-text city when maps are disabled', async () => {
+	updateSettings({ mapsEnabled: false });
+	const a = makeUser(kit, { email: 'edit-city@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = createTrip(a.id, {
+		name: 'Old',
+		destinationCountryCode: 'IS',
+		destinationCityName: 'Reykjavik',
+		destinationCityLat: 64.1466,
+		destinationCityLng: -21.9426
+	});
+	const form = makeFormData({
+		name: 'Updated',
+		destinationCountryCode: 'FR',
+		destinationCityName: 'Paris'
+	});
+
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
+	expect(updated.destination_country_code).toBe('FR');
+	expect(updated.destination_city_name).toBe('Paris');
+	expect(updated.destination_city_lat).toBeNull();
+	expect(updated.destination_city_lng).toBeNull();
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {

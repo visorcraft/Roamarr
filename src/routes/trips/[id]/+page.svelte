@@ -29,7 +29,7 @@
 
 	const { formatDate, formatDateTime } = useDateFormat();
 
-	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents' | 'tools';
+	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents';
 	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
 	type ViewMode = 'timeline' | 'list' | 'board';
 	type SegmentPanelTab = 'details' | 'travelers' | 'notes' | 'reminders';
@@ -46,7 +46,7 @@
 		createdAt: string;
 	};
 
-	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents', 'tools'] as const;
+	const TRIP_TAB_IDS = ['itinerary', 'prep', 'money', 'people', 'notes', 'documents'] as const;
 	const VIEW_MODES: ViewMode[] = ['timeline', 'list', 'board'];
 	const SEGMENT_PANEL_TABS: { id: SegmentPanelTab; label: string }[] = [
 		{ id: 'details', label: 'Details' },
@@ -239,7 +239,7 @@
 			const dt = segmentLocalDateTime(s);
 			if (dt) {
 				key = dt.toISODate()!;
-				label = formatDate(dt.toISODate()!);
+				label = dt.toFormat('LLLL d, yyyy');
 			}
 			const existing = index.get(key);
 			if (existing != null) groups[existing].segments.push(s);
@@ -439,7 +439,6 @@
 	const hasPeopleTab = $derived(isEditor || peopleItemCount > 0 || (data.owner === true && (data.emergencyContacts?.length ?? 0) > 0));
 	const hasNotesTab = $derived(isEditor || notesItemCount > 0);
 	const hasDocumentsTab = $derived(isEditor || documentsItemCount > 0 || (data.availablePolicies?.length ?? 0) > 0);
-	const hasToolsTab = $derived(isEditor);
 	const tripTabs = $derived(
 		([
 			{ id: 'itinerary', label: 'Itinerary', icon: 'calendar', count: segmentList.length, visible: true },
@@ -447,8 +446,7 @@
 			{ id: 'money', label: 'Budget', icon: 'budget', count: moneyItemCount, visible: hasMoneyTab },
 			{ id: 'people', label: 'People', icon: 'users', count: peopleItemCount, visible: hasPeopleTab },
 			{ id: 'notes', label: 'Notes', icon: 'edit', count: notesItemCount, visible: hasNotesTab },
-			{ id: 'documents', label: 'Documents', icon: 'document', count: documentsItemCount, visible: hasDocumentsTab },
-			{ id: 'tools', label: 'Tools', icon: 'settings', count: null, visible: hasToolsTab }
+			{ id: 'documents', label: 'Documents', icon: 'document', count: documentsItemCount, visible: hasDocumentsTab }
 		] satisfies TripTabLink[]).filter((tab) => tab.visible)
 	);
 	const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
@@ -511,6 +509,17 @@
 		return statusValue === 'fully_paid' || statusValue === 'deposit_paid' ? 'trip-modern-segment-status-paid' : 'trip-modern-segment-status-confirmed';
 	}
 
+	function segmentSideLabel(segment: SegmentRow) {
+		if (segment.paymentStatus && segment.paymentStatus !== 'quoted') return paymentStatusLabel(segment.paymentStatus);
+		if (segment.confirmationNumber) return 'Confirmed';
+		return paymentStatusLabel(segment.paymentStatus);
+	}
+
+	function segmentSideClass(segment: SegmentRow) {
+		if (segment.paymentStatus && segment.paymentStatus !== 'quoted') return paymentStatusClass(segment.paymentStatus);
+		return segment.confirmationNumber ? 'trip-modern-segment-status-confirmed' : paymentStatusClass(segment.paymentStatus);
+	}
+
 	function segmentSubtitle(segment: SegmentRow) {
 		const city = [segment.cityName, segment.countryCode?.toUpperCase()].filter(Boolean).join(', ');
 		if (city && segment.venue) return `${city} · ${segment.venue}`;
@@ -519,13 +528,33 @@
 		return segment.location ?? 'Location not set';
 	}
 
-	function segmentMetaItems(segment: SegmentRow) {
-		const items: string[] = [];
-		if (segment.confirmationNumber) items.push(`Confirmation ${segment.confirmationNumber}`);
-		if (segment.meetingPoint) items.push(segment.meetingPoint);
-		if (segment.meetingAt) items.push(`Meet ${formatTime(segment.meetingAt, segment.startTz ?? 'UTC')}`);
+	function segmentMetaItems(segment: SegmentRow): { icon: IconName; value: string }[] {
+		const details = readDetailsJson(segment);
+		const items: { icon: IconName; value: string }[] = [];
+		const detail = (key: string) => {
+			const value = details[key];
+			return typeof value === 'string' && value.trim() ? value.trim() : '';
+		};
+		const flight = [detail('airline'), detail('flightNumber')].filter(Boolean).join(' ');
+		if (flight) items.push({ icon: 'flight', value: flight });
+		if (segment.location && segment.venue && segment.location !== segment.venue) items.push({ icon: 'location', value: segment.location });
+		for (const key of ['terminal', 'gate', 'seat', 'room', 'checkIn']) {
+			const value = detail(key);
+			if (value) items.push({ icon: key === 'seat' ? 'user' : 'document', value });
+		}
+		for (const key of ['guests', 'tickets']) {
+			const value = detail(key);
+			if (value) items.push({ icon: 'users', value });
+		}
+		for (const key of ['reservation', 'entry']) {
+			const value = detail(key);
+			if (value) items.push({ icon: key === 'entry' ? 'location' : 'document', value });
+		}
+		if (segment.confirmationNumber && !detail('reservation')) items.push({ icon: 'document', value: `Confirmation ${segment.confirmationNumber}` });
+		if (segment.meetingPoint) items.push({ icon: 'location', value: segment.meetingPoint });
+		if (segment.meetingAt) items.push({ icon: 'reminder', value: `Meet ${formatTime(segment.meetingAt, segment.startTz ?? 'UTC')}` });
 		const card = segment.cardId ? cardMap.get(segment.cardId) : null;
-		if (card) items.push(`${card.nickname}${card.last4 ? ` ····${card.last4}` : ''}`);
+		if (card) items.push({ icon: 'card', value: `${card.nickname}${card.last4 ? ` ····${card.last4}` : ''}` });
 		return items;
 	}
 
@@ -633,9 +662,12 @@
 					<details class="app-user-menu relative">
 						<summary class="app-user-summary btn btn-primary flex cursor-pointer list-none items-center gap-2" aria-label="Trip actions"><Icon name="more-horizontal" class="h-4 w-4" /><span>Actions</span></summary>
 						<div class="app-user-menu-panel absolute right-0 top-[calc(100%+0.5rem)] z-30 w-64 overflow-hidden rounded-lg border shadow-2xl"><div class="p-2">
-							<a href={`/trips/${trip.id}/calendar`} class="app-user-menu-item"><Icon name="calendar" class="h-4.5 w-4.5" /><span>Calendar</span></a>
+							{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="app-user-menu-item"><Icon name="edit" class="h-4.5 w-4.5" /><span>Edit Trip</span></a>{/if}
+							{#if data.owner === true}<form method="POST" action="?/toggleFavorite"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="star" class="h-4.5 w-4.5" /><span>{trip.favorite ? 'Favorited' : 'Favorite'}</span></button></form><a href={`/trips/${trip.id}/share`} class="app-user-menu-item"><Icon name="share" class="h-4.5 w-4.5" /><span>Share</span></a>{#if data.publicShareUrl}<CopyButton text={data.publicShareUrl} class="app-user-menu-item app-user-menu-button w-full" label="Copy public link" icon="copy" />{/if}{/if}
 							<a href={`/trips/${trip.id}/print`} class="app-user-menu-item"><Icon name="print" class="h-4.5 w-4.5" /><span>Print</span></a>
-							{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="app-user-menu-item"><Icon name="edit" class="h-4.5 w-4.5" /><span>Edit trip</span></a><form method="POST" action="?/duplicate"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="duplicate" class="h-4.5 w-4.5" /><span>Duplicate</span></button></form>{#if data.owner === true}<form method="POST" action="?/toggleFavorite"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="star" class="h-4.5 w-4.5" /><span>{trip.favorite ? 'Favorited' : 'Favorite'}</span></button></form><form method="POST" action="?/toggleArchive"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="archive" class="h-4.5 w-4.5" /><span>{trip.archived ? 'Unarchive' : 'Archive'}</span></button></form><form method="POST" action="?/markVisitedPlaces"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="location" class="h-4.5 w-4.5" /><span>Mark places visited</span></button></form><a href={`/trips/${trip.id}/share`} class="app-user-menu-item"><Icon name="share" class="h-4.5 w-4.5" /><span>Share</span></a>{#if data.publicShareUrl}<CopyButton text={data.publicShareUrl} class="app-user-menu-item app-user-menu-button w-full" label="Copy public link" icon="copy" />{/if}{/if}{/if}
+							<a href={`/trips/${trip.id}/calendar`} class="app-user-menu-item"><Icon name="calendar" class="h-4.5 w-4.5" /><span>Calendar</span></a>
+							{#if isEditor}<form method="POST" action="?/duplicate"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="duplicate" class="h-4.5 w-4.5" /><span>Duplicate</span></button></form>{/if}
+							{#if data.owner === true}<form method="POST" action="?/markVisitedPlaces"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="location" class="h-4.5 w-4.5" /><span>Mark Places Visited</span></button></form><form method="POST" action="?/toggleArchive"><button class="app-user-menu-item app-user-menu-button w-full" type="submit"><Icon name="archive" class="h-4.5 w-4.5" /><span>{trip.archived ? 'Unarchive' : 'Archive'}</span></button></form>{/if}
 						</div></div>
 					</details>
 				</div>
@@ -653,7 +685,7 @@
 			<div class="trip-modern-toolbar">
 				<div class="trip-modern-control" aria-label="Trip date range"><span class="inline-flex items-center gap-2"><Icon name="calendar" class="h-4 w-4" /><span>{dateRangeText}</span></span><Icon name="chevron-down" class="h-4 w-4" /></div>
 				<label class="trip-modern-search"><Icon name="search" class="h-4.5 w-4.5" /><span class="sr-only">Search itinerary</span><input type="search" placeholder="Search itinerary…" bind:value={segmentQuery} /></label>
-				<div class="trip-modern-toolbar-actions"><button type="button" class="trip-modern-control" onclick={() => (showTypeFilters = !showTypeFilters)}><Icon name="settings" class="h-4 w-4" /><span>Filters</span></button><button type="button" class="trip-modern-control" onclick={() => (sortAscending = !sortAscending)}><span>{sortAscending ? '↑↓' : '↓↑'}</span><span>Sort</span></button><div class="trip-modern-view-toggle" aria-label="Itinerary view">{#each VIEW_MODES as mode}<button type="button" class="trip-modern-view-button {viewMode === mode ? 'trip-modern-view-button-active' : ''}" onclick={() => (viewMode = mode)}><Icon name={mode === 'timeline' ? 'trips' : mode === 'list' ? 'document' : 'card'} class="h-4 w-4" /><span>{viewModeLabel(mode)}</span></button>{/each}</div>{#if isEditor}<div class="trip-modern-add-menu"><a href={`/trips/${trip.id}/segments/new`} class="trip-modern-add-button"><Icon name="plus" class="h-4 w-4" /><span>Add segment</span></a><a href={`/trips/${trip.id}/segments/new`} class="trip-modern-add-caret" aria-label="Add segment options"><Icon name="chevron-down" class="h-4 w-4" /></a></div>{/if}</div>
+				<div class="trip-modern-toolbar-actions"><button type="button" class="trip-modern-control" onclick={() => (showTypeFilters = !showTypeFilters)}><Icon name="settings" class="h-4 w-4" /><span>Filters</span></button><button type="button" class="trip-modern-control" onclick={() => (sortAscending = !sortAscending)}><span>{sortAscending ? '↑↓' : '↓↑'}</span><span>Sort</span></button><div class="trip-modern-view-toggle" aria-label="Itinerary view">{#each VIEW_MODES as mode}<button type="button" class="trip-modern-view-button {viewMode === mode ? 'trip-modern-view-button-active' : ''}" onclick={() => (viewMode = mode)}><Icon name={mode === 'timeline' ? 'trips' : mode === 'list' ? 'document' : 'card'} class="h-4 w-4" /><span>{viewModeLabel(mode)}</span></button>{/each}</div>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary flex items-center gap-2"><Icon name="plus" class="h-4 w-4" /><span>Add segment</span></a>{/if}</div>
 			</div>
 			{#if showTypeFilters && typeCounts.length}<div class="trip-modern-filter-row" aria-label="Filter plans by type">{#each typeCounts as t (t.type)}{@const active = selectedTypes.has(t.type)}<button type="button" class="trip-modern-filter-chip {active ? 'trip-modern-filter-chip-active' : ''}" onclick={() => toggleType(t.type)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">{@html SEG[t.type].icon}</svg><span>{SEG[t.type].label}</span><span class="font-mono">{t.count}</span></button>{/each}{#if selectedTypes.size}<button type="button" class="trip-modern-filter-chip" onclick={() => (selectedTypes = new Set())}>Clear filters</button>{/if}</div>{/if}
 			{#if isEditor}<form method="POST" action="?/moveSegmentDate" class="hidden" bind:this={moveSegmentDateForm} use:enhance={preserveScrollOnMove}><input type="hidden" name="segmentId" bind:this={moveSegmentIdInput} /><input type="hidden" name="targetDate" bind:this={moveTargetDateInput} /></form><form method="POST" action={`/trips/${trip.id}/segments?/delete`} class="hidden" bind:this={deleteSegmentForm} use:enhance={refreshTripAction}><input type="hidden" name="segmentId" bind:this={deleteSegmentIdInput} /></form>{/if}
@@ -665,7 +697,23 @@
 						{#each dayGroups as group (group.key)}
 							<section class="trip-modern-day-card {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
 								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3"><span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
-								<div class="trip-modern-day-body">{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}{@const duration = formatSegmentDuration(s.startAt, s.endAt)}{@const paymentLabel = paymentStatusLabel(s.paymentStatus)}{#if isEditor && editingId === s.id}<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />{:else}<article class="trip-modern-segment {segmentTypeClass(s.type)} {selectedSegment?.id != null && selectedSegment.id === s.id ? 'trip-modern-segment-active' : ''} {draggingSegmentId === s.id ? 'trip-modern-segment-dragging' : ''}" role="button" tabindex="0" onclick={(e) => handleSegmentCardClick(s, e)} onkeydown={(e) => handleSegmentKeydown(s, e)} draggable={isEditor && s.id != null} ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)} ondragend={endSegmentDrag}><div class="trip-modern-time">{#if s.startAt}<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>{:else}<div class="trip-modern-time-main">TBD</div>{/if}{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}</div><span class="trip-modern-type-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg></span><div class="trip-modern-segment-body"><div class="trip-modern-segment-head"><h3 class="trip-modern-segment-title">{s.title}</h3>{#if s.status}<span class="trip-modern-segment-status {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>{/if}{#if paymentLabel}<span class="trip-modern-segment-status {paymentStatusClass(s.paymentStatus)}">{paymentLabel}</span>{/if}</div><p class="trip-modern-segment-subtitle">{segmentSubtitle(s)}</p>{#if segmentMetaItems(s).length}<div class="trip-modern-segment-meta">{#each segmentMetaItems(s) as item}<span class="trip-modern-meta-pill">• {item}</span>{/each}</div>{/if}</div><Icon name="chevron-down" class="trip-modern-chevron h-5 w-5 -rotate-90" /></article>{/if}{/each}</div>
+								<div class="trip-modern-day-body">
+									{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}
+										{@const duration = formatSegmentDuration(s.startAt, s.endAt)}
+										{@const sideLabel = segmentSideLabel(s)}
+										{@const metaItems = segmentMetaItems(s)}
+										{#if isEditor && editingId === s.id}
+											<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />
+										{:else}
+											<button type="button" class="trip-modern-segment {segmentTypeClass(s.type)} {selectedSegment?.id != null && selectedSegment.id === s.id ? 'trip-modern-segment-active' : ''} {draggingSegmentId === s.id ? 'trip-modern-segment-dragging' : ''}" onclick={(e) => handleSegmentCardClick(s, e)} onkeydown={(e) => handleSegmentKeydown(s, e)} draggable={isEditor && s.id != null} ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)} ondragend={endSegmentDrag}>
+												<div class="trip-modern-time">{#if s.startAt}<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>{:else}<div class="trip-modern-time-main">TBD</div>{/if}{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}</div>
+												<span class="trip-modern-type-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg></span>
+												<div class="trip-modern-segment-body"><div class="trip-modern-segment-head"><h3 class="trip-modern-segment-title">{s.title}</h3>{#if s.status}<span class="trip-modern-segment-status {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>{/if}</div><p class="trip-modern-segment-subtitle">{segmentSubtitle(s)}</p>{#if metaItems.length}<div class="trip-modern-segment-meta">{#each metaItems as item, metaIndex}<span class="trip-modern-meta-pill"><Icon name={item.icon} class="h-3.5 w-3.5" /><span>{item.value}</span></span>{#if metaIndex < metaItems.length - 1}<span class="trip-modern-meta-separator">•</span>{/if}{/each}</div>{/if}</div>
+												<div class="trip-modern-segment-side">{#if sideLabel}<span class="trip-modern-segment-status {segmentSideClass(s)}">{sideLabel}</span>{/if}<Icon name="chevron-down" class="trip-modern-chevron h-5 w-5 -rotate-90" /></div>
+											</button>
+										{/if}
+									{/each}
+								</div>
 							</section>
 						{/each}
 					{:else}<div class="trip-modern-empty">No itinerary segments match your filters.</div>{/if}
@@ -694,8 +742,6 @@
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
 		{:else if activeTab === 'documents'}
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Documents</h2></div>{#if data.documentLinks?.length}<div class="trip-modern-list">{#each data.documentLinks as link (link.id)}<div class="trip-modern-list-row"><div><a href={link.url} target="_blank" rel="noopener noreferrer" class="link">{link.label}</a>{#if link.notes}<p class="trip-modern-panel-muted text-sm">{link.notes}</p>{/if}</div></div>{/each}</div>{:else}<p class="trip-modern-empty">No documents linked yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addDocumentLink" class="trip-modern-form-grid"><input name="label" class="input text-sm" placeholder="Label" required /><input name="url" type="url" class="input text-sm" placeholder="https://…" required /><input name="notes" class="input text-sm" placeholder="Notes (optional)" /><button class="btn btn-primary btn-sm justify-self-end">Add document</button></form>{/if}</section>
-		{:else if activeTab === 'tools'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Tools</h2></div><div class="grid gap-4 lg:grid-cols-2"><div class="subpanel"><h3 class="subsection-title mb-2">Calendar feed</h3>{#if data.feedUrl}<p class="code-chip mb-3">{data.feedUrl}</p><CopyButton text={data.feedUrl} class="btn btn-secondary btn-sm" label="Copy feed URL" />{:else if isEditor}<form method="POST" action="?/regenerateCalendarFeed" class="trip-modern-form-grid"><input name="calendarExpiresAt" type="datetime-local" class="input text-sm" /><button class="btn btn-primary btn-sm">Generate feed URL</button></form>{:else}<p class="trip-modern-panel-muted">No feed URL generated.</p>{/if}</div><div class="subpanel"><h3 class="subsection-title mb-2">Quick links</h3><nav class="grid gap-2"><a href={`/trips/${trip.id}/calendar`} class="nav-link">Download calendar</a><a href={`/trips/${trip.id}/print`} class="nav-link">Print itinerary</a>{#if isEditor}<a href={`/trips/${trip.id}/edit`} class="nav-link">Edit trip info</a>{/if}{#if data.owner === true}<a href={`/trips/${trip.id}/share`} class="nav-link">Sharing settings</a>{/if}</nav></div></div></section>
 		{/if}
 	</div>
 

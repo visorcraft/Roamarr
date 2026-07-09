@@ -13,7 +13,7 @@ vi.mock('$lib/server/db', async () => {
 import { createMcpServer } from './mcpServer';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../tests/helpers';
 
@@ -87,9 +87,15 @@ describe('mcpServer', () => {
 		const other = makeUser(ctx.kit).id;
 		const otherTrip = tripsRepo.createTrip(other, { name: 'Private' });
 		const { client } = await connect(userId, ['packing:write']);
-		await expect(
-			client.callTool({ name: 'roamarr_packing_list_build', arguments: { tripId: otherTrip.id } })
-		).rejects.toThrow();
+		// The dispatch wraps helper errors into an isError:true response
+		// (per the codex batch 2 hardening) so the promise resolves
+		// instead of rejecting. Assert on isError + the 404 message.
+		const res: any = await client.callTool({
+			name: 'roamarr_packing_list_build',
+			arguments: { tripId: otherTrip.id }
+		});
+		expect(res.isError).toBe(true);
+		expect(String(res.content?.[0]?.text ?? '')).toMatch(/404|Not found/);
 	});
 
 	test('places_list requires places:read', async () => {
@@ -162,6 +168,407 @@ describe('mcpServer', () => {
 		expect(text).toContain('Secret');
 		expect(text).not.toContain('ABC123');
 		expect(text).not.toContain('recordLocator');
+	});
+
+	test('profile_update with a single field preserves the others (read-then-merge)', async () => {
+		const { client } = await connect(userId, ['profile-prefs:write']);
+		const before = ctx.kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+		const res: any = await client.callTool({
+			name: 'roamarr_profile_update',
+			arguments: { flightCheckinLeadHours: 48 }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = ctx.kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+		expect(Number(after.flight_checkin_lead_hours)).toBe(48);
+		expect(after.document_expiry_lead_days).toBe(before.document_expiry_lead_days);
+		expect(after.timezone).toBe(before.timezone);
+		expect(after.email).toBe(before.email);
+		expect(after.theme_id).toBe(before.theme_id);
+	});
+
+	test('notification_channels_update with one arg preserves the other channel', async () => {
+		const { client } = await connect(userId, ['notifications:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_notification_channels_update',
+			arguments: { emailNotifications: false }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = ctx.kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+		expect(after.email_notifications).toBe(false);
+		expect(after.webhook_notifications).toBe(true);
+		expect(after.email).toBeTruthy();
+	});
+
+	test('card_update preserves notes when only the label is changed', async () => {
+		const { createCard } = await import('./repositories/profileRepo');
+		const card = createCard(userId, {
+			network: 'visa',
+			last4: '4242',
+			nickname: 'Old',
+			notes: 'call issuer before intl spend'
+		});
+		const { client } = await connect(userId, ['cards:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_card_update',
+			arguments: { cardId: card.id, label: 'Personal' }
+		});
+		expect(res.isError).toBeFalsy();
+		const { getCardById } = await import('./repositories/profileRepo');
+		const after = getCardById(card.id, userId)!;
+		expect(after.nickname).toBe('Personal');
+		expect(after.notes).toBe('call issuer before intl spend');
+		expect(after.last4).toBe('4242');
+	});
+
+	test('loyalty_update preserves balance and notes on partial update', async () => {
+		const { createLoyaltyProgram, getLoyaltyProgramById } = await import('./repositories/profileRepo');
+		const l = createLoyaltyProgram(userId, {
+			programName: 'SkyMiles',
+			membershipNumber: 'ABC123',
+			balance: 50_000,
+			notes: 'medallion'
+		});
+		const { client } = await connect(userId, ['loyalty:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_loyalty_update',
+			arguments: { loyaltyId: l.id, memberNumber: 'XYZ789' }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = getLoyaltyProgramById(l.id, userId)!;
+		expect(after.membershipNumber).toBe('XYZ789');
+		expect(after.balance).toBe(50_000);
+		expect(after.notes).toBe('medallion');
+	});
+
+	test('insurance_update preserves coverage, dates, and trip linkage', async () => {
+		const { createInsurancePolicy, getInsurancePolicyById } = await import('./repositories/profileRepo');
+		const trip = tripsRepo.createTrip(userId, { name: ' insured trip' });
+		const p = createInsurancePolicy(userId, {
+			provider: 'Allianz',
+			policyNumber: 'P1',
+			coverageSummary: 'medical + evacuation',
+			coverageAmount: 100000,
+			currency: 'USD',
+			startDate: '2026-08-01',
+			endDate: '2026-08-31',
+			tripId: trip.id,
+			notes: 'primary policy'
+		});
+		const { client } = await connect(userId, ['insurance:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_insurance_update',
+			arguments: { insuranceId: p.id, provider: 'WorldNomads' }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = getInsurancePolicyById(p.id, userId)!;
+		expect(after.provider).toBe('WorldNomads');
+		expect(after.coverageSummary).toBe('medical + evacuation');
+		expect(after.coverageAmount).toBe(100000);
+		expect(after.currency).toBe('USD');
+		expect(after.startDate).toBe('2026-08-01');
+		expect(after.endDate).toBe('2026-08-31');
+		expect(after.tripId).toBe(trip.id);
+		expect(after.notes).toBe('primary policy');
+	});
+
+	test('travel_doc_update preserves notes and companion linkage', async () => {
+		const { createTravelDocument, getTravelDocumentById } = await import('./repositories/profileRepo');
+		const trip = tripsRepo.createTrip(userId, { name: 'doc trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Spouse' });
+		const d = createTravelDocument(userId, {
+			type: 'passport',
+			number: 'P123',
+			issuingAuthority: 'USA',
+			expiresOn: '2030-01-01',
+			notes: 'renew early',
+			companionId: companion.id
+		});
+		const { client } = await connect(userId, ['travel-docs:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_travel_doc_update',
+			arguments: { docId: d.id, expiresOn: '2031-06-01' }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = getTravelDocumentById(d.id, userId)!;
+		expect(after.expiresOn).toBe('2031-06-01');
+		expect(after.notes).toBe('renew early');
+		expect(after.companionId).toBe(companion.id);
+	});
+
+	test('contact_update preserves relationship, email, and primary flag on partial update', async () => {
+		const { createEmergencyContact, getEmergencyContactById } = await import('./repositories/profileRepo');
+		const c = createEmergencyContact(userId, {
+			name: 'Mom',
+			relationship: 'parent',
+			phone: '+15551234',
+			email: 'mom@x.c',
+			isPrimary: true
+		});
+		const { client } = await connect(userId, ['contacts:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_contact_update',
+			arguments: { contactId: c.id, phone: '+19999999999' }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = getEmergencyContactById(c.id, userId)!;
+		expect(after.phone).toBe('+19999999999');
+		expect(after.name).toBe('Mom');
+		expect(after.relationship).toBe('parent');
+		expect(after.email).toBe('mom@x.c');
+		expect(after.isPrimary).toBe(true);
+	});
+
+	describe('IDOR / cross-user enforcement', () => {
+		test('card_update on another user’s card returns not-found (not the row)', async () => {
+			const other = makeUser(ctx.kit).id;
+			const { createCard } = await import('./repositories/profileRepo');
+			const otherCard = createCard(other, { network: 'visa', last4: '9999', nickname: 'secret' });
+			const { client } = await connect(userId, ['cards:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_card_update',
+				arguments: { cardId: otherCard.id, label: 'hijacked' }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toMatch(/not found/i);
+			// Original row untouched.
+			const { getCardById } = await import('./repositories/profileRepo');
+			expect(getCardById(otherCard.id, other)!.nickname).toBe('secret');
+		});
+
+		test('loyalty/insurance/travel_doc/contact delete on another user’s row is rejected', async () => {
+			const other = makeUser(ctx.kit).id;
+			const { createLoyaltyProgram, createInsurancePolicy, createTravelDocument, createEmergencyContact } =
+				await import('./repositories/profileRepo');
+			const l = createLoyaltyProgram(other, { programName: 'OtherMiles', membershipNumber: 'X' });
+			const ins = createInsurancePolicy(other, { provider: 'OtherIns' });
+			const doc = createTravelDocument(other, { type: 'passport', number: 'P-OTHER' });
+			const ec = createEmergencyContact(other, { name: 'OtherMom' });
+
+			const { client } = await connect(userId, [
+				'loyalty:write',
+				'insurance:write',
+				'travel-docs:write',
+				'contacts:write'
+			]);
+			for (const [tool, args] of [
+				['roamarr_loyalty_delete', { loyaltyId: l.id, confirm: true }],
+				['roamarr_insurance_delete', { insuranceId: ins.id, confirm: true }],
+				['roamarr_travel_doc_delete', { docId: doc.id, confirm: true }],
+				['roamarr_contact_delete', { contactId: ec.id, confirm: true }]
+			] as const) {
+				const res: any = await client.callTool({ name: tool as string, arguments: args as any });
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toMatch(/not found/i);
+			}
+		});
+
+		test('poll_create rejects invalid input (empty question, single option) via createTripPoll', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'PollVal' });
+			const { client } = await connect(userId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, question: '', options: ['only'] }
+			});
+			expect(res.isError).toBe(true);
+			const text = String(res.content?.[0]?.text ?? '');
+			expect(text).toMatch(/400|at least 2|required/i);
+		});
+
+		test('poll_cast_vote on another user’s poll is rejected (IDOR)', async () => {
+			const other = makeUser(ctx.kit).id;
+			const otherTrip = tripsRepo.createTrip(other, { name: 'TheirTrip' });
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(other, otherTrip.id, 'Q?', ['a', 'b']);
+			const optionId = poll.options[0]!.id;
+			const { client } = await connect(userId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toMatch(/404|not found/i);
+		});
+
+		test('trip_template_apply on another user’s template is rejected (IDOR)', async () => {
+			const other = makeUser(ctx.kit).id;
+			const otherTrip = tripsRepo.createTrip(other, { name: 'TplSrc' });
+			const { createTripTemplate } = await import('./repositories/templatesRepo');
+			const tpl = createTripTemplate({ userId: other, name: 'OtherTpl', sourceTripId: otherTrip.id, snapshot: { note: 'fixture' } });
+			const { client } = await connect(userId, ['templates:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_template_apply',
+				arguments: { templateId: tpl.id }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toMatch(/not found/i);
+		});
+
+		test('companion_update on another user’s trip companion is rejected (IDOR)', async () => {
+			const other = makeUser(ctx.kit).id;
+			const otherTrip = tripsRepo.createTrip(other, { name: 'OtherC' });
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const c = insertTripCompanion(other, otherTrip.id, { name: 'Spouse' });
+			const { client } = await connect(userId, ['companions:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_companion_update',
+				arguments: { companionId: c.id, name: 'hijacked' }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toMatch(/404|not found/i);
+		});
+
+		test('resources/read companion:// on another user’s trip is rejected (IDOR)', async () => {
+			const other = makeUser(ctx.kit).id;
+			const otherTrip = tripsRepo.createTrip(other, { name: 'OtherRes' });
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const c = insertTripCompanion(other, otherTrip.id, { name: 'Private' });
+			const { client } = await connect(userId, ['companions:read']);
+			await expect(client.readResource({ uri: `companion://${c.id}` })).rejects.toThrow();
+		});
+	});
+
+	describe('shared-trip access (editors and viewers)', () => {
+		// Sets up: owner creates a trip with content; shares it with another
+		// user (editor or viewer) via direct trip_share. Returns the editor/
+		// viewer user id and the trip.
+		let shareCounter = 0;
+		function setupSharedTrip(permission: 'read' | 'edit', showDetails = false) {
+			const n = ++shareCounter;
+			const ownerId = makeUser(ctx.kit, { email: `owner-${n}@x.c` }).id;
+			const otherId = makeUser(ctx.kit, { email: `other-${n}@x.c` }).id;
+			const trip = tripsRepo.createTrip(ownerId, { name: `Shared-${n}` });
+			tripsRepo.createShare({
+				tripId: trip.id,
+				sharedWithUserId: otherId,
+				permission,
+				showDetails
+			});
+			return { ownerId, otherId, trip };
+		}
+
+		test('editor can poll_list / expense_list / companion_list on shared trip', async () => {
+			const { otherId, trip } = setupSharedTrip('edit');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			insertTripCompanion(otherId, trip.id, { name: 'Ed' });
+			const { client } = await connect(otherId, [
+				'polls:read',
+				'expenses:read',
+				'companions:read'
+			]);
+			for (const t of [
+				{ name: 'roamarr_poll_list', args: { tripId: trip.id } },
+				{ name: 'roamarr_expense_list', args: { tripId: trip.id } },
+				{ name: 'roamarr_companion_list', args: { tripId: trip.id } }
+			]) {
+				const res: any = await client.callTool({ name: t.name, arguments: t.args });
+				expect(res.isError, `${t.name} should succeed for editor`).toBeFalsy();
+			}
+		});
+
+		test('viewer (read-only share) can poll_list but poll_create is rejected', async () => {
+			const { otherId, trip } = setupSharedTrip('read');
+			const { client } = await connect(otherId, ['polls:read', 'polls:write']);
+			// Read allowed
+			const readRes: any = await client.callTool({
+				name: 'roamarr_poll_list',
+				arguments: { tripId: trip.id }
+			});
+			expect(readRes.isError).toBeFalsy();
+			// Write rejected (viewer is not editor)
+			const writeRes: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, question: 'Q?', options: ['a', 'b'] }
+			});
+			expect(writeRes.isError).toBe(true);
+		});
+
+		test('editor can poll_cast_vote on shared trip (was previously owner-only)', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('edit');
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Vote?', ['yes', 'no']);
+			const optionYes = poll.options[0]!.id;
+			const { client } = await connect(otherId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes }
+			});
+			expect(res.isError).toBeFalsy();
+			// Vote recorded against the editor's self-companion
+			const { listPollsForTrip } = await import('./repositories/pollsRepo');
+			const refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(1);
+		});
+
+		test('non-share cannot read shared trip via requireViewableTrip', async () => {
+			const ownerId = makeUser(ctx.kit, { email: 'owner2@x.c' }).id;
+			const strangerId = makeUser(ctx.kit, { email: 'stranger@x.c' }).id;
+			const trip = tripsRepo.createTrip(ownerId, { name: 'Private' });
+			const { client } = await connect(strangerId, ['polls:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_list',
+				arguments: { tripId: trip.id }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toMatch(/404|not found/i);
+		});
+
+		test('share_list/calendar_rotate_token stay owner-only even with sharing/calendar scopes', async () => {
+			const { otherId, trip } = setupSharedTrip('edit');
+			const { client } = await connect(otherId, ['sharing:read', 'sharing:write', 'calendar:write']);
+			const listRes: any = await client.callTool({
+				name: 'roamarr_share_list',
+				arguments: { tripId: trip.id }
+			});
+			expect(listRes.isError).toBe(true);
+			const rotateRes: any = await client.callTool({
+				name: 'roamarr_calendar_rotate_token',
+				arguments: { tripId: trip.id }
+			});
+			expect(rotateRes.isError).toBe(true);
+		});
+
+		test('viewer can read companion:// resource for shared trip', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const c = insertTripCompanion(ownerId, trip.id, { name: 'Visible' });
+			const { client } = await connect(otherId, ['companions:read']);
+			const res = await client.readResource({ uri: `companion://${c.id}` });
+			const text = (res.contents[0] as { text?: string })?.text ?? '';
+			expect(text).toContain('Visible');
+		});
+
+		test('editor can trip_update shared trip metadata (matches web UI)', async () => {
+			const { otherId, trip } = setupSharedTrip('edit');
+			const { client } = await connect(otherId, ['trips:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_update',
+				arguments: { tripId: trip.id, name: 'Editor renamed' }
+			});
+			expect(res.isError).toBeFalsy();
+			const after = tripsRepo.getTripById(trip.id);
+			expect(after?.name).toBe('Editor renamed');
+		});
+
+		test('shared trips appear in roamarr_trip_list for the share recipient', async () => {
+			const { otherId, trip } = setupSharedTrip('read');
+			const { client } = await connect(otherId, ['trips:read']);
+			const res: any = await client.callTool({ name: 'roamarr_trip_list', arguments: {} });
+			const ids = JSON.parse(res.content[0].text).map((t: any) => t.id);
+			expect(ids).toContain(trip.id);
+		});
+
+		test('shared trips appear in the trip-summary prompt for the share recipient', async () => {
+			const { ownerId, otherId } = setupSharedTrip('read');
+			// Set a far-future start date so the upcoming filter catches it.
+			const trips_for_owner = tripsRepo.listViewableTripIdsForUser(ownerId);
+			const tripId = trips_for_owner[trips_for_owner.length - 1]!;
+			tripsRepo.updateTrip(tripId, { startDate: '2099-01-01', endDate: '2099-01-08' });
+			const { client } = await connect(otherId, ['trips:read']);
+			const res = await client.getPrompt({ name: 'trip-summary', arguments: {} });
+			const text = res.messages[0]?.content?.type === 'text' ? res.messages[0].content.text : '';
+			expect(text).toContain('2099-01-01');
+		});
 	});
 
 	describe('prompts', () => {
@@ -242,7 +649,7 @@ describe('mcpServer', () => {
 			const { setBudget } = await import('./tripBudgets');
 			setBudget(trip.id, 'lodging', 1000, 'USD');
 
-			const { client } = await connect(userId, ['trips:read']);
+			const { client } = await connect(userId, ['budgets:read']);
 			const res = await readPrompt(client, 'budget-overview', { tripId: String(trip.id) });
 			const text = promptText(res);
 			expect(text).toContain('lodging');

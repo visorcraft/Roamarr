@@ -9,7 +9,7 @@ import {
 	users
 } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
-import { canEdit } from './sharing';
+import { canEdit, canView } from './sharing';
 
 export function requireOwnedUser(userId: number) {
 	const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
@@ -26,6 +26,12 @@ export function requireOwnedTrip(userId: number, tripId: number) {
 export function requireEditableTrip(userId: number, tripId: number) {
 	const t = tripsRepo.getTripById(tripId);
 	if (!t || !canEdit(userId, t)) throw error(404, 'Not found');
+	return t;
+}
+
+export function requireViewableTrip(userId: number, tripId: number) {
+	const t = tripsRepo.getTripById(tripId);
+	if (!t || !canView(userId, t)) throw error(404, 'Not found');
 	return t;
 }
 

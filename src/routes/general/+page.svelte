@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import {
 		DATE_FORMAT_OPTIONS,
@@ -41,6 +43,15 @@
 	let tileUrl = $state(initialTiles.url);
 	let tileAttribution = $state(initialTiles.attribution);
 	let tileApiKey = $state(initialTiles.apiKey);
+	let mapAction = $state('');
+
+	const enhanceMaps: SubmitFunction = ({ submitter }) => {
+		mapAction = submitter?.getAttribute('formaction') ?? '?/saveMaps';
+		return async ({ update }) => {
+			await update();
+			mapAction = '';
+		};
+	};
 
 	const apiKeyVisible = $derived(
 		['maptiler', 'stadia', 'thunderforest', 'jawg', 'protomaps'].includes(selectedProvider)
@@ -233,7 +244,7 @@
 		{/if}
 
 		{#if tab === 'maps'}
-			<form method="POST" action="?/saveMaps" enctype="multipart/form-data" class="space-y-6">
+			<form method="POST" action="?/saveMaps" enctype="multipart/form-data" class="space-y-6" use:enhance={enhanceMaps} aria-busy={!!mapAction}>
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Maps</h2>
 					<p class="mt-1 text-sm muted">
@@ -259,9 +270,9 @@
 							<li>Country borders: bundled (Natural Earth, public domain)</li>
 						</ul>
 						<div class="mt-4 flex flex-wrap gap-3">
-							<button class="btn btn-primary" type="submit" formaction="?/reimportCities">Re-import city database</button>
-							<button class="btn btn-primary" type="submit" formaction="?/reimportTexture">Re-import textures</button>
-							<button class="btn btn-secondary" type="submit" formaction="?/disableMaps">Disable Maps</button>
+							<button class="btn btn-primary" class:btn-loading={mapAction === '?/reimportCities'} disabled={!!mapAction} type="submit" formaction="?/reimportCities">Re-import city database</button>
+							<button class="btn btn-primary" class:btn-loading={mapAction === '?/reimportTexture'} disabled={!!mapAction} type="submit" formaction="?/reimportTexture">Re-import textures</button>
+							<button class="btn btn-secondary" class:btn-loading={mapAction === '?/disableMaps'} disabled={!!mapAction} type="submit" formaction="?/disableMaps">Disable Maps</button>
 						</div>
 					{:else}
 						<p class="notice mt-4">
@@ -272,7 +283,7 @@
 								Maps are not set up yet. Enabling downloads the city database and Earth texture.
 							{/if}
 						</p>
-						<button class="btn btn-primary mt-4" type="submit" formaction="?/enableMaps">Enable Maps</button>
+						<button class="btn btn-primary mt-4" class:btn-loading={mapAction === '?/enableMaps'} disabled={!!mapAction} type="submit" formaction="?/enableMaps">Enable Maps</button>
 						<p class="mt-4 text-sm muted">
 							Automatic download not working? Download
 							<a
@@ -287,7 +298,7 @@
 								<label class="label" for="cities1000">cities1000.zip</label>
 								<input id="cities1000" name="cities1000" type="file" accept=".zip" class="input" />
 							</div>
-							<button class="btn btn-primary" type="submit" formaction="?/importGeonames">Import from file</button>
+							<button class="btn btn-primary" class:btn-loading={mapAction === '?/importGeonames'} disabled={!!mapAction} type="submit" formaction="?/importGeonames">Import from file</button>
 						</div>
 					{/if}
 					<p class="mt-4 text-xs text-readable-faint">
@@ -361,7 +372,7 @@
 					</div>
 
 					<div class="mt-6 flex justify-end">
-						<button class="btn btn-primary">Save map settings</button>
+						<button class="btn btn-primary" class:btn-loading={mapAction === '?/saveMaps'} disabled={!!mapAction}>Save map settings</button>
 					</div>
 				</section>
 			</form>

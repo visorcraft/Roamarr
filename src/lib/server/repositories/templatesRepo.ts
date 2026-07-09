@@ -1,4 +1,4 @@
-import { eq as kitEq, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, inList as kitInList, asc as kitAsc, and as kitAnd } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import {
 	tripTemplates,
@@ -137,6 +137,22 @@ export function deleteTripTemplate(id: number): number {
 	return Number(deleted);
 }
 
+export function deleteTripTemplateForUser(id: number, userId: number): number {
+	// Owner-scoped delete. The repo's plain deleteTripTemplate is kept
+	// for callers that already verified ownership (e.g. tests); MCP must
+	// go through this to prevent IDOR.
+	const deleted = kit
+		.deleteFrom(tripTemplates)
+		.where(
+			kitAnd(
+				kitEq(tripTemplates.id, toBigInt(id)),
+				kitEq(tripTemplates.user_id, toBigInt(userId))
+			)
+		)
+		.executeSync();
+	return Number(deleted);
+}
+
 // Packing templates
 
 function hydratePackingTemplates(rows: KitPackingTemplate[]): PackingTemplate[] {
@@ -220,6 +236,21 @@ export function updatePackingTemplate(
 
 export function deletePackingTemplate(id: number): number {
 	const deleted = kit.deleteFrom(packingTemplates).where(kitEq(packingTemplates.id, toBigInt(id))).executeSync();
+	return Number(deleted);
+}
+
+export function deletePackingTemplateForUser(id: number, userId: number): number {
+	// Owner-scoped delete. MCP must use this to prevent IDOR; tests and
+	// already-validated callers can use deletePackingTemplate.
+	const deleted = kit
+		.deleteFrom(packingTemplates)
+		.where(
+			kitAnd(
+				kitEq(packingTemplates.id, toBigInt(id)),
+				kitEq(packingTemplates.user_id, toBigInt(userId))
+			)
+		)
+		.executeSync();
 	return Number(deleted);
 }
 

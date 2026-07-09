@@ -48,11 +48,14 @@ segments, sharing, reminders, documents, and more.
 - [Notifications](./notifications.md) — admin SMTP, webhooks, and per-user SMTP.
 - [Admin](./admin.md) — user management, jobs, backups, audit logs, map tiles.
 
-## New feature guides
+## Integrations and advanced features
 
 - [Visited places](./visited-places.md) — track countries and U.S. states.
 - [Weather](./weather.md) — trip-level and per-day forecasting via Open-Meteo.
-- [MCP / AI integration](./mcp-ai.md) — connect AI assistants over OAuth 2.1.
+- [OAuth 2.1 integration](./oauth.md) — generic OAuth 2.1 + PKCE reference:
+  scopes, endpoints, discovery, token lifecycle, allow-list.
+- [MCP / AI integration](./mcp-ai.md) — setup, least-privilege scope recipes,
+  tools, prompts, resources, protocol testing, and troubleshooting.
 - [Per-user SMTP](./per-user-smtp.md) — send notifications from your own mailbox.
 
 ## Conventions

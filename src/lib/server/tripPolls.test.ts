@@ -124,6 +124,54 @@ test('changing vote replaces previous vote and keeps one per companion', () => {
 	expect(rows).toHaveLength(1);
 });
 
+test('owner can vote via getOrCreateOwnerCompanion (no manual companion row)', async () => {
+	const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
+	const u = makeUser('owner@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const poll = createTripPoll(Number(u.id), t.id, 'Solo?', ['Yes', 'No']);
+	const optionYes = poll.options.find((o) => o.label === 'Yes')!;
+
+	// The MCP layer auto-creates an "owner" companion when no
+	// companionId is supplied. The vote should succeed and be
+	// associated with that companion row.
+	const selfCompanion = getOrCreateOwnerCompanion(Number(u.id), t.id);
+	expect(selfCompanion.name).toBe('owner@x.c');
+	castVote(Number(u.id), poll.id, selfCompanion.id, optionYes.id);
+
+	const refreshed = listPollsWithVotes(t.id).find((p) => p.id === poll.id)!;
+	expect(refreshed.options.find((o) => o.id === optionYes.id)!.voteCount).toBe(1);
+
+	// Idempotent: re-fetching the owner companion returns the same row.
+	const again = getOrCreateOwnerCompanion(Number(u.id), t.id);
+	expect(again.id).toBe(selfCompanion.id);
+});
+
+test('getOrCreateOwnerCompanion does not hijack a same-named ordinary companion', async () => {
+	const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
+	const u = makeUser('sam@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	// A real, pre-existing companion who happens to share the owner's
+	// display name (e.g. a junior). The MCP self-companion lookup must
+	// NOT match this row — otherwise the owner's vote would be silently
+	// attributed to the ordinary companion.
+	const ordinary = makeCompanion(t.id, 'sam@x.c');
+
+	const selfCompanion = getOrCreateOwnerCompanion(Number(u.id), t.id);
+	expect(selfCompanion.id).not.toBe(ordinary.id);
+	const kit = getKit();
+	const rows = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync();
+	// Two rows: the pre-existing ordinary companion (user_id NULL) and
+	// the freshly-created self companion (user_id = u.id).
+	expect(rows).toHaveLength(2);
+	const selfRow = rows.find((r) => r.user_id != null);
+	const ordinaryRow = rows.find((r) => r.user_id == null);
+	expect(selfRow).toBeDefined();
+	expect(ordinaryRow).toBeDefined();
+	expect(Number(selfRow!.user_id)).toBe(Number(u.id));
+	expect(Number(selfRow!.id)).toBe(selfCompanion.id);
+	expect(Number(ordinaryRow!.id)).toBe(ordinary.id);
+});
+
 test('deletePoll removes poll, options, and votes and logs audit', () => {
 	const u = makeUser('d@x.c');
 	const t = makeTrip(Number(u.id), 'T');

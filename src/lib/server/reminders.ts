@@ -114,6 +114,59 @@ export function listRemindersForUser(userId: number) {
 	return listRemindersForUserFromRepo(userId);
 }
 
+// Narrow-surface reminder update for MCP clients. Only the three user-safe
+// fields are accepted: title, customNote (stored in details), and offsetMinutes.
+// The raw remindersRepo.updateReminder can touch scheduler-internal fields
+// (status, last_fired_at, attempts, kind, source) which an AI client must
+// never mutate.
+export function safeUpdateCustomReminder(
+	userId: number,
+	reminderId: number,
+	patch: {
+		title?: string;
+		customNote?: string;
+		offsetMinutes?: number;
+	}
+) {
+	const r = getReminderById(reminderId);
+	if (!r || r.userId !== userId) throw error(404, 'Not found');
+	if (r.kind !== 'custom') throw error(400, 'Only custom reminders are MCP-editable');
+	if (patch.title !== undefined) {
+		if (typeof patch.title !== 'string' || patch.title.length > 200) {
+			throw error(400, 'title must be a string up to 200 chars');
+		}
+	}
+	if (patch.customNote !== undefined) {
+		if (typeof patch.customNote !== 'string' || patch.customNote.length > 1000) {
+			throw error(400, 'customNote must be a string up to 1000 chars');
+		}
+	}
+	let newOffset: number | null = null;
+	if (patch.offsetMinutes !== undefined) {
+		if (!Number.isInteger(patch.offsetMinutes) || patch.offsetMinutes < -10080 || patch.offsetMinutes > 10080) {
+			throw error(400, 'offsetMinutes must be an integer between -10080 and 10080');
+		}
+		newOffset = patch.offsetMinutes;
+	}
+	// ReminderRow uses `name`, not `title`. The MCP-facing `title` arg
+	// maps to the row's `name` column so the user-visible label is updated.
+	const safePatch: { name?: string; description?: string | null } = {};
+	if (patch.title !== undefined) safePatch.name = patch.title;
+	if (patch.customNote !== undefined) {
+		// customNote rides on the description column for custom reminders.
+		safePatch.description = patch.customNote;
+	}
+	updateReminder(reminderId, safePatch as Parameters<typeof updateReminder>[1]);
+	if (newOffset !== null && r.refType === 'trip') {
+		// Re-arm with the trip's start date so the new offset is honored.
+		const trip = tripsRepo.getTripById(r.refId);
+		if (trip?.startDate) {
+			const startAt = `${trip.startDate}T09:00:00Z`;
+			arm(userId, 'custom', 'trip', r.refId, computeFireAt('custom', startAt, { customOffsetMinutes: newOffset }));
+		}
+	}
+}
+
 export function cancelReminder(userId: number, reminderId: number) {
 	const r = getReminderById(reminderId);
 	if (!r || r.userId !== userId) throw error(404, 'Not found');

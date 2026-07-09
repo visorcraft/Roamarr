@@ -51,6 +51,10 @@ function validateVote(pollId: number, companionId: number, optionId: number) {
 	const option = pollsRepo.getOptionById(optionId);
 	if (!option || option.pollId !== pollId) throw error(404, 'Option not found');
 
+	// Every vote is recorded against a trip_companions row so the
+	// (poll_id, companion_id) uniqueness constraint can dedupe at most one
+	// vote per companion. Callers must pass a real companionId that
+	// belongs to this trip; the trip_companions FK is non-nullable.
 	requireCompanionOnTrip(companionId, poll.tripId);
 
 	return poll;

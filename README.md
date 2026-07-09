@@ -36,9 +36,9 @@
       <sub><b>Dashboard</b> — trips, reminders, documents, and recent activity.</sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/trip-itinerary-people.png" alt="Roamarr trip people tab with companions, attendees, and sharing controls" />
+      <img src="docs/screenshots/trip-itinerary-people.png" alt="Roamarr trip people tab with two travel companions" />
       <br />
-      <sub><b>Trip people</b> — companions, attendees, and itinerary sharing.</sub>
+      <sub><b>Trip people</b> — companions and traveler assignments.</sub>
     </td>
   </tr>
   <tr>
@@ -55,14 +55,38 @@
   </tr>
   <tr>
     <td width="50%">
+      <img src="docs/screenshots/trip-prep.png" alt="Roamarr trip prep tab with a Thailand travel checklist" />
+      <br />
+      <sub><b>Trip prep</b> — shared checklists for every pre-departure task.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/documents.png" alt="Roamarr travel documents page with a passport and expiry date" />
+      <br />
+      <sub><b>Travel documents</b> — passports, visas, licenses, and expiry tracking.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/reminders.png" alt="Roamarr reminders page with a pending Thailand trip checklist reminder" />
+      <br />
+      <sub><b>Reminders</b> — scheduled trip, flight, and document alerts.</sub>
+    </td>
+    <td width="50%">
       <img src="docs/screenshots/loyalty.png" alt="Roamarr loyalty programs page with airline and hotel membership balances" />
       <br />
       <sub><b>Loyalty programs</b> — memberships, balances, notes, and travel rewards.</sub>
     </td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="docs/screenshots/insurance.png" alt="Roamarr insurance policies page with coverage dates, policy numbers, and add-policy controls" />
       <br />
       <sub><b>Insurance policies</b> — coverage details, policy dates, and trip protection.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/mcp-ai.png" alt="Live Roamarr MCP test creating a Kyoto trip and itinerary segment through an AI assistant" />
+      <br />
+      <sub><b>MCP / AI workflow</b> — live OAuth connection, trip creation, and itinerary updates.</sub>
     </td>
   </tr>
 </table>
@@ -101,14 +125,19 @@ Roamarr can:
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
-- Connect external clients via OAuth and expose an MCP/AI integration endpoint
-  for tool access.
+- Connect external clients via OAuth (58 read/write scopes, PKCE, refresh-token
+  rotation) and expose an MCP/AI integration endpoint with 108 tools, 16
+  prompts, and 9 resource templates — covering trips, segments, expenses, polls,
+  companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
+  templates, and profile preferences. Destructive operations require an explicit
+  `confirm: true`; sensitive fields (PAN, policy/member/document numbers, notes)
+  are stripped on every AI-bound response.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
   jobs, backups, restores, demo data, instance stats, health checks, database
   maintenance (integrity check, compaction, flush, and doctor), and map
   configuration (GeoNames city import and raster tile providers).
 - Surface license text, runtime credits, package attribution, and app version
-  details from the Settings -> About area.
+  details from the About page.
 
 ## Your itinerary, under your roof
 
@@ -299,15 +328,15 @@ Chromium first with `npm run test:e2e:install`, then run the suite with
 
 ### Application settings
 
-After the first setup flow, use Settings for:
+After the first setup flow, use the admin pages for:
 
 - Instance name, public registration, and admin controls.
 - SMTP delivery, signed webhooks, and per-user notification channels.
 - Fare provider accounts and connection tests.
 - Backups, restores, scheduled jobs, audit logs, health information, database
   maintenance, and demo data.
-- About, project license, third-party package credits, and runtime component
-  acknowledgements.
+- Project license, third-party package credits, runtime component
+  acknowledgements, and app details on the About page.
 
 Use Profile for:
 
@@ -316,9 +345,11 @@ Use Profile for:
   country/state list toggles.
 - Security settings: TOTP authenticator setup, backup codes, and WebAuthn
   passkey management.
-- Calendar feed token management.
 - Per-user theme selection, including High Contrast.
 - OAuth client management (for users creating connected clients).
+
+Use each trip's Share page for user/group access, public links, and calendar
+feed URL management.
 
 ## Architecture
 
@@ -336,8 +367,11 @@ expired-session cleanup, and run pruning without duplicate starts or
 overlapping ticks.
 
 Routes stay thin. Server-side business logic lives under `src/lib/server/`.
-Authorization is centralized in sharing and ownership helpers, while public
-share and calendar-feed routes expose only a reduced viewer projection.
+Trip access is centralized in three ownership helpers — `requireOwnedTrip`
+(owner only), `requireEditableTrip` (owner + edit-share), and
+`requireViewableTrip` (owner + any share) — so MCP tools, route actions, and
+resource reads all share one consistent authorization layer. Public share and
+calendar-feed routes expose only a reduced `viewerProjection`.
 
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and

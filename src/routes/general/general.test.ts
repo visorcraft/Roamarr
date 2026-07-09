@@ -179,6 +179,21 @@ test('getMapSettings reflects imported city count', () => {
 	expect(m.cityCount).toBe(0);
 });
 
+test('disable maps stays on the Maps tab', async () => {
+	const u = makeUser('maps-disable@x.c', 'Admin', 'admin');
+	updateSettings({ mapsEnabled: true });
+	const cookies = { set: vi.fn() };
+
+	await expect(
+		actions.disableMaps({
+			locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+			cookies
+		} as any)
+	).rejects.toMatchObject({ status: 303, location: '/general?tab=maps' });
+	expect(getMapSettings().mapsEnabled).toBe(false);
+	expect(cookies.set).toHaveBeenCalledWith('flash', expect.stringContaining('Maps disabled'), expect.any(Object));
+});
+
 test('map tile API key is encrypted at rest and decrypts for tile config', () => {
 	const u = makeUser('tilekey@x.c');
 	saveAdminSettings(Number(u.id), {

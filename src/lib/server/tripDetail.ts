@@ -148,9 +148,6 @@ export async function buildTripDetail(
 				lastResultJson: w.lastResultJson,
 				segmentTitle: w.segmentId != null ? segmentTitleMap.get(w.segmentId) ?? null : null
 			}));
-		const feedUrl = view.trip.calendarToken
-			? `${url.origin}/trips/${view.trip.id}/calendar/feed?token=${encodeURIComponent(view.trip.calendarToken)}`
-			: null;
 		const publicShareUrl = view.trip.publicToken
 			? `${url.origin}/share/${encodeURIComponent(view.trip.publicToken)}`
 			: null;
@@ -182,7 +179,6 @@ export async function buildTripDetail(
 			cards: userCards,
 			policies,
 			availablePolicies,
-			feedUrl,
 			publicShareUrl,
 			comments,
 			packingTemplates,

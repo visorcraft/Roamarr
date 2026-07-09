@@ -15,8 +15,10 @@ import { POST as revokePost } from './revoke/+server';
 import {
 	createClient,
 	createAuthorizationCode,
-	verifyAccessToken
+	verifyAccessToken,
+	type Scope
 } from '$lib/server/oauth';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { updateSettings } from '$lib/server/settings';
 import { oauthTokens, oauthClients } from '$lib/server/db/mongrelSchema';
 import { makeUser } from '../../../tests/helpers';
@@ -44,11 +46,12 @@ describe('oauth routes', () => {
 	});
 
 	describe('authorize', () => {
-		function makeClient() {
+		function makeClient(opts: { scopes?: Scope[]; isPublic?: boolean } = {}) {
 			return createClient(user.id, {
 				clientName: 'Test',
 				redirectUris: ['https://app.example/cb'],
-				scopes: ['trips:read', 'places:read']
+				scopes: opts.scopes ?? (['trips:read', 'places:read'] as Scope[]),
+				isPublic: opts.isPublic
 			});
 		}
 
@@ -123,6 +126,56 @@ describe('oauth routes', () => {
 				expect(e.location).toContain('state=xyz');
 				return true;
 			});
+		});
+
+		test('approve action preserves all multi-value scopes (regression: getAll, not get)', async () => {
+			const { client, plaintextSecret } = makeClient({
+				scopes: ['trips:read', 'trips:write', 'places:write'],
+				isPublic: false
+			});
+			const { challenge, verifier } = pkcePair();
+			const form = new FormData();
+			form.set('client_id', client.clientId);
+			form.set('redirect_uri', client.redirectUris[0]);
+			form.set('code_challenge', challenge);
+			form.set('state', 'xyz');
+			// Form posts each scope as a separate field — must be collected with getAll,
+			// not collapsed by .get() which only returns the first.
+			form.append('scopes', 'trips:read');
+			form.append('scopes', 'trips:write');
+			form.append('scopes', 'places:write');
+
+			const event: any = {
+				locals: makeLocals(user),
+				request: { formData: async () => form },
+				getClientAddress: () => '127.0.0.1'
+			};
+
+			let location: string | undefined;
+			try {
+				await actions.approve(event);
+			} catch (e: any) {
+				location = e.location;
+			}
+			const code = new URL(location!).searchParams.get('code');
+			expect(code).toBeTruthy();
+
+			// Exchange code; verify the issued token carries all three scopes, not just the first.
+			const tokenRes = await tokenPost({
+				request: new Request('http://localhost/oauth/token', {
+					method: 'POST',
+					body: new URLSearchParams({
+						grant_type: 'authorization_code',
+						code: code!,
+						client_id: client.clientId,
+						client_secret: plaintextSecret!,
+						code_verifier: verifier
+					})
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+			const tokenBody = await tokenRes.json();
+			expect(tokenBody.scope).toBe('trips:read trips:write places:write');
 		});
 
 		test('deny action redirects with access_denied', async () => {
@@ -293,9 +346,37 @@ describe('oauth routes', () => {
 
 			expect(res.status).toBe(200);
 			const body = await res.json();
-			expect(body.accessToken).toBeDefined();
-			expect(body.refreshToken).toBeDefined();
-			expect(verifyAccessToken(body.accessToken)?.userId).toBe(user.id);
+			// RFC 6749 §5.1: snake_case wire format.
+			expect(body.access_token).toBeDefined();
+			expect(body.refresh_token).toBeDefined();
+			expect(body.token_type).toBe('Bearer');
+			expect(typeof body.expires_in).toBe('number');
+			expect(verifyAccessToken(body.access_token)?.userId).toBe(user.id);
+		});
+
+		test('token response uses RFC 6749 §5.1 snake_case keys (no camelCase leakage)', async () => {
+			const { client, plaintextSecret, verifier, code } = issueCode();
+			const form = new URLSearchParams();
+			form.set('grant_type', 'authorization_code');
+			form.set('code', code);
+			form.set('client_id', client.clientId);
+			form.set('client_secret', plaintextSecret!);
+			form.set('code_verifier', verifier);
+
+			const res = await tokenPost({
+				request: new Request('http://localhost/oauth/token', {
+					method: 'POST',
+					body: form,
+					headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+
+			const body = await res.json();
+			// Wire surface must match RFC exactly; camelCase is internal-only.
+			expect(Object.keys(body).sort()).toEqual(
+				['access_token', 'expires_in', 'refresh_token', 'scope', 'token_type'].sort()
+			);
 		});
 
 		test('refresh_token rotates the token', async () => {
@@ -313,7 +394,7 @@ describe('oauth routes', () => {
 				}),
 				getClientAddress: () => '127.0.0.1'
 			} as any);
-			const { refreshToken } = await first.json();
+			const { refresh_token: refreshToken } = await first.json();
 
 			const second = await tokenPost({
 				request: new Request('http://localhost/oauth/token', {
@@ -330,7 +411,7 @@ describe('oauth routes', () => {
 
 			expect(second.status).toBe(200);
 			const body = await second.json();
-			expect(verifyAccessToken(body.accessToken)?.userId).toBe(user.id);
+			expect(verifyAccessToken(body.access_token)?.userId).toBe(user.id);
 		});
 
 		test('rate limiting blocks repeated requests', async () => {
@@ -351,6 +432,98 @@ describe('oauth routes', () => {
 					getClientAddress: () => ip
 				} as any)
 			).rejects.toMatchObject({ status: 429 });
+		});
+	});
+
+	describe('requires_reauth gate', () => {
+		test('flagged client cannot exchange a code for tokens', async () => {
+			const { client, plaintextSecret } = createClient(user.id, {
+				clientName: 'Reauth Test',
+				redirectUris: ['https://app.example/cb'],
+				scopes: ['trips:read'] as Scope[]
+			});
+			// Manually flag the client (simulates post-migration state).
+			ctx.kit
+				.updateTable(oauthClients)
+				.set({ requires_reauth: true })
+				.where(kitEq(oauthClients.client_id, client.clientId))
+				.executeSync();
+			const { challenge, verifier } = pkcePair();
+			const { code } = createAuthorizationCode({
+				userId: user.id,
+				clientId: client.clientId,
+				scopes: ['trips:read'] as Scope[],
+				codeChallenge: challenge,
+				redirectUri: client.redirectUris[0]
+			});
+			const res = await tokenPost({
+				request: new Request('http://localhost/oauth/token', {
+					method: 'POST',
+					body: new URLSearchParams({
+						grant_type: 'authorization_code',
+						code,
+						client_id: client.clientId,
+						client_secret: plaintextSecret!,
+						code_verifier: verifier
+					})
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+			expect(res.status).toBe(400);
+			const body = await res.json();
+			expect(body.error).toBe('invalid_client');
+		});
+
+		test('minted access token is rejected by verifyAccessToken once client is flagged', async () => {
+			const { client, plaintextSecret } = createClient(user.id, {
+				clientName: 'PreFlag Test',
+				redirectUris: ['https://app.example/cb'],
+				scopes: ['trips:read'] as Scope[]
+			});
+			const { challenge, verifier } = pkcePair();
+			const { code } = createAuthorizationCode({
+				userId: user.id,
+				clientId: client.clientId,
+				scopes: ['trips:read'] as Scope[],
+				codeChallenge: challenge,
+				redirectUri: client.redirectUris[0]
+			});
+			// Exchange while unflagged: succeeds and clears the flag.
+			const res = await tokenPost({
+				request: new Request('http://localhost/oauth/token', {
+					method: 'POST',
+					body: new URLSearchParams({
+						grant_type: 'authorization_code',
+						code,
+						client_id: client.clientId,
+						client_secret: plaintextSecret!,
+						code_verifier: verifier
+					})
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+			const ok = await res.json();
+			expect(ok.access_token).toBeTruthy();
+			// Now flag the client after token issue and verify the access token
+			// is no longer honored.
+			ctx.kit
+				.updateTable(oauthClients)
+				.set({ requires_reauth: true })
+				.where(kitEq(oauthClients.client_id, client.clientId))
+				.executeSync();
+			expect(verifyAccessToken(ok.access_token)).toBeNull();
+		});
+	});
+
+	describe('empty-scope clients are rejected at create time', () => {
+		test('createClient with empty scopes throws', () => {
+			expect(() =>
+				createClient(user.id, {
+					clientName: 'Empty',
+					redirectUris: ['https://app.example/cb'],
+					scopes: []
+				})
+			).toThrow(/at least one scope/i);
 		});
 	});
 
@@ -387,7 +560,7 @@ describe('oauth routes', () => {
 				}),
 				getClientAddress: () => '127.0.0.1'
 			} as any);
-			const { accessToken } = await tokenRes.json();
+			const { access_token: accessToken } = await tokenRes.json();
 			expect(verifyAccessToken(accessToken)).not.toBeNull();
 
 			const form = new FormData();
@@ -435,7 +608,7 @@ describe('oauth routes', () => {
 				}),
 				getClientAddress: () => '127.0.0.1'
 			} as any);
-			const { accessToken } = await tokenRes.json();
+			const { access_token: accessToken } = await tokenRes.json();
 
 			const form = new FormData();
 			form.set('token', accessToken);

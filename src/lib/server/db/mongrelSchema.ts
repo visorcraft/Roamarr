@@ -312,6 +312,7 @@ export const oauthClients = table('oauth_clients', {
 		text('client_secret_hash', { nullable: true }),
 		text('redirect_uris'),
 		text('scopes'),
+		bool('requires_reauth', { default: staticDefault(false) }),
 		timestamp('created_at', { default: nowDefault() }),
 		int('created_by_user_id', { nullable: true })
 	],
@@ -779,6 +780,11 @@ export const tripCompanions = table('trip_companions', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_companions_id_seq') }),
 		int('trip_id'),
+		// user_id links a "self" companion to the user it represents. Null for
+		// ordinary companions. Scoped unique (trip_id, user_id) so each user
+		// has at most one self-companion per trip — the MCP poll-vote path
+		// uses this to attribute an owner vote without name-match ambiguity.
+		int('user_id', { nullable: true }),
 		text('name'),
 		text('category', { enumValues: [...COMPANION_CATEGORIES], default: staticDefault('adult') }),
 		text('dietary', { nullable: true }),
@@ -797,9 +803,14 @@ export const tripCompanions = table('trip_companions', {
 		timestamp('created_at', { default: nowDefault() })
 	],
 	primaryKey: 'id',
-	indexes: [index(['trip_id'], { name: 'companions_trip_idx' })],
+	indexes: [
+		index(['trip_id'], { name: 'companions_trip_idx' }),
+		index(['user_id'], { name: 'companions_user_idx' })
+	],
+	unique: [unique(['trip_id', 'user_id'], { name: 'trip_companions_trip_user_uq' })],
 	foreignKeys: [
-		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_trip_companions_trip_id_trips', onDelete: 'cascade' })
+		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_trip_companions_trip_id_trips', onDelete: 'cascade' }),
+		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_trip_companions_user_id_users', onDelete: 'set null' })
 	]
 });
 

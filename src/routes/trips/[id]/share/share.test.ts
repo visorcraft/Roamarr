@@ -9,6 +9,8 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import {
+	actions,
+	load,
 	_shareWithUserEmail as shareWithUserEmail,
 	_shareWithGroup as shareWithGroup,
 	_unshareUser as unshareUser,
@@ -41,6 +43,35 @@ function makeUser(email: string) {
 function makeTrip(ownerId: number, name: string) {
 	return tripsRepo.createTrip(ownerId, { name, calendarToken: randomUUID() });
 }
+
+test('calendar feed is loaded and managed from the share page', async () => {
+	const owner = makeUser('calendar-o@x.c');
+	const trip = makeTrip(owner.id, 'T');
+	const locals = { user: { id: owner.id } } as App.Locals;
+	const params = { id: String(trip.id) };
+	const data = load({ locals, params, url: new URL(`https://roamarr.test/trips/${trip.id}/share`) } as any) as {
+		feedUrl: string;
+	};
+	expect(data.feedUrl).toContain(`/trips/${trip.id}/calendar/feed?token=`);
+
+	const cookies = { set: vi.fn() };
+	const oldToken = tripsRepo.getTripById(trip.id)!.calendarToken;
+	await expect(
+		actions.regenerateCalendarFeed({
+			locals,
+			params,
+			cookies,
+			request: new Request('https://roamarr.test', { method: 'POST', body: new FormData() })
+		} as any)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${trip.id}/share` });
+	expect(tripsRepo.getTripById(trip.id)!.calendarToken).not.toBe(oldToken);
+
+	await expect(actions.revokeCalendarFeed({ locals, params, cookies } as any)).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${trip.id}/share`
+	});
+	expect(tripsRepo.getTripById(trip.id)!.calendarToken).toBeNull();
+});
 
 test('owner can revoke a user share', () => {
 	const kit = kitDb();

@@ -3,7 +3,7 @@ import type { SegmentStatus } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import { requireOwnedTrip, requireEditableTrip } from './ownership';
 import { getSegmentById } from './repositories/segmentsRepo';
-import { regenerateCalendarToken, revokeCalendarToken, duplicateTrip } from '../../routes/trips/shared';
+import { duplicateTrip } from '../../routes/trips/shared';
 import { upsertCustomReminder } from './reminders';
 import { duplicateSegment, moveSegmentToDate, setSegmentStatus } from './segments';
 import {
@@ -24,21 +24,6 @@ function parseOffsetMinutes(formData: FormData): number {
 	const offset = Number(formData.get('offsetMinutes') ?? 60);
 	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
 	return offset;
-}
-
-export async function regenerateCalendarFeed(event: RequestEvent) {
-	const { user, tripId, formData } = await withTripAction(event);
-	requireOwnedTrip(user.id, tripId);
-	const expiresAt = String(formData.get('calendarExpiresAt') || '');
-	regenerateCalendarToken(user.id, tripId, expiresAt || null);
-	throw redirect(303, `/trips/${tripId}`);
-}
-
-export async function revokeCalendarFeed(event: RequestEvent) {
-	const { user, tripId } = await withTripAction(event);
-	requireOwnedTrip(user.id, tripId);
-	revokeCalendarToken(user.id, tripId);
-	throw redirect(303, `/trips/${tripId}`);
 }
 
 export async function duplicate(event: RequestEvent) {

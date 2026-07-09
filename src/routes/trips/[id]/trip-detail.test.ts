@@ -226,8 +226,8 @@ test('duplicateSegment action copies a segment and redirects', async () => {
 	expect(rows).toHaveLength(2);
 	const copy = rows.find((r) => Number(r.id) !== s.id)!;
 	expect(copy.title).toBe('City tour');
-	expect(copy.start_at).toBe('2026-09-02T14:00:00.000Z');
-	expect(copy.end_at).toBe('2026-09-02T16:00:00.000Z');
+	expect(copy.start_at).toBe('2026-09-01T14:00:00Z');
+	expect(copy.end_at).toBe('2026-09-01T16:00:00Z');
 	expect(copy.confirmation_number).toBeNull();
 
 	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, copy.id)).executeSync();

@@ -355,14 +355,14 @@ export const actions: Actions = {
 			} catch (e) {
 				return fail(400, { error: userFacingError(e, 'Failed to enable maps') });
 			}
-			throw redirect(303, '/general');
+			throw redirect(303, TAB_REDIRECTS.maps);
 		},
 		disableMaps: async ({ locals, cookies }) => {
 			const u = requireAdmin(locals);
 			updateSettings({ mapsEnabled: false });
 			logAudit(u.id, 'maps_disable', 'settings', 1, {});
 			setFlash(cookies, 'Maps disabled. Downloaded data was kept; re-enable to re-check and resume.');
-			throw redirect(303, '/general');
+			throw redirect(303, TAB_REDIRECTS.maps);
 		},
 		reimportCities: async ({ locals, cookies, getClientAddress }) => {
 			const u = requireAdmin(locals);
@@ -375,7 +375,7 @@ export const actions: Actions = {
 			} catch (e) {
 				return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
 			}
-			throw redirect(303, '/general');
+			throw redirect(303, TAB_REDIRECTS.maps);
 		},
 		reimportTexture: async ({ locals, cookies, getClientAddress }) => {
 			const u = requireAdmin(locals);
@@ -388,7 +388,7 @@ export const actions: Actions = {
 			} catch (e) {
 				return fail(400, { error: userFacingError(e, 'Failed to import Earth texture') });
 			}
-			throw redirect(303, '/general');
+			throw redirect(303, TAB_REDIRECTS.maps);
 		},
 		importGeonames: async ({ request, locals, cookies, getClientAddress }) => {
 			const u = requireAdmin(locals);
@@ -406,6 +406,6 @@ export const actions: Actions = {
 			} catch (e) {
 				return fail(400, { error: userFacingError(e, 'Failed to import GeoNames data') });
 			}
-			throw redirect(303, '/general');
+			throw redirect(303, TAB_REDIRECTS.maps);
 		}
 };

@@ -11,23 +11,125 @@ import type { Row } from '@visorcraft/mongreldb-kit';
 export type Scope =
 	| 'trips:read'
 	| 'trips:write'
+	| 'segments:read'
+	| 'segments:write'
+	| 'packing:read'
 	| 'packing:write'
+	| 'budgets:read'
 	| 'budgets:write'
+	| 'expenses:read'
+	| 'expenses:write'
 	| 'places:read'
 	| 'places:write'
+	| 'reminders:read'
 	| 'reminders:write'
-	| 'profile:read';
+	| 'profile:read'
+	| 'companions:read'
+	| 'companions:write'
+	| 'sharing:read'
+	| 'sharing:write'
+	| 'calendar:read'
+	| 'calendar:write'
+	| 'templates:read'
+	| 'templates:write'
+	| 'travel-docs:read'
+	| 'travel-docs:write'
+	| 'doc-links:read'
+	| 'doc-links:write'
+	| 'fares:read'
+	| 'fares:write'
+	| 'polls:read'
+	| 'polls:write'
+	| 'journal:read'
+	| 'journal:write'
+	| 'items:read'
+	| 'items:write'
+	| 'requirements:read'
+	| 'requirements:write'
+	| 'home-tasks:read'
+	| 'home-tasks:write'
+	| 'medications:read'
+	| 'medications:write'
+	| 'cards:read'
+	| 'cards:write'
+	| 'loyalty:read'
+	| 'loyalty:write'
+	| 'insurance:read'
+	| 'insurance:write'
+	| 'contacts:read'
+	| 'contacts:write'
+	| 'profile-prefs:read'
+	| 'profile-prefs:write'
+	| 'notifications:read'
+	| 'notifications:write'
+	| 'user-smtp:read'
+	| 'user-smtp:write'
+	| 'comments:read'
+	| 'comments:write'
+	| 'search:read';
 
 export const ALL_SCOPES: Scope[] = [
 	'trips:read',
 	'trips:write',
+	'segments:read',
+	'segments:write',
+	'packing:read',
 	'packing:write',
+	'budgets:read',
 	'budgets:write',
+	'expenses:read',
+	'expenses:write',
 	'places:read',
 	'places:write',
+	'reminders:read',
 	'reminders:write',
-	'profile:read'
+	'profile:read',
+	'companions:read',
+	'companions:write',
+	'sharing:read',
+	'sharing:write',
+	'calendar:read',
+	'calendar:write',
+	'templates:read',
+	'templates:write',
+	'travel-docs:read',
+	'travel-docs:write',
+	'doc-links:read',
+	'doc-links:write',
+	'fares:read',
+	'fares:write',
+	'polls:read',
+	'polls:write',
+	'journal:read',
+	'journal:write',
+	'items:read',
+	'items:write',
+	'requirements:read',
+	'requirements:write',
+	'home-tasks:read',
+	'home-tasks:write',
+	'medications:read',
+	'medications:write',
+	'cards:read',
+	'cards:write',
+	'loyalty:read',
+	'loyalty:write',
+	'insurance:read',
+	'insurance:write',
+	'contacts:read',
+	'contacts:write',
+	'profile-prefs:read',
+	'profile-prefs:write',
+	'notifications:read',
+	'notifications:write',
+	'user-smtp:read',
+	'user-smtp:write',
+	'comments:read',
+	'comments:write',
+	'search:read'
 ];
+
+export { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
@@ -42,6 +144,7 @@ export interface OAuthClient {
 	scopes: Scope[];
 	isConfidential: boolean;
 	createdAt: string;
+	requiresReauth: boolean;
 }
 
 function toClient(row: Row<typeof oauthClients>): OAuthClient {
@@ -51,7 +154,8 @@ function toClient(row: Row<typeof oauthClients>): OAuthClient {
 		redirectUris: JSON.parse(row.redirect_uris as string) as string[],
 		scopes: JSON.parse(row.scopes as string) as Scope[],
 		isConfidential: Boolean(row.client_secret_hash),
-		createdAt: row.created_at as string
+		createdAt: row.created_at as string,
+		requiresReauth: Boolean(row.requires_reauth)
 	};
 }
 
@@ -100,6 +204,19 @@ export function assertClientAllowed(clientId: string): void {
 export function createClient(userId: number, input: CreateClientInput): { client: OAuthClient; plaintextSecret: string | null } {
 	const clientId = input.clientId ?? randomToken(16);
 	assertClientAllowed(clientId);
+	// Reject empty scope arrays. The previous behavior of "empty = ALL_SCOPES"
+	// was a privilege-inflation hazard once ALL_SCOPES grew. A client with
+	// no scopes gets no permission; the consent UI surfaces this.
+	if (!Array.isArray(input.scopes) || input.scopes.length === 0) {
+		throw new Error('At least one scope is required');
+	}
+	// Reject any scope not in the canonical ALL_SCOPES list. validateScopes
+	// filters silently; here we want the create call to fail loudly so a
+	// tampered form (e.g. future scope name smuggled in) cannot persist.
+	const invalid = input.scopes.filter((s) => !ALL_SCOPES.includes(s));
+	if (invalid.length > 0) {
+		throw new Error(`Unknown scope(s): ${invalid.join(', ')}`);
+	}
 	const isConfidential = !input.isPublic;
 	const plaintextSecret = isConfidential ? randomToken(32) : null;
 
@@ -146,6 +263,10 @@ export function createAuthorizationCode(params: {
 	codeChallenge: string;
 	redirectUri: string;
 }): { code: string; redirectUri: string } {
+	// NOTE: requires_reauth is cleared only on a successful token exchange
+	// (exchangeAuthorizationCode), not here. A user who opens the consent
+	// page but never completes the flow would otherwise bypass the re-auth
+	// gate by simply visiting /oauth/authorize.
 	const code = randomToken(32);
 	const expiresAt = utcIsoAfter({ seconds: CODE_TTL_SEC });
 	kit.insertInto(oauthCodes).values({
@@ -172,6 +293,7 @@ export function verifyPkce(verifier: string, challenge: string): boolean {
 function authenticateClient(clientId: string, clientSecret: string | null): { ok: true } | { error: string } {
 	const client = getClient(clientId);
 	if (!client) return { error: 'invalid_client' };
+	if (client.requiresReauth) return { error: 'invalid_client' };
 	if (client.isConfidential) {
 		if (!clientSecret) return { error: 'invalid_client' };
 		const stored = kit
@@ -218,6 +340,13 @@ export function exchangeAuthorizationCode(params: {
 		.updateTable(oauthCodes)
 		.set({ used_at: nowIso() })
 		.where(kitEq(oauthCodes.id, row.id))
+		.executeSync();
+
+	// Successful exchange clears the reauth gate.
+	kit
+		.updateTable(oauthClients)
+		.set({ requires_reauth: false })
+		.where(kitEq(oauthClients.client_id, params.clientId))
 		.executeSync();
 
 	const scopes = JSON.parse(row.scopes as string) as Scope[];
@@ -309,6 +438,16 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 	// natural expiry.
 	const user = getUserById(Number(row.user_id));
 	if (!user || user.disabled) return null;
+
+	// Enforce the re-auth gate set by the scope-hardening migration. Existing
+	// tokens issued before re-authorization must not be honored after the
+	// client is flagged. This catches the case where a client was rotated to
+	// requires_reauth=1 but old tokens still exist in oauth_tokens.
+	const clientRow = kit
+		.selectFrom(oauthClients)
+		.where(kitEq(oauthClients.client_id, row.client_id as string))
+		.executeSync()[0];
+	if (clientRow?.requires_reauth) return null;
 
 	kit
 		.updateTable(oauthTokens)

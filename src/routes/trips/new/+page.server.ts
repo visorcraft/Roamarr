@@ -2,7 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { createTrip } from '../shared';
 import { listTripTemplates, createTripFromTemplate } from '$lib/server/tripTemplates';
-import { findCity } from '$lib/server/cities';
+import { citySelectionError } from '$lib/server/cities';
 import { Validator } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals }) => {
@@ -36,12 +36,13 @@ function parseDestinationCity(v: Validator, f: FormData) {
 		: undefined;
 
 	if (destinationCountryCode && destinationCityName) {
-		const city = findCity(destinationCountryCode, destinationCityName);
-		if (!city) {
-			v.addError('destinationCityName', 'Selected city was not found in the GeoNames database');
-		} else if (destinationCityLat == null || destinationCityLng == null) {
-			v.addError('destinationCityName', 'City coordinates are missing');
-		}
+		const error = citySelectionError(
+			destinationCountryCode,
+			destinationCityName,
+			destinationCityLat,
+			destinationCityLng
+		);
+		if (error) v.addError('destinationCityName', error);
 	}
 
 	return {

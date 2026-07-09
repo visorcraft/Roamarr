@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from '@sveltejs/kit';
 import { appInfo } from '$lib/appInfo';
+import { ALL_SCOPES } from '$lib/server/oauth';
 
 export const GET: RequestHandler = ({ url }) => {
 	const origin = url.origin;
@@ -18,15 +19,6 @@ export const GET: RequestHandler = ({ url }) => {
 			prompts: {},
 			resources: {}
 		},
-		scopes_supported: [
-			'trips:read',
-			'trips:write',
-			'packing:write',
-			'budgets:write',
-			'places:read',
-			'places:write',
-			'reminders:write',
-			'profile:read'
-		]
+		scopes_supported: ALL_SCOPES
 	});
 };

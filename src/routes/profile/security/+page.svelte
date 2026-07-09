@@ -370,6 +370,13 @@
 							<div class="meta mt-0.5">
 								Scopes: {c.scopes.join(', ') || 'none'}
 							</div>
+							{#if c.requiresReauth}
+								<p class="mt-2 text-sm text-amber-400">
+									⚠ Needs re-authorization: Roamarr's OAuth scopes changed.
+									Have the client re-run the consent flow to refresh its
+									granted scopes, then tokens will work again.
+								</p>
+							{/if}
 						</div>
 						<form method="POST" action="?/deleteClient">
 							<input type="hidden" name="clientId" value={c.clientId} />

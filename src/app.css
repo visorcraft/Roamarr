@@ -419,6 +419,7 @@
 		--theme-menu-hover: var(--theme-active-strong);
 		--theme-option-hover: var(--theme-active-strong);
 		--theme-option-selected: var(--theme-active-strong);
+		--theme-readable-danger: light-dark(var(--theme-danger-bottom), var(--theme-danger-border));
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 70%, var(--theme-ink));
 		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-ink));
 		min-height: 100dvh;
@@ -1263,10 +1264,17 @@ button.card:hover,
 		cursor: pointer;
 	}
 	.input-error {
-		@apply ring-red-400/70 focus:ring-red-400/70;
+		box-shadow: inset 0 0 0 1px var(--theme-danger-border);
+	}
+	.input-error:focus {
+		background: color-mix(in oklab, var(--theme-control) 86%, var(--theme-danger-top) 6%);
+		box-shadow:
+			inset 0 0 0 1px var(--theme-danger-border),
+			0 0 0 2px color-mix(in oklab, var(--theme-danger-border) 32%, transparent);
 	}
 	.field-error {
-		@apply text-xs text-red-300;
+		@apply text-sm font-medium;
+		color: var(--theme-readable-danger);
 	}
 	.checkbox {
 		@apply h-4 w-4 rounded border-white/20 bg-white/5 text-indigo-500 accent-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas;
@@ -1404,7 +1412,9 @@ button.card:hover,
 		@apply rounded-lg px-3 py-2 text-sm ring-1 ring-inset;
 	}
 	.notice-error {
-		@apply bg-red-500/10 text-red-300 ring-red-400/30;
+		background: color-mix(in oklab, var(--theme-danger-bottom) 12%, var(--theme-panel));
+		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-danger-border) 55%, var(--theme-line));
+		color: var(--theme-readable-danger);
 	}
 	.notice-success {
 		@apply bg-emerald-500/10 text-emerald-300 ring-emerald-400/30;

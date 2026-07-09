@@ -67,7 +67,7 @@
 .trip-modern .trip-modern-segment:not(.trip-modern-segment-active)::after {
 	content: '';
 	position: absolute;
-	left: 8rem;
+	left: 0.75rem;
 	right: 0.75rem;
 	bottom: -0.36rem;
 	height: 1px;
@@ -86,7 +86,9 @@
 }
 
 .trip-modern .trip-modern-time {
+	padding-left: 10px;
 	padding-top: 0.48rem;
+	text-align: left;
 }
 
 .trip-modern .trip-modern-type-node {

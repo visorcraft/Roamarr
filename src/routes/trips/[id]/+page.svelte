@@ -230,7 +230,7 @@
 			const dt = segmentLocalDateTime(s);
 			if (dt) {
 				key = dt.toISODate()!;
-				label = formatDate(dt.toISODate()!);
+				label = dt.toFormat('LLLL d, yyyy');
 			}
 			const existing = index.get(key);
 			if (existing != null) groups[existing].segments.push(s);
@@ -546,6 +546,17 @@
 		return statusValue === 'fully_paid' || statusValue === 'deposit_paid' ? 'trip-modern-segment-status-paid' : 'trip-modern-segment-status-confirmed';
 	}
 
+	function segmentSideLabel(segment: SegmentRow) {
+		if (segment.paymentStatus && segment.paymentStatus !== 'quoted') return paymentStatusLabel(segment.paymentStatus);
+		if (segment.confirmationNumber) return 'Confirmed';
+		return paymentStatusLabel(segment.paymentStatus);
+	}
+
+	function segmentSideClass(segment: SegmentRow) {
+		if (segment.paymentStatus && segment.paymentStatus !== 'quoted') return paymentStatusClass(segment.paymentStatus);
+		return segment.confirmationNumber ? 'trip-modern-segment-status-confirmed' : paymentStatusClass(segment.paymentStatus);
+	}
+
 	function segmentSubtitle(segment: SegmentRow) {
 		const city = [segment.cityName, segment.countryCode?.toUpperCase()].filter(Boolean).join(', ');
 		if (city && segment.venue) return `${city} · ${segment.venue}`;
@@ -554,13 +565,33 @@
 		return segment.location ?? 'Location not set';
 	}
 
-	function segmentMetaItems(segment: SegmentRow) {
-		const items: string[] = [];
-		if (segment.confirmationNumber) items.push(`Confirmation ${segment.confirmationNumber}`);
-		if (segment.meetingPoint) items.push(segment.meetingPoint);
-		if (segment.meetingAt) items.push(`Meet ${formatTime(segment.meetingAt, segment.startTz ?? 'UTC')}`);
+	function segmentMetaItems(segment: SegmentRow): { icon: IconName; value: string }[] {
+		const details = readDetailsJson(segment);
+		const items: { icon: IconName; value: string }[] = [];
+		const detail = (key: string) => {
+			const value = details[key];
+			return typeof value === 'string' && value.trim() ? value.trim() : '';
+		};
+		const flight = [detail('airline'), detail('flightNumber')].filter(Boolean).join(' ');
+		if (flight) items.push({ icon: 'flight', value: flight });
+		if (segment.location && segment.venue && segment.location !== segment.venue) items.push({ icon: 'location', value: segment.location });
+		for (const key of ['terminal', 'gate', 'seat', 'room', 'checkIn']) {
+			const value = detail(key);
+			if (value) items.push({ icon: key === 'seat' ? 'user' : 'document', value });
+		}
+		for (const key of ['guests', 'tickets']) {
+			const value = detail(key);
+			if (value) items.push({ icon: 'users', value });
+		}
+		for (const key of ['reservation', 'entry']) {
+			const value = detail(key);
+			if (value) items.push({ icon: key === 'entry' ? 'location' : 'document', value });
+		}
+		if (segment.confirmationNumber && !detail('reservation')) items.push({ icon: 'document', value: `Confirmation ${segment.confirmationNumber}` });
+		if (segment.meetingPoint) items.push({ icon: 'location', value: segment.meetingPoint });
+		if (segment.meetingAt) items.push({ icon: 'reminder', value: `Meet ${formatTime(segment.meetingAt, segment.startTz ?? 'UTC')}` });
 		const card = segment.cardId ? cardMap.get(segment.cardId) : null;
-		if (card) items.push(`${card.nickname}${card.last4 ? ` ····${card.last4}` : ''}`);
+		if (card) items.push({ icon: 'card', value: `${card.nickname}${card.last4 ? ` ····${card.last4}` : ''}` });
 		return items;
 	}
 
@@ -702,7 +733,23 @@
 						{#each dayGroups as group (group.key)}
 							<section class="trip-modern-day-card {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
 								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3"><span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
-								<div class="trip-modern-day-body">{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}{@const duration = formatSegmentDuration(s.startAt, s.endAt)}{@const paymentLabel = paymentStatusLabel(s.paymentStatus)}{#if isEditor && editingId === s.id}<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />{:else}<button type="button" class="trip-modern-segment {segmentTypeClass(s.type)} {selectedSegment?.id != null && selectedSegment.id === s.id ? 'trip-modern-segment-active' : ''} {draggingSegmentId === s.id ? 'trip-modern-segment-dragging' : ''}" onclick={(e) => handleSegmentCardClick(s, e)} onkeydown={(e) => handleSegmentKeydown(s, e)} draggable={isEditor && s.id != null} ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)} ondragend={endSegmentDrag}><div class="trip-modern-time">{#if s.startAt}<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>{:else}<div class="trip-modern-time-main">TBD</div>{/if}{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}</div><span class="trip-modern-type-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg></span><div class="trip-modern-segment-body"><div class="trip-modern-segment-head"><h3 class="trip-modern-segment-title">{s.title}</h3>{#if s.status}<span class="trip-modern-segment-status {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>{/if}{#if paymentLabel}<span class="trip-modern-segment-status {paymentStatusClass(s.paymentStatus)}">{paymentLabel}</span>{/if}</div><p class="trip-modern-segment-subtitle">{segmentSubtitle(s)}</p>{#if segmentMetaItems(s).length}<div class="trip-modern-segment-meta">{#each segmentMetaItems(s) as item}<span class="trip-modern-meta-pill">• {item}</span>{/each}</div>{/if}</div><Icon name="chevron-down" class="trip-modern-chevron h-5 w-5 -rotate-90" /></button>{/if}{/each}</div>
+								<div class="trip-modern-day-body">
+									{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}
+										{@const duration = formatSegmentDuration(s.startAt, s.endAt)}
+										{@const sideLabel = segmentSideLabel(s)}
+										{@const metaItems = segmentMetaItems(s)}
+										{#if isEditor && editingId === s.id}
+											<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />
+										{:else}
+											<button type="button" class="trip-modern-segment {segmentTypeClass(s.type)} {selectedSegment?.id != null && selectedSegment.id === s.id ? 'trip-modern-segment-active' : ''} {draggingSegmentId === s.id ? 'trip-modern-segment-dragging' : ''}" onclick={(e) => handleSegmentCardClick(s, e)} onkeydown={(e) => handleSegmentKeydown(s, e)} draggable={isEditor && s.id != null} ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)} ondragend={endSegmentDrag}>
+												<div class="trip-modern-time">{#if s.startAt}<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>{:else}<div class="trip-modern-time-main">TBD</div>{/if}{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}</div>
+												<span class="trip-modern-type-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg></span>
+												<div class="trip-modern-segment-body"><div class="trip-modern-segment-head"><h3 class="trip-modern-segment-title">{s.title}</h3>{#if s.status}<span class="trip-modern-segment-status {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>{/if}</div><p class="trip-modern-segment-subtitle">{segmentSubtitle(s)}</p>{#if metaItems.length}<div class="trip-modern-segment-meta">{#each metaItems as item, metaIndex}<span class="trip-modern-meta-pill"><Icon name={item.icon} class="h-3.5 w-3.5" /><span>{item.value}</span></span>{#if metaIndex < metaItems.length - 1}<span class="trip-modern-meta-separator">•</span>{/if}{/each}</div>{/if}</div>
+												<div class="trip-modern-segment-side">{#if sideLabel}<span class="trip-modern-segment-status {segmentSideClass(s)}">{sideLabel}</span>{/if}<Icon name="chevron-down" class="trip-modern-chevron h-5 w-5 -rotate-90" /></div>
+											</button>
+										{/if}
+									{/each}
+								</div>
 							</section>
 						{/each}
 					{:else}<div class="trip-modern-empty">No itinerary segments match your filters.</div>{/if}

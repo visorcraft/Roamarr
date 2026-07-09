@@ -34,12 +34,13 @@
 }
 
 .trip-modern .trip-modern-segment {
-	grid-template-columns: 5.45rem 3.15rem minmax(0, 1fr) 1.25rem;
+	grid-template-columns: 5.45rem 3.15rem minmax(0, 1fr) minmax(6.5rem, auto);
 	width: calc(100% - 0.3rem);
-	min-height: 5.35rem;
+	min-height: 5.85rem;
 	margin: 0.35rem 0.15rem;
 	padding: 0.8rem 0.85rem 0.8rem 0.2rem;
 	border-radius: 0.75rem;
+	text-align: left;
 }
 
 .trip-modern .trip-modern-segment + .trip-modern-segment {
@@ -124,7 +125,7 @@
 }
 
 .trip-modern .trip-modern-main-list .trip-modern-segment {
-	grid-template-columns: 5rem 2.65rem minmax(0, 1fr) 1.25rem;
+	grid-template-columns: 5rem 2.65rem minmax(0, 1fr) minmax(6.5rem, auto);
 	min-height: 4.4rem;
 }
 
@@ -160,6 +161,12 @@
 	min-height: 0;
 	margin: 0.45rem 0;
 	padding: 0.75rem;
+}
+
+.trip-modern .trip-modern-main-board .trip-modern-segment-side {
+	grid-column: 1 / -1;
+	justify-content: space-between;
+	gap: 0.75rem;
 }
 
 .trip-modern .trip-modern-main-board .trip-modern-time {

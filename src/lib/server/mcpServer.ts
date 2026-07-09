@@ -294,7 +294,9 @@ const PROMPTS: readonly PromptEntry[] = [
 		requiresTrip: true,
 		requiresTripArgument: true,
 		async build({ tripId }) {
-			// Real data: aggregate listExpensesForTrip by category.
+			// Real data: aggregate listExpensesForTrip by category. Totals
+			// are per-currency because adding cents across currencies
+			// would mix them (5000 USD + 5000 JPY != 10000 of anything).
 			const { listExpensesForTrip } = await import('./repositories/expensesRepo');
 			const { listBudgetsWithSpent } = await import('./tripBudgets');
 			const expenses = listExpensesForTrip(tripId);
@@ -308,14 +310,21 @@ const PROMPTS: readonly PromptEntry[] = [
 				cur.totalCents += e.amount;
 				byCategory[key] = cur;
 			}
-			const totalCount = expenses.length;
-			const totalCents = expenses.reduce((s, e) => s + e.amount, 0);
+			// Per-currency totals — never sum across currencies.
+			const byCurrency: Record<string, { count: number; totalCents: number }> = {};
+			for (const e of expenses) {
+				const cur = byCurrency[e.currency] ?? { count: 0, totalCents: 0 };
+				cur.count++;
+				cur.totalCents += e.amount;
+				byCurrency[e.currency] = cur;
+			}
 			return textOut('Expense summary', {
 				tripId,
-				totals: { count: totalCount, amountCents: totalCents },
+				count: expenses.length,
 				byCategory: Object.fromEntries(
 					Object.entries(byCategory).map(([k, v]) => [k, { category: k.split(':')[0], count: v.count, totalCents: v.totalCents, currency: v.currency }])
 				),
+				byCurrency,
 				budgets: budgets.map((b) => ({ category: b.category, amountCents: b.amount, spentCents: b.spent, currency: b.currency }))
 			});
 		}
@@ -355,12 +364,18 @@ const PROMPTS: readonly PromptEntry[] = [
 	},
 	{
 		name: 'poll-status',
-		description: 'Outstanding polls across your active trips.',
+		description: 'Polls with no votes yet across your active trips (waiting on input).',
 		scope: 'polls:read',
 		async build({ userId }) {
 			const trips = tripsRepo.listTripsForUser(userId);
 			const { listPollsForTrip } = await import('./repositories/pollsRepo');
-			const all = trips.flatMap((t) => listPollsForTrip(t.id).map((p) => ({ ...p, tripId: t.id, tripName: t.name })));
+			// Outstanding = no votes cast yet. The schema has no
+			// closedAt, so "unanswered" is the closest signal.
+			const all = trips.flatMap((t) =>
+				listPollsForTrip(t.id)
+					.filter((p) => p.options.every((o) => o.voteCount === 0))
+					.map((p) => ({ ...p, tripId: t.id, tripName: t.name }))
+			);
 			return textOut('Poll status', all);
 		}
 	},

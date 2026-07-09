@@ -87,9 +87,16 @@ describe('mcpServer', () => {
 		const other = makeUser(ctx.kit).id;
 		const otherTrip = tripsRepo.createTrip(other, { name: 'Private' });
 		const { client } = await connect(userId, ['packing:write']);
-		await expect(
-			client.callTool({ name: 'roamarr_packing_list_build', arguments: { tripId: otherTrip.id } })
-		).rejects.toThrow();
+		// The dispatch wraps helper errors into an isError:true response
+		// (per the codex batch 2 hardening) so the promise resolves
+		// instead of rejecting. Assert on isError + the 404 message.
+		const result = await client.callTool({
+			name: 'roamarr_packing_list_build',
+			arguments: { tripId: otherTrip.id }
+		});
+		expect(result.isError).toBe(true);
+		const text = String((result.content?.[0] as { text: string })?.text ?? '');
+		expect(text).toMatch(/404|Not found/);
 	});
 
 	test('places_list requires places:read', async () => {

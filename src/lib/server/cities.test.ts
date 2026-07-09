@@ -7,12 +7,32 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { citiesForGlobe, findCity, searchCities } from './cities';
+import { citiesForGlobe, citySelectionError, findCity, searchCities } from './cities';
 import * as repo from './repositories/travelDataRepo';
 import { geonamesCities } from './db/mongrelSchema';
+import { updateSettings } from './settings';
 
 beforeEach(() => {
 	(ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit.deleteFrom(geonamesCities).executeSync();
+	updateSettings({ mapsEnabled: false });
+});
+
+test('city selection validation follows map availability', () => {
+	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBeNull();
+
+	updateSettings({ mapsEnabled: true });
+	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBe(
+		'Please ask your Roamarr administrator to use “Re-import city database” under General → Maps.'
+	);
+
+	repo.importCitiesBatch([
+		{ geonameId: 1, name: 'Paris', asciiName: 'Paris', countryCode: 'FR', lat: 48.85, lng: 2.35, population: 1000, timezone: null }
+	]);
+	expect(citySelectionError('FR', 'London', 51.5, -0.1)).toBe(
+		'Selected city was not found in the GeoNames database'
+	);
+	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBe('City coordinates are missing');
+	expect(citySelectionError('FR', 'Paris', 48.85, 2.35)).toBeNull();
 });
 
 test('findCity returns matching city', () => {

@@ -10,7 +10,7 @@ import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
 import { serializeTags } from '$lib/tags';
-import { findCity } from '$lib/server/cities';
+import { citySelectionError } from '$lib/server/cities';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals, params }) => {
@@ -64,12 +64,13 @@ export const actions: Actions = {
 			: undefined;
 
 		if (destinationCountryCode && destinationCityName) {
-			const city = findCity(destinationCountryCode, destinationCityName);
-			if (!city) {
-				v.addError('destinationCityName', 'Selected city was not found in the GeoNames database');
-			} else if (destinationCityLat == null || destinationCityLng == null) {
-				v.addError('destinationCityName', 'City coordinates are missing');
-			}
+			const error = citySelectionError(
+				destinationCountryCode,
+				destinationCityName,
+				destinationCityLat,
+				destinationCityLng
+			);
+			if (error) v.addError('destinationCityName', error);
 		}
 
 		const startDate = v.date(f.get('startDate'), 'startDate');
@@ -99,8 +100,8 @@ export const actions: Actions = {
 			destination: null,
 			destinationCountryCode,
 			destinationCityName,
-			destinationCityLat,
-			destinationCityLng,
+			destinationCityLat: destinationCityLat ?? null,
+			destinationCityLng: destinationCityLng ?? null,
 			startDate,
 			endDate,
 			notes,

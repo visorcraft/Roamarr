@@ -14,6 +14,7 @@ import { makeUser, makeShare } from '../../../../../tests/helpers';
 import { _deleteTrip, actions } from './+page.server';
 import { createTrip } from '../../shared';
 import { addSegment } from '$lib/server/segments';
+import { updateSettings } from '$lib/server/settings';
 import {
 	users,
 	trips,
@@ -114,6 +115,33 @@ test('edit action updates a trip with valid data', async () => {
 	expect(updated.destination).toBeNull();
 	expect(updated.destination_country_code).toBeNull();
 	expect(updated.destination_city_name).toBeNull();
+});
+
+test('edit action accepts a free-text city when maps are disabled', async () => {
+	updateSettings({ mapsEnabled: false });
+	const a = makeUser(kit, { email: 'edit-city@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = createTrip(a.id, {
+		name: 'Old',
+		destinationCountryCode: 'IS',
+		destinationCityName: 'Reykjavik',
+		destinationCityLat: 64.1466,
+		destinationCityLng: -21.9426
+	});
+	const form = makeFormData({
+		name: 'Updated',
+		destinationCountryCode: 'FR',
+		destinationCityName: 'Paris'
+	});
+
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
+	expect(updated.destination_country_code).toBe('FR');
+	expect(updated.destination_city_name).toBe('Paris');
+	expect(updated.destination_city_lat).toBeNull();
+	expect(updated.destination_city_lng).toBeNull();
 });
 
 test('edit action allows shared editors but not read-only viewers', async () => {

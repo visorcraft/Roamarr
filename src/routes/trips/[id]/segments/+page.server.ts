@@ -5,7 +5,7 @@ import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/mongrelSchema';
-import { findCity } from '$lib/server/cities';
+import { citySelectionError } from '$lib/server/cities';
 
 export const load: PageServerLoad = ({ params }) => {
 	throw redirect(308, `/trips/${params.id}`);
@@ -62,12 +62,8 @@ export const actions: Actions = {
 		const venue = v.optionalString(f.get('venue'), 'venue', { max: 200 });
 
 		if (countryCode && cityName) {
-			const city = findCity(countryCode, cityName);
-			if (!city) {
-				v.addError('cityName', 'Selected city was not found in the GeoNames database');
-			} else if (cityLat == null || cityLng == null) {
-				v.addError('cityName', 'City coordinates are missing');
-			}
+			const error = citySelectionError(countryCode, cityName, cityLat, cityLng);
+			if (error) v.addError('cityName', error);
 		}
 
 		const confirmationNumber = v.optionalString(

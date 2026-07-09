@@ -4,7 +4,7 @@ import { combineDateTime, parseSegmentDetails } from '$lib/server/segmentForm';
 import { Validator } from '$lib/server/validation';
 import type { SegmentType } from '$lib/server/db/mongrelSchema';
 import { addSegment, hasOverlappingSegment } from '$lib/server/segments';
-import { findCity } from '$lib/server/cities';
+import { citySelectionError } from '$lib/server/cities';
 import { localToUtc } from '$lib/server/tz';
 import { setFlash } from '$lib/server/flash';
 
@@ -56,12 +56,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 	const venue = v.optionalString(f.get('venue'), 'venue', { max: 200 });
 
 	if (countryCode && cityName) {
-		const city = findCity(countryCode, cityName);
-		if (!city) {
-			v.addError('cityName', 'Selected city was not found in the GeoNames database');
-		} else if (cityLat == null || cityLng == null) {
-			v.addError('cityName', 'City coordinates are missing');
-		}
+		const error = citySelectionError(countryCode, cityName, cityLat, cityLng);
+		if (error) v.addError('cityName', error);
 	}
 
 	const confirmationNumber = v.optionalString(f.get('confirmationNumber'), 'confirmationNumber', {

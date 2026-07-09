@@ -16,6 +16,7 @@ import { tripMapCity } from './tripMap';
 import { resolveTileConfig } from './mapTiles';
 import { getMapSettings } from './settings';
 import { listFareProvidersForUser, listFareWatchesForUser } from './repositories/travelDataRepo';
+import { listRemindersForUser } from './reminders';
 import { tripWeatherOverview } from './weather';
 import {
 	listJournalEntriesForTrip,
@@ -104,6 +105,15 @@ export async function buildTripDetail(
 	const medications = view.editor ? listMedicationsForTrip(view.trip.id) : [];
 	const entryRequirements = view.editor ? listEntryRequirementsForTrip(view.trip.id) : [];
 	const importantItems = view.editor ? listImportantItemsForTrip(view.trip.id) : [];
+	const segmentIdsForTrip = view.editor ? view.segments.map((s) => s.id).filter((id): id is number => !!id) : [];
+	const segmentIdSet = new Set(segmentIdsForTrip);
+	const reminders = view.editor
+		? listRemindersForUser(u.id).filter(
+				(r) =>
+					(r.refType === 'trip' && r.refId === view.trip.id) ||
+					(r.refType === 'segment' && segmentIdSet.has(r.refId))
+		  )
+		: [];
 	const stats = computeTripStats(
 		view.editor ? view.segments : (view.trip as { segments: Array<{ startAt: string | null; paymentStatus?: string | null }> }).segments,
 		expenseSummary,
@@ -115,8 +125,7 @@ export async function buildTripDetail(
 		ReturnType<typeof listAttendeesForSegments> extends Map<number, infer V> ? V : never
 	>();
 	if (view.editor) {
-		const segmentIds = view.segments.map((s) => s.id).filter((id): id is number => !!id);
-		attendeesBySegment = listAttendeesForSegments(segmentIds);
+		attendeesBySegment = listAttendeesForSegments(segmentIdsForTrip);
 	}
 	if (view.owner) {
 		const providers = listFareProvidersForUser(u.id)
@@ -183,6 +192,7 @@ export async function buildTripDetail(
 			medications,
 			entryRequirements,
 			importantItems,
+			reminders,
 			stats,
 			nextCity,
 			tileConfig,
@@ -207,6 +217,7 @@ export async function buildTripDetail(
 		medications,
 		entryRequirements,
 		importantItems,
+		reminders,
 		stats,
 		nextCity: mapEnabled ? tripMapCity(view.trip.id) : null,
 		tileConfig: mapEnabled ? resolveTileConfig() : null,

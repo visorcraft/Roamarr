@@ -1,9 +1,10 @@
 import { fail, redirect, type Actions } from '@sveltejs/kit';
-import { createReadStream, mkdtempSync, rmSync, writeFileSync, unlinkSync } from 'node:fs';
+import { createReadStream, createWriteStream, mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { requireAdmin } from '$lib/server/auth';
 import { logAudit } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
@@ -54,8 +55,9 @@ export const actions: Actions = {
 		let markerWritten = false;
 
 		try {
-			const buffer = Buffer.from(await file.arrayBuffer());
-			writeFileSync(archivePath, buffer);
+			// Stream the upload straight to disk instead of materializing up to
+			// MAX_RESTORE_BYTES (512 MB) on the heap.
+			await pipeline(Readable.fromWeb(file.stream() as any), createWriteStream(archivePath));
 
 			await pipeline(createReadStream(archivePath), createGunzip(), tar.extract(extractRoot));
 

@@ -14,6 +14,9 @@ import {
 	parseSmtpSecurity,
 	buildTransport,
 	buildSmtpOptions,
+	getPooledTransport,
+	resetSmtpTransportCache,
+	MAX_SMTP_TRANSPORT_CACHE,
 	SMTP_CONNECTION_TIMEOUT_MS,
 	SMTP_GREETING_TIMEOUT_MS,
 	SMTP_SOCKET_TIMEOUT_MS,
@@ -229,5 +232,50 @@ describe('buildSmtpOptions timeouts', () => {
 		expect(opts.connectionTimeout).toBe(SMTP_CONNECTION_TIMEOUT_MS);
 		expect(opts.greetingTimeout).toBe(SMTP_GREETING_TIMEOUT_MS);
 		expect(opts.socketTimeout).toBe(SMTP_SOCKET_TIMEOUT_MS);
+	});
+});
+
+describe('getPooledTransport', () => {
+	beforeEach(() => resetSmtpTransportCache());
+
+	test('reuses a pooled transport for the same config', () => {
+		const c = {
+			host: 'pool.example.com',
+			port: 587,
+			security: 'starttls' as const,
+			user: null,
+			pass: null,
+			from: 'a@b.com'
+		};
+		expect(getPooledTransport(c)).toBe(getPooledTransport(c));
+		expect((getPooledTransport(c).options as Record<string, unknown>).pool).toBe(true);
+	});
+
+	test('uses distinct transports for distinct configs', () => {
+		const a = getPooledTransport({
+			host: 'a.smtp', port: 587, security: 'starttls', user: null, pass: null, from: 'x'
+		});
+		const b = getPooledTransport({
+			host: 'b.smtp', port: 587, security: 'starttls', user: null, pass: null, from: 'x'
+		});
+		expect(a).not.toBe(b);
+	});
+
+	test('evicts and closes the oldest transport when the cache is full', () => {
+		const first = getPooledTransport({
+			host: 'smtp0.example.com', port: 587, security: 'starttls', user: null, pass: null, from: 'a@b.com'
+		});
+		const closeSpy = vi.spyOn(first, 'close');
+		for (let i = 1; i <= MAX_SMTP_TRANSPORT_CACHE; i++) {
+			getPooledTransport({
+				host: `smtp${i}.example.com`, port: 587, security: 'starttls', user: null, pass: null, from: 'a@b.com'
+			});
+		}
+		expect(closeSpy).toHaveBeenCalled();
+		// The evicted config is rebuilt on demand rather than reused.
+		const refetched = getPooledTransport({
+			host: 'smtp0.example.com', port: 587, security: 'starttls', user: null, pass: null, from: 'a@b.com'
+		});
+		expect(refetched).not.toBe(first);
 	});
 });

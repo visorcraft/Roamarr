@@ -60,7 +60,9 @@ export function buildSmtpOptions(config: SmtpTransportConfig) {
 		auth: config.user ? { user: config.user, pass: config.pass ?? '' } : undefined,
 		connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
 		greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
-		socketTimeout: SMTP_SOCKET_TIMEOUT_MS
+		socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
+		// Reuse SMTP connections across sends instead of opening one per message.
+		pool: true
 	};
 }
 
@@ -71,6 +73,62 @@ export function buildSmtpOptions(config: SmtpTransportConfig) {
  */
 export function buildTransport(config: SmtpTransportConfig): Transporter {
 	return nodemailer.createTransport(buildSmtpOptions(config));
+}
+
+/** Max pooled SMTP transports kept at once (admin + per-user overrides). */
+export const MAX_SMTP_TRANSPORT_CACHE = 32;
+const transportCache = new Map<string, { transport: Transporter; lastUsed: number }>();
+
+function configSignature(config: SmtpTransportConfig): string {
+	// `from` does not affect the connection, so it is intentionally excluded.
+	return JSON.stringify([
+		config.host,
+		config.port,
+		parseSmtpSecurity(config.security),
+		config.user ?? '',
+		config.pass ?? ''
+	]);
+}
+
+/**
+ * Return a pooled SMTP transport for the given config, reusing connections
+ * across sends. Building a fresh transport per send is wasteful; this keeps a
+ * small bounded pool and closes evicted transports so config changes do not
+ * strand open sockets.
+ */
+export function getPooledTransport(config: SmtpTransportConfig): Transporter {
+	const key = configSignature(config);
+	const hit = transportCache.get(key);
+	if (hit) {
+		hit.lastUsed = Date.now();
+		return hit.transport;
+	}
+	const transport = buildTransport(config);
+	transportCache.set(key, { transport, lastUsed: Date.now() });
+	while (transportCache.size > MAX_SMTP_TRANSPORT_CACHE) {
+		const oldestKey = transportCache.keys().next().value;
+		if (!oldestKey) break;
+		const old = transportCache.get(oldestKey);
+		transportCache.delete(oldestKey);
+		try {
+			old?.transport.close();
+		} catch {
+			// ignore close failures on evicted transports
+		}
+	}
+	return transport;
+}
+
+/** Close and clear every cached transport. Exported for tests/shutdown. */
+export function resetSmtpTransportCache(): void {
+	for (const { transport } of transportCache.values()) {
+		try {
+			transport.close();
+		} catch {
+			// ignore
+		}
+	}
+	transportCache.clear();
 }
 
 export interface UserSmtpOverride {
@@ -185,7 +243,7 @@ export function resolveSmtpTransport(userId?: number): ResolvedTransport | null 
 		if (override && overrideIsComplete(override)) {
 			const pass = getOverridePassword(userId);
 			return {
-				transport: buildTransport({
+				transport: getPooledTransport({
 					host: override.host!,
 					port: override.port ?? 587,
 					security: override.security,
@@ -202,7 +260,7 @@ export function resolveSmtpTransport(userId?: number): ResolvedTransport | null 
 	const s = getSettings();
 	if (!s.smtpHost || !s.smtpFrom) return null;
 	return {
-		transport: buildTransport({
+		transport: getPooledTransport({
 			host: s.smtpHost,
 			port: s.smtpPort ?? 587,
 			security: parseSmtpSecurity(s.smtpSecurity),

@@ -6,67 +6,10 @@ import { createMcpServer } from '$lib/server/mcpServer';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from '@sveltejs/kit';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-
-const transports = new Map<string, WebStandardStreamableHTTPServerTransport>();
-const transportLastUsed = new Map<string, number>();
-const MAX_MCP_SESSIONS = 1_000;
-export const MCP_SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+import { deleteTransport, getTransport, registerTransport } from './transport';
 
 function randomSessionId(): string {
 	return randomBytes(16).toString('base64url');
-}
-
-function recordTransportUse(sessionId: string, now: number = Date.now()) {
-	transportLastUsed.set(sessionId, now);
-}
-
-export function pruneStaleTransports(now: number = Date.now()): void {
-	const cutoff = now - MCP_SESSION_TTL_MS;
-	for (const [sessionId, lastUsed] of transportLastUsed) {
-		if (lastUsed < cutoff) {
-			transports.delete(sessionId);
-			transportLastUsed.delete(sessionId);
-		}
-	}
-}
-
-export function registerTransport(
-	sessionId: string,
-	transport: WebStandardStreamableHTTPServerTransport,
-	now: number = Date.now()
-) {
-	pruneStaleTransports(now);
-	while (transports.size >= MAX_MCP_SESSIONS) {
-		const oldest = transportLastUsed.keys().next().value;
-		if (!oldest) break;
-		transports.delete(oldest);
-		transportLastUsed.delete(oldest);
-	}
-	transports.set(sessionId, transport);
-	recordTransportUse(sessionId, now);
-}
-
-export function getTransport(
-	sessionId: string
-): WebStandardStreamableHTTPServerTransport | undefined {
-	// Reap idle sessions on every request, not only when a new session initializes,
-	// so a long quiet stretch cannot keep up to MAX_MCP_SESSIONS stale transports
-	// (each holding a server + stream state) resident until the process restarts.
-	pruneStaleTransports();
-	const t = transports.get(sessionId);
-	if (t) recordTransportUse(sessionId);
-	return t;
-}
-
-/** Current number of live MCP transports. Exported for tests/diagnostics. */
-export function getMcpTransportCount(): number {
-	return transports.size;
-}
-
-/** Test/diagnostic helper: drop every tracked transport. */
-export function resetMcpTransports(): void {
-	transports.clear();
-	transportLastUsed.clear();
 }
 
 function extractBearer(request: Request): string | null {
@@ -143,10 +86,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	transport.onclose = () => {
 		const sid = transport.sessionId;
-		if (sid) {
-			transports.delete(sid);
-			transportLastUsed.delete(sid);
-		}
+		if (sid) deleteTransport(sid);
 	};
 
 	const server = createMcpServer(token.userId, token.scopes);

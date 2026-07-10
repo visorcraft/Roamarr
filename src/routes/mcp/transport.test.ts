@@ -5,7 +5,7 @@ import {
 	getMcpTransportCount,
 	resetMcpTransports,
 	MCP_SESSION_TTL_MS
-} from './+server';
+} from './transport';
 import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
 const stub = {} as WebStandardStreamableHTTPServerTransport;

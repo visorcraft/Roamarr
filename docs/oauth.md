@@ -238,7 +238,7 @@ curl -sS -X POST https://your-origin/mcp \
 ```
 
 Keep the `Mcp-Session-Id` response header and send it with later MCP requests.
-See [MCP protocol smoke test](./mcp-ai.md#protocol-smoke-test) for the complete
+See the [MCP protocol smoke test](./mcp-ai.md) for the complete
 initialize, list, call, and close sequence.
 
 Revoke:

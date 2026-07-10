@@ -17,5 +17,5 @@ test('add a note segment to a trip', async ({ page }) => {
 	await page.click('button:has-text("Save")');
 	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'networkidle' });
 
-	await expect(page.getByText(title)).toBeVisible();
+	await expect(page.locator('.trip-modern-segment-title', { hasText: title })).toBeVisible();
 });

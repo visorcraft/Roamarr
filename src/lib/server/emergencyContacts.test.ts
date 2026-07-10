@@ -21,7 +21,11 @@ import {
 	updateEmergencyContact,
 	deleteEmergencyContact,
 	shareItineraryWithContact,
-	resetEmergencyShareRateLimit
+	checkShareRateLimit,
+	pruneExpiredShareWindow,
+	shareRateLimitSize,
+	resetEmergencyShareRateLimit,
+	MAX_SHARE_WINDOW_ENTRIES
 } from './emergencyContacts';
 import { emergencyContacts, trips, users, auditLogs, tripShares } from './db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
@@ -295,4 +299,24 @@ test('shareItineraryWithContact rate limits repeat shares', async () => {
 		expect(e.status).toBe(429);
 	}
 	expect(sent.length).toBe(3);
+});
+
+test('pruneExpiredShareWindow removes only expired buckets and reports the count', () => {
+	resetEmergencyShareRateLimit();
+	checkShareRateLimit(1, 1, 1);
+	checkShareRateLimit(2, 2, 2);
+	expect(shareRateLimitSize()).toBe(2);
+	// Simulate the window elapsing by passing a future timestamp (no real waiting).
+	expect(pruneExpiredShareWindow(Date.now() + 120_000)).toBe(2);
+	expect(shareRateLimitSize()).toBe(0);
+});
+
+test('share rate-limit store is capped by evicting the nearest-expiry bucket when full', () => {
+	resetEmergencyShareRateLimit();
+	for (let i = 0; i < MAX_SHARE_WINDOW_ENTRIES; i++) {
+		checkShareRateLimit(i, 1, 1);
+	}
+	expect(shareRateLimitSize()).toBe(MAX_SHARE_WINDOW_ENTRIES);
+	expect(checkShareRateLimit(9_999_999, 9, 9)).toBe(true);
+	expect(shareRateLimitSize()).toBeLessThanOrEqual(MAX_SHARE_WINDOW_ENTRIES);
 });

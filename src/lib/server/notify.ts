@@ -4,7 +4,7 @@ import { kit } from './db';
 import { users } from './db/mongrelSchema';
 import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
-import { resolveSmtpTransport } from './smtpConfig';
+import { resolveSmtpTransport, SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 
 function isPrivateOrLocalHostname(hostname: string): boolean {
 	const lower = hostname.toLowerCase();
@@ -35,6 +35,29 @@ export function isAllowedWebhookUrl(urlString: string): boolean {
 	return true;
 }
 
+/**
+ * Upper bound for a single SMTP send, kept just above the socket timeout so a
+ * hung/blackholed SMTP server can never stall a scheduler tick or request
+ * indefinitely. The race's timer is cleared as soon as the send settles, so it
+ * does not pin the event loop or leak timers.
+ */
+export const SMTP_SEND_DEADLINE_MS = SMTP_SOCKET_TIMEOUT_MS + 5_000;
+
+/**
+ * Race a promise against a wall-clock deadline. Rejects with a labeled error
+ * if `ms` elapses first. Always clears its timer so callers can't accumulate
+ * pending timeouts.
+ */
+export function withDeadline<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+	});
+	return Promise.race([promise, timeout]).finally(() => {
+		if (timer) clearTimeout(timer);
+	}) as Promise<T>;
+}
+
 type NotificationMessage = { title: string; body: string; link?: string };
 
 interface Channel {
@@ -63,12 +86,16 @@ const smtpChannel: Channel = {
 		if (!u) return;
 		const resolved = resolveSmtpTransport(userId);
 		if (!resolved) return;
-		await resolved.transport.sendMail({
-			from: resolved.from,
-			to: u.email,
-			subject: msg.title,
-			text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
-		});
+		await withDeadline(
+			resolved.transport.sendMail({
+				from: resolved.from,
+				to: u.email,
+				subject: msg.title,
+				text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
+			}),
+			SMTP_SEND_DEADLINE_MS,
+			'SMTP send'
+		);
 	}
 };
 
@@ -107,7 +134,12 @@ const externalChannels: Channel[] = [smtpChannel, webhookChannel];
 
 export async function deliver(userId: number, msg: NotificationMessage) {
 	await inAppChannel.send(userId, msg);
-	await Promise.all(externalChannels.map((c) => c.send(userId, msg)));
+	// One failing/slow channel (notably SMTP) must not abort the others or fail the
+	// whole scheduler tick. Bound each channel and absorb per-channel failures.
+	const results = await Promise.allSettled(externalChannels.map((c) => c.send(userId, msg)));
+	for (const r of results) {
+		if (r.status === 'rejected') console.error('[notify] channel delivery failed:', r.reason);
+	}
 }
 
 export async function sendMail(
@@ -117,11 +149,15 @@ export async function sendMail(
 ): Promise<boolean> {
 	const resolved = resolveSmtpTransport(userId);
 	if (!resolved) return false;
-	await resolved.transport.sendMail({
-		from: resolved.from,
-		to,
-		subject: msg.title,
-		text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
-	});
+	await withDeadline(
+		resolved.transport.sendMail({
+			from: resolved.from,
+			to,
+			subject: msg.title,
+			text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
+		}),
+		SMTP_SEND_DEADLINE_MS,
+		'SMTP send'
+	);
 	return true;
 }

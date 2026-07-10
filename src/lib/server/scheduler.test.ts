@@ -72,6 +72,22 @@ test('runTick records a failed run', async () => {
 	errorSpy.mockRestore();
 });
 
+test('runTick bounds a stalled job with a deadline and records a failed run', async () => {
+	const kit = getKit();
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	// A job that never settles must not hang the tick.
+	(runDueReminders as any).mockImplementationOnce(() => new Promise(() => {}));
+
+	await runTick(new Date('2026-06-24T12:00:00.000Z'), { deadlineMs: 25 });
+
+	const run = kit.selectFrom(schedulerRuns).executeSync()[0];
+	expect(run).not.toBeUndefined();
+	expect(run!.success).toBe(false);
+	expect(run!.error_message).toMatch(/timed out/);
+	expect(run!.finished_at).not.toBeNull();
+	errorSpy.mockRestore();
+});
+
 test('runTick prunes old runs keeping the most recent 100', async () => {
 	const kit = getKit();
 	// Seed 110 existing finished runs.

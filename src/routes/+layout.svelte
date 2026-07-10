@@ -116,7 +116,7 @@
 	);
 
 	onMount(() => {
-		installPickerInputs();
+		const disconnectPickerInputs = installPickerInputs();
 		const disconnectFieldA11y = installFieldErrorA11y();
 		if (!browser) return;
 		function handleDocumentClick(event: MouseEvent) {
@@ -131,6 +131,7 @@
 		return () => {
 			document.removeEventListener('click', handleDocumentClick);
 			disconnectFieldA11y();
+			disconnectPickerInputs();
 		};
 	});
 

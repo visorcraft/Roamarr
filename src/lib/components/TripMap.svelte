@@ -23,6 +23,9 @@
 
 	let container = $state<HTMLDivElement | null>(null);
 	let map = $state<MapType | null>(null);
+	// Set in onDestroy so an in-flight dynamic import that resolves after the
+	// component is gone removes the map it just built instead of leaking it.
+	let destroyed = false;
 
 	onMount(async () => {
 		if (!browser || !container) return;
@@ -47,11 +50,16 @@
 			center: [lng, lat],
 			zoom: 12
 		});
+		if (destroyed) {
+			instance.remove();
+			return;
+		}
 		new maplibregl.Marker().setLngLat([lng, lat]).addTo(instance);
 		map = instance;
 	});
 
 	onDestroy(() => {
+		destroyed = true;
 		map?.remove();
 		map = null;
 	});

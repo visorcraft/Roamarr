@@ -12,7 +12,14 @@ const fetchMock = vi.hoisted(() => vi.fn());
 vi.stubGlobal('fetch', fetchMock);
 
 import { weatherCache } from './db/mongrelSchema';
-import { locationKey, fetchForecast, getCachedForecast, tripWeatherOverview, CACHE_TTL_MS } from './weather';
+import {
+	locationKey,
+	fetchForecast,
+	getCachedForecast,
+	tripWeatherOverview,
+	purgeExpiredWeatherCache,
+	CACHE_TTL_MS
+} from './weather';
 import { checkRateLimit, resetRateLimit } from './rateLimit';
 import { weatherCodeSummary, weatherIconForCode } from '$lib/weatherCodes';
 import { makeTrip, makeSegment, makeUser } from '../../../tests/helpers';
@@ -334,5 +341,29 @@ describe('weather', () => {
 				body: expect.objectContaining({ message: expect.stringContaining('Rate limited') })
 			})
 		);
+	});
+
+	test('purgeExpiredWeatherCache deletes past-dated rows and keeps today/future', () => {
+		const today = DateTime.now().startOf('day');
+		const todayIso = today.toISODate()!;
+		const lastWeekIso = today.minus({ days: 7 }).toISODate()!;
+		const yesterdayIso = today.minus({ days: 1 }).toISODate()!;
+		const tomorrowIso = today.plus({ days: 1 }).toISODate()!;
+		const now = today.plus({ hours: 12 }).toJSDate();
+		for (const d of [lastWeekIso, yesterdayIso, todayIso, tomorrowIso]) {
+			ctx.kit.insertInto(weatherCache).values({
+				location_key: locationKey(48.86, 2.35),
+				for_date: d,
+				fetched_at: now.toISOString(),
+				payload_json: '{}'
+			} as any).executeSync();
+		}
+		expect(purgeExpiredWeatherCache(now).deleted).toBe(2);
+		const remaining = ctx.kit
+			.selectFrom(weatherCache)
+			.executeSync()
+			.map((r) => r.for_date)
+			.sort();
+		expect(remaining).toEqual([todayIso, tomorrowIso]);
 	});
 });

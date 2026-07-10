@@ -13,6 +13,10 @@ import { kit } from './db';
 import {
 	parseSmtpSecurity,
 	buildTransport,
+	buildSmtpOptions,
+	SMTP_CONNECTION_TIMEOUT_MS,
+	SMTP_GREETING_TIMEOUT_MS,
+	SMTP_SOCKET_TIMEOUT_MS,
 	getUserSmtpOverride,
 	upsertUserSmtpOverride,
 	deleteUserSmtpOverride,
@@ -202,5 +206,28 @@ describe('smtpConfig', () => {
 			});
 			expect(resolveSmtpTransport(userId)!.source).toBe('admin');
 		});
+	});
+});
+
+describe('buildSmtpOptions timeouts', () => {
+	const base = {
+		host: 'smtp.example.com',
+		port: 587,
+		security: 'starttls' as const,
+		user: null,
+		pass: null,
+		from: 'a@b.com'
+	};
+	test('sets connection, greeting and socket timeouts', () => {
+		const opts = buildSmtpOptions(base) as Record<string, unknown>;
+		expect(opts.connectionTimeout).toBe(SMTP_CONNECTION_TIMEOUT_MS);
+		expect(opts.greetingTimeout).toBe(SMTP_GREETING_TIMEOUT_MS);
+		expect(opts.socketTimeout).toBe(SMTP_SOCKET_TIMEOUT_MS);
+	});
+	test('timeouts reach the nodemailer transport options', () => {
+		const opts = buildTransport(base).options as Record<string, unknown>;
+		expect(opts.connectionTimeout).toBe(SMTP_CONNECTION_TIMEOUT_MS);
+		expect(opts.greetingTimeout).toBe(SMTP_GREETING_TIMEOUT_MS);
+		expect(opts.socketTimeout).toBe(SMTP_SOCKET_TIMEOUT_MS);
 	});
 });

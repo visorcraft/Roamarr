@@ -33,13 +33,23 @@ export function parseSmtpSecurity(value: string | null | undefined): SmtpSecurit
 }
 
 /**
- * Map the transport-security selector to Nodemailer's `secure`/`requireTLS`
- * flags. `ssl/tls` uses implicit TLS (port 465); `starttls` upgrades via
- * STARTTLS (port 587); `none` sends plaintext (port 25 typically).
+ * SMTP socket timeouts. Without these, a blackholed or slow SMTP server leaves
+ * Nodemailer waiting on the socket indefinitely, which (because sends are
+ * awaited inside scheduler ticks) can freeze all scheduled work until the
+ * process is restarted. Keep the send deadline in `notify.ts` slightly above
+ * `SMTP_SOCKET_TIMEOUT_MS`.
  */
-export function buildTransport(config: SmtpTransportConfig): Transporter {
+export const SMTP_CONNECTION_TIMEOUT_MS = 15_000;
+export const SMTP_GREETING_TIMEOUT_MS = 15_000;
+export const SMTP_SOCKET_TIMEOUT_MS = 20_000;
+
+/**
+ * Build the raw Nodemailer transport options. Exported (and pure) so the
+ * timeout/security mapping can be unit-tested without opening a socket.
+ */
+export function buildSmtpOptions(config: SmtpTransportConfig) {
 	const security = parseSmtpSecurity(config.security);
-	return nodemailer.createTransport({
+	return {
 		host: config.host,
 		port: config.port,
 		secure: security === 'ssl/tls',
@@ -47,8 +57,20 @@ export function buildTransport(config: SmtpTransportConfig): Transporter {
 		// `none` must mean plaintext: without ignoreTLS, Nodemailer still attempts
 		// opportunistic STARTTLS, which fails against servers with broken certs.
 		ignoreTLS: security === 'none',
-		auth: config.user ? { user: config.user, pass: config.pass ?? '' } : undefined
-	});
+		auth: config.user ? { user: config.user, pass: config.pass ?? '' } : undefined,
+		connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+		greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+		socketTimeout: SMTP_SOCKET_TIMEOUT_MS
+	};
+}
+
+/**
+ * Map the transport-security selector to Nodemailer's `secure`/`requireTLS`
+ * flags. `ssl/tls` uses implicit TLS (port 465); `starttls` upgrades via
+ * STARTTLS (port 587); `none` sends plaintext (port 25 typically).
+ */
+export function buildTransport(config: SmtpTransportConfig): Transporter {
+	return nodemailer.createTransport(buildSmtpOptions(config));
 }
 
 export interface UserSmtpOverride {

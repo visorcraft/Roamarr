@@ -51,13 +51,57 @@ export function deleteEmergencyContact(userId: number, contactId: number) {
 
 const SHARE_WINDOW_MS = 60_000;
 const SHARE_MAX_ATTEMPTS = 3;
+/**
+ * Hard cap on tracked share-rate-limit buckets. Same rationale as the HTTP
+ * rate limiter: without a cap, distinct user/trip/contact keys accumulate for
+ * the process lifetime (a restart-cured leak). On overflow we drop expired
+ * buckets, then evict the bucket closest to expiring.
+ */
+export const MAX_SHARE_WINDOW_ENTRIES = 50_000;
 const shareWindow = new Map<string, { count: number; resetAt: number }>();
 
-function checkShareRateLimit(userId: number, tripId: number, contactId: number): boolean {
+/** Delete every expired bucket. Returns the number removed (scheduler + tests). */
+export function pruneExpiredShareWindow(now: number = Date.now()): number {
+	let removed = 0;
+	for (const [key, entry] of shareWindow) {
+		if (now >= entry.resetAt) {
+			shareWindow.delete(key);
+			removed += 1;
+		}
+	}
+	return removed;
+}
+
+/** Current number of tracked buckets. Exported for tests/diagnostics. */
+export function shareRateLimitSize(): number {
+	return shareWindow.size;
+}
+
+function evictNearestExpiry(): void {
+	let oldestKey: string | null = null;
+	let oldestReset = Infinity;
+	for (const [key, entry] of shareWindow) {
+		if (entry.resetAt < oldestReset) {
+			oldestReset = entry.resetAt;
+			oldestKey = key;
+		}
+	}
+	if (oldestKey !== null) shareWindow.delete(oldestKey);
+}
+
+export function checkShareRateLimit(userId: number, tripId: number, contactId: number): boolean {
 	const key = `${userId}:${tripId}:${contactId}`;
 	const now = Date.now();
 	const entry = shareWindow.get(key);
-	if (!entry || now >= entry.resetAt) {
+	if (!entry) {
+		if (shareWindow.size >= MAX_SHARE_WINDOW_ENTRIES) {
+			pruneExpiredShareWindow(now);
+			if (shareWindow.size >= MAX_SHARE_WINDOW_ENTRIES) evictNearestExpiry();
+		}
+		shareWindow.set(key, { count: 1, resetAt: now + SHARE_WINDOW_MS });
+		return true;
+	}
+	if (now >= entry.resetAt) {
 		shareWindow.set(key, { count: 1, resetAt: now + SHARE_WINDOW_MS });
 		return true;
 	}

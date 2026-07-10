@@ -25,6 +25,31 @@ function openOrCreateEncryptedSync(path: string, passphrase: string): KitDatabas
 	return KitDatabase.createEncryptedSync(path, schema, passphrase);
 }
 
+/**
+ * Per-table cap on the decoded result cache. The engine default can retain an
+ * unbounded amount of decoded query results, which reads as a slow,
+ * restart-cured memory climb over a long uptime. 32 MiB per table is generous
+ * enough to keep normal caching effective while preventing runaway growth.
+ * Failures are swallowed so a cap can never break boot.
+ */
+const RESULT_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+
+function capResultCaches(handle: KitDatabase): void {
+	let names: string[];
+	try {
+		names = handle.tableNames();
+	} catch {
+		return;
+	}
+	for (const name of names) {
+		try {
+			handle.setTableResultCacheMaxBytes(name, RESULT_CACHE_MAX_BYTES);
+		} catch {
+			// A table rejecting the cap must never break boot.
+		}
+	}
+}
+
 export function getDb(): KitDatabase {
 	if (!_kit) {
 		const path = getDatabasePath();
@@ -34,6 +59,7 @@ export function getDb(): KitDatabase {
 		}
 		_kit = openOrCreateEncryptedSync(path, passphrase);
 		_kit.migrateSync(schema, migrations);
+		capResultCaches(_kit);
 	}
 	return _kit;
 }

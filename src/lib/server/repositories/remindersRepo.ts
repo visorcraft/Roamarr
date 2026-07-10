@@ -206,9 +206,9 @@ export function countReminders(
 	).length;
 }
 
-export function listPendingRemindersBefore(fireAt: string): ReminderRow[] {
+export function listPendingRemindersBefore(fireAt: string, limit?: number): ReminderRow[] {
 	const statuses: ReminderRow['status'][] = ['pending', 'sending'];
-	return kit
+	const query = kit
 		.selectFrom(kitReminders)
 		.where(
 			kitAnd(
@@ -216,7 +216,8 @@ export function listPendingRemindersBefore(fireAt: string): ReminderRow[] {
 				kitLte(kitReminders.fire_at, fireAt)
 			)
 		)
-		.orderBy(kitAsc(kitReminders.fire_at))
+		.orderBy(kitAsc(kitReminders.fire_at));
+	return (limit != null ? query.limit(limit) : query)
 		.executeSync()
 		.map(toReminderRow);
 }

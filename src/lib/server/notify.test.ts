@@ -18,7 +18,8 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 	return new Response('ok', { status: 200 });
 });
 
-import { deliver, isAllowedWebhookUrl } from './notify';
+import { deliver, isAllowedWebhookUrl, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
+import { SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { encrypt } from './crypto';
@@ -157,4 +158,48 @@ test('skips webhook when webhookUrl points to a disallowed target', async () => 
 	updateSettings({ webhookUrl: 'http://localhost/admin' });
 	await deliver(Number(u.id), { title: 'T', body: 'B' });
 	expect(fetches.length).toBe(before);
+});
+
+test('withDeadline resolves when the wrapped promise settles first', async () => {
+	await expect(withDeadline(Promise.resolve(42), 50, 'x')).resolves.toBe(42);
+});
+
+test('withDeadline rejects a hung promise with a labeled timeout', async () => {
+	const never = new Promise<never>(() => {});
+	await expect(withDeadline(never, 25, 'SMTP send')).rejects.toThrow(/SMTP send timed out after 25ms/);
+});
+
+test('SMTP send deadline stays above the socket timeout', () => {
+	expect(SMTP_SEND_DEADLINE_MS).toBeGreaterThan(SMTP_SOCKET_TIMEOUT_MS);
+});
+
+test('deliver absorbs a failing channel so one outage does not fail the tick', async () => {
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
+	const u = makeUser({ email: 'z@x.c', display_name: 'Z' });
+	updateSettings({
+		smtpHost: 'smtp.x',
+		smtpPort: 587,
+		smtpFrom: 'r@x.c',
+		smtpPass: encrypt('pw'),
+		webhookUrl: 'https://hooks.example.com/roamarr'
+	});
+
+	const originalFetch = globalThis.fetch;
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	(globalThis as unknown as { fetch: typeof fetch }).fetch = async () => {
+		throw new Error('webhook down');
+	};
+	try {
+		// Must resolve (not throw) even though the webhook channel rejects.
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		// In-app write still happened before the fan-out.
+		expect(kit.selectFrom(notifications).executeSync().length).toBeGreaterThan(0);
+		// SMTP channel still succeeded (not blocked by the webhook failure).
+		expect(sent[sent.length - 1]?.to).toBe('z@x.c');
+		// The channel failure was logged, not propagated.
+		expect(errorSpy).toHaveBeenCalled();
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		errorSpy.mockRestore();
+	}
 });

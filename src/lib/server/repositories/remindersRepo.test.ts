@@ -126,6 +126,24 @@ test('listPendingRemindersBefore filters by status and fireAt', () => {
 	expect(pending[0].refId).toBe(1);
 });
 
+test('listPendingRemindersBefore honors an optional limit, oldest fireAt first', () => {
+	const u = makeUser('limit@x.c');
+	const now = '2026-02-01T00:00:00Z';
+	for (let i = 0; i < 5; i++) {
+		repo.createReminder({
+			userId: Number(u.id),
+			kind: 'custom',
+			refType: 'trip',
+			refId: i + 1,
+			fireAt: `2026-01-0${i + 1}T00:00:00Z`
+		});
+	}
+	expect(repo.listPendingRemindersBefore(now)).toHaveLength(5);
+	const limited = repo.listPendingRemindersBefore(now, 3);
+	expect(limited).toHaveLength(3);
+	expect(limited.map((r) => r.refId)).toEqual([1, 2, 3]);
+});
+
 test('markReminderSent updates status', () => {
 	const kit = kitDb();
 	const u = makeUser('sent@x.c');

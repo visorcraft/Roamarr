@@ -279,6 +279,28 @@ test('listActiveFareWatches returns only active watches with enabled providers',
 	expect(rows[0].provider.id).toBe(activeProvider.id);
 });
 
+test('listActiveFareWatches honors an optional limit, oldest-checked first', () => {
+	const u = makeKitUser({ email: 'fw-limit@x.c' });
+	const trip = createTrip(Number(u.id), { name: 'T' });
+	const ids: number[] = [];
+	for (let i = 0; i < 5; i++) {
+		const provider = repo.createFareProvider({
+			userId: Number(u.id),
+			providerKey: 'stub',
+			label: `P${i}`,
+			apiKey: null,
+			enabled: true
+		});
+		const w = repo.createFareWatch({ tripId: trip.id, providerId: provider.id });
+		repo.updateFareWatch(w.id, { lastCheckedAt: `2026-01-0${i + 1}T00:00:00Z` });
+		ids.push(w.id);
+	}
+	expect(repo.listActiveFareWatches()).toHaveLength(5);
+	const limited = repo.listActiveFareWatches({ limit: 3 });
+	expect(limited).toHaveLength(3);
+	expect(limited.map((r) => r.id)).toEqual([ids[0], ids[1], ids[2]]);
+});
+
 test('getFareWatchByTripAndProvider is idempotent', () => {
 	const u = makeKitUser({ email: 'fw-idem@x.c' });
 	const trip = createTrip(Number(u.id), { name: 'T' });

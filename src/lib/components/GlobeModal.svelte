@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import Icon from './Icon.svelte';
 
@@ -18,11 +19,16 @@
 	let container = $state<HTMLDivElement | null>(null);
 	// EarthCityGlobe is a vendored JS module loaded only in the browser; keep it untyped.
 	let globe: { dispose?: () => void } | null = null;
+	let unsubscribeSelect: (() => void) | null = null;
 	let loading = $state(false);
 	let readout = $state('');
+	// Set once Svelte tears the component down (e.g. SPA navigation while the
+	// dialog is open). Mount is async; this lets an in-flight create() dispose
+	// the instance it produces instead of leaking a live renderer + rAF loop.
+	let destroyed = false;
 
 	async function mountGlobe() {
-		if (!browser || !container || globe) return;
+		if (!browser || !container || globe || destroyed) return;
 		loading = true;
 		readout = '';
 		try {
@@ -34,14 +40,22 @@
 				maxLabels: 200,
 				labelMinPopulation: 0
 			});
+			if (destroyed) {
+				g.dispose();
+				return;
+			}
 			try {
 				const res = await fetch(`/api/cities/globe?lat=${lat}&lng=${lng}`);
 				if (res.ok) g.setCities((await res.json()).cities);
 			} catch {
 				// Globe still renders (texture + borders) without city dots.
 			}
+			if (destroyed) {
+				g.dispose();
+				return;
+			}
 			g.flyTo(lat, lng, 1.26);
-			g.on('select', (e: CustomEvent) => {
+			unsubscribeSelect = g.on('select', (e: CustomEvent) => {
 				const d = e.detail;
 				readout =
 					d.kind === 'city'
@@ -55,6 +69,8 @@
 	}
 
 	function unmountGlobe() {
+		unsubscribeSelect?.();
+		unsubscribeSelect = null;
 		globe?.dispose?.();
 		globe = null;
 	}
@@ -74,6 +90,11 @@
 		open = false;
 		unmountGlobe();
 	}
+
+	onDestroy(() => {
+		destroyed = true;
+		unmountGlobe();
+	});
 
 	function requestClose() {
 		dialogEl?.close();

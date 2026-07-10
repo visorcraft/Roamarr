@@ -173,11 +173,18 @@ export function cancelReminder(userId: number, reminderId: number) {
 	deleteReminder(reminderId);
 }
 
+/**
+ * Max due reminders delivered in a single scheduler tick. Bounding the batch
+ * keeps any one tick short even after a backlog builds up (e.g. while SMTP was
+ * down); the remainder stays 'pending' and drains across subsequent ticks.
+ */
+export const MAX_REMINDERS_PER_TICK = 100;
+
 export async function runDueReminders(now: Date): Promise<{ processed: number; sent: number }> {
 	// Claim both fresh 'pending' rows and any 'sending' rows orphaned by a prior crash.
 	// Ticks never overlap (single process + scheduler running-guard), so any due
 	// 'sending' row at tick start is stale and safe to re-grab — at-least-once delivery.
-	const claimed = listPendingRemindersBefore(now.toISOString()).filter(
+	const claimed = listPendingRemindersBefore(now.toISOString(), MAX_REMINDERS_PER_TICK).filter(
 		(r) => r.status === 'pending' || r.status === 'sending'
 	);
 	let sent = 0;

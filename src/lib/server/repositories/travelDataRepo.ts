@@ -433,11 +433,12 @@ export interface FareWatchWithProvider extends FareWatch {
 	provider: FareProviderAccount;
 }
 
-export function listActiveFareWatches(): FareWatchWithProvider[] {
-	const watchRows = kit
+export function listActiveFareWatches(opts: { limit?: number } = {}): FareWatchWithProvider[] {
+	const watchQuery = kit
 		.selectFrom(fareWatches)
 		.where(eq(fareWatches.status, 'active'))
-		.executeSync();
+		.orderBy(asc(fareWatches.last_checked_at));
+	const watchRows = (opts.limit != null ? watchQuery.limit(opts.limit) : watchQuery).executeSync();
 	if (watchRows.length === 0) return [];
 
 	const providerIds = Array.from(new Set(watchRows.map((w) => Number(w.provider_id))));

@@ -192,8 +192,14 @@ export async function checkWatch(userId: number, watchId: number): Promise<FareR
 	return res;
 }
 
+/**
+ * Max fare watches evaluated in a single scheduler tick, oldest-checked first.
+ * Bounds per-tick work and rotates through watches so none is starved.
+ */
+export const MAX_FARE_CHECKS_PER_TICK = 50;
+
 export async function runFareChecks(now: Date): Promise<{ checked: number }> {
-	const rows = listActiveFareWatches();
+	const rows = listActiveFareWatches({ limit: MAX_FARE_CHECKS_PER_TICK });
 	for (const row of rows) {
 		const w = row;
 		const p = row.provider;

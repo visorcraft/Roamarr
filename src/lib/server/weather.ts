@@ -223,6 +223,22 @@ export async function refreshWeatherCache(now: Date = new Date()): Promise<{ ref
 	return { refreshed: seen.size };
 }
 
+/**
+ * Delete cached forecast rows for dates that have already passed. The cache is
+ * append-only otherwise (each trip/location/forecast-day upserts rows that are
+ * never removed), so without this it grows without bound over the process
+ * lifetime. Keeps today and all future days. Returns the number of rows removed.
+ */
+export function purgeExpiredWeatherCache(now: Date = new Date()): { deleted: number } {
+	const todayStart = DateTime.fromJSDate(now).startOf('day');
+	const yesterday = todayStart.minus({ days: 1 }).toISODate()!;
+	const deleted = kit
+		.deleteFrom(weatherCache)
+		.where(kitLte(weatherCache.for_date, yesterday))
+		.executeSync();
+	return { deleted: Number(deleted) };
+}
+
 export async function getCachedForecast(
 	lat: number,
 	lng: number,

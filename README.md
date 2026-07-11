@@ -313,6 +313,11 @@ npm start
 
 # Regenerate bundled license and credits data
 npm run credits:generate
+
+# Bump the version (patch | minor | major | x.y.z). Updates package.json,
+# package-lock.json root version, and regenerates the license/credits data
+# so the About page stays in sync.
+npm run version:bump -- patch
 ```
 
 Migrations are applied automatically during application boot before the

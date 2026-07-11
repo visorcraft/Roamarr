@@ -76,7 +76,7 @@ export const actions: Actions = {
 				aiClientSecret: editAi && aiEnabled ? aiAuthMode === 'oauth' ? aiClientSecret : null : undefined, aiScope: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiScope') : null : existing?.aiScope ?? null
 			});
 			logAudit(user.id, 'email_processing_update', 'user', user.id, { enabled, useImapForSmtp, aiEnabled });
-			setFlash(cookies, 'Email processing settings saved.');
+			setFlash(cookies, 'Email settings saved.');
 		} catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Invalid settings' }); }
 		throw redirect(303, section === 'parsing' ? '/profile/email_parsing' : section === 'sender' ? '/profile/email_sender' : '/profile/email_processing');
 	},

@@ -1,4 +1,4 @@
-export type NavChild = { href: string; label: string };
+export type NavChild = { href: string; label: string; activePaths?: string[] };
 export type NavItem = { href: string; label: string; children?: NavChild[] };
 
 export function isActive(path: string, href: string): boolean {
@@ -8,7 +8,8 @@ export function isActive(path: string, href: string): boolean {
 export function activeChildHref(path: string, children: NavChild[]): string | null {
 	let match: string | null = null;
 	for (const child of children) {
-		if (path === child.href || path.startsWith(child.href + '/')) {
+		const paths = [child.href, ...(child.activePaths ?? [])];
+		if (paths.some((href) => path === href || path.startsWith(href + '/'))) {
 			if (!match || child.href.length > match.length) {
 				match = child.href;
 			}

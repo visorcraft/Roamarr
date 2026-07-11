@@ -7,7 +7,7 @@
 	onMount(() => useImapForSmtp = config?.useImapForSmtp ?? true);
 </script>
 
-<header class="page-header"><div><h1 class="page-title">Email processing</h1><p class="page-subtitle">Import travel confirmations and control notification delivery.</p></div></header>
+<header class="page-header"><div><h1 class="page-title">Email Settings</h1><p class="page-subtitle">Import travel confirmations and control notification delivery.</p></div></header>
 <EmailProcessingTabs />
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 

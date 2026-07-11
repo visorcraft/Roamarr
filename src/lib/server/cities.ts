@@ -39,7 +39,7 @@ export function citySelectionError(
 	const maps = getMapSettings();
 	if (!maps.mapsEnabled) return null;
 	if (maps.cityCount === 0) {
-		return 'Please ask your Roamarr administrator to use “Re-import city database” under General → Maps.';
+		return 'Please ask your Roamarr administrator to use “Re-import city database” under Configuration → Maps.';
 	}
 	if (!findCity(countryCode, name)) return 'Selected city was not found in the GeoNames database';
 	if (lat == null || lng == null) return 'City coordinates are missing';

@@ -4,7 +4,7 @@ import { requireAdmin } from '$lib/server/auth';
 import { getMapSettings, getSettings, updateSettings } from '$lib/server/settings';
 import { importMapTexture, hasMapTexture } from '$lib/server/mapsAssets';
 import { encrypt } from '$lib/server/crypto';
-import { listAuditLogs, logAudit, getAdminStats } from '$lib/server/audit';
+import { logAudit, getAdminStats } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
@@ -171,19 +171,23 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	requireAdmin(locals);
 	const s = getSettings();
 	const stats = getAdminStats();
-	const recentLogs = listAuditLogs({ limit: 5 }).logs;
 	const mapSettings = getMapSettings();
 	const allowedTabs = ['general', 'maps', 'email', 'webhook', 'oauth'] as const;
-	const tabParam = url?.searchParams.get('tab') ?? 'general';
+	const routeTabs: Record<string, string> = {
+		'/general/maps': 'maps', '/general/email': 'email', '/general/webhooks': 'webhook', '/general/oauth': 'oauth'
+	};
+	const tabParam = routeTabs[url.pathname] ?? url.searchParams.get('tab') ?? 'general';
 	const tab: (typeof allowedTabs)[number] = (allowedTabs as readonly string[]).includes(tabParam)
 		? (tabParam as (typeof allowedTabs)[number])
 		: 'general';
 	return {
 		settings: { ...s, smtpPass: s.smtpPass ? '********' : '', globalImapPassword: s.globalImapPassword ? '********' : '', globalAiToken: s.globalAiToken ? '********' : '', globalAiClientSecret: s.globalAiClientSecret ? '********' : '' },
 		stats,
-		recentLogs,
 		mapSettings,
-		tab
+		tab,
+		emailTab: ['access', 'inbound', 'parsing', 'outbound'].includes(url.searchParams.get('section') ?? '')
+			? url.searchParams.get('section')!
+			: 'access'
 	};
 };
 
@@ -195,11 +199,11 @@ function parseLead(value: FormDataEntryValue | null, fallback: number): number {
 }
 
 const TAB_REDIRECTS = {
-	general: '/general?tab=general',
-	maps: '/general?tab=maps',
-	email: '/general?tab=email',
-	webhook: '/general?tab=webhook',
-	oauth: '/general?tab=oauth'
+	general: '/general',
+	maps: '/general/maps',
+	email: '/general/email',
+	webhook: '/general/webhooks',
+	oauth: '/general/oauth'
 } as const;
 
 export const actions: Actions = {
@@ -253,6 +257,8 @@ export const actions: Actions = {
 			const value = String(f.get(name) || '');
 			return f.get(`clear${name[0]!.toUpperCase()}${name.slice(1)}`) === 'on' ? null : value && value !== '********' ? value : undefined;
 		};
+		const section = String(f.get('section') || '');
+		if (!['access', 'inbound', 'parsing', 'outbound'].includes(section)) return fail(400, { error: 'Invalid email settings section.' });
 		const current = getSettings();
 		const globalAiEnabled = f.get('globalAiEnabled') === 'on';
 		const globalAiAuthMode = String(f.get('globalAiAuthMode') || 'token');
@@ -266,26 +272,34 @@ export const actions: Actions = {
 		const bearerPresent = globalAiToken === undefined ? !!current.globalAiToken : !!globalAiToken;
 		const oauthSecretPresent = globalAiClientSecret === undefined ? !!current.globalAiClientSecret : !!globalAiClientSecret;
 		const oauthComplete = !!globalAiTokenUrl && !!globalAiClientId && oauthSecretPresent;
-		if (globalAiEnabled && (!globalAiBaseUrl || !globalAiModel)) return fail(400, { error: 'Global parsing requires API base URL and model.' });
-		if (globalAiEnabled && globalAiAuthMode === 'token' && !bearerPresent) return fail(400, { error: 'API/subscription key is required.' });
-		if (globalAiEnabled && globalAiAuthMode === 'oauth' && !oauthComplete) return fail(400, { error: 'OAuth requires token URL, client ID, and client secret.' });
-		_saveAdminSettings(u.id, {
+		if (section === 'parsing' && globalAiEnabled && (!globalAiBaseUrl || !globalAiModel)) return fail(400, { error: 'Global parsing requires API base URL and model.' });
+		if (section === 'parsing' && globalAiEnabled && globalAiAuthMode === 'token' && !bearerPresent) return fail(400, { error: 'API/subscription key is required.' });
+		if (section === 'parsing' && globalAiEnabled && globalAiAuthMode === 'oauth' && !oauthComplete) return fail(400, { error: 'OAuth requires token URL, client ID, and client secret.' });
+		if (section === 'outbound') _saveAdminSettings(u.id, {
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
 			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
 			smtpPass: clearSmtpPass ? null : pass && pass !== '********' ? pass : undefined,
-			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
+			smtpFrom: String(f.get('smtpFrom') || '') || undefined
+		});
+		if (section === 'access') _saveAdminSettings(u.id, {
 			allowUserImap: f.get('allowUserImap') === 'on',
 			allowUserSmtp: f.get('allowUserSmtp') === 'on',
-			allowUserParsingProviders: f.get('allowUserParsingProviders') === 'on',
+			allowUserParsingProviders: f.get('allowUserParsingProviders') === 'on'
+		});
+		if (section === 'inbound') _saveAdminSettings(u.id, {
 			globalImapEnabled: f.get('globalImapEnabled') === 'on',
-			globalImapHost: String(f.get('globalImapHost') || '') || null,
-			globalImapPort: f.get('globalImapPort') ? Number(f.get('globalImapPort')) : null,
-			globalImapSecurity: String(f.get('globalImapSecurity') || 'ssl/tls'),
-			globalImapUsername: String(f.get('globalImapUsername') || '') || null,
-			globalImapPassword: changedSecret('globalImapPassword'),
-			globalImapMailbox: String(f.get('globalImapMailbox') || 'INBOX'),
+			...(f.get('globalImapEnabled') === 'on' ? {
+				globalImapHost: String(f.get('globalImapHost') || '') || null,
+				globalImapPort: f.get('globalImapPort') ? Number(f.get('globalImapPort')) : null,
+				globalImapSecurity: String(f.get('globalImapSecurity') || 'ssl/tls'),
+				globalImapUsername: String(f.get('globalImapUsername') || '') || null,
+				globalImapPassword: changedSecret('globalImapPassword'),
+				globalImapMailbox: String(f.get('globalImapMailbox') || 'INBOX')
+			} : {})
+		});
+		if (section === 'parsing') _saveAdminSettings(u.id, {
 			globalAiEnabled,
 			globalAiAuthMode,
 			globalAiBaseUrl,
@@ -297,7 +311,7 @@ export const actions: Actions = {
 			globalAiScope: globalAiAuthMode === 'oauth' ? String(f.get('globalAiScope') || '') || null : null
 		});
 		setFlash(cookies, 'Email settings saved.');
-		throw redirect(303, TAB_REDIRECTS.email);
+		throw redirect(303, `${TAB_REDIRECTS.email}?section=${section}`);
 	},
 
 	saveWebhook: async ({ request, locals, cookies }) => {
@@ -403,8 +417,8 @@ export const actions: Actions = {
 			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
 		});
 		setFlash(cookies, 'Settings saved.');
-		const tab = url.searchParams.get('tab') ?? 'general';
-		throw redirect(303, `/general?tab=${tab}`);
+		const tab = url.searchParams.get('tab') as keyof typeof TAB_REDIRECTS | null;
+		throw redirect(303, tab && TAB_REDIRECTS[tab] ? TAB_REDIRECTS[tab] : url.pathname);
 		},
 		// Idempotent: re-checks what's already downloaded and only fetches the missing
 		// pieces, so re-enabling after a disable (or a failed asset) resumes cleanly.

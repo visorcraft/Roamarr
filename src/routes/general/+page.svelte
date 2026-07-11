@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+	import AdminEmailTabs from '$lib/components/AdminEmailTabs.svelte';
 	import {
 		DATE_FORMAT_OPTIONS,
 		DATETIME_FORMAT_OPTIONS,
@@ -16,8 +17,13 @@
 	const s = $derived(data.settings);
 	const m = $derived(data.mapSettings);
 	const tab = $derived(data.tab);
+	const emailTab = $derived(data.emailTab);
 	let globalAiAuthMode = $state<'token' | 'oauth'>('token');
-	onMount(() => (globalAiAuthMode = s.globalAiAuthMode ?? 'token'));
+	let globalImapEnabled = $state(true);
+	onMount(() => {
+		globalAiAuthMode = s.globalAiAuthMode ?? 'token';
+		globalImapEnabled = s.globalImapEnabled;
+	});
 
 	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
 
@@ -61,17 +67,10 @@
 	);
 	const customVisible = $derived(selectedProvider === 'custom');
 
-	const tabs = [
-		{ id: 'general', label: 'General' },
-		{ id: 'maps', label: 'Maps' },
-		{ id: 'email', label: 'Email' },
-		{ id: 'webhook', label: 'Webhooks' },
-		{ id: 'oauth', label: 'MCP OAuth' }
-	] as const;
 </script>
 
 <header>
-	<h1 class="page-title">General</h1>
+	<h1 class="page-title">Configuration</h1>
 	<p class="page-subtitle">Configure your Roamarr instance and outgoing email.</p>
 </header>
 
@@ -100,13 +99,7 @@
 	</div>
 </section>
 
-<div class="tab-list visited-tab-list mt-6">
-	{#each tabs as t (t.id)}
-		<a href="/general?tab={t.id}" class="tab-link {tab === t.id ? 'tab-link-active' : ''}">{t.label}</a>
-	{/each}
-</div>
-
-<div class="mt-6 grid gap-8 lg:grid-cols-[minmax(0,1fr)_17.5rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+<div class="mt-6">
 	<div class="space-y-6">
 
 		{#if tab === 'general'}
@@ -387,6 +380,9 @@
 
 		{#if tab === 'email'}
 			<form method="POST" action="?/saveEmail" class="space-y-6">
+				<AdminEmailTabs active={emailTab} />
+				<input type="hidden" name="section" value={emailTab} />
+				{#if emailTab === 'access'}
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Per-user email settings</h2>
 					<div class="settings-rows mt-4">
@@ -394,8 +390,11 @@
 						<div class="settings-row"><div><label class="checkbox-label" for="allowUserSmtp"><input id="allowUserSmtp" name="allowUserSmtp" type="checkbox" class="checkbox" checked={s.allowUserSmtp} />Allow Per-User SMTP</label><p class="field-help mt-1">Users may configure their own server for notifications sent to themselves.</p></div></div>
 						<div class="settings-row"><div><label class="checkbox-label" for="allowUserParsingProviders"><input id="allowUserParsingProviders" name="allowUserParsingProviders" type="checkbox" class="checkbox" checked={s.allowUserParsingProviders} />Allow Per-User Parsing Providers</label><p class="field-help mt-1">Users may override the global parsing provider.</p></div></div>
 					</div>
+					<div class="mt-6 flex justify-end"><button class="btn btn-primary">Save email settings</button></div>
 				</section>
+				{/if}
 
+				{#if emailTab === 'outbound'}
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Global Outbound Emails (SMTP)</h2>
 					<p class="field-help mt-1">Sends system notifications. This connection is not used for inbound trip processing.</p>
@@ -463,24 +462,32 @@
 
 					<div class="mt-6 flex flex-wrap justify-end gap-2">
 						<button class="btn btn-ghost" type="submit" formaction="?/testEmail">Send test email</button>
+						<button class="btn btn-primary">Save email settings</button>
 					</div>
 				</section>
+				{/if}
 
+				{#if emailTab === 'inbound'}
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Global Email Inbox (IMAP)</h2>
 					<p class="field-help mt-1">Monitors one shared inbox. Mail is assigned only when its sender exactly matches an enabled Roamarr user.</p>
 					<div class="settings-rows mt-4">
-						<div class="settings-row"><div><label class="checkbox-label" for="globalImapEnabled"><input id="globalImapEnabled" name="globalImapEnabled" type="checkbox" class="checkbox" checked={s.globalImapEnabled} />Enable global inbox processing</label></div></div>
+						<div class="settings-row"><div><label class="checkbox-label" for="globalImapEnabled"><input id="globalImapEnabled" name="globalImapEnabled" type="checkbox" class="checkbox" bind:checked={globalImapEnabled} />Enable global inbox processing</label></div></div>
+						{#if globalImapEnabled}
 						<div class="settings-row"><label class="label" for="globalImapHost">IMAP host</label><input id="globalImapHost" name="globalImapHost" class="input" value={s.globalImapHost ?? ''} /></div>
 						<div class="settings-row"><label class="label" for="globalImapPort">IMAP port</label><input id="globalImapPort" name="globalImapPort" type="number" class="input" value={s.globalImapPort ?? ''} placeholder="993" /></div>
 						<div class="settings-row"><label class="label" for="globalImapSecurity">Security</label><select id="globalImapSecurity" name="globalImapSecurity" class="input"><option value="ssl/tls" selected={s.globalImapSecurity === 'ssl/tls'}>SSL/TLS</option><option value="starttls" selected={s.globalImapSecurity === 'starttls'}>STARTTLS</option><option value="none" selected={s.globalImapSecurity === 'none'}>None</option></select></div>
 						<div class="settings-row"><label class="label" for="globalImapUsername">Username</label><input id="globalImapUsername" name="globalImapUsername" class="input" value={s.globalImapUsername ?? ''} /></div>
 						<div class="settings-row"><label class="label" for="globalImapPassword">Password</label><input id="globalImapPassword" name="globalImapPassword" type="password" class="input" value={s.globalImapPassword} /></div>
 						<div class="settings-row"><label class="label" for="globalImapMailbox">Mailbox</label><input id="globalImapMailbox" name="globalImapMailbox" class="input" value={s.globalImapMailbox} /></div>
+						{/if}
 					</div>
-					{#if s.globalImapLastPolledAt}<p class="field-help mt-3">Last checked: {s.globalImapLastPolledAt}. {s.globalImapLastError ? `Error: ${s.globalImapLastError}` : 'No error.'}</p>{/if}
+					{#if globalImapEnabled && s.globalImapLastPolledAt}<p class="field-help mt-3">Last checked: {s.globalImapLastPolledAt}. {s.globalImapLastError ? `Error: ${s.globalImapLastError}` : 'No error.'}</p>{/if}
+					<div class="mt-6 flex justify-end"><button class="btn btn-primary">Save email settings</button></div>
 				</section>
+				{/if}
 
+				{#if emailTab === 'parsing'}
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Global Email Parsing</h2>
 					<p class="field-help mt-1">Optional AI parsing for all inboxes. API base URL, model, and one authentication method are required when enabled.</p>
@@ -498,9 +505,9 @@
 						<div class="settings-row"><div><label class="label" for="globalAiScope">OAuth scope</label><p class="field-help">Optional. Leave blank unless the provider documents a required scope.</p></div><input id="globalAiScope" name="globalAiScope" class="input" value={s.globalAiScope ?? ''} /></div>
 						{/if}
 					</div>
+					<div class="mt-6 flex justify-end"><button class="btn btn-primary">Save email settings</button></div>
 				</section>
-
-				<div class="flex justify-end"><button class="btn btn-primary">Save email settings</button></div>
+				{/if}
 			</form>
 		{/if}
 
@@ -566,28 +573,4 @@
 
 	</div>
 
-	<aside class="space-y-8">
-		<div class="trip-sidebar-card">
-			<h2 class="subsection-title mb-3">Recent activity</h2>
-			{#if data.recentLogs.length === 0}
-				<p class="empty-text mt-2">No audit log entries yet.</p>
-			{:else}
-				<ul class="mt-3 list-stack">
-					{#each data.recentLogs as log}
-						<li class="list-item text-sm">
-							<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-								<span class="font-medium text-white">{log.action}</span>
-								<span class="muted">{log.entityType}:{log.entityId}</span>
-								<span class="text-xs text-readable-faint">{formatDateTime(log.createdAt)}</span>
-							</div>
-							<p class="mt-1 muted">{log.user.displayName ?? log.user.email}</p>
-						</li>
-					{/each}
-				</ul>
-				<div class="mt-4">
-					<a href="/audit-logs" class="btn btn-primary">View full audit log</a>
-				</div>
-			{/if}
-		</div>
-	</aside>
 </div>

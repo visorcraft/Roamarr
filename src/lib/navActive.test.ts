@@ -17,7 +17,7 @@ describe('isActive', () => {
 describe('activeChildHref', () => {
 	const children = [
 		{ href: '/profile', label: 'Account' },
-		{ href: '/profile/contacts', label: 'Emergency contacts' },
+		{ href: '/profile/contacts', label: 'Emergency Contacts' },
 		{ href: '/profile/visited/countries', label: 'Countries' },
 		{ href: '/profile/visited/states', label: 'U.S. States' }
 	];
@@ -41,6 +41,12 @@ describe('activeChildHref', () => {
 
 	it('returns null when no child matches', () => {
 		expect(activeChildHref('/trips', children)).toBeNull();
+	});
+
+	it('matches alternate paths to one child', () => {
+		expect(activeChildHref('/profile/email_parsing', [
+			{ href: '/profile/email_processing', label: 'Email Settings', activePaths: ['/profile/email_parsing', '/profile/email_sender'] }
+		])).toBe('/profile/email_processing');
 	});
 });
 

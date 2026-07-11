@@ -276,7 +276,7 @@
 		}
 	}
 
-	type NavItem = { href: string; label: string; icon: IconName; children?: { href: string; label: string }[] };
+	type NavItem = { href: string; label: string; icon: IconName; children?: { href: string; label: string; activePaths?: string[] }[] };
 
 	const SECTIONS: {
 		label: string;
@@ -300,8 +300,8 @@
 					icon: 'user',
 					children: [
 						{ href: '/profile', label: 'Account' },
-						{ href: '/profile/contacts', label: 'Emergency contacts' },
-						{ href: '/profile/email_processing', label: 'Email processing' },
+						{ href: '/profile/contacts', label: 'Emergency Contacts' },
+						{ href: '/profile/email_processing', label: 'Email Settings', activePaths: ['/profile/email_parsing', '/profile/email_sender'] },
 						{ href: '/profile/security', label: 'Security' }
 					]
 				},
@@ -331,7 +331,18 @@
 			label: 'Admin',
 			admin: true,
 			items: [
-				{ href: '/general', label: 'General', icon: 'settings' },
+				{
+					href: '/general',
+					label: 'Configuration',
+					icon: 'settings',
+					children: [
+						{ href: '/general', label: 'General' },
+						{ href: '/general/maps', label: 'Maps' },
+						{ href: '/general/email', label: 'Email' },
+						{ href: '/general/webhooks', label: 'Webhooks' },
+						{ href: '/general/oauth', label: 'MCP OAuth' }
+					]
+				},
 				{ href: '/users', label: 'Users', icon: 'users' },
 				{ href: '/fare-providers', label: 'Fare providers', icon: 'card' },
 				{
@@ -341,7 +352,7 @@
 					children: [
 						{ href: '/maintenance', label: 'Database Ops' },
 						{ href: '/jobs', label: 'Scheduled Jobs' },
-						{ href: '/audit-logs', label: 'Audit log' },
+						{ href: '/audit-logs', label: 'Audit Logs' },
 						{ href: '/backup', label: 'Backup' },
 						{ href: '/seed', label: 'Seed' }
 					]

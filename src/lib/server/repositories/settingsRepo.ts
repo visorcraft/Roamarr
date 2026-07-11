@@ -119,7 +119,7 @@ const EMAIL_SETTING_KEYS = [
 
 const EMAIL_DEFAULTS = {
 	allowUserImap: true, allowUserSmtp: false, allowUserParsingProviders: false,
-	globalImapEnabled: false, globalImapHost: null, globalImapPort: null,
+	globalImapEnabled: true, globalImapHost: null, globalImapPort: null,
 	globalImapSecurity: 'ssl/tls', globalImapUsername: null, globalImapPassword: null,
 	globalImapMailbox: 'INBOX', globalImapLastUid: null, globalImapLastPolledAt: null,
 	globalImapLastError: null, globalAiEnabled: false, globalAiAuthMode: 'token' as const, globalAiBaseUrl: null,

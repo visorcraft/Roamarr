@@ -22,7 +22,7 @@ test('city selection validation follows map availability', () => {
 
 	updateSettings({ mapsEnabled: true });
 	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBe(
-		'Please ask your Roamarr administrator to use “Re-import city database” under General → Maps.'
+		'Please ask your Roamarr administrator to use “Re-import city database” under Configuration → Maps.'
 	);
 
 	repo.importCitiesBatch([

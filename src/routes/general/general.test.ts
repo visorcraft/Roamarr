@@ -143,24 +143,6 @@ test('saves empty webhookUrl as null', () => {
 	expect(s.webhookUrl).toBeNull();
 });
 
-test('load includes recent audit log entries for admins', () => {
-	const u = makeUser('audit-admin@x.c', 'Admin', 'admin');
-	saveAdminSettings(Number(u.id), {
-		instanceName: 'R',
-		allowRegistration: false,
-		defaultTimezone: 'UTC',
-		defaultCurrency: 'USD',
-		defaultFlightCheckinLeadHours: 24,
-		defaultDocumentExpiryLeadDays: 90
-	});
-
-	const data = load({ locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals, url: new URL('http://x/general') } as any) as {
-		recentLogs: { action: string }[];
-	};
-	expect(data.recentLogs).toHaveLength(1);
-	expect(data.recentLogs[0].action).toBe('settings_update');
-});
-
 test('save action sets a flash cookie and redirects', async () => {
 	const u = makeUser('admin@x.c', 'Admin', 'admin');
 	const cookies = { set: vi.fn(), get: vi.fn() };
@@ -179,9 +161,20 @@ test('save action sets a flash cookie and redirects', async () => {
 	const locals = { user: { id: Number(u.id), role: 'admin' } } as App.Locals;
 	await expect(actions.save({ request, locals, cookies, url: new URL('http://x/general') } as any)).rejects.toMatchObject({
 		status: 303,
-		location: '/general?tab=general'
+		location: '/general'
 	});
 	expect(cookies.set).toHaveBeenCalledWith('flash', 'Settings saved.', expect.any(Object));
+});
+
+test('email section save preserves other email settings', async () => {
+	const u = makeUser('email-sections@x.c', 'Admin', 'admin');
+	updateSettings({ smtpHost: 'smtp.example.com', allowUserImap: false });
+	const request = new Request('http://x/general/email?section=access', {
+		method: 'POST', body: new URLSearchParams({ section: 'access', allowUserImap: 'on' })
+	});
+	await expect(actions.saveEmail({ request, locals: { user: { id: Number(u.id), role: 'admin' } }, cookies: { set: vi.fn() } } as any))
+		.rejects.toMatchObject({ status: 303, location: '/general/email?section=access' });
+	expect(getSettings()).toMatchObject({ allowUserImap: true, smtpHost: 'smtp.example.com' });
 });
 
 test('getMapSettings reflects imported city count', () => {
@@ -202,7 +195,7 @@ test('disable maps stays on the Maps tab', async () => {
 			locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
 			cookies
 		} as any)
-	).rejects.toMatchObject({ status: 303, location: '/general?tab=maps' });
+	).rejects.toMatchObject({ status: 303, location: '/general/maps' });
 	expect(getMapSettings().mapsEnabled).toBe(false);
 	expect(cookies.set).toHaveBeenCalledWith('flash', expect.stringContaining('Maps disabled'), expect.any(Object));
 });

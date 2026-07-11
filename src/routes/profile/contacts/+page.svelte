@@ -10,7 +10,7 @@
 
 <header class="page-header">
 	<div>
-		<h1 class="page-title">Emergency contacts</h1>
+		<h1 class="page-title">Emergency Contacts</h1>
 		<p class="page-subtitle">People to reach in case of an emergency.</p>
 	</div>
 </header>

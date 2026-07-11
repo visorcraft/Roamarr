@@ -93,7 +93,7 @@
 
 <header class="page-header">
 	<div>
-		<h1 class="page-title">Audit log</h1>
+		<h1 class="page-title">Audit Logs</h1>
 		<p class="page-subtitle">Security-relevant events across the instance.</p>
 	</div>
 </header>

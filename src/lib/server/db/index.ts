@@ -18,11 +18,27 @@ function isExistingDatabaseDirectory(path: string): boolean {
 	return true;
 }
 
-function openOrCreateEncryptedSync(path: string, passphrase: string): KitDatabase {
+export function openOrCreateEncryptedSync(
+	path: string,
+	passphrase: string,
+	credentials?: { username: string; password: string }
+): KitDatabase {
 	if (isExistingDatabaseDirectory(path)) {
-		return KitDatabase.openEncryptedSync(path, schema, passphrase);
+		return credentials
+			? KitDatabase.openSync(path, schema, { encryption: { passphrase }, credentials })
+			: KitDatabase.openEncryptedSync(path, schema, passphrase);
 	}
-	return KitDatabase.createEncryptedSync(path, schema, passphrase);
+	return credentials
+		? KitDatabase.createEncryptedWithCredentialsSync(path, schema, passphrase, credentials.username, credentials.password)
+		: KitDatabase.createEncryptedSync(path, schema, passphrase);
+}
+
+export function databaseCredentialsFromEnv(): { username: string; password: string } | undefined {
+	const username = process.env.DATABASE_USER;
+	const password = process.env.DATABASE_PASS;
+	if (!username && !password) return undefined;
+	if (!username || !password) throw new Error('DATABASE_USER and DATABASE_PASS must both be set.');
+	return { username, password };
 }
 
 /**
@@ -57,7 +73,7 @@ export function getDb(): KitDatabase {
 		if (!passphrase) {
 			throw new Error('ROAMARR_SECRET is required: it is used to encrypt the database at rest.');
 		}
-		_kit = openOrCreateEncryptedSync(path, passphrase);
+		_kit = openOrCreateEncryptedSync(path, passphrase, databaseCredentialsFromEnv());
 		_kit.migrateSync(schema, migrations);
 		capResultCaches(_kit);
 	}

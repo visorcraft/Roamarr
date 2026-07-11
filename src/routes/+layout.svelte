@@ -301,7 +301,7 @@
 					children: [
 						{ href: '/profile', label: 'Account' },
 						{ href: '/profile/contacts', label: 'Emergency contacts' },
-						{ href: '/profile/notifications', label: 'SMTP' },
+						{ href: '/profile/email_processing', label: 'Email processing' },
 						{ href: '/profile/security', label: 'Security' }
 					]
 				},

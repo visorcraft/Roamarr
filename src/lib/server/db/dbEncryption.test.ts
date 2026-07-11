@@ -8,6 +8,8 @@ import { makeUser } from '../../../../tests/helpers';
 
 describe('getDb encryption', () => {
 	const originalPath = process.env.DATABASE_PATH;
+	const originalUser = process.env.DATABASE_USER;
+	const originalPass = process.env.DATABASE_PASS;
 	const dirs: string[] = [];
 
 	beforeEach(() => {
@@ -16,10 +18,32 @@ describe('getDb encryption', () => {
 
 	afterEach(() => {
 		process.env.DATABASE_PATH = originalPath;
+		if (originalUser === undefined) delete process.env.DATABASE_USER; else process.env.DATABASE_USER = originalUser;
+		if (originalPass === undefined) delete process.env.DATABASE_PASS; else process.env.DATABASE_PASS = originalPass;
 		for (const dir of dirs.splice(0)) {
 			rmSync(dir, { recursive: true, force: true });
 		}
 		vi.resetModules();
+	});
+
+	it('requires DATABASE_USER and DATABASE_PASS together', async () => {
+		process.env.DATABASE_USER = 'roamarr';
+		delete process.env.DATABASE_PASS;
+		const { databaseCredentialsFromEnv } = await import('./index');
+		expect(() => databaseCredentialsFromEnv()).toThrow('must both be set');
+	});
+
+	it('creates and reopens an encrypted credential-authenticated database', async () => {
+		if (!process.env.ROAMARR_SECRET) return;
+		const path = tempDbPath();
+		const { openOrCreateEncryptedSync } = await import('./index');
+		const credentials = { username: 'roamarr', password: 'database-password' };
+		const created = openOrCreateEncryptedSync(path, process.env.ROAMARR_SECRET, credentials);
+		created.nativeDb.close();
+		const reopened = openOrCreateEncryptedSync(path, process.env.ROAMARR_SECRET, credentials);
+		expect(reopened.tableNames()).toContain('users');
+		reopened.nativeDb.close();
+		expect(() => openOrCreateEncryptedSync(path, process.env.ROAMARR_SECRET!, { ...credentials, password: 'wrong' })).toThrow();
 	});
 
 	function tempDbPath(): string {

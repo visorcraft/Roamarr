@@ -39,6 +39,7 @@ function seedSettings(patch: Record<string, unknown> = {}) {
 			smtp_user: patch.smtp_user ?? null,
 			smtp_pass: patch.smtp_pass ?? null,
 			smtp_from: patch.smtp_from ?? null,
+			email_processing_config: JSON.stringify({ allowUserSmtp: patch.allow_user_smtp ?? false }),
 			webhook_url: null,
 			maps_geonames_imported_at: null,
 			maps_tile_url: null,
@@ -169,7 +170,8 @@ describe('smtpConfig', () => {
 			seedSettings({
 				smtp_host: 'smtp.admin.com',
 				smtp_port: 587n,
-				smtp_from: 'admin@roamarr.app'
+				smtp_from: 'admin@roamarr.app',
+				allow_user_smtp: true
 			});
 			upsertUserSmtpOverride(userId, {
 				enabled: true,

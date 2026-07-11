@@ -121,6 +121,10 @@ Roamarr can:
   attachments, splits, settlements, budgets, and payment due dates.
 - Import and export trip data as JSON or CSV, including dry-run previews before
   importing.
+- Poll per-user IMAP inboxes for travel confirmations, parse them locally or
+  through a user-configured OpenAI-compatible API, and match them to trips.
+- Merge an incorrect donor trip into a recipient while retaining itinerary,
+  documents, expenses, companions, and other trip data.
 - Send reminders and operational notifications in app, by SMTP, per-user SMTP
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
@@ -208,6 +212,9 @@ Paste the generated secret into `.env`:
 ```env
 ROAMARR_SECRET=replace-with-output-from-openssl
 DATABASE_PATH=./roamarr-db
+# Optional. Set both to require MongrelDB credential authentication.
+DATABASE_USER=roamarr
+DATABASE_PASS=replace-with-a-strong-password
 PORT=3000
 ORIGIN=http://localhost:5173
 ```
@@ -218,6 +225,11 @@ ORIGIN=http://localhost:5173
 > rest and to unlock the encrypted Kit database. If it is missing or invalid, the
 > first-boot setup page will refuse to create the admin account and will show
 > instructions for generating and setting the secret.
+>
+> `DATABASE_USER` and `DATABASE_PASS` are optional, but must be set together
+> before the database is first created. They create the MongrelDB administrator
+> and require credential authentication in addition to encryption. Keep them
+> stable; changing or omitting them prevents the authenticated database opening.
 
 Then start the development server:
 
@@ -265,6 +277,8 @@ source.
 | -------- | -------- | ------- | ----- |
 | `ROAMARR_SECRET` | yes | none | Base64-encoded 32-byte AES key. Generate with `openssl rand -base64 32`; other lengths are rejected at boot. The setup page blocks admin creation until a valid secret is set. |
 | `DATABASE_PATH` | no | `./roamarr-db` | MongrelDB data directory or file path. |
+| `DATABASE_USER` | no | none | MongrelDB administrator username. Must be set with `DATABASE_PASS` before first creation. |
+| `DATABASE_PASS` | no | none | MongrelDB administrator password. Must be set with `DATABASE_USER` before first creation. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
@@ -336,7 +350,7 @@ Chromium first with `npm run test:e2e:install`, then run the suite with
 After the first setup flow, use the admin pages for:
 
 - Instance name, public registration, and admin controls.
-- SMTP delivery, signed webhooks, and per-user notification channels.
+- SMTP delivery, IMAP polling interval, signed webhooks, and per-user email processing.
 - Fare provider accounts and connection tests.
 - Backups, restores, scheduled jobs, audit logs, health information, database
   maintenance, and demo data.

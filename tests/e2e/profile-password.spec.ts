@@ -1,7 +1,8 @@
 import { type Page } from '@playwright/test';
 import { test, expect } from './fixtures';
+import { E2E_ADMIN } from './credentials';
 
-const ORIGINAL_PASSWORD = 'e2e-correct-horse-battery-staple';
+const ORIGINAL_PASSWORD = E2E_ADMIN.password;
 const NEW_PASSWORD = 'e2e-new-correct-horse-battery-staple';
 
 async function updatePassword(page: Page, currentPassword: string, newPassword: string) {

@@ -63,7 +63,7 @@
 		{ id: 'maps', label: 'Maps' },
 		{ id: 'email', label: 'Email' },
 		{ id: 'webhook', label: 'Webhooks' },
-		{ id: 'oauth', label: 'OAuth clients' }
+		{ id: 'oauth', label: 'MCP OAuth' }
 	] as const;
 </script>
 
@@ -234,6 +234,10 @@
 							class="input"
 						/>
 						</div>
+						<div class="settings-row">
+							<div><label class="label" for="emailPollIntervalMinutes">Email polling interval (minutes)</label><p class="field-help">How often enabled user inboxes are checked.</p></div>
+							<input id="emailPollIntervalMinutes" name="emailPollIntervalMinutes" type="number" min="1" max="1440" value={s.emailPollIntervalMinutes} class="input" />
+						</div>
 					</div>
 
 					<div class="mt-6 flex justify-end">
@@ -381,7 +385,17 @@
 		{#if tab === 'email'}
 			<form method="POST" action="?/saveEmail" class="space-y-6">
 				<section class="card p-5 sm:p-6">
-					<h2 class="section-title">Email (SMTP)</h2>
+					<h2 class="section-title">Per-user email settings</h2>
+					<div class="settings-rows mt-4">
+						<div class="settings-row"><div><label class="checkbox-label" for="allowUserImap"><input id="allowUserImap" name="allowUserImap" type="checkbox" class="checkbox" checked={s.allowUserImap} />Allow Per-User IMAP</label><p class="field-help mt-1">Users may configure their own inbox monitoring connection.</p></div></div>
+						<div class="settings-row"><div><label class="checkbox-label" for="allowUserSmtp"><input id="allowUserSmtp" name="allowUserSmtp" type="checkbox" class="checkbox" checked={s.allowUserSmtp} />Allow Per-User SMTP</label><p class="field-help mt-1">Users may configure their own server for notifications sent to themselves.</p></div></div>
+						<div class="settings-row"><div><label class="checkbox-label" for="allowUserParsingProviders"><input id="allowUserParsingProviders" name="allowUserParsingProviders" type="checkbox" class="checkbox" checked={s.allowUserParsingProviders} />Allow Per-User Parsing Providers</label><p class="field-help mt-1">Users may override the global parsing provider.</p></div></div>
+					</div>
+				</section>
+
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">Global Outbound Emails (SMTP)</h2>
+					<p class="field-help mt-1">Sends system notifications. This connection is not used for inbound trip processing.</p>
 					<div class="settings-rows">
 						<div class="settings-row">
 							<div>
@@ -446,9 +460,39 @@
 
 					<div class="mt-6 flex flex-wrap justify-end gap-2">
 						<button class="btn btn-ghost" type="submit" formaction="?/testEmail">Send test email</button>
-						<button class="btn btn-primary">Save email settings</button>
 					</div>
 				</section>
+
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">Global Email Inbox (IMAP)</h2>
+					<p class="field-help mt-1">Monitors one shared inbox. Mail is assigned only when its sender exactly matches an enabled Roamarr user.</p>
+					<div class="settings-rows mt-4">
+						<div class="settings-row"><div><label class="checkbox-label" for="globalImapEnabled"><input id="globalImapEnabled" name="globalImapEnabled" type="checkbox" class="checkbox" checked={s.globalImapEnabled} />Enable global inbox processing</label></div></div>
+						<div class="settings-row"><label class="label" for="globalImapHost">IMAP host</label><input id="globalImapHost" name="globalImapHost" class="input" value={s.globalImapHost ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalImapPort">IMAP port</label><input id="globalImapPort" name="globalImapPort" type="number" class="input" value={s.globalImapPort ?? ''} placeholder="993" /></div>
+						<div class="settings-row"><label class="label" for="globalImapSecurity">Security</label><select id="globalImapSecurity" name="globalImapSecurity" class="input"><option value="ssl/tls" selected={s.globalImapSecurity === 'ssl/tls'}>SSL/TLS</option><option value="starttls" selected={s.globalImapSecurity === 'starttls'}>STARTTLS</option><option value="none" selected={s.globalImapSecurity === 'none'}>None</option></select></div>
+						<div class="settings-row"><label class="label" for="globalImapUsername">Username</label><input id="globalImapUsername" name="globalImapUsername" class="input" value={s.globalImapUsername ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalImapPassword">Password</label><input id="globalImapPassword" name="globalImapPassword" type="password" class="input" value={s.globalImapPassword} /></div>
+						<div class="settings-row"><label class="label" for="globalImapMailbox">Mailbox</label><input id="globalImapMailbox" name="globalImapMailbox" class="input" value={s.globalImapMailbox} /></div>
+					</div>
+					{#if s.globalImapLastPolledAt}<p class="field-help mt-3">Last checked: {s.globalImapLastPolledAt}. {s.globalImapLastError ? `Error: ${s.globalImapLastError}` : 'No error.'}</p>{/if}
+				</section>
+
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">Global Email Parsing</h2>
+					<label class="checkbox-label mt-4" for="globalAiEnabled"><input id="globalAiEnabled" name="globalAiEnabled" type="checkbox" class="checkbox" checked={s.globalAiEnabled} />Use an OpenAI-compatible API</label>
+					<div class="settings-rows mt-4">
+						<div class="settings-row"><label class="label" for="globalAiBaseUrl">API base URL</label><input id="globalAiBaseUrl" name="globalAiBaseUrl" type="url" class="input" value={s.globalAiBaseUrl ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalAiModel">Model</label><input id="globalAiModel" name="globalAiModel" class="input" value={s.globalAiModel ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalAiToken">Bearer token</label><input id="globalAiToken" name="globalAiToken" type="password" class="input" value={s.globalAiToken} /></div>
+						<div class="settings-row"><label class="label" for="globalAiTokenUrl">OAuth token URL</label><input id="globalAiTokenUrl" name="globalAiTokenUrl" type="url" class="input" value={s.globalAiTokenUrl ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalAiClientId">OAuth client ID</label><input id="globalAiClientId" name="globalAiClientId" class="input" value={s.globalAiClientId ?? ''} /></div>
+						<div class="settings-row"><label class="label" for="globalAiClientSecret">OAuth client secret</label><input id="globalAiClientSecret" name="globalAiClientSecret" type="password" class="input" value={s.globalAiClientSecret} /></div>
+						<div class="settings-row"><label class="label" for="globalAiScope">OAuth scope</label><input id="globalAiScope" name="globalAiScope" class="input" value={s.globalAiScope ?? ''} /></div>
+					</div>
+				</section>
+
+				<div class="flex justify-end"><button class="btn btn-primary">Save email settings</button></div>
 			</form>
 		{/if}
 
@@ -484,14 +528,14 @@
 		{#if tab === 'oauth'}
 			<form method="POST" action="?/saveOauth" class="space-y-6">
 				<section class="card p-5 sm:p-6">
-					<h2 class="section-title">OAuth clients</h2>
+					<h2 class="section-title">MCP OAuth clients</h2>
 					<p class="mt-1 text-sm muted">
-						When the allow-list is empty, users can register and authorize any OAuth client. When it
+						Controls which OAuth clients may connect to Roamarr's MCP server. When the allow-list is empty, users can register and authorize any OAuth client. When it
 						contains one or more client IDs, only those clients may be authorized.
 					</p>
 					<div class="settings-rows mt-4">
-						<div class="settings-row">
-							<div>
+						<div class="settings-row items-start">
+							<div class="self-start">
 								<label class="label" for="oauthClientAllowList">Allowed client IDs</label>
 								<p class="field-help">One client ID per line. Leave empty to allow all clients.</p>
 							</div>

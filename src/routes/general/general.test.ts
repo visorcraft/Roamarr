@@ -54,6 +54,16 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 		smtpUser: 'u',
 		smtpPass: 'pw',
 		smtpFrom: 'r@x.c',
+		allowUserImap: false,
+		allowUserSmtp: true,
+		allowUserParsingProviders: true,
+		globalImapEnabled: true,
+		globalImapHost: 'imap.x',
+		globalImapPassword: 'imap-pw',
+		globalAiEnabled: true,
+		globalAiBaseUrl: 'https://ai.example/v1',
+		globalAiModel: 'travel',
+		globalAiToken: 'ai-token',
 		webhookUrl: 'https://hooks.example.com/roamarr'
 	});
 	const s = getSettings();
@@ -62,6 +72,9 @@ test('saves settings, default leads and encrypts smtp pass', () => {
 	expect(s.defaultFlightCheckinLeadHours).toBe(48);
 	expect(s.defaultDocumentExpiryLeadDays).toBe(60);
 	expect(decrypt(s.smtpPass!)).toBe('pw');
+	expect([s.allowUserImap, s.allowUserSmtp, s.allowUserParsingProviders]).toEqual([false, true, true]);
+	expect(decrypt(s.globalImapPassword!)).toBe('imap-pw');
+	expect(decrypt(s.globalAiToken!)).toBe('ai-token');
 	expect(s.webhookUrl).toBe('https://hooks.example.com/roamarr');
 
 	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();

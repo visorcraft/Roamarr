@@ -42,6 +42,7 @@
 				the app:
 			</p>
 			<pre class="mt-2 overflow-x-auto rounded bg-black/10 p-3 font-mono text-sm text-ink">ROAMARR_SECRET=&lt;output-from-openssl&gt;</pre>
+			<p class="mt-2">Optional MongrelDB authentication must be configured before first creation by setting both <code>DATABASE_USER</code> and <code>DATABASE_PASS</code>.</p>
 		</div>
 	{:else}
 		{#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}

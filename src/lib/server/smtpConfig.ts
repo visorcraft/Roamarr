@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
-import { userSmtpOverrides } from './db/mongrelSchema';
+import { userEmailProcessingConfigs, userSmtpOverrides } from './db/mongrelSchema';
 import { getSettings } from './repositories/settingsRepo';
 import { decrypt, encrypt } from './crypto';
 import { nowIso } from './tz';
@@ -238,7 +238,28 @@ function overrideIsComplete(o: UserSmtpOverride): boolean {
  * is configured (caller should skip SMTP).
  */
 export function resolveSmtpTransport(userId?: number): ResolvedTransport | null {
-	if (userId != null) {
+	if (userId != null && getSettings().allowUserSmtp) {
+		const emailConfig = kit.selectFrom(userEmailProcessingConfigs)
+			.where(kitEq(userEmailProcessingConfigs.user_id, BigInt(userId))).executeSync()[0];
+		if (emailConfig) {
+			const same = emailConfig.use_imap_for_smtp;
+			const host = same ? emailConfig.imap_host : emailConfig.smtp_host;
+			const username = same ? emailConfig.imap_username : emailConfig.smtp_username;
+			const encryptedPass = same ? emailConfig.imap_password : emailConfig.smtp_password;
+			const from = emailConfig.smtp_from || username;
+			if (host && from) return {
+				transport: getPooledTransport({
+					host,
+					port: same ? 587 : Number(emailConfig.smtp_port ?? 587n),
+					security: same ? 'starttls' : parseSmtpSecurity(emailConfig.smtp_security),
+					user: username,
+					pass: encryptedPass ? decrypt(encryptedPass) : null,
+					from
+				}),
+				from,
+				source: 'user'
+			};
+		}
 		const override = getUserSmtpOverride(userId);
 		if (override && overrideIsComplete(override)) {
 			const pass = getOverridePassword(userId);

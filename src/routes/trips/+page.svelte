@@ -49,6 +49,7 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
+		<a href="/trips/merge" class="btn btn-ghost">Merge</a>
 		<a href="/trips/import" class="btn btn-ghost">
 			<Icon name="import" class="h-4 w-4" />
 			Import

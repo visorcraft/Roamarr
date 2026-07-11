@@ -1,10 +1,5 @@
 import { test as setup, expect } from '@playwright/test';
-
-const ADMIN = {
-	displayName: 'E2E Admin',
-	email: 'e2e-admin@roamarr.test',
-	password: 'e2e-correct-horse-battery-staple'
-};
+import { E2E_ADMIN as ADMIN } from './credentials';
 
 setup('create admin account', async ({ page, baseURL }) => {
 	await page.goto('/setup', { waitUntil: 'networkidle' });

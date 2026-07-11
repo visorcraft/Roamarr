@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.28.0",
+	"version": "0.29.0",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -33,6 +33,7 @@
 		"@tailwindcss/vite": "^4.3.1",
 		"@types/jsdom": "^28.0.3",
 		"@types/luxon": "^3.7.2",
+		"@types/mailparser": "^3.4.6",
 		"@types/nodemailer": "^8.0.1",
 		"@types/qrcode": "^1.5.6",
 		"@types/unzipper": "^0.10.11",
@@ -54,7 +55,9 @@
 		"@visorcraft/mongreldb": "^0.48.0",
 		"@visorcraft/mongreldb-kit": "^0.48.0",
 		"gridjs": "^6.2.0",
+		"imapflow": "^1.4.7",
 		"luxon": "^3.7.2",
+		"mailparser": "^3.9.14",
 		"maplibre-gl": "^5.24.0",
 		"nodemailer": "^9.0.1",
 		"otpauth": "^9.5.1",

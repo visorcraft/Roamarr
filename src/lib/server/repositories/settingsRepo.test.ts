@@ -29,6 +29,9 @@ test('getSettings returns the singleton row with defaults', () => {
 	expect(s.defaultFlightCheckinLeadHours).toBe(24);
 	expect(s.defaultDocumentExpiryLeadDays).toBe(90);
 	expect(s.sessionCookieSameSite).toBe('lax');
+	expect(s.allowUserImap).toBe(true);
+	expect(s.allowUserSmtp).toBe(false);
+	expect(s.allowUserParsingProviders).toBe(false);
 });
 
 test('updateSettings patches the singleton row', () => {

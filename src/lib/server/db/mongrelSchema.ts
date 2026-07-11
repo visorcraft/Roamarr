@@ -187,6 +187,7 @@ export const settings = table('settings', {
 		text('smtp_user', { nullable: true }),
 		text('smtp_pass', { nullable: true }),
 		text('smtp_from', { nullable: true }),
+		json('email_processing_config', { nullable: true }),
 		text('webhook_url', { nullable: true }),
 		bool('maps_enabled', { default: staticDefault(false) }),
 		timestamp('maps_geonames_imported_at', { nullable: true }),
@@ -203,7 +204,8 @@ export const settings = table('settings', {
 		}),
 		json('oauth_client_allow_list', { nullable: true }),
 		text('default_date_format', { nullable: true, default: staticDefault('yyyy-MM-dd') }),
-		text('default_datetime_format', { nullable: true, default: staticDefault('yyyy-MM-dd h:mm a') })
+		text('default_datetime_format', { nullable: true, default: staticDefault('yyyy-MM-dd h:mm a') }),
+		int('email_poll_interval_minutes', { default: staticDefault(5n) })
 	],
 	primaryKey: 'id'
 });
@@ -289,6 +291,62 @@ export const userSmtpOverrides = table('user_smtp_overrides', {
 			{ table: 'users', columns: ['id'] },
 			{ name: 'fk_user_smtp_overrides_user_id_users', onDelete: 'cascade' }
 		)
+	]
+});
+
+export const userEmailProcessingConfigs = table('user_email_processing_configs', {
+	columns: [
+		int('user_id', { primaryKey: true }),
+		bool('enabled', { default: staticDefault(false) }),
+		text('imap_host', { nullable: true }),
+		int('imap_port', { nullable: true }),
+		text('imap_security', { enumValues: [...SMTP_SECURITY_MODES], default: staticDefault('ssl/tls') }),
+		text('imap_username', { nullable: true }),
+		text('imap_password', { nullable: true }),
+		text('imap_mailbox', { default: staticDefault('INBOX') }),
+		bool('use_imap_for_smtp', { default: staticDefault(true) }),
+		text('smtp_host', { nullable: true }),
+		int('smtp_port', { nullable: true }),
+		text('smtp_security', { enumValues: [...SMTP_SECURITY_MODES], default: staticDefault('starttls') }),
+		text('smtp_username', { nullable: true }),
+		text('smtp_password', { nullable: true }),
+		text('smtp_from', { nullable: true }),
+		bool('ai_enabled', { default: staticDefault(false) }),
+		text('ai_base_url', { nullable: true }),
+		text('ai_model', { nullable: true }),
+		text('ai_token', { nullable: true }),
+		text('ai_token_url', { nullable: true }),
+		text('ai_client_id', { nullable: true }),
+		text('ai_client_secret', { nullable: true }),
+		text('ai_scope', { nullable: true }),
+		int('last_uid', { nullable: true }),
+		timestamp('last_polled_at', { nullable: true }),
+		text('last_error', { nullable: true }),
+		timestamp('updated_at', { default: nowDefault() })
+	],
+	primaryKey: 'user_id',
+	foreignKeys: [
+		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_user_email_processing_user_id_users', onDelete: 'cascade' })
+	]
+});
+
+export const emailIngestions = table('email_ingestions', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('email_ingestions_id_seq') }),
+		int('user_id'),
+		text('message_id'),
+		text('subject', { nullable: true }),
+		text('status'),
+		int('trip_id', { nullable: true }),
+		text('error', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['user_id', 'message_id'], { name: 'email_ingestions_user_message_uq' })],
+	indexes: [index(['user_id'], { name: 'email_ingestions_user_idx' })],
+	foreignKeys: [
+		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_email_ingestions_user_id_users', onDelete: 'cascade' }),
+		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_email_ingestions_trip_id_trips', onDelete: 'set null' })
 	]
 });
 
@@ -1353,6 +1411,8 @@ export const schema = new Schema([
 	visitedCountries,
 	visitedUsStates,
 	userSmtpOverrides,
+	userEmailProcessingConfigs,
+	emailIngestions,
 	weatherCache,
 	userTwoFactor,
 	twoFactorBackupCodes,

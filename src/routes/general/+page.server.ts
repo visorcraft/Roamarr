@@ -48,12 +48,31 @@ export function _saveAdminSettings(
 		defaultDatetimeFormat?: string;
 		defaultFlightCheckinLeadHours?: number;
 		defaultDocumentExpiryLeadDays?: number;
+		emailPollIntervalMinutes?: number;
 		smtpHost?: string;
 		smtpPort?: number;
 		smtpSecurity?: string;
 		smtpUser?: string;
 		smtpPass?: string | null;
 		smtpFrom?: string;
+		allowUserImap?: boolean;
+		allowUserSmtp?: boolean;
+		allowUserParsingProviders?: boolean;
+		globalImapEnabled?: boolean;
+		globalImapHost?: string | null;
+		globalImapPort?: number | null;
+		globalImapSecurity?: string;
+		globalImapUsername?: string | null;
+		globalImapPassword?: string | null;
+		globalImapMailbox?: string;
+		globalAiEnabled?: boolean;
+		globalAiBaseUrl?: string | null;
+		globalAiModel?: string | null;
+		globalAiToken?: string | null;
+		globalAiTokenUrl?: string | null;
+		globalAiClientId?: string | null;
+		globalAiClientSecret?: string | null;
+		globalAiScope?: string | null;
 		webhookUrl?: string;
 		mapsTileProvider?: MapTileProvider;
 		mapsTileUrl?: string | null;
@@ -73,6 +92,8 @@ export function _saveAdminSettings(
 		!nonNegativeInteger(i.defaultDocumentExpiryLeadDays)
 	)
 		throw new Error('Default document expiry lead must be a non-negative integer');
+	if (i.emailPollIntervalMinutes !== undefined && (!Number.isInteger(i.emailPollIntervalMinutes) || i.emailPollIntervalMinutes < 1 || i.emailPollIntervalMinutes > 1440))
+		throw new Error('Email poll interval must be between 1 and 1440 minutes');
 	if (i.defaultCurrency !== undefined) {
 		const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 		if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
@@ -104,11 +125,27 @@ export function _saveAdminSettings(
 		patch.defaultFlightCheckinLeadHours = i.defaultFlightCheckinLeadHours;
 	if (i.defaultDocumentExpiryLeadDays !== undefined)
 		patch.defaultDocumentExpiryLeadDays = i.defaultDocumentExpiryLeadDays;
+	if (i.emailPollIntervalMinutes !== undefined) patch.emailPollIntervalMinutes = i.emailPollIntervalMinutes;
 	if (i.smtpHost !== undefined) patch.smtpHost = i.smtpHost || null;
 	if (i.smtpPort !== undefined) patch.smtpPort = i.smtpPort ?? null;
 	if (i.smtpSecurity !== undefined) patch.smtpSecurity = i.smtpSecurity || null;
 	if (i.smtpUser !== undefined) patch.smtpUser = i.smtpUser || null;
 	if (i.smtpFrom !== undefined) patch.smtpFrom = i.smtpFrom || null;
+	if (i.allowUserImap !== undefined) patch.allowUserImap = i.allowUserImap;
+	if (i.allowUserSmtp !== undefined) patch.allowUserSmtp = i.allowUserSmtp;
+	if (i.allowUserParsingProviders !== undefined) patch.allowUserParsingProviders = i.allowUserParsingProviders;
+	if (i.globalImapEnabled !== undefined) patch.globalImapEnabled = i.globalImapEnabled;
+	if (i.globalImapHost !== undefined) patch.globalImapHost = i.globalImapHost;
+	if (i.globalImapPort !== undefined) patch.globalImapPort = i.globalImapPort;
+	if (i.globalImapSecurity !== undefined) patch.globalImapSecurity = i.globalImapSecurity;
+	if (i.globalImapUsername !== undefined) patch.globalImapUsername = i.globalImapUsername;
+	if (i.globalImapMailbox !== undefined) patch.globalImapMailbox = i.globalImapMailbox;
+	if (i.globalAiEnabled !== undefined) patch.globalAiEnabled = i.globalAiEnabled;
+	if (i.globalAiBaseUrl !== undefined) patch.globalAiBaseUrl = i.globalAiBaseUrl;
+	if (i.globalAiModel !== undefined) patch.globalAiModel = i.globalAiModel;
+	if (i.globalAiTokenUrl !== undefined) patch.globalAiTokenUrl = i.globalAiTokenUrl;
+	if (i.globalAiClientId !== undefined) patch.globalAiClientId = i.globalAiClientId;
+	if (i.globalAiScope !== undefined) patch.globalAiScope = i.globalAiScope;
 	if (i.webhookUrl !== undefined) patch.webhookUrl = i.webhookUrl || null;
 	if (i.mapsTileProvider !== undefined) patch.mapsTileProvider = i.mapsTileProvider ?? 'openstreetmap';
 	if (i.mapsTileUrl !== undefined) patch.mapsTileUrl = i.mapsTileUrl ?? null;
@@ -116,6 +153,9 @@ export function _saveAdminSettings(
 	if (i.sessionCookieSameSite !== undefined) patch.sessionCookieSameSite = i.sessionCookieSameSite ?? 'lax';
 	if (i.oauthClientAllowList !== undefined) patch.oauthClientAllowList = i.oauthClientAllowList ?? null;
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
+	if (i.globalImapPassword !== undefined) patch.globalImapPassword = i.globalImapPassword ? encrypt(i.globalImapPassword) : null;
+	if (i.globalAiToken !== undefined) patch.globalAiToken = i.globalAiToken ? encrypt(i.globalAiToken) : null;
+	if (i.globalAiClientSecret !== undefined) patch.globalAiClientSecret = i.globalAiClientSecret ? encrypt(i.globalAiClientSecret) : null;
 	if (i.mapsTileApiKey !== undefined)
 		patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
 	updateSettings(patch);
@@ -137,7 +177,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		? (tabParam as (typeof allowedTabs)[number])
 		: 'general';
 	return {
-		settings: { ...s, smtpPass: s.smtpPass ? '********' : '' },
+		settings: { ...s, smtpPass: s.smtpPass ? '********' : '', globalImapPassword: s.globalImapPassword ? '********' : '', globalAiToken: s.globalAiToken ? '********' : '', globalAiClientSecret: s.globalAiClientSecret ? '********' : '' },
 		stats,
 		recentLogs,
 		mapSettings,
@@ -177,6 +217,7 @@ export const actions: Actions = {
 			defaultDatetimeFormat: String(f.get('defaultDatetimeFormat') || 'yyyy-MM-dd h:mm a'),
 			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
+			emailPollIntervalMinutes: parseLead(f.get('emailPollIntervalMinutes'), 5),
 			sessionCookieSameSite: sessionCookieSameSite as SessionCookieSameSite
 		});
 		setFlash(cookies, 'General settings saved.');
@@ -206,13 +247,35 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const pass = String(f.get('smtpPass') || '');
 		const clearSmtpPass = f.get('clearSmtpPass') === 'on';
+		const changedSecret = (name: string) => {
+			const value = String(f.get(name) || '');
+			return f.get(`clear${name[0]!.toUpperCase()}${name.slice(1)}`) === 'on' ? null : value && value !== '********' ? value : undefined;
+		};
 		_saveAdminSettings(u.id, {
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
 			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,
 			smtpUser: String(f.get('smtpUser') || '') || undefined,
 			smtpPass: clearSmtpPass ? null : pass && pass !== '********' ? pass : undefined,
-			smtpFrom: String(f.get('smtpFrom') || '') || undefined
+			smtpFrom: String(f.get('smtpFrom') || '') || undefined,
+			allowUserImap: f.get('allowUserImap') === 'on',
+			allowUserSmtp: f.get('allowUserSmtp') === 'on',
+			allowUserParsingProviders: f.get('allowUserParsingProviders') === 'on',
+			globalImapEnabled: f.get('globalImapEnabled') === 'on',
+			globalImapHost: String(f.get('globalImapHost') || '') || null,
+			globalImapPort: f.get('globalImapPort') ? Number(f.get('globalImapPort')) : null,
+			globalImapSecurity: String(f.get('globalImapSecurity') || 'ssl/tls'),
+			globalImapUsername: String(f.get('globalImapUsername') || '') || null,
+			globalImapPassword: changedSecret('globalImapPassword'),
+			globalImapMailbox: String(f.get('globalImapMailbox') || 'INBOX'),
+			globalAiEnabled: f.get('globalAiEnabled') === 'on',
+			globalAiBaseUrl: String(f.get('globalAiBaseUrl') || '') || null,
+			globalAiModel: String(f.get('globalAiModel') || '') || null,
+			globalAiToken: changedSecret('globalAiToken'),
+			globalAiTokenUrl: String(f.get('globalAiTokenUrl') || '') || null,
+			globalAiClientId: String(f.get('globalAiClientId') || '') || null,
+			globalAiClientSecret: changedSecret('globalAiClientSecret'),
+			globalAiScope: String(f.get('globalAiScope') || '') || null
 		});
 		setFlash(cookies, 'Email settings saved.');
 		throw redirect(303, TAB_REDIRECTS.email);
@@ -267,8 +330,7 @@ export const actions: Actions = {
 			const { sendMail } = await import('$lib/server/notify');
 			const ok = await sendMail(
 				u.email,
-				{ title: 'Roamarr SMTP test', body: 'This is a test email from Roamarr to verify SMTP delivery.' },
-				u.id
+				{ title: 'Roamarr SMTP test', body: 'This is a test email from Roamarr to verify SMTP delivery.' }
 			);
 			logAudit(u.id, 'smtp_test', 'settings', 1, { delivered: ok });
 			setFlash(cookies, ok ? 'Test email sent.' : 'SMTP is not configured.');

@@ -114,7 +114,7 @@ test('skips webhook when webhookUrl is not set', async () => {
 
 test('a complete enabled override sends from the user’s own address', async () => {
 	const u = makeUser({ email: 'owner@x.c' });
-	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw') });
+	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw'), allowUserSmtp: true });
 	upsertUserSmtpOverride(Number(u.id), {
 		enabled: true, host: 'user.smtp', port: 587, security: 'starttls',
 		username: 'me', password: 'secret', fromAddress: 'me@mine.c'
@@ -127,7 +127,7 @@ test('a complete enabled override sends from the user’s own address', async ()
 
 test('a disabled override falls back to admin SMTP', async () => {
 	const u = makeUser({ email: 'owner2@x.c' });
-	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw') });
+	updateSettings({ smtpHost: 'admin.smtp', smtpPort: 587, smtpFrom: 'admin@x.c', smtpPass: encrypt('pw'), allowUserSmtp: true });
 	upsertUserSmtpOverride(Number(u.id), {
 		enabled: false, host: 'user.smtp', port: 587, security: 'starttls',
 		username: 'me', password: 'secret', fromAddress: 'me@mine.c'

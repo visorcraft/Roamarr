@@ -6,6 +6,7 @@ import { purgeExpiredOauth } from './oauth';
 import { refreshWeatherCache, purgeExpiredWeatherCache } from './weather';
 import { pruneExpiredRateLimit } from './rateLimit';
 import { pruneExpiredShareWindow } from './emergencyContacts';
+import { pollDueInboxes } from './emailProcessing';
 import { kit } from './db';
 import {
 	startSchedulerRun,
@@ -58,6 +59,7 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 			const reminders = await runDueReminders(now);
 			const fareChecks = await runFareChecks(now);
 			const weatherCache = await refreshWeatherCache(now);
+			const emailProcessing = await pollDueInboxes(now);
 			const sessions = purgeExpiredSessions();
 			const challenges = purgeExpiredChallenges();
 			const oauth = purgeExpiredOauth();
@@ -65,6 +67,7 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 				reminders,
 				fareChecks,
 				weatherCache,
+				emailProcessing,
 				purges: { sessions, challenges, oauth }
 			};
 		})();

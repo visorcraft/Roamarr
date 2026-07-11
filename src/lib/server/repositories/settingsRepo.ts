@@ -20,12 +20,34 @@ export type Settings = {
 	defaultDatetimeFormat: string;
 	defaultFlightCheckinLeadHours: number;
 	defaultDocumentExpiryLeadDays: number;
+	emailPollIntervalMinutes: number;
 	smtpHost: string | null;
 	smtpPort: number | null;
 	smtpSecurity: string | null;
 	smtpUser: string | null;
 	smtpPass: string | null;
 	smtpFrom: string | null;
+	allowUserImap: boolean;
+	allowUserSmtp: boolean;
+	allowUserParsingProviders: boolean;
+	globalImapEnabled: boolean;
+	globalImapHost: string | null;
+	globalImapPort: number | null;
+	globalImapSecurity: string;
+	globalImapUsername: string | null;
+	globalImapPassword: string | null;
+	globalImapMailbox: string;
+	globalImapLastUid: number | null;
+	globalImapLastPolledAt: string | null;
+	globalImapLastError: string | null;
+	globalAiEnabled: boolean;
+	globalAiBaseUrl: string | null;
+	globalAiModel: string | null;
+	globalAiToken: string | null;
+	globalAiTokenUrl: string | null;
+	globalAiClientId: string | null;
+	globalAiClientSecret: string | null;
+	globalAiScope: string | null;
 	webhookUrl: string | null;
 	mapsEnabled: boolean;
 	mapsGeonamesImportedAt: string | null;
@@ -61,6 +83,7 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	defaultDatetimeFormat: 'default_datetime_format',
 	defaultFlightCheckinLeadHours: 'default_flight_checkin_lead_hours',
 	defaultDocumentExpiryLeadDays: 'default_document_expiry_lead_days',
+	emailPollIntervalMinutes: 'email_poll_interval_minutes',
 	smtpHost: 'smtp_host',
 	smtpPort: 'smtp_port',
 	smtpSecurity: 'smtp_security',
@@ -81,14 +104,34 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 const SETTINGS_INT_FIELDS = new Set([
 	'default_flight_checkin_lead_hours',
 	'default_document_expiry_lead_days',
+	'email_poll_interval_minutes',
 	'smtp_port'
 ]);
+
+const EMAIL_SETTING_KEYS = [
+	'allowUserImap', 'allowUserSmtp', 'allowUserParsingProviders', 'globalImapEnabled',
+	'globalImapHost', 'globalImapPort', 'globalImapSecurity', 'globalImapUsername',
+	'globalImapPassword', 'globalImapMailbox', 'globalImapLastUid', 'globalImapLastPolledAt',
+	'globalImapLastError', 'globalAiEnabled', 'globalAiBaseUrl', 'globalAiModel', 'globalAiToken',
+	'globalAiTokenUrl', 'globalAiClientId', 'globalAiClientSecret', 'globalAiScope'
+] as const;
+
+const EMAIL_DEFAULTS = {
+	allowUserImap: true, allowUserSmtp: false, allowUserParsingProviders: false,
+	globalImapEnabled: false, globalImapHost: null, globalImapPort: null,
+	globalImapSecurity: 'ssl/tls', globalImapUsername: null, globalImapPassword: null,
+	globalImapMailbox: 'INBOX', globalImapLastUid: null, globalImapLastPolledAt: null,
+	globalImapLastError: null, globalAiEnabled: false, globalAiBaseUrl: null,
+	globalAiModel: null, globalAiToken: null, globalAiTokenUrl: null, globalAiClientId: null,
+	globalAiClientSecret: null, globalAiScope: null
+};
 
 function nullableText(value: string | null): string | null {
 	return value === '' ? null : value;
 }
 
 function toSettingsRow(row: Row<typeof settings>): Settings {
+	const email = { ...EMAIL_DEFAULTS, ...(row.email_processing_config ? JSON.parse(row.email_processing_config as string) : {}) };
 	return {
 		id: Number(row.id),
 		instanceName: row.instance_name,
@@ -102,12 +145,14 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 			row.default_flight_checkin_lead_hours == null ? 24 : Number(row.default_flight_checkin_lead_hours),
 		defaultDocumentExpiryLeadDays:
 			row.default_document_expiry_lead_days == null ? 90 : Number(row.default_document_expiry_lead_days),
+		emailPollIntervalMinutes: Number(row.email_poll_interval_minutes ?? 5n),
 		smtpHost: nullableText(row.smtp_host),
 		smtpPort: row.smtp_port == null || row.smtp_port === 0n ? null : Number(row.smtp_port),
 		smtpSecurity: nullableText(row.smtp_security),
 		smtpUser: nullableText(row.smtp_user),
 		smtpPass: nullableText(row.smtp_pass),
 		smtpFrom: nullableText(row.smtp_from),
+		...email,
 		webhookUrl: nullableText(row.webhook_url),
 		mapsEnabled: row.maps_enabled,
 		mapsGeonamesImportedAt: nullableText(row.maps_geonames_imported_at),
@@ -238,6 +283,7 @@ function rebuildSettingsRow(existing: Record<string, unknown>): void {
 		default_datetime_format: 'yyyy-MM-dd h:mm a',
 		default_flight_checkin_lead_hours: 24n,
 		default_document_expiry_lead_days: 90n,
+		email_poll_interval_minutes: 5n,
 		maps_enabled: false,
 		maps_tile_provider: 'openstreetmap',
 		session_cookie_same_site: 'lax',
@@ -247,6 +293,7 @@ function rebuildSettingsRow(existing: Record<string, unknown>): void {
 		smtp_user: null,
 		smtp_pass: null,
 		smtp_from: null,
+		email_processing_config: null,
 		webhook_url: null,
 		maps_geonames_imported_at: null,
 		maps_tile_url: null,
@@ -333,7 +380,16 @@ export function updateSettings(patch: SettingsPatch): void {
 	// current row, merge the patch, fix any bad values, then delete +
 	// re-insert. insertInto only validates the new row, which is clean.
 	const current = rows[0] as Record<string, unknown>;
-	const kitPatch = toKitSettingsPatch(patch);
+	const patchCopy = { ...patch } as Record<string, unknown>;
+	const storedEmail = current.email_processing_config;
+	const email = { ...EMAIL_DEFAULTS, ...(storedEmail ? JSON.parse(storedEmail as string) : {}) } as Record<string, unknown>;
+	let emailChanged = false;
+	for (const key of EMAIL_SETTING_KEYS) {
+		if (patchCopy[key] !== undefined) { email[key] = patchCopy[key]; emailChanged = true; }
+		delete patchCopy[key];
+	}
+	const kitPatch = toKitSettingsPatch(patchCopy as SettingsPatch) as Record<string, unknown>;
+	if (emailChanged) kitPatch.email_processing_config = JSON.stringify(email);
 	const merged: Record<string, unknown> = { ...current, ...kitPatch };
 
 	// Fix any wrong-typed values using the same hardcoded defaults

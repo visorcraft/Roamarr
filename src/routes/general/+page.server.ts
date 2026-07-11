@@ -66,6 +66,7 @@ export function _saveAdminSettings(
 		globalImapPassword?: string | null;
 		globalImapMailbox?: string;
 		globalAiEnabled?: boolean;
+		globalAiAuthMode?: 'token' | 'oauth';
 		globalAiBaseUrl?: string | null;
 		globalAiModel?: string | null;
 		globalAiToken?: string | null;
@@ -141,6 +142,7 @@ export function _saveAdminSettings(
 	if (i.globalImapUsername !== undefined) patch.globalImapUsername = i.globalImapUsername;
 	if (i.globalImapMailbox !== undefined) patch.globalImapMailbox = i.globalImapMailbox;
 	if (i.globalAiEnabled !== undefined) patch.globalAiEnabled = i.globalAiEnabled;
+	if (i.globalAiAuthMode !== undefined) patch.globalAiAuthMode = i.globalAiAuthMode;
 	if (i.globalAiBaseUrl !== undefined) patch.globalAiBaseUrl = i.globalAiBaseUrl;
 	if (i.globalAiModel !== undefined) patch.globalAiModel = i.globalAiModel;
 	if (i.globalAiTokenUrl !== undefined) patch.globalAiTokenUrl = i.globalAiTokenUrl;
@@ -251,6 +253,22 @@ export const actions: Actions = {
 			const value = String(f.get(name) || '');
 			return f.get(`clear${name[0]!.toUpperCase()}${name.slice(1)}`) === 'on' ? null : value && value !== '********' ? value : undefined;
 		};
+		const current = getSettings();
+		const globalAiEnabled = f.get('globalAiEnabled') === 'on';
+		const globalAiAuthMode = String(f.get('globalAiAuthMode') || 'token');
+		if (globalAiAuthMode !== 'token' && globalAiAuthMode !== 'oauth') return fail(400, { error: 'Invalid global parsing authentication method.' });
+		const globalAiBaseUrl = String(f.get('globalAiBaseUrl') || '') || null;
+		const globalAiModel = String(f.get('globalAiModel') || '') || null;
+		const globalAiToken = changedSecret('globalAiToken');
+		const globalAiTokenUrl = String(f.get('globalAiTokenUrl') || '') || null;
+		const globalAiClientId = String(f.get('globalAiClientId') || '') || null;
+		const globalAiClientSecret = changedSecret('globalAiClientSecret');
+		const bearerPresent = globalAiToken === undefined ? !!current.globalAiToken : !!globalAiToken;
+		const oauthSecretPresent = globalAiClientSecret === undefined ? !!current.globalAiClientSecret : !!globalAiClientSecret;
+		const oauthComplete = !!globalAiTokenUrl && !!globalAiClientId && oauthSecretPresent;
+		if (globalAiEnabled && (!globalAiBaseUrl || !globalAiModel)) return fail(400, { error: 'Global parsing requires API base URL and model.' });
+		if (globalAiEnabled && globalAiAuthMode === 'token' && !bearerPresent) return fail(400, { error: 'API/subscription key is required.' });
+		if (globalAiEnabled && globalAiAuthMode === 'oauth' && !oauthComplete) return fail(400, { error: 'OAuth requires token URL, client ID, and client secret.' });
 		_saveAdminSettings(u.id, {
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
@@ -268,14 +286,15 @@ export const actions: Actions = {
 			globalImapUsername: String(f.get('globalImapUsername') || '') || null,
 			globalImapPassword: changedSecret('globalImapPassword'),
 			globalImapMailbox: String(f.get('globalImapMailbox') || 'INBOX'),
-			globalAiEnabled: f.get('globalAiEnabled') === 'on',
-			globalAiBaseUrl: String(f.get('globalAiBaseUrl') || '') || null,
-			globalAiModel: String(f.get('globalAiModel') || '') || null,
-			globalAiToken: changedSecret('globalAiToken'),
-			globalAiTokenUrl: String(f.get('globalAiTokenUrl') || '') || null,
-			globalAiClientId: String(f.get('globalAiClientId') || '') || null,
-			globalAiClientSecret: changedSecret('globalAiClientSecret'),
-			globalAiScope: String(f.get('globalAiScope') || '') || null
+			globalAiEnabled,
+			globalAiAuthMode,
+			globalAiBaseUrl,
+			globalAiModel,
+			globalAiToken: globalAiAuthMode === 'token' ? globalAiToken : null,
+			globalAiTokenUrl: globalAiAuthMode === 'oauth' ? globalAiTokenUrl : null,
+			globalAiClientId: globalAiAuthMode === 'oauth' ? globalAiClientId : null,
+			globalAiClientSecret: globalAiAuthMode === 'oauth' ? globalAiClientSecret : null,
+			globalAiScope: globalAiAuthMode === 'oauth' ? String(f.get('globalAiScope') || '') || null : null
 		});
 		setFlash(cookies, 'Email settings saved.');
 		throw redirect(303, TAB_REDIRECTS.email);

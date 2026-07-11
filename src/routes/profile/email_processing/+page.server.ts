@@ -42,30 +42,43 @@ export const actions: Actions = {
 	save: async ({ request, locals, cookies }) => {
 		const user = requireUser(locals);
 		const form = await request.formData();
+		const section = String(form.get('section') || '');
 		try {
 			const settings = getSettings();
 			const existing = getEmailProcessingConfig(user.id);
-			const enabled = settings.allowUserImap && form.get('enabled') === 'on';
-			const useImapForSmtp = form.get('useImapForSmtp') === 'on';
-			const aiEnabled = settings.allowUserParsingProviders && form.get('aiEnabled') === 'on';
-			const imapHost = settings.allowUserImap ? text(form, 'imapHost') : existing?.imapHost ?? null;
-			const imapUsername = settings.allowUserImap ? text(form, 'imapUsername') : existing?.imapUsername ?? null;
-			if (enabled && (!imapHost || !imapUsername)) throw new Error('IMAP host and username are required');
-			if (aiEnabled && (!text(form, 'aiBaseUrl') || !text(form, 'aiModel'))) throw new Error('AI base URL and model are required');
+			if (!['inbound', 'parsing', 'sender'].includes(section)) throw new Error('Invalid email settings section');
+			const editImap = section === 'inbound' && settings.allowUserImap;
+			const editSmtp = section === 'sender' && settings.allowUserSmtp;
+			const editAi = section === 'parsing' && settings.allowUserParsingProviders;
+			const enabled = editImap ? form.get('enabled') === 'on' : existing?.enabled ?? false;
+			const useImapForSmtp = editSmtp ? form.get('useImapForSmtp') === 'on' : existing?.useImapForSmtp ?? true;
+			const aiEnabled = editAi ? form.get('aiEnabled') === 'on' : existing?.aiEnabled ?? false;
+			const aiAuthMode = String(form.get('aiAuthMode') || (existing?.aiTokenUrl || existing?.aiClientId ? 'oauth' : 'token'));
+			if (aiAuthMode !== 'token' && aiAuthMode !== 'oauth') throw new Error('Invalid parsing authentication method');
+			const imapHost = editImap ? text(form, 'imapHost') : existing?.imapHost ?? null;
+			const imapUsername = editImap ? text(form, 'imapUsername') : existing?.imapUsername ?? null;
+			if (editImap && enabled && (!imapHost || !imapUsername)) throw new Error('IMAP host and username are required');
+			if (editAi && aiEnabled && (!text(form, 'aiBaseUrl') || !text(form, 'aiModel'))) throw new Error('AI base URL and model are required');
+			const aiToken = editAi ? secret(form, 'aiToken', 'clearAiToken') : undefined;
+			const aiClientSecret = editAi ? secret(form, 'aiClientSecret', 'clearAiClientSecret') : undefined;
+			const tokenPresent = aiToken === undefined ? !!existing?.aiTokenSet : !!aiToken;
+			const oauthSecretPresent = aiClientSecret === undefined ? !!existing?.aiClientSecretSet : !!aiClientSecret;
+			if (editAi && aiEnabled && aiAuthMode === 'token' && !tokenPresent) throw new Error('API/subscription key is required');
+			if (editAi && aiEnabled && aiAuthMode === 'oauth' && (!text(form, 'aiTokenUrl') || !text(form, 'aiClientId') || !oauthSecretPresent)) throw new Error('OAuth requires token URL, client ID, and client secret');
 			saveEmailProcessingConfig(user.id, {
-				enabled, imapHost, imapPort: settings.allowUserImap ? port(form, 'imapPort') : existing?.imapPort ?? null, imapSecurity: settings.allowUserImap ? security(form, 'imapSecurity', 'ssl/tls') : existing?.imapSecurity ?? 'ssl/tls',
-				imapUsername, imapPassword: settings.allowUserImap ? secret(form, 'imapPassword', 'clearImapPassword') : undefined, imapMailbox: settings.allowUserImap ? text(form, 'imapMailbox') || 'INBOX' : existing?.imapMailbox ?? 'INBOX',
-				useImapForSmtp: settings.allowUserSmtp && useImapForSmtp, smtpHost: settings.allowUserSmtp ? text(form, 'smtpHost') : existing?.smtpHost ?? null, smtpPort: settings.allowUserSmtp ? port(form, 'smtpPort') : existing?.smtpPort ?? null,
-				smtpSecurity: settings.allowUserSmtp ? security(form, 'smtpSecurity', 'starttls') : existing?.smtpSecurity ?? 'starttls', smtpUsername: settings.allowUserSmtp ? text(form, 'smtpUsername') : existing?.smtpUsername ?? null,
-				smtpPassword: settings.allowUserSmtp ? secret(form, 'smtpPassword', 'clearSmtpPassword') : undefined, smtpFrom: settings.allowUserSmtp ? text(form, 'smtpFrom') || imapUsername : existing?.smtpFrom ?? null,
-				aiEnabled, aiBaseUrl: settings.allowUserParsingProviders ? text(form, 'aiBaseUrl') : existing?.aiBaseUrl ?? null, aiModel: settings.allowUserParsingProviders ? text(form, 'aiModel') : existing?.aiModel ?? null, aiToken: settings.allowUserParsingProviders ? secret(form, 'aiToken', 'clearAiToken') : undefined,
-				aiTokenUrl: settings.allowUserParsingProviders ? text(form, 'aiTokenUrl') : existing?.aiTokenUrl ?? null, aiClientId: settings.allowUserParsingProviders ? text(form, 'aiClientId') : existing?.aiClientId ?? null,
-				aiClientSecret: settings.allowUserParsingProviders ? secret(form, 'aiClientSecret', 'clearAiClientSecret') : undefined, aiScope: settings.allowUserParsingProviders ? text(form, 'aiScope') : existing?.aiScope ?? null
+				enabled, imapHost, imapPort: editImap ? port(form, 'imapPort') : existing?.imapPort ?? null, imapSecurity: editImap ? security(form, 'imapSecurity', 'ssl/tls') : existing?.imapSecurity ?? 'ssl/tls',
+				imapUsername, imapPassword: editImap ? secret(form, 'imapPassword', 'clearImapPassword') : undefined, imapMailbox: editImap ? text(form, 'imapMailbox') || 'INBOX' : existing?.imapMailbox ?? 'INBOX',
+				useImapForSmtp, smtpHost: editSmtp ? text(form, 'smtpHost') : existing?.smtpHost ?? null, smtpPort: editSmtp ? port(form, 'smtpPort') : existing?.smtpPort ?? null,
+				smtpSecurity: editSmtp ? security(form, 'smtpSecurity', 'starttls') : existing?.smtpSecurity ?? 'starttls', smtpUsername: editSmtp ? text(form, 'smtpUsername') : existing?.smtpUsername ?? null,
+				smtpPassword: editSmtp ? secret(form, 'smtpPassword', 'clearSmtpPassword') : undefined, smtpFrom: editSmtp ? text(form, 'smtpFrom') || existing?.imapUsername || null : existing?.smtpFrom ?? null,
+				aiEnabled, aiBaseUrl: editAi && aiEnabled ? text(form, 'aiBaseUrl') : existing?.aiBaseUrl ?? null, aiModel: editAi && aiEnabled ? text(form, 'aiModel') : existing?.aiModel ?? null, aiToken: editAi && aiEnabled ? aiAuthMode === 'token' ? aiToken : null : undefined,
+				aiTokenUrl: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiTokenUrl') : null : existing?.aiTokenUrl ?? null, aiClientId: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiClientId') : null : existing?.aiClientId ?? null,
+				aiClientSecret: editAi && aiEnabled ? aiAuthMode === 'oauth' ? aiClientSecret : null : undefined, aiScope: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiScope') : null : existing?.aiScope ?? null
 			});
 			logAudit(user.id, 'email_processing_update', 'user', user.id, { enabled, useImapForSmtp, aiEnabled });
 			setFlash(cookies, 'Email processing settings saved.');
 		} catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Invalid settings' }); }
-		throw redirect(303, '/profile/email_processing');
+		throw redirect(303, section === 'parsing' ? '/profile/email_parsing' : section === 'sender' ? '/profile/email_sender' : '/profile/email_processing');
 	},
 	pollNow: async ({ locals, cookies, getClientAddress }) => {
 		const user = requireUser(locals);
@@ -86,6 +99,6 @@ export const actions: Actions = {
 			const sent = await sendMail(user.email, { title: 'Roamarr email test', body: 'Your notification email settings work.' }, user.id);
 			setFlash(cookies, sent ? 'Test email sent.' : 'Notification email is not configured.');
 		} catch (error) { return fail(400, { error: error instanceof Error ? error.message : 'Test email failed' }); }
-		throw redirect(303, '/profile/email_processing');
+		throw redirect(303, '/profile/email_sender');
 	}
 };

@@ -41,6 +41,7 @@ export type Settings = {
 	globalImapLastPolledAt: string | null;
 	globalImapLastError: string | null;
 	globalAiEnabled: boolean;
+	globalAiAuthMode: 'token' | 'oauth';
 	globalAiBaseUrl: string | null;
 	globalAiModel: string | null;
 	globalAiToken: string | null;
@@ -112,7 +113,7 @@ const EMAIL_SETTING_KEYS = [
 	'allowUserImap', 'allowUserSmtp', 'allowUserParsingProviders', 'globalImapEnabled',
 	'globalImapHost', 'globalImapPort', 'globalImapSecurity', 'globalImapUsername',
 	'globalImapPassword', 'globalImapMailbox', 'globalImapLastUid', 'globalImapLastPolledAt',
-	'globalImapLastError', 'globalAiEnabled', 'globalAiBaseUrl', 'globalAiModel', 'globalAiToken',
+	'globalImapLastError', 'globalAiEnabled', 'globalAiAuthMode', 'globalAiBaseUrl', 'globalAiModel', 'globalAiToken',
 	'globalAiTokenUrl', 'globalAiClientId', 'globalAiClientSecret', 'globalAiScope'
 ] as const;
 
@@ -121,7 +122,7 @@ const EMAIL_DEFAULTS = {
 	globalImapEnabled: false, globalImapHost: null, globalImapPort: null,
 	globalImapSecurity: 'ssl/tls', globalImapUsername: null, globalImapPassword: null,
 	globalImapMailbox: 'INBOX', globalImapLastUid: null, globalImapLastPolledAt: null,
-	globalImapLastError: null, globalAiEnabled: false, globalAiBaseUrl: null,
+	globalImapLastError: null, globalAiEnabled: false, globalAiAuthMode: 'token' as const, globalAiBaseUrl: null,
 	globalAiModel: null, globalAiToken: null, globalAiTokenUrl: null, globalAiClientId: null,
 	globalAiClientSecret: null, globalAiScope: null
 };

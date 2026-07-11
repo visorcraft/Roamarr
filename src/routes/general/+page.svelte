@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { onMount } from 'svelte';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import {
@@ -15,6 +16,8 @@
 	const s = $derived(data.settings);
 	const m = $derived(data.mapSettings);
 	const tab = $derived(data.tab);
+	let globalAiAuthMode = $state<'token' | 'oauth'>('token');
+	onMount(() => (globalAiAuthMode = s.globalAiAuthMode ?? 'token'));
 
 	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
 
@@ -480,15 +483,20 @@
 
 				<section class="card p-5 sm:p-6">
 					<h2 class="section-title">Global Email Parsing</h2>
+					<p class="field-help mt-1">Optional AI parsing for all inboxes. API base URL, model, and one authentication method are required when enabled.</p>
 					<label class="checkbox-label mt-4" for="globalAiEnabled"><input id="globalAiEnabled" name="globalAiEnabled" type="checkbox" class="checkbox" checked={s.globalAiEnabled} />Use an OpenAI-compatible API</label>
 					<div class="settings-rows mt-4">
-						<div class="settings-row"><label class="label" for="globalAiBaseUrl">API base URL</label><input id="globalAiBaseUrl" name="globalAiBaseUrl" type="url" class="input" value={s.globalAiBaseUrl ?? ''} /></div>
-						<div class="settings-row"><label class="label" for="globalAiModel">Model</label><input id="globalAiModel" name="globalAiModel" class="input" value={s.globalAiModel ?? ''} /></div>
-						<div class="settings-row"><label class="label" for="globalAiToken">Bearer token</label><input id="globalAiToken" name="globalAiToken" type="password" class="input" value={s.globalAiToken} /></div>
-						<div class="settings-row"><label class="label" for="globalAiTokenUrl">OAuth token URL</label><input id="globalAiTokenUrl" name="globalAiTokenUrl" type="url" class="input" value={s.globalAiTokenUrl ?? ''} /></div>
-						<div class="settings-row"><label class="label" for="globalAiClientId">OAuth client ID</label><input id="globalAiClientId" name="globalAiClientId" class="input" value={s.globalAiClientId ?? ''} /></div>
-						<div class="settings-row"><label class="label" for="globalAiClientSecret">OAuth client secret</label><input id="globalAiClientSecret" name="globalAiClientSecret" type="password" class="input" value={s.globalAiClientSecret} /></div>
-						<div class="settings-row"><label class="label" for="globalAiScope">OAuth scope</label><input id="globalAiScope" name="globalAiScope" class="input" value={s.globalAiScope ?? ''} /></div>
+						<div class="settings-row"><div><label class="label" for="globalAiBaseUrl">API base URL <span aria-hidden="true">*</span></label><p class="field-help">Provider root ending before <code>/chat/completions</code>. Example: <code>https://api.minimax.io/v1</code>.</p></div><input id="globalAiBaseUrl" name="globalAiBaseUrl" type="url" class="input" value={s.globalAiBaseUrl ?? ''} /></div>
+						<div class="settings-row"><div><label class="label" for="globalAiModel">Model <span aria-hidden="true">*</span></label><p class="field-help">Exact provider model ID, such as <code>MiniMax-M2.7</code>.</p></div><input id="globalAiModel" name="globalAiModel" class="input" value={s.globalAiModel ?? ''} /></div>
+						<div class="settings-row items-start"><div><span class="label">Authentication <span aria-hidden="true">*</span></span><p class="field-help">Choose the credential type issued by your provider.</p></div><div class="space-y-2"><label class="checkbox-label"><input bind:group={globalAiAuthMode} name="globalAiAuthMode" type="radio" value="token" />API/Subscription Key</label><label class="checkbox-label"><input bind:group={globalAiAuthMode} name="globalAiAuthMode" type="radio" value="oauth" />OAuth Credentials</label></div></div>
+						{#if globalAiAuthMode === 'token'}
+						<div class="settings-row"><div><label class="label" for="globalAiToken">API/Subscription Key</label><p class="field-help">API key or subscription key issued by the provider.</p></div><div><input id="globalAiToken" name="globalAiToken" type="password" class="input" value={s.globalAiToken} />{#if s.globalAiToken}<label class="checkbox-label mt-2 text-xs"><input type="checkbox" name="clearGlobalAiToken" class="checkbox" />Clear stored key</label>{/if}</div></div>
+						{:else}
+						<div class="settings-row"><div><label class="label" for="globalAiTokenUrl">OAuth token URL</label><p class="field-help">OAuth alternative to a bearer token. Required with client ID and client secret.</p></div><input id="globalAiTokenUrl" name="globalAiTokenUrl" type="url" class="input" value={s.globalAiTokenUrl ?? ''} /></div>
+						<div class="settings-row"><div><label class="label" for="globalAiClientId">OAuth client ID</label><p class="field-help">Issued by the provider. Required only for OAuth authentication.</p></div><input id="globalAiClientId" name="globalAiClientId" class="input" value={s.globalAiClientId ?? ''} /></div>
+						<div class="settings-row"><div><label class="label" for="globalAiClientSecret">OAuth client secret</label><p class="field-help">Issued with the client ID. Required only for OAuth authentication.</p></div><div><input id="globalAiClientSecret" name="globalAiClientSecret" type="password" class="input" value={s.globalAiClientSecret} />{#if s.globalAiClientSecret}<label class="checkbox-label mt-2 text-xs"><input type="checkbox" name="clearGlobalAiClientSecret" class="checkbox" />Clear stored client secret</label>{/if}</div></div>
+						<div class="settings-row"><div><label class="label" for="globalAiScope">OAuth scope</label><p class="field-help">Optional. Leave blank unless the provider documents a required scope.</p></div><input id="globalAiScope" name="globalAiScope" class="input" value={s.globalAiScope ?? ''} /></div>
+						{/if}
 					</div>
 				</section>
 

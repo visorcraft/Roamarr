@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return context;
 });
 
-import { findUserForEmailSender, getEmailProcessingConfig, matchTrip, parseEmailForUser, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
+import { findUserForEmailSender, getEmailProcessingConfig, matchTrip, parseAiJson, parseEmailForUser, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
 import { updateSettings } from './settings';
 import { encrypt } from './crypto';
 import { userEmailProcessingConfigs } from './db/mongrelSchema';
@@ -47,8 +47,35 @@ test('global AI parser is used when user provider is unavailable', async () => {
 	await expect(parseEmailForUser(user.id, 'Flight', 'May 3, 2027')).resolves.toMatchObject({ tripName: 'Paris' });
 });
 
+test('OAuth client credentials exchange supplies the parser bearer token', async () => {
+	const user = makeUser(db(), { email: 'oauth-ai@example.com' });
+	updateSettings({ allowUserParsingProviders: true });
+	saveEmailProcessingConfig(user.id, {
+		enabled: false, imapHost: null, imapPort: null, imapSecurity: 'ssl/tls', imapUsername: null,
+		imapMailbox: 'INBOX', useImapForSmtp: false, smtpHost: null, smtpPort: null,
+		smtpSecurity: 'starttls', smtpUsername: null, smtpFrom: null, aiEnabled: true,
+		aiBaseUrl: 'https://ai.example/v1', aiModel: 'travel', aiTokenUrl: 'https://auth.example/token',
+		aiClientId: 'client', aiClientSecret: 'secret', aiScope: 'parse'
+	});
+	const fetchMock = vi.spyOn(globalThis, 'fetch')
+		.mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'oauth-token' }), { status: 200 }))
+		.mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: '{"isTravel":true,"tripName":"Paris","type":"flight","title":"Flight","startAt":"2027-05-03T10:00:00Z"}' } }] }), { status: 200 }));
+	await expect(parseEmailForUser(user.id, 'Flight', 'May 3, 2027')).resolves.toMatchObject({ tripName: 'Paris' });
+	expect(fetchMock.mock.calls.at(-1)?.[1]?.headers).toMatchObject({ authorization: 'Bearer oauth-token' });
+});
+
 test('global inbox sender matching accepts enabled users only', () => {
 	const user = makeUser(db(), { email: 'sender@example.com' });
 	expect(findUserForEmailSender('SENDER@example.com')?.id).toBe(BigInt(user.id));
 	expect(findUserForEmailSender('missing@example.com')).toBeNull();
 });
+
+test('AI parser accepts reasoning and fenced JSON', () => {
+	expect(parseAiJson('<think>reasoning</think>\n```json\n{"isTravel":true,"tripName":"Paris","type":"flight","title":"Flight","startAt":"2027-05-03T10:00:00Z"}\n```')).toMatchObject({ tripName: 'Paris' });
+});
+
+test.runIf(!!process.env.MINIMAX)('MiniMax OpenAI-compatible parser works live', async () => {
+	const user = makeUser(db(), { email: 'minimax-live@example.com' });
+	updateSettings({ globalAiEnabled: true, globalAiBaseUrl: 'https://api.minimax.io/v1', globalAiModel: 'MiniMax-M2.7', globalAiToken: encrypt(process.env.MINIMAX!) });
+	await expect(parseEmailForUser(user.id, 'Flight confirmation to Paris', 'Flight departure May 3, 2027 at 10:30 AM. Confirmation ABC123.')).resolves.toMatchObject({ isTravel: true, type: 'flight' });
+}, 30_000);

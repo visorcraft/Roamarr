@@ -220,11 +220,20 @@ async function parseTravelEmailAi(config: AiConfig, subject: string, text: strin
 	});
 	if (!response.ok) throw new Error(`AI parser returned ${response.status}`);
 	const json = await response.json() as { choices?: { message?: { content?: string } }[] };
-	const parsed = JSON.parse(json.choices?.[0]?.message?.content ?? '{}') as ParsedTravelEmail;
+	const parsed = parseAiJson(json.choices?.[0]?.message?.content ?? '');
 	if (!parsed.isTravel) return { ...parseTravelEmailLocal(subject, text), isTravel: false };
 	if (!['flight', 'event', 'hotel', 'rental_car', 'note', 'todo', 'parking', 'boat', 'train', 'directions', 'food', 'poi', 'meetup', 'rideshare', 'shuttle'].includes(parsed.type)) parsed.type = 'note';
 	if (!parsed.title || !parsed.tripName || Number.isNaN(Date.parse(parsed.startAt))) throw new Error('AI parser returned invalid itinerary data');
 	return parsed;
+}
+
+export function parseAiJson(content: string): ParsedTravelEmail {
+	const clean = content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+	const fenced = clean.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+	const candidate = (fenced ?? clean).trim();
+	const start = candidate.indexOf('{'), end = candidate.lastIndexOf('}');
+	if (start < 0 || end < start) throw new Error('AI parser returned no JSON object');
+	return JSON.parse(candidate.slice(start, end + 1)) as ParsedTravelEmail;
 }
 
 function userAiConfig(row: ConfigRow): AiConfig {

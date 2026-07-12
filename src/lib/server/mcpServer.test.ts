@@ -13,6 +13,7 @@ vi.mock('$lib/server/db', async () => {
 import { createMcpServer } from './mcpServer';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
+import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../tests/helpers';
@@ -73,6 +74,12 @@ describe('mcpServer', () => {
 		expect(res.content[0].text).toContain('trips:write');
 	});
 
+	test('profile exposes role for native capability gating', async () => {
+		const { client } = await connect(userId, ['profile-prefs:read']);
+		const result: any = await client.callTool({ name: 'roamarr_profile_get', arguments: {} });
+		expect(JSON.parse(result.content[0].text).role).toBe('user');
+	});
+
 	test('companion tools accept guide and driver roles', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Role trip' });
 		const { client } = await connect(userId, ['companions:write', 'companions:read']);
@@ -81,6 +88,74 @@ describe('mcpServer', () => {
 		await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId, category: 'driver' } });
 		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
 		expect(JSON.parse(listed.content[0].text).items[0].category).toBe('driver');
+	});
+
+	test('mobile trip workflows preserve full user-entered fields', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Complete mobile trip' });
+		const { client } = await connect(userId, [
+			'companions:read', 'companions:write', 'journal:read', 'journal:write',
+			'home-tasks:read', 'home-tasks:write', 'medications:read', 'medications:write',
+			'items:read', 'items:write', 'requirements:read', 'requirements:write',
+			'doc-links:read', 'doc-links:write'
+		]);
+		const call = async (name: string, arguments_: Record<string, unknown>) => {
+			const result: any = await client.callTool({ name, arguments: arguments_ });
+			expect(result.isError, result.content?.[0]?.text).toBeFalsy();
+			return JSON.parse(result.content[0].text);
+		};
+		const companion = await call('roamarr_companion_create', { tripId: trip.id, name: 'Sam', category: 'child', dietary: 'vegan', allergies: 'nuts', medicalNotes: 'inhaler', needsCarSeat: true, needsStroller: true, needsCrib: false, needsKidsMeal: true, childTicketDiscount: 'under 12', seatPreference: 'window', bedPreference: 'twin', accessibilityNeeds: 'step free', roomNotes: 'quiet', notes: 'test' });
+		await call('roamarr_journal_create', { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' });
+		await call('roamarr_home_task_create', { tripId: trip.id, text: 'Stop mail', dueDate: '2026-07-10' });
+		await call('roamarr_medication_create', { tripId: trip.id, companionId: companion.id, name: 'Medicine', dosage: '5mg', schedule: 'daily', startsAt: '2026-07-12T08:00:00Z', endsAt: '2026-07-20T08:00:00Z', notes: 'with food' });
+		await call('roamarr_important_item_create', { tripId: trip.id, companionId: companion.id, name: 'Camera', serialNumber: 'SN1', trackerId: 'AIR1', notes: 'carry on' });
+		await call('roamarr_entry_requirement_create', { tripId: trip.id, country: 'JP', requirementType: 'visa', status: 'in_progress', dueDate: '2026-07-01', notes: 'online form' });
+		await call('roamarr_doc_link_create', { tripId: trip.id, label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' });
+		const companionRows = (await call('roamarr_companion_list', { tripId: trip.id })).items;
+		expect(companionRows[0]).toMatchObject({ allergies: 'nuts', needsCarSeat: true, seatPreference: 'window', notes: 'test' });
+		expect((await call('roamarr_journal_list', { tripId: trip.id })).items[0]).toMatchObject({ title: 'Arrival', body: 'Landed safely' });
+		expect((await call('roamarr_home_task_list', { tripId: trip.id })).items[0]).toMatchObject({ text: 'Stop mail', dueDate: '2026-07-10' });
+		expect((await call('roamarr_medication_list', { tripId: trip.id })).items[0]).toMatchObject({ companionId: companion.id, schedule: 'daily', notes: 'with food' });
+		expect((await call('roamarr_important_item_list', { tripId: trip.id })).items[0]).toMatchObject({ name: 'Camera', serialNumber: 'SN1', trackerId: 'AIR1' });
+		expect((await call('roamarr_entry_requirement_list', { tripId: trip.id })).items[0]).toMatchObject({ country: 'JP', requirementType: 'visa', status: 'in_progress', dueDate: '2026-07-01' });
+		expect((await call('roamarr_doc_link_list', { tripId: trip.id })).items[0]).toMatchObject({ label: 'Voucher', notes: 'offline copy' });
+	});
+
+	test('read-only collaborators can load every native planning workflow', async () => {
+		const viewerId = makeUser(ctx.kit).id;
+		const trip = tripsRepo.createTrip(userId, { name: 'Shared planning' });
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read' });
+		addChecklistItem(userId, trip.id, 'Passport');
+		const tools: Array<[string, Scope]> = [
+			['roamarr_packing_list_build', 'packing:read'],
+			['roamarr_expense_list', 'expenses:read'],
+			['roamarr_budget_update', 'budgets:read'],
+			['roamarr_companion_list', 'companions:read'],
+			['roamarr_journal_list', 'journal:read'],
+			['roamarr_home_task_list', 'home-tasks:read'],
+			['roamarr_medication_list', 'medications:read'],
+			['roamarr_important_item_list', 'items:read'],
+			['roamarr_entry_requirement_list', 'requirements:read'],
+			['roamarr_comment_list', 'comments:read'],
+			['roamarr_doc_link_list', 'doc-links:read'],
+			['roamarr_poll_list', 'polls:read']
+		];
+		for (const [name, scope] of tools) {
+			const { client } = await connect(viewerId, [scope]);
+			const result: any = await client.callTool({ name, arguments: { tripId: trip.id } });
+			expect(result.isError, `${name}: ${result.content?.[0]?.text}`).toBeFalsy();
+			if (name === 'roamarr_packing_list_build') expect(JSON.parse(result.content[0].text).items[0]).toMatchObject({ text: 'Passport', assignedToCompanionId: null, assignedToName: null });
+		}
+	});
+
+	test('mobile custom reminders preserve exact user fields', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Reminder trip' });
+		const { client } = await connect(userId, ['reminders:read', 'reminders:write']);
+		const created: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { reminderType: 'trip', refId: trip.id, name: 'Leave home', description: 'Take passports', fireAt: '2026-08-01T12:30:00Z' } });
+		expect(created.isError).toBeFalsy();
+		const reminderId = JSON.parse(created.content[0].text).id;
+		await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00Z' } });
+		const listed: any = await client.callTool({ name: 'roamarr_reminder_list', arguments: {} });
+		expect(JSON.parse(listed.content[0].text).items[0]).toMatchObject({ id: reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00.000Z', refType: 'trip', refId: trip.id });
 	});
 
 	test('trips:write creates a trip owned by the token user', async () => {
@@ -93,10 +168,52 @@ describe('mcpServer', () => {
 		expect(row.name).toBe('Lisbon');
 	});
 
+	test('trip_get includes itinerary segments for the owner', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Itinerary', notes: 'Owner notes' });
+		const { createSegment } = await import('./repositories/segmentsRepo');
+		createSegment({ trip_id: BigInt(trip.id), type: 'event', title: 'Museum', start_at: '2026-08-01T10:00:00Z', start_tz: 'UTC' });
+		const { client } = await connect(userId, ['trips:read']);
+		const response: any = await client.callTool({ name: 'roamarr_trip_get', arguments: { tripId: trip.id } });
+		const body = JSON.parse(response.content[0].text);
+		expect(body.trip.segments).toHaveLength(1);
+		expect(body.trip.segments[0].title).toBe('Museum');
+		expect(body.trip).toMatchObject({ canEdit: true, owner: true });
+		expect(body.trip.notes).toBeUndefined();
+	});
+
+	test('search finds trips by itinerary content', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Summer' });
+		const { createSegment } = await import('./repositories/segmentsRepo');
+		createSegment({ trip_id: BigInt(trip.id), type: 'event', title: 'Hidden Museum', start_at: '2026-08-01T10:00:00Z', start_tz: 'UTC' });
+		const { client } = await connect(userId, ['search:read']);
+		const response: any = await client.callTool({ name: 'roamarr_search', arguments: { query: 'museum' } });
+		expect(JSON.parse(response.content[0].text).trips).toEqual([expect.objectContaining({ id: trip.id })]);
+	});
+
+	test('weather overview returns null when trip lacks forecast coordinates', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'No coordinates' });
+		const { client } = await connect(userId, ['trips:read']);
+		const response: any = await client.callTool({ name: 'roamarr_weather_overview', arguments: { tripId: trip.id } });
+		expect(response.isError).toBeFalsy();
+		expect(JSON.parse(response.content[0].text)).toBeNull();
+	});
+
+	test('trip templates capture and recreate a source trip', async () => {
+		const source = tripsRepo.createTrip(userId, { name: 'Source', destinationCityName: 'Paris' });
+		const { client } = await connect(userId, ['templates:write']);
+		const created: any = await client.callTool({ name: 'roamarr_trip_template_create', arguments: { name: 'Paris template', sourceTripId: source.id } });
+		expect(created.isError).toBeFalsy();
+		const templateId = JSON.parse(created.content[0].text).id;
+		const applied: any = await client.callTool({ name: 'roamarr_trip_template_apply', arguments: { templateId } });
+		expect(applied.isError).toBeFalsy();
+		const newTripId = JSON.parse(applied.content[0].text).newTripId;
+		expect(tripsRepo.getTripById(newTripId)?.destinationCityName).toBe('Paris');
+	});
+
 	test('packing_list_build cannot read another user’s trip (IDOR)', async () => {
 		const other = makeUser(ctx.kit).id;
 		const otherTrip = tripsRepo.createTrip(other, { name: 'Private' });
-		const { client } = await connect(userId, ['packing:write']);
+		const { client } = await connect(userId, ['packing:read']);
 		// The dispatch wraps helper errors into an isError:true response
 		// (per the codex batch 2 hardening) so the promise resolves
 		// instead of rejecting. Assert on isError + the 404 message.

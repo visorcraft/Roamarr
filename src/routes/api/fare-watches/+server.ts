@@ -3,6 +3,8 @@ import type { RequestHandler } from './$types';
 import { requireUser } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { listFareProvidersForUser, listFareWatchesForUser } from '$lib/server/repositories/travelDataRepo';
+import { listTripsForUser } from '$lib/server/repositories/tripsRepo';
+import { listSegmentsForTrips } from '$lib/server/repositories/segmentsRepo';
 import { checkWatch, deleteWatch, pauseWatch, resumeWatch, toggleWatch } from '$lib/server/fareproviders';
 
 function positiveId(value: unknown, name: string): number {
@@ -13,6 +15,7 @@ function positiveId(value: unknown, name: string): number {
 
 export const GET: RequestHandler = ({ locals }) => {
 	const user = requireUser(locals);
+	const trips = listTripsForUser(user.id);
 	return json({
 		rows: listFareWatchesForUser(user.id).map((watch) => ({
 			id: watch.id, tripId: watch.tripId, providerId: watch.providerId, segmentId: watch.segmentId,
@@ -20,6 +23,8 @@ export const GET: RequestHandler = ({ locals }) => {
 			summary: watch.lastResultJson ? (() => { try { return JSON.parse(watch.lastResultJson).summary ?? null; } catch { return null; } })() : null
 		})),
 		providers: listFareProvidersForUser(user.id).map(({ id, providerKey, label, enabled }) => ({ id, providerKey, label, enabled }))
+		, trips: trips.map(({ id, name }) => ({ id, name })),
+		segments: listSegmentsForTrips(trips.map(({ id }) => id)).map(({ id, tripId, title }) => ({ id, tripId, title }))
 	});
 };
 

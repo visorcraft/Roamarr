@@ -8,7 +8,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { DELETE } from './+server';
+import { DELETE, PATCH } from './+server';
 import { makeUser, makeGroup, makeGroupMember } from '../../../../../tests/helpers';
 import { groups, groupMembers, auditLogs, users } from '$lib/server/db/mongrelSchema';
 import { kit } from '$lib/server/db';
@@ -49,6 +49,16 @@ test('delete removes an owned group, logs audit, and returns 204', async () => {
 	expect(logs[0].action).toBe('group_delete');
 	expect(logs[0].entity_type).toBe('group');
 	expect(Number(logs[0].entity_id)).toBe(group.id);
+});
+
+test('patch renames an owned group', async () => {
+	const owner = makeUser(ctx.kit, { email: 'rename@x.c' });
+	const group = makeGroup(ctx.kit, owner.id, 'Old');
+	const event = makeEvent({ id: String(group.id) }, owner);
+	event.request = new Request('https://roamarr.test/api/groups/1', { method: 'PATCH', body: JSON.stringify({ name: 'New' }) });
+	const response = await PATCH(event);
+	expect(response.status).toBe(200);
+	expect(kit.selectFrom(groups).executeSync()[0].name).toBe('New');
 });
 
 test('delete by member returns 404', async () => {

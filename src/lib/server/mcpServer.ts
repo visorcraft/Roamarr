@@ -1,4 +1,5 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { error } from '@sveltejs/kit';
 import {
 	ListToolsRequestSchema,
 	CallToolRequestSchema,
@@ -15,7 +16,7 @@ import { requireOwnedTrip, requireEditableTrip, requireViewableTrip, requireOwne
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { loadTripFor } from '../../routes/trips/shared';
 import { viewerProjection } from './sharing';
-import { addItem as addChecklistItem, loadChecklist } from './tripChecklists';
+import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
@@ -48,9 +49,9 @@ function textResult(obj: unknown) {
 function safeTripProjection(tripId: number, userId: number) {
 	const view = loadTripFor(userId, tripId);
 	if (view.editor) {
-		return viewerProjection(view.trip, view.segments, false);
+		return { ...viewerProjection(view.trip, view.segments, false), canEdit: true, owner: view.owner };
 	}
-	return view.trip;
+	return { ...view.trip, canEdit: false, owner: false };
 }
 
 function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
@@ -222,7 +223,7 @@ const PROMPTS: readonly PromptEntry[] = [
 		requiresTrip: true,
 		requiresTripArgument: true,
 		build({ tripId }) {
-			const items = loadChecklist(tripId).items.map((i) => ({ text: i.text, packed: i.packed }));
+			const items = viewChecklist(tripId).items.map((i) => ({ text: i.text, packed: i.packed }));
 			return textOut('Packing check', items);
 		}
 	},
@@ -263,7 +264,7 @@ const PROMPTS: readonly PromptEntry[] = [
 		async build({ userId, tripId }) {
 			// Real data: aggregate travel-doc status, packing %, home tasks.
 			const { listTravelDocuments } = await import('./repositories/profileRepo');
-			const { loadChecklist } = await import('./tripChecklists');
+			const { viewChecklist } = await import('./tripChecklists');
 			const { listHomeTasksForTrip } = await import('./repositories/tripMiscRepo');
 			const { getUserById } = await import('./repositories/usersRepo');
 			const user = getUserById(userId);
@@ -273,7 +274,7 @@ const PROMPTS: readonly PromptEntry[] = [
 			const docs = listTravelDocuments(userId);
 			const expiringSoon = docs.filter((d) => d.expiresOn && d.expiresOn >= today && d.expiresOn <= cutoff);
 			const expired = docs.filter((d) => d.expiresOn && d.expiresOn < today);
-			const checklist = loadChecklist(tripId);
+			const checklist = viewChecklist(tripId);
 			const total = checklist.items.length;
 			const packed = checklist.items.filter((i) => i.packed).length;
 			const packingPct = total > 0 ? Math.round((packed / total) * 100) : 0;
@@ -464,8 +465,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						name: { type: 'string' },
 						destination: { type: 'string' },
 						destinationCountryCode: { type: 'string' },
+						destinationCityName: { type: 'string' }, destinationCityLat: { type: 'number' }, destinationCityLng: { type: 'number' },
 						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
-						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' }
+						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' }, notes: { type: 'string' },
+						tags: { type: 'array', items: { type: 'string' } }, baseCurrency: { type: 'string' },
+						defaultVisibility: { type: 'string', enum: ['private', 'shared', 'public'] }, status: { type: 'string', enum: [...TRIP_STATUSES] }
 					},
 					required: ['name']
 				}
@@ -479,9 +483,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						tripId: { type: 'number' },
 						name: { type: 'string' },
 						destination: { type: 'string' },
+						destinationCountryCode: { type: 'string' }, destinationCityName: { type: 'string' },
+						destinationCityLat: { type: 'number' }, destinationCityLng: { type: 'number' },
 						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
 						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
-						status: { type: 'string', enum: [...TRIP_STATUSES] }
+						notes: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, baseCurrency: { type: 'string' },
+						defaultVisibility: { type: 'string', enum: ['private', 'shared', 'public'] }, status: { type: 'string', enum: [...TRIP_STATUSES] }
 					},
 					required: ['tripId']
 				}
@@ -511,7 +518,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						text: { type: 'string', description: 'Item description, e.g. "Passport" or "Sunscreen"' }
+						text: { type: 'string', description: 'Item description, e.g. "Passport" or "Sunscreen"' }, assignedToCompanionId: { type: 'number' }
 					},
 					required: ['tripId', 'text']
 				}
@@ -559,6 +566,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				inputSchema: { type: 'object', properties: {} }
 			},
 			{
+				name: 'roamarr_weather_overview',
+				description: 'Get the weather forecast for a trip destination.',
+				inputSchema: { type: 'object', properties: { tripId: { type: 'number' } }, required: ['tripId'] }
+			},
+			{
 				name: 'roamarr_places_list',
 				description: 'List visited countries and U.S. states.',
 				inputSchema: { type: 'object', properties: {} }
@@ -595,9 +607,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						tripId: { type: 'number' },
 						offsetMinutes: { type: 'number', description: 'Minutes before the trip start' },
-						title: { type: 'string' }
+						title: { type: 'string' }, reminderType: { type: 'string', enum: ['trip', 'document'] },
+						name: { type: 'string' }, description: { type: 'string' }, fireAt: { type: 'string' }, refId: { type: 'number' }
 					},
-					required: ['tripId', 'offsetMinutes']
+					required: []
 				}
 			},
 			// Round 1: trip planning vertical — 17 new tools.
@@ -723,7 +736,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						description: { type: 'string' },
 						amount: { type: 'integer' },
 						currency: { type: 'string' },
-						category: { type: 'string' }
+						category: { type: 'string' }, exchangeRate: { type: 'integer' }, baseAmount: { type: 'integer' },
+						paidByCompanionId: { type: 'number' }, splitAmong: { type: 'array', items: { oneOf: [{ type: 'string', enum: ['owner'] }, { type: 'number' }] } }
 					},
 					required: ['expenseId']
 				}
@@ -754,9 +768,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						itemId: { type: 'number' },
-						text: { type: 'string' }
+						text: { type: 'string' }, assignedToCompanionId: { type: 'number' }
 					},
-					required: ['itemId', 'text']
+					required: ['itemId']
 				}
 			},
 			{
@@ -790,7 +804,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						reminderId: { type: 'number' },
 						title: { type: 'string', maxLength: 200 },
 						customNote: { type: 'string', maxLength: 1000 },
-						offsetMinutes: { type: 'integer', minimum: -10080, maximum: 10080 }
+						offsetMinutes: { type: 'integer', minimum: -10080, maximum: 10080 },
+						name: { type: 'string' }, description: { type: 'string' }, fireAt: { type: 'string' }, refId: { type: 'number' }
 					},
 					required: ['reminderId']
 				}
@@ -985,10 +1000,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						title: { type: 'string' },
-						url: { type: 'string' }
+						label: { type: 'string' }, url: { type: 'string' }, notes: { type: 'string' }
 					},
-					required: ['tripId', 'title', 'url']
+					required: ['tripId', 'label', 'url']
 				}
 			},
 			{
@@ -998,8 +1012,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						linkId: { type: 'number' },
-						title: { type: 'string' },
-						url: { type: 'string' }
+						label: { type: 'string' }, url: { type: 'string' }, notes: { type: 'string' }
 					},
 					required: ['linkId']
 				}
@@ -1124,7 +1137,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						name: { type: 'string' },
 						relationship: { type: 'string' },
 						phone: { type: 'string' },
-						email: { type: 'string' }
+						email: { type: 'string' }, isPrimary: { type: 'boolean' }
 					},
 					required: ['name']
 				}
@@ -1137,8 +1150,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						contactId: { type: 'number' },
 						name: { type: 'string' },
+						relationship: { type: 'string' },
 						phone: { type: 'string' },
-						email: { type: 'string' }
+						email: { type: 'string' }, isPrimary: { type: 'boolean' }
 					},
 					required: ['contactId']
 				}
@@ -1164,6 +1178,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				inputSchema: {
 					type: 'object',
 					properties: {
+						displayName: { type: 'string' },
 						timezone: { type: 'string' },
 						defaultCurrency: { type: 'string' },
 						flightCheckinLeadHours: { type: 'integer' },
@@ -1223,11 +1238,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_packing_template_create',
-				description: 'Create a packing template.',
+				description: 'Create a packing template from a trip checklist.',
 				inputSchema: {
 					type: 'object',
-					properties: { name: { type: 'string' } },
-					required: ['name']
+					properties: { name: { type: 'string' }, sourceTripId: { type: 'number' } },
+					required: ['name', 'sourceTripId']
 				}
 			},
 			{
@@ -1247,11 +1262,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_trip_template_create',
-				description: 'Create a trip template.',
+				description: 'Create a trip template from an owned trip.',
 				inputSchema: {
 					type: 'object',
-					properties: { name: { type: 'string' } },
-					required: ['name']
+					properties: { name: { type: 'string' }, sourceTripId: { type: 'number' } },
+					required: ['name', 'sourceTripId']
 				}
 			},
 			{
@@ -1291,7 +1306,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						tripId: { type: 'number' },
 						name: { type: 'string' },
 						category: { type: 'string', enum: ['adult', 'child', 'other', 'guide', 'driver'] },
-						dietary: { type: 'string' }
+						dietary: { type: 'string' }, allergies: { type: 'string' }, medicalNotes: { type: 'string' },
+						needsCarSeat: { type: 'boolean' }, needsStroller: { type: 'boolean' }, needsCrib: { type: 'boolean' }, needsKidsMeal: { type: 'boolean' },
+						childTicketDiscount: { type: 'string' }, seatPreference: { type: 'string' }, bedPreference: { type: 'string' },
+						accessibilityNeeds: { type: 'string' }, roomNotes: { type: 'string' }, notes: { type: 'string' }
 					},
 					required: ['tripId', 'name']
 				}
@@ -1305,7 +1323,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						companionId: { type: 'number' },
 						name: { type: 'string' },
 						category: { type: 'string', enum: ['adult', 'child', 'other', 'guide', 'driver'] },
-						dietary: { type: 'string' }
+						dietary: { type: 'string' }, allergies: { type: 'string' }, medicalNotes: { type: 'string' },
+						needsCarSeat: { type: 'boolean' }, needsStroller: { type: 'boolean' }, needsCrib: { type: 'boolean' }, needsKidsMeal: { type: 'boolean' },
+						childTicketDiscount: { type: 'string' }, seatPreference: { type: 'string' }, bedPreference: { type: 'string' },
+						accessibilityNeeds: { type: 'string' }, roomNotes: { type: 'string' }, notes: { type: 'string' }
 					},
 					required: ['companionId']
 				}
@@ -1382,10 +1403,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						tripId: { type: 'number' },
 						entryDate: { type: 'string', description: 'ISO date' },
-						body: { type: 'string' },
-						mood: { type: 'string' }
+						title: { type: 'string' },
+						body: { type: 'string' }
 					},
-					required: ['tripId', 'entryDate', 'body']
+					required: ['tripId', 'entryDate', 'title', 'body']
 				}
 			},
 			{
@@ -1395,8 +1416,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						entryId: { type: 'number' },
-						body: { type: 'string' },
-						mood: { type: 'string' }
+						entryDate: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }
 					},
 					required: ['entryId']
 				}
@@ -1427,10 +1447,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						title: { type: 'string' },
+						text: { type: 'string' },
 						dueDate: { type: 'string' }
 					},
-					required: ['tripId', 'title']
+					required: ['tripId', 'text']
 				}
 			},
 			{
@@ -1469,7 +1489,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						tripId: { type: 'number' },
 						name: { type: 'string' },
-						dosage: { type: 'string' }
+						companionId: { type: 'number' }, dosage: { type: 'string' }, schedule: { type: 'string' },
+						startsAt: { type: 'string' }, endsAt: { type: 'string' }, notes: { type: 'string' }
 					},
 					required: ['tripId', 'name']
 				}
@@ -1500,10 +1521,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						description: { type: 'string' },
-						serial: { type: 'string' }
+						name: { type: 'string' }, companionId: { type: 'number' }, serialNumber: { type: 'string' },
+						trackerId: { type: 'string' }, notes: { type: 'string' }
 					},
-					required: ['tripId', 'description']
+					required: ['tripId', 'name']
 				}
 			},
 			{
@@ -1532,11 +1553,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						country: { type: 'string', description: 'ISO country code (e.g. JP). Optional — defaults to trip destination country.' },
-						type: { type: 'string', enum: ['visa', 'vaccination', 'other'] },
-						description: { type: 'string' }
+						country: { type: 'string' }, requirementType: { type: 'string', enum: ['visa', 'vaccination', 'other'] },
+						status: { type: 'string', enum: ['needed', 'in_progress', 'complete', 'not_needed'] }, dueDate: { type: 'string' }, notes: { type: 'string' }
 					},
-					required: ['tripId', 'type']
+					required: ['tripId', 'country', 'requirementType']
 				}
 			},
 			{
@@ -1546,7 +1566,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						requirementId: { type: 'number' },
-						description: { type: 'string' },
+						notes: { type: 'string' },
 						status: { type: 'string', enum: ['needed', 'in_progress', 'complete', 'not_needed'] }
 					},
 					required: ['requirementId']
@@ -1619,11 +1639,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// UI. The previous impl used listTripsForUser (owner-only),
 				// which silently hid trips shared with the calling user.
 				const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
-				const trips = tripIds
-					.map((id) => tripsRepo.getTripById(id))
-					.filter((t): t is NonNullable<typeof t> => t !== null);
+				const trips = tripIds.map((id) => safeTripProjection(id, userId));
 				return textResult(trips.map((t) => ({
-					id: t.id, name: t.name, destination: t.destination,
+					id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
 					destinationCountryCode: t.destinationCountryCode,
 					destinationCityName: t.destinationCityName,
 					startDate: t.startDate, endDate: t.endDate, status: t.status
@@ -1641,8 +1659,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					name: String(args.name ?? ''),
 					destination: args.destination as string | undefined,
 					destinationCountryCode: args.destinationCountryCode as string | undefined,
+					destinationCityName: args.destinationCityName as string | undefined,
+					destinationCityLat: args.destinationCityLat as number | undefined, destinationCityLng: args.destinationCityLng as number | undefined,
 					startDate: args.startDate as string | undefined,
-					endDate: args.endDate as string | undefined
+					endDate: args.endDate as string | undefined, notes: args.notes as string | undefined,
+					tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined, baseCurrency: args.baseCurrency as string | undefined,
+					defaultVisibility: args.defaultVisibility as any, status: args.status as any
 				});
 				logAudit(userId, 'mcp_trip_create', 'trip', trip.id, { name: trip.name });
 				return textResult({ id: trip.id, name: trip.name });
@@ -1658,8 +1680,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const updated = tripsRepo.updateTrip(tripId, {
 					name: args.name as string | undefined,
 					destination: args.destination as string | undefined,
+					destinationCountryCode: args.destinationCountryCode as string | undefined, destinationCityName: args.destinationCityName as string | undefined,
+					destinationCityLat: args.destinationCityLat as number | undefined, destinationCityLng: args.destinationCityLng as number | undefined,
 					startDate: args.startDate as string | undefined,
 					endDate: args.endDate as string | undefined,
+					notes: args.notes as string | undefined, tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined,
+					baseCurrency: args.baseCurrency as string | undefined, defaultVisibility: args.defaultVisibility as any,
 					status: args.status as any | undefined
 				});
 				if (!updated) return textResult({ error: 'Trip not found' });
@@ -1689,23 +1715,26 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_packing_item_add': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
 				const tripId = Number(args.tripId);
-				const item = addChecklistItem(userId, tripId, String(args.text ?? ''));
+				const item = addChecklistItem(userId, tripId, String(args.text ?? ''), args.assignedToCompanionId == null ? null : Number(args.assignedToCompanionId));
 				logAudit(userId, 'mcp_packing_add', 'trip_checklist_item', Number(item.id), { tripId });
 				return textResult({ id: Number(item.id), tripId, text: item.text });
 			}
 			case 'roamarr_packing_list_build': {
-				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
 				if (args.templateId) {
+					if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
+					requireEditableTrip(userId, tripId);
 					const { applyTemplate } = await import('./packingTemplates');
 					applyTemplate(Number(args.templateId), tripId, userId);
 					logAudit(userId, 'mcp_packing_build', 'trip', tripId, { templateId: args.templateId });
+				} else {
+					if (!hasScope(scopes, 'packing:read')) return scopeError('packing:read');
+					requireViewableTrip(userId, tripId);
 				}
-				const checklist = loadChecklist(tripId);
+				const checklist = viewChecklist(tripId);
 				return textResult({
 					tripId,
-					items: checklist.items.map((i) => ({ id: Number(i.id), text: i.text, packed: i.packed }))
+					items: checklist.items.map((i) => ({ id: Number(i.id), text: i.text, packed: i.packed, assignedToCompanionId: i.assignedToCompanionId, assignedToName: i.assignedToName }))
 				});
 			}
 			case 'roamarr_budget_set': {
@@ -1744,6 +1773,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					id: t.id, name: t.name, destination: t.destination, startDate: t.startDate
 				})));
 			}
+			case 'roamarr_weather_overview': {
+				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
+				const { tripWeatherOverview } = await import('./weather');
+				return textResult(await tripWeatherOverview(Number(args.tripId), userId));
+			}
 			case 'roamarr_places_list': {
 				if (!hasScope(scopes, 'places:read')) return scopeError('places:read');
 				return textResult(listVisited(userId));
@@ -1768,6 +1802,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_reminder_add': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
+				if (args.fireAt != null) {
+					const { createReminder } = await import('./repositories/remindersRepo');
+					const refType = args.reminderType === 'document' ? 'document' : 'trip';
+					const refId = args.refId == null ? 0 : Number(args.refId);
+					if (!String(args.name ?? '').trim()) return { content: [{ type: 'text' as const, text: 'name is required' }], isError: true };
+					if (!Number.isFinite(Date.parse(String(args.fireAt)))) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
+					if (refType === 'trip' && refId) requireViewableTrip(userId, refId);
+					if (refType === 'document' && refId) { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
+					const reminder = createReminder({ userId, kind: 'custom', refType, refId, fireAt: new Date(String(args.fireAt)).toISOString(), name: String(args.name).trim(), description: String(args.description ?? '').trim() || null });
+					logAudit(userId, 'mcp_reminder_add', 'reminder', reminder.id, {});
+					return textResult({ id: reminder.id });
+				}
 				const { upsertCustomReminder } = await import('./reminders');
 				const tripId = Number(args.tripId);
 				const offset = Number(args.offsetMinutes ?? 60);
@@ -1904,7 +1950,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const nextId = start + limit < all.length ? all[start + limit].id : null;
 				return textResult({
 					tripId,
-					items: slice.map((e) => ({ id: e.id, description: e.description, amount: e.amount, currency: e.currency, category: e.category })),
+					items: slice,
 					nextCursor: nextId != null ? encodeCursor(String(nextId)) : null
 				});
 			}
@@ -1917,7 +1963,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					description: optString(args.description, 500) ?? undefined,
 					amount: args.amount != null ? toCents(args.amount, 'amount') : undefined,
 					currency: optString(args.currency) ?? undefined,
-					category: optString(args.category) ?? undefined
+					category: optString(args.category) ?? undefined, exchangeRate: args.exchangeRate == null ? undefined : Number(args.exchangeRate),
+					baseAmount: args.baseAmount == null ? undefined : Number(args.baseAmount),
+					paidByCompanionId: args.paidByCompanionId == null ? undefined : Number(args.paidByCompanionId),
+					splitAmong: Array.isArray(args.splitAmong) ? args.splitAmong.map((v) => v === 'owner' ? 'owner' : Number(v)) : undefined
 				});
 				logAudit(userId, 'mcp_expense_update', 'trip_expense', id, {});
 				return textResult({ ok: true, expenseId: id, updated });
@@ -1943,8 +1992,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_packing_item_update': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
 				const { renameItem } = await import('./tripChecklists');
+				const { getChecklistItemTripId, updateChecklistItem } = await import('./repositories/tripMiscRepo');
 				const itemId = Number(args.itemId);
-				renameItem(userId, itemId, String(args.text ?? ''));
+				if (args.text != null) renameItem(userId, itemId, String(args.text));
+				if (args.assignedToCompanionId !== undefined) {
+					const tripId = getChecklistItemTripId(itemId);
+					if (tripId == null) throw error(404, 'Item not found');
+					requireEditableTrip(userId, tripId);
+					const { requireCompanionOnTrip } = await import('./ownership');
+					updateChecklistItem(itemId, { assignedToCompanionId: requireCompanionOnTrip(args.assignedToCompanionId == null ? null : Number(args.assignedToCompanionId), tripId) });
+				}
 				logAudit(userId, 'mcp_packing_update', 'trip_checklist_item', itemId, {});
 				return textResult({ ok: true, itemId });
 			}
@@ -2001,6 +2058,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_reminder_update': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
+				if (args.fireAt != null || args.name != null || args.description != null || args.refId != null) {
+					const { getReminderById, updateReminderUserFields } = await import('./repositories/remindersRepo');
+					const id = Number(args.reminderId), reminder = getReminderById(id);
+					if (!reminder || reminder.userId !== userId) return { content: [{ type: 'text' as const, text: 'Reminder not found' }], isError: true };
+					if (args.fireAt != null && !Number.isFinite(Date.parse(String(args.fireAt)))) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
+					const refId = args.refId == null ? reminder.refId : Number(args.refId);
+					if (reminder.kind === 'custom' && reminder.refType === 'trip' && refId) requireViewableTrip(userId, refId);
+					if (reminder.kind === 'custom' && reminder.refType === 'document' && refId) { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
+					updateReminderUserFields(id, { name: args.name == null ? reminder.name : String(args.name).trim() || null, description: args.description == null ? reminder.description : String(args.description).trim() || null, fireAt: args.fireAt == null ? reminder.fireAt : new Date(String(args.fireAt)).toISOString(), refId: reminder.kind === 'custom' ? refId : reminder.refId });
+					logAudit(userId, 'mcp_reminder_update', 'reminder', id, {});
+					return textResult({ ok: true, reminderId: id });
+				}
 				const { safeUpdateCustomReminder } = await import('./reminders');
 				safeUpdateCustomReminder(userId, Number(args.reminderId), {
 					title: args.title as string | undefined,
@@ -2222,9 +2291,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const tripId = Number(args.tripId);
 				// Helper enforces ownership + URL validation + audit log.
 				const link = createDocumentLink(userId, tripId, {
-					label: String(args.title ?? ''),
+					label: String(args.label ?? ''),
 					url: String(args.url ?? ''),
-					notes: null
+					notes: (args.notes as string) ?? null
 				});
 				logAudit(userId, 'mcp_doc_link_create', 'trip_document_link', link.id, { tripId });
 				return textResult({ id: link.id, tripId });
@@ -2237,9 +2306,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const existing = getDocumentLinkById(id);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
 				editDocumentLink(userId, existing.tripId, id, {
-					label: String(args.title ?? ''),
+					label: String(args.label ?? existing.label),
 					url: String(args.url ?? ''),
-					notes: existing.notes ?? null
+					notes: (args.notes as string) ?? existing.notes ?? null
 				});
 				logAudit(userId, 'mcp_doc_link_update', 'trip_document_link', id, {});
 				return textResult({ ok: true, linkId: id });
@@ -2394,7 +2463,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					name: String(args.name ?? ''),
 					relationship: (args.relationship as string) ?? null,
 					phone: (args.phone as string) ?? null,
-					email: (args.email as string) ?? null
+					email: (args.email as string) ?? null,
+					isPrimary: Boolean(args.isPrimary)
 				});
 				logAudit(userId, 'mcp_contact_create', 'emergency_contact', c.id, {});
 				return textResult({ id: c.id });
@@ -2411,10 +2481,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// wiped to null / demoted from primary.
 				updateEmergencyContact(id, userId, {
 					name: (args.name as string) ?? existing.name,
-					relationship: existing.relationship,
+					relationship: (args.relationship as string) ?? existing.relationship,
 					phone: (args.phone as string) ?? existing.phone,
 					email: (args.email as string) ?? existing.email,
-					isPrimary: existing.isPrimary
+					isPrimary: args.isPrimary == null ? existing.isPrimary : Boolean(args.isPrimary)
 				});
 				logAudit(userId, 'mcp_contact_update', 'emergency_contact', id, {});
 				return textResult({ ok: true, contactId: id });
@@ -2436,6 +2506,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const u = getUserById(userId);
 				if (!u) return { content: [{ type: 'text' as const, text: 'User not found' }], isError: true };
 				return textResult({
+					role: u.role,
+					displayName: u.display_name,
 					timezone: u.timezone,
 					defaultCurrency: u.default_currency,
 					flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
@@ -2471,6 +2543,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					expiryDays = BigInt(v);
 				}
 				updateUser(userId, {
+					display_name: (args.displayName as string | undefined)?.trim() || existing.display_name,
 					timezone: (args.timezone as string | undefined) ?? existing.timezone,
 					default_currency: (args.defaultCurrency as string | undefined) ?? existing.default_currency,
 					flight_checkin_lead_hours: leadHours ?? existing.flight_checkin_lead_hours,
@@ -2557,7 +2630,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_packing_template_create': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
 				const { saveTemplate } = await import('./packingTemplates');
-				const id = saveTemplate(userId, String(args.name ?? ''), []);
+				const id = saveTemplate(userId, String(args.name ?? ''), [], Number(args.sourceTripId));
 				logAudit(userId, 'mcp_packing_template_create', 'packing_template', id, {});
 				return textResult({ id });
 			}
@@ -2581,8 +2654,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_template_create': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
-				const { createTripTemplate } = await import('./repositories/templatesRepo');
-				const t = createTripTemplate({ userId, name: String(args.name ?? ''), snapshot: {} });
+				const { saveTripTemplate } = await import('./tripTemplates');
+				const t = saveTripTemplate(userId, Number(args.sourceTripId), String(args.name ?? ''));
 				logAudit(userId, 'mcp_trip_template_create', 'trip_template', t.id, {});
 				return textResult({ id: t.id });
 			}
@@ -2601,10 +2674,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (tpl.sourceTripId == null) {
 					return { content: [{ type: 'text' as const, text: 'Template has no source trip to apply' }], isError: true };
 				}
-				const { duplicateTrip } = await import('../../routes/trips/shared');
-				const copy = duplicateTrip(userId, tpl.sourceTripId);
+				const { createTripFromTemplate } = await import('./tripTemplates');
+				const copy = createTripFromTemplate(userId, tpl.id, {});
 				logAudit(userId, 'mcp_trip_template_apply', 'trip', copy.id, { templateId: tpl.id, sourceTripId: tpl.sourceTripId });
-				return textResult({ id: copy.id, name: copy.name });
+				return textResult({ newTripId: copy.id, name: copy.name });
 			}
 			case 'roamarr_trip_template_delete': {
 				if (!hasScope(scopes, 'templates:write')) return scopeError('templates:write');
@@ -2632,7 +2705,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const c = insertTripCompanion(userId, tripId, {
 					name: String(args.name ?? ''),
 					category: (args.category as CompanionCategory) ?? 'adult',
-					dietary: (args.dietary as string) ?? null
+					dietary: (args.dietary as string) ?? undefined, allergies: (args.allergies as string) ?? undefined,
+					medicalNotes: (args.medicalNotes as string) ?? undefined, needsCarSeat: Boolean(args.needsCarSeat),
+					needsStroller: Boolean(args.needsStroller), needsCrib: Boolean(args.needsCrib), needsKidsMeal: Boolean(args.needsKidsMeal),
+					childTicketDiscount: (args.childTicketDiscount as string) ?? undefined, seatPreference: (args.seatPreference as string) ?? undefined,
+					bedPreference: (args.bedPreference as string) ?? undefined, accessibilityNeeds: (args.accessibilityNeeds as string) ?? undefined,
+					roomNotes: (args.roomNotes as string) ?? undefined, notes: (args.notes as string) ?? undefined
 				});
 				logAudit(userId, 'mcp_companion_create', 'trip_companion', c.id, { tripId });
 				return textResult({ id: c.id });
@@ -2647,7 +2725,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				patchTripCompanion(userId, tripId, id, {
 					name: (args.name as string) ?? undefined,
 					category: (args.category as CompanionCategory) ?? undefined,
-					dietary: (args.dietary as string) ?? undefined
+					dietary: (args.dietary as string) ?? undefined, allergies: (args.allergies as string) ?? undefined,
+					medicalNotes: (args.medicalNotes as string) ?? undefined,
+					needsCarSeat: args.needsCarSeat as boolean | undefined, needsStroller: args.needsStroller as boolean | undefined,
+					needsCrib: args.needsCrib as boolean | undefined, needsKidsMeal: args.needsKidsMeal as boolean | undefined,
+					childTicketDiscount: (args.childTicketDiscount as string) ?? undefined, seatPreference: (args.seatPreference as string) ?? undefined,
+					bedPreference: (args.bedPreference as string) ?? undefined, accessibilityNeeds: (args.accessibilityNeeds as string) ?? undefined,
+					roomNotes: (args.roomNotes as string) ?? undefined, notes: (args.notes as string) ?? undefined
 				});
 				logAudit(userId, 'mcp_companion_update', 'trip_companion', id, {});
 				return textResult({ ok: true, companionId: id });
@@ -2735,13 +2819,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_journal_create': {
 				if (!hasScope(scopes, 'journal:write')) return scopeError('journal:write');
-				const { createJournalEntry } = await import('./repositories/tripMiscRepo');
+				const { createJournalEntry } = await import('./tripJournal');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				const e = createJournalEntry({
-					tripId,
+				const e = createJournalEntry(userId, tripId, {
 					entryDate: String(args.entryDate),
-					title: '',
+					title: String(args.title ?? ''),
 					body: String(args.body ?? '')
 				});
 				logAudit(userId, 'mcp_journal_create', 'trip_journal_entry', e.id, { tripId });
@@ -2749,13 +2831,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_journal_update': {
 				if (!hasScope(scopes, 'journal:write')) return scopeError('journal:write');
-				const { getJournalEntryById, updateJournalEntry } = await import('./repositories/tripMiscRepo');
+				const { getJournalEntryById } = await import('./repositories/tripMiscRepo');
+				const { modifyJournalEntry } = await import('./tripJournal');
 				const e = getJournalEntryById(Number(args.entryId));
 				if (!e) return { content: [{ type: 'text' as const, text: 'Entry not found' }], isError: true };
-				requireEditableTrip(userId, e.tripId);
-				updateJournalEntry(Number(args.entryId), {
-					body: (args.body as string) ?? undefined
-				});
+				modifyJournalEntry(userId, Number(args.entryId), { entryDate: args.entryDate as string | undefined, title: args.title as string | undefined, body: args.body as string | undefined });
 				logAudit(userId, 'mcp_journal_update', 'trip_journal_entry', Number(args.entryId), {});
 				return textResult({ ok: true, entryId: Number(args.entryId) });
 			}
@@ -2785,7 +2865,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				requireEditableTrip(userId, tripId);
 				const t = createHomeTask({
 					tripId,
-					text: String(args.title ?? ''),
+					text: String(args.text ?? ''),
 					dueDate: (args.dueDate as string) ?? null
 				});
 				logAudit(userId, 'mcp_home_task_create', 'trip_home_task', t.id, { tripId });
@@ -2822,14 +2902,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_medication_create': {
 				if (!hasScope(scopes, 'medications:write')) return scopeError('medications:write');
-				const { createMedication } = await import('./repositories/tripMiscRepo');
+				const { addMedication } = await import('./tripMedications');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				const m = createMedication({
-					tripId,
+				const m = addMedication(userId, tripId, {
 					name: String(args.name ?? ''),
-					dosage: (args.dosage as string) ?? null
-				} as any);
+					companionId: args.companionId == null ? null : Number(args.companionId), dosage: (args.dosage as string) ?? null,
+					schedule: (args.schedule as string) ?? null, startsAt: (args.startsAt as string) ?? null,
+					endsAt: (args.endsAt as string) ?? null, notes: (args.notes as string) ?? null
+				});
 				logAudit(userId, 'mcp_medication_create', 'trip_medication', m.id, { tripId });
 				return textResult({ id: m.id });
 			}
@@ -2854,15 +2934,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_important_item_create': {
 				if (!hasScope(scopes, 'items:write')) return scopeError('items:write');
-				const { createImportantItem } = await import('./repositories/tripMiscRepo');
+				const { addImportantItem } = await import('./tripImportantItems');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				// Repo expects `name` and `serialNumber`; the MCP interface
-				// exposes `description` and `serial` for AI ergonomics.
-				const i = createImportantItem({
-					tripId,
-					name: String(args.description ?? ''),
-					serialNumber: (args.serial as string) ?? null
+				const i = addImportantItem(userId, tripId, {
+					name: String(args.name ?? ''), companionId: args.companionId == null ? null : Number(args.companionId),
+					serialNumber: (args.serialNumber as string) ?? null, trackerId: (args.trackerId as string) ?? null, notes: (args.notes as string) ?? null
 				});
 				logAudit(userId, 'mcp_important_item_create', 'trip_important_item', i.id, { tripId });
 				return textResult({ id: i.id });
@@ -2888,25 +2964,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_entry_requirement_create': {
 				if (!hasScope(scopes, 'requirements:write')) return scopeError('requirements:write');
-				const { createEntryRequirement } = await import('./repositories/tripMiscRepo');
-				const { getTripById } = await import('./repositories/tripsRepo');
+				const { addEntryRequirement } = await import('./tripEntryRequirements');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				// Default to the trip's destination country if the caller
-				// didn't supply one. The country column is non-null.
-				const trip = getTripById(tripId);
-				const country =
-					(args.country as string) ||
-					(trip?.destinationCountryCode as string | undefined) ||
-					'';
-				if (!country) {
-					return { content: [{ type: 'text' as const, text: 'country is required (trip has no destination country)' }], isError: true };
-				}
-				const r = createEntryRequirement({
-					tripId,
-					country,
-					requirementType: String(args.type) as 'visa' | 'vaccination' | 'other',
-					notes: (args.description as string) ?? null
+				const r = addEntryRequirement(userId, tripId, {
+					country: String(args.country ?? ''), requirementType: String(args.requirementType ?? ''),
+					status: (args.status as string) ?? 'needed', dueDate: (args.dueDate as string) ?? null, notes: (args.notes as string) ?? null
 				});
 				logAudit(userId, 'mcp_entry_requirement_create', 'trip_entry_requirement', r.id, { tripId });
 				return textResult({ id: r.id });
@@ -2919,7 +2981,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				requireEditableTrip(userId, r.tripId);
 				updateEntryRequirement(Number(args.requirementId), {
 					status: (args.status as any) ?? undefined,
-					notes: (args.description as string) ?? undefined
+					dueDate: (args.dueDate as string) ?? undefined,
+					notes: (args.notes as string) ?? undefined
 				});
 				logAudit(userId, 'mcp_entry_requirement_update', 'trip_entry_requirement', Number(args.requirementId), {});
 				return textResult({ ok: true, requirementId: Number(args.requirementId) });
@@ -2968,11 +3031,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_search': {
 				if (!hasScope(scopes, 'search:read')) return scopeError('search:read');
-				const q = String(args.query ?? '').toLowerCase();
-				const trips = tripsRepo.listTripsForUser(userId).filter(
-					(t) => t.name.toLowerCase().includes(q) || (t.destination ?? '').toLowerCase().includes(q)
-				);
-				return textResult({ query: q, trips: trips.map((t) => ({ id: t.id, name: t.name, destination: t.destination })) });
+				const q = String(args.query ?? '').trim();
+				const { listViewableTrips } = await import('./sharing');
+				const trips = q ? listViewableTrips(userId, { q, filter: 'active' }) : [];
+				return textResult({ query: q, trips: trips.map((t) => ({ id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null, destinationCityName: t.destinationCityName, isShared: t.isShared })) });
 			}
 			default:
 				return {

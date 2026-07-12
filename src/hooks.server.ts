@@ -20,9 +20,12 @@ const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot
 export function requiredApiScope(path: string, method: string): Scope | null {
 	const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
 	const routes: Array<[RegExp, string]> = [
+		[/^\/api\/mobile\/trips\/\d+\/sharing(?:\/|$)/, 'sharing'],
 		[/^\/api\/trips(?:\/|$)/, 'trips'],
 		[/^\/api\/mobile\/trips(?:\/|$)/, 'trips'],
+		[/^\/api\/mobile\/segments(?:\/|$)/, 'segments'],
 		[/^\/api\/mobile\/trip-transfer(?:\/|$)/, 'trips'],
+		[/^\/api\/mobile\/trip-merge(?:\/|$)/, 'trips'],
 		[/^\/api\/mobile\/expenses(?:\/|$)/, 'expenses'],
 		[/^\/api\/cards(?:\/|$)/, 'cards'],
 		[/^\/api\/loyalty(?:\/|$)/, 'loyalty'],
@@ -30,12 +33,17 @@ export function requiredApiScope(path: string, method: string): Scope | null {
 		[/^\/api\/travel-documents(?:\/|$)/, 'travel-docs'],
 		[/^\/api\/reminders(?:\/|$)/, 'reminders'],
 		[/^\/api\/mobile\/notifications(?:\/|$)/, 'notifications'],
+		[/^\/api\/mobile\/calendar(?:\/|$)/, 'calendar'],
 		[/^\/api\/fare-watches(?:\/|$)/, 'fares'],
 		[/^\/api\/fare-providers(?:\/|$)/, 'fares'],
 		[/^\/api\/groups(?:\/|$)/, 'sharing'],
 		[/^\/api\/(?:cities|maps)(?:\/|$)/, 'places'],
 		[/^\/api\/mobile-admin(?:\/|$)/, 'admin'],
+		[/^\/api\/(?:audit-logs|jobs)(?:\/|$)/, 'admin'],
+		[/^\/api\/mobile\/admin-backup(?:\/|$)/, 'admin'],
+		[/^\/api\/mobile\/admin-maps(?:\/|$)/, 'admin'],
 		[/^\/api\/mobile\/security(?:\/|$)/, 'security'],
+		[/^\/api\/mobile\/email-processing(?:\/|$)/, 'profile-prefs'],
 		[/^\/api\/webauthn\/register(?:\/|$)/, 'security']
 	];
 	const resource = routes.find(([pattern]) => pattern.test(path))?.[1];
@@ -129,6 +137,19 @@ function applySecurityHeaders(response: Response) {
 	return response;
 }
 
+function isOAuthCorsPath(path: string) {
+	return /^\/(?:oauth\/(?:register|token|revoke)|\.well-known\/(?:oauth-authorization-server|mcp\.json)|mcp)$/.test(path);
+}
+
+function applyOAuthCors(response: Response, path: string) {
+	if (!isOAuthCorsPath(path)) return response;
+	response.headers.set('Access-Control-Allow-Origin', '*');
+	response.headers.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+	response.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id');
+	response.headers.set('Access-Control-Expose-Headers', 'MCP-Session-Id');
+	return response;
+}
+
 function redirectResponse(e: Redirect) {
 	return new Response(null, { status: e.status, headers: { location: e.location } });
 }
@@ -136,6 +157,9 @@ function redirectResponse(e: Redirect) {
 export const handle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
+		if (event.request.method === 'OPTIONS' && isOAuthCorsPath(path)) {
+			return applyOAuthCors(applySecurityHeaders(new Response(null, { status: 204 })), path);
+		}
 		const bootError = getBootError();
 
 		if (isMissingSecret() || bootError) {
@@ -159,7 +183,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					throw redirect(307, '/setup');
 				}
 			}
-			return applySecurityHeaders(await resolve(event));
+			return applyOAuthCors(applySecurityHeaders(await resolve(event)), path);
 		}
 
 		const sessionToken = event.cookies.get('session');
@@ -213,7 +237,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!allowed) throw redirect(302, '/profile/change-password');
 		}
 
-		return applySecurityHeaders(await resolve(event));
+		return applyOAuthCors(applySecurityHeaders(await resolve(event)), path);
 	} catch (e) {
 		if (isRedirect(e)) return applySecurityHeaders(redirectResponse(e));
 

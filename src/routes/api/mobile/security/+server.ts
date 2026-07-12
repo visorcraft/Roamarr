@@ -7,6 +7,7 @@ import { disableTwoFactor, enableTwoFactor, generateSecret, getTwoFactorState, r
 import { deleteClient, listClients, listUserTokens, revokeTokenByIdForUser } from '$lib/server/oauth';
 import { logAudit } from '$lib/server/audit';
 import { nowIso } from '$lib/server/tz';
+import { _changeEmail } from '$lib/server/profileActions';
 
 export const GET: RequestHandler = ({ locals }) => {
 	const user = requireUser(locals), setup = generateSecret(user.email);
@@ -24,6 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const next = String(body.newPassword ?? ''); if (next !== String(body.confirmPassword ?? '')) throw error(400, 'New passwords do not match');
 		usersRepo.updateUser(user.id, { password_hash: await hashPassword(next) }); invalidateAllSessions(user.id); logAudit(user.id, 'password_change', 'user', user.id); return json({ ok: true });
 	}
+	if (action === 'email') { await _changeEmail(user.id, { currentPassword: String(body.currentPassword ?? ''), newEmail: String(body.newEmail ?? ''), confirmEmail: String(body.confirmEmail ?? '') }); return json({ ok: true }); }
 	if (action === 'enable-2fa') { const result = enableTwoFactor(user.id, String(body.secret ?? ''), String(body.token ?? '')); if (!result.ok) throw error(400, result.error); return json(result); }
 	if (action === 'disable-2fa') { if (!(await verifyPassword(user.passwordHash, String(body.password ?? ''))) || !verifyTwoFactor(user.id, String(body.token ?? ''))) throw error(401, 'Invalid password or code'); disableTwoFactor(user.id); return json({ ok: true }); }
 	if (action === 'regenerate-codes') { const result = regenerateBackupCodes(user.id, String(body.token ?? '')); if (!result.ok) throw error(400, result.error); return json(result); }

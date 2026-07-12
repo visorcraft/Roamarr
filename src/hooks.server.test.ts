@@ -56,6 +56,17 @@ test('OAuth registration is public', async () => {
 	expect((await run('/oauth/register') as Response).status).toBe(200);
 });
 
+test('OAuth browser clients receive CORS preflight and response headers', async () => {
+	updateSettings({ setupComplete: true });
+	const preflight = ev('/oauth/register');
+	preflight.request = new Request(preflight.url, { method: 'OPTIONS', headers: { origin: 'http://127.0.0.1:8087', 'access-control-request-method': 'POST' } });
+	const response = await handle({ event: preflight as any, resolve: async () => { throw new Error('preflight must not dispatch'); } }) as Response;
+	expect(response.status).toBe(204);
+	expect(response.headers.get('access-control-allow-origin')).toBe('*');
+	const discovery = await handle({ event: ev('/.well-known/oauth-authorization-server') as any, resolve: async () => new Response('{}') }) as Response;
+	expect(discovery.headers.get('access-control-allow-origin')).toBe('*');
+});
+
 test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/cards', 'GET')).toBe('cards:read');
 	expect(requiredApiScope('/api/cards/3', 'DELETE')).toBe('cards:write');
@@ -65,10 +76,20 @@ test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/fare-providers', 'PATCH')).toBe('fares:write');
 	expect(requiredApiScope('/api/mobile-admin', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/mobile/trips/1/poster', 'POST')).toBe('trips:write');
+	expect(requiredApiScope('/api/mobile/trips/1/sharing', 'GET')).toBe('sharing:read');
+	expect(requiredApiScope('/api/mobile/trips/1/sharing', 'POST')).toBe('sharing:write');
+	expect(requiredApiScope('/api/mobile/segments/1', 'PATCH')).toBe('segments:write');
 	expect(requiredApiScope('/api/mobile/trip-transfer', 'GET')).toBe('trips:read');
+	expect(requiredApiScope('/api/mobile/trip-merge', 'POST')).toBe('trips:write');
+	expect(requiredApiScope('/api/mobile/email-processing', 'PATCH')).toBe('profile-prefs:write');
+	expect(requiredApiScope('/api/mobile/admin-backup', 'GET')).toBe('admin:read');
+	expect(requiredApiScope('/api/mobile/admin-maps', 'POST')).toBe('admin:write');
 	expect(requiredApiScope('/api/mobile/expenses/1/attachments', 'GET')).toBe('expenses:read');
 	expect(requiredApiScope('/api/mobile/notifications', 'PATCH')).toBe('notifications:write');
 	expect(requiredApiScope('/api/mobile/security', 'POST')).toBe('security:write');
+	expect(requiredApiScope('/api/mobile/calendar', 'POST')).toBe('calendar:write');
+	expect(requiredApiScope('/api/audit-logs', 'GET')).toBe('admin:read');
+	expect(requiredApiScope('/api/jobs', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBe('security:write');
 });
 

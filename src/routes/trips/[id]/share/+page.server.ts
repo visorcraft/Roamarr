@@ -94,6 +94,8 @@ export function _setShowDetails(
 	showDetails: boolean
 ) {
 	requireOwnedTrip(ownerId, tripId);
+	const share = tripsRepo.getShareById(shareId);
+	if (!share || share.tripId !== tripId) throw error(404, 'Share not found');
 	tripsRepo.updateShare(shareId, { showDetails });
 	logAudit(ownerId, 'trip_share_set_show_details', 'trip', tripId, { shareId, showDetails });
 }

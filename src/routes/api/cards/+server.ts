@@ -3,7 +3,9 @@ import type { RequestHandler } from './$types';
 import { parseTableParams } from '$lib/tableParams';
 import { requireUser } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
-import { listCardsPaginated, countCards, listBenefitsForCards } from '$lib/server/repositories/profileRepo';
+import { listCardsPaginated, countCards, listBenefitsForCards, createCard } from '$lib/server/repositories/profileRepo';
+import { logAudit } from '$lib/server/audit';
+import { Validator, sanitizeLast4 } from '$lib/server/validation';
 
 export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => {
 	const u = requireUser(locals);
@@ -33,4 +35,16 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 	}));
 	const total = countCards(u.id, search);
 	return json({ rows, total });
+};
+
+export const POST: RequestHandler = async ({ request, locals }) => {
+	const user = requireUser(locals), body = await request.json() as Record<string, unknown>, validator = new Validator();
+	const nickname = validator.requiredString(body.nickname, 'nickname', { max: 200 });
+	const network = validator.enumValue(body.network, ['visa', 'mc', 'amex', 'disc', 'other'] as const, 'network');
+	const last4 = validator.optionalString(body.last4, 'last4', { max: 4 }), notes = validator.optionalString(body.notes, 'notes', { max: 2000 });
+	if (last4 && !/^\d{4}$/.test(last4)) validator.addError('last4', 'last4 must be exactly 4 digits');
+	if (!validator.ok()) return json({ error: validator.failMessage(), errors: validator.errors }, { status: 400 });
+	const card = createCard(user.id, { nickname: nickname!, network: network!, last4: sanitizeLast4(last4), notes });
+	logAudit(user.id, 'card_create', 'card', card.id);
+	return json({ card }, { status: 201 });
 };

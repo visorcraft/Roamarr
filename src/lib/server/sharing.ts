@@ -12,12 +12,16 @@ export { VISIBILITIES } from './db/mongrelSchema';
 export { listGroupsForUser } from './repositories/tripsRepo';
 
 type Segment = {
+	id: number;
 	type: string;
 	title: string;
 	startAt: string;
 	endAt: string | null;
 	status: string;
 	location: string | null;
+	cityName: string | null;
+	countryCode: string | null;
+	venue: string | null;
 	meetingPoint: string | null;
 	meetingAt: string | null;
 	confirmationNumber: string | null;
@@ -84,12 +88,16 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		favorite: trip.favorite,
 		tags: tripTags(trip),
 		segments: segs.map((s) => ({
+			id: s.id,
 			type: s.type,
 			title: s.title,
 			startAt: s.startAt,
 			endAt: s.endAt,
 			status: s.status,
 			location: s.location,
+			cityName: s.cityName,
+			countryCode: s.countryCode,
+			venue: s.venue,
 			meetingPoint: s.meetingPoint,
 			meetingAt: s.meetingAt,
 			...(includeDetails && {

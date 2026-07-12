@@ -130,16 +130,24 @@ export function updateTripExpense(
 		amount?: number;
 		currency?: string;
 		category?: string;
+		exchangeRate?: number;
+		baseAmount?: number;
+		paidByCompanionId?: number | null;
+		splitAmong?: Array<'owner' | number>;
 	}
 ) {
 	const existing = expensesRepo.getExpenseById(expenseId);
 	if (!existing) throw error(404, 'Expense not found');
 	requireEditableTrip(userId, existing.tripId);
 	const repoPatch: Parameters<typeof expensesRepo.updateExpense>[1] = {};
-	if (patch.description !== undefined) repoPatch.description = patch.description;
-	if (patch.amount !== undefined) repoPatch.amount = patch.amount;
-	if (patch.currency !== undefined) repoPatch.currency = patch.currency;
-	if (patch.category !== undefined) repoPatch.category = patch.category;
+	if (patch.description !== undefined) { const value = patch.description.trim(); if (!value) throw error(400, 'Description is required'); repoPatch.description = value; }
+	if (patch.amount !== undefined) { if (!Number.isInteger(patch.amount) || patch.amount <= 0) throw error(400, 'Amount must be a positive integer'); repoPatch.amount = patch.amount; }
+	if (patch.currency !== undefined) { const value = patch.currency.trim().toUpperCase(); if (!/^[A-Z]{1,3}$/.test(value)) throw error(400, 'Currency must be 1-3 letters'); repoPatch.currency = value; }
+	if (patch.category !== undefined) repoPatch.category = normalizeCategory(patch.category);
+	if (patch.exchangeRate !== undefined) { if (!Number.isInteger(patch.exchangeRate) || patch.exchangeRate <= 0 || patch.exchangeRate > 1_000_000_000) throw error(400, 'Exchange rate must be a positive integer'); repoPatch.exchangeRate = patch.exchangeRate; }
+	if (patch.baseAmount !== undefined) { if (!Number.isInteger(patch.baseAmount)) throw error(400, 'Base amount must be an integer'); repoPatch.baseAmount = patch.baseAmount; }
+	if (patch.paidByCompanionId !== undefined) { requireCompanionOnTrip(patch.paidByCompanionId, existing.tripId); repoPatch.paidByCompanionId = patch.paidByCompanionId; }
+	if (patch.splitAmong !== undefined) { const ids = patch.splitAmong.filter((value): value is number => typeof value === 'number'); requireCompanionsOnTrip(ids, existing.tripId); repoPatch.splitAmong = JSON.stringify(Array.from(new Set(patch.splitAmong))); }
 	const updated = expensesRepo.updateExpense(expenseId, repoPatch);
 	if (!updated) throw error(404, 'Expense not found');
 	logAudit(userId, 'update', 'trip_expense', expenseId, { tripId: existing.tripId });

@@ -9,7 +9,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { GET } from './+server';
+import { GET, POST } from './+server';
 import { makeUser, makeCard } from '../../../../tests/helpers';
 import { createCardBenefit } from '$lib/server/repositories/profileRepo';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -52,6 +52,15 @@ test('returns paginated cards', async () => {
 		benefitCount: 0
 	});
 	expect(body.rows[0]).not.toHaveProperty('notes');
+});
+
+test('creates a full card with notes', async () => {
+	const user = makeUser(ctx.kit);
+	const event = makeEvent('/api/cards', user);
+	event.request = new Request('http://localhost/api/cards', { method: 'POST', body: JSON.stringify({ nickname: 'Reserve', network: 'visa', last4: '4242', notes: 'Primary' }) });
+	const response = await POST(event);
+	expect(response.status).toBe(201);
+	expect((await response.json()).card).toMatchObject({ nickname: 'Reserve', last4: '4242', notes: 'Primary' });
 });
 
 test('does not expose other users cards', async () => {

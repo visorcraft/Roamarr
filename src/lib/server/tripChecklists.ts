@@ -2,6 +2,7 @@ import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import {
 	getOrCreateChecklist as repoGetOrCreateChecklist,
+	getChecklistByTripId,
 	listItemsForChecklist,
 	createChecklistItem,
 	updateChecklistItem,
@@ -38,6 +39,11 @@ export function loadChecklist(tripId: number): ChecklistWithItems {
 	const checklist = getOrCreateChecklist(tripId);
 	const items = listItemsForChecklist(checklist.id);
 	return { id: checklist.id, tripId, items };
+}
+
+export function viewChecklist(tripId: number): ChecklistWithItems {
+	const checklist = getChecklistByTripId(tripId);
+	return { id: checklist?.id ?? 0, tripId, items: checklist ? listItemsForChecklist(checklist.id) : [] };
 }
 
 export function addItem(

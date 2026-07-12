@@ -11,6 +11,12 @@ import { inList } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { tripCompanions } from '$lib/server/db/mongrelSchema';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { Validator } from '$lib/server/validation';
+import { TRAVEL_DOCUMENT_TYPES } from '$lib/server/db/mongrelSchema';
+import { addDocument } from '$lib/server/travelDocuments';
+import { getCompanionTripId } from '$lib/server/tripCompanions';
+import { requireOwnedTrip } from '$lib/server/ownership';
+import { logAudit } from '$lib/server/audit';
 
 export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => {
 	const u = requireUser(locals);
@@ -64,4 +70,14 @@ export const GET: RequestHandler = async ({ url, locals, getClientAddress }) => 
 	}));
 	const total = countTravelDocuments(u.id, { search, from, to });
 	return json({ rows, total });
+};
+
+export const POST: RequestHandler = async ({ locals, request }) => {
+	const user = requireUser(locals), body = await request.json() as Record<string, unknown>, validator = new Validator();
+	const type = validator.enumValue(String(body.type ?? ''), TRAVEL_DOCUMENT_TYPES, 'type'), number = validator.optionalString(body.number, 'number', { max: 200 });
+	const issuingAuthority = validator.optionalString(body.issuingAuthority, 'issuingAuthority', { max: 200 }), expiresOn = validator.date(body.expiresOn, 'expiresOn'), notes = validator.optionalString(body.notes, 'notes', { max: 2000 });
+	const companionId = body.companionId == null || body.companionId === '' ? null : validator.positiveId(body.companionId, 'companionId');
+	if (companionId != null) { const tripId = getCompanionTripId(companionId); if (tripId == null) throw error(404, 'Companion not found'); requireOwnedTrip(user.id, tripId); }
+	if (!validator.ok()) return json({ error: validator.failMessage(), errors: validator.errors }, { status: 400 });
+	const document = addDocument(user.id, { type: type!, number, issuingAuthority, expiresOn, notes, companionId }); logAudit(user.id, 'document_create', 'document', document.id); return json({ document }, { status: 201 });
 };

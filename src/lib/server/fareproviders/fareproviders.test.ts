@@ -35,6 +35,7 @@ import {
 } from './index';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from '../repositories/tripsRepo';
+import { createSegment } from '../repositories/segmentsRepo';
 import { getFareWatchById } from '../repositories/travelDataRepo';
 import { users, trips, fareProviders, fareWatches } from '../db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
@@ -117,6 +118,16 @@ test('toggleWatch is idempotent — no duplicate watches', () => {
 			.where(kitEq(fareWatches.trip_id, BigInt(t.id)))
 			.executeSync()
 	).toHaveLength(1);
+});
+
+test('toggleWatch rejects a segment from a different owned trip', () => {
+	const u = makeKitUser({ email: 'fare-segment@x.c' });
+	const selected = createTrip(Number(u.id), { name: 'Selected' });
+	const other = createTrip(Number(u.id), { name: 'Other' });
+	const segment = createSegment({ trip_id: BigInt(other.id), type: 'flight', title: 'Wrong trip', start_at: '2027-01-01T00:00:00Z' });
+	const provider = createProvider(Number(u.id), 'stub', 'Primary', 'KEY', true);
+	expect(() => toggleWatch(Number(u.id), selected.id, provider.id, segment.id)).toThrow();
+	try { toggleWatch(Number(u.id), selected.id, provider.id, segment.id); } catch (cause) { expect(cause).toMatchObject({ status: 400, body: { message: 'Segment must belong to the selected trip' } }); }
 });
 
 test('pauseWatch, resumeWatch and deleteWatch are owner-checked', () => {

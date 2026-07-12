@@ -18,6 +18,7 @@ import { deliver } from '../notify';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
 import { stub } from './stub';
 import { nowIso } from '../tz';
+import { getSegmentById } from '../repositories/segmentsRepo';
 
 type FareResult = { ok: boolean; summary: string; raw?: unknown };
 
@@ -111,6 +112,7 @@ export function toggleWatch(
 ) {
 	requireOwnedTrip(userId, tripId);
 	assertOwnedRefs(userId, { providerId, segmentId: segmentId ?? null });
+	if (segmentId != null && getSegmentById(segmentId)?.tripId !== tripId) throw error(400, 'Segment must belong to the selected trip');
 	const sid = segmentId ?? null;
 	// Idempotent: re-enabling an already-watched (trip, provider, segment) returns the
 	// existing row instead of stacking duplicate watches (and duplicate provider calls).

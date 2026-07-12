@@ -11,6 +11,7 @@ import {
 	listTripExpenses,
 	addTripExpense,
 	deleteTripExpense,
+	updateTripExpense,
 	summarizeTripExpenses,
 	computeSettlement,
 	addExpense,
@@ -425,6 +426,17 @@ test('addTripExpense computes base amount from exchange rate', () => {
 
 	const summary = summarizeTripExpenses(listTripExpenses(t.id), [], 'USD');
 	expect(summary.baseTotal).toEqual({ currency: 'USD', amount: 11000 });
+});
+
+test('updateTripExpense rejects invalid money fields', () => {
+	const u = makeSyncedUser(kit, { email: 'update-expense@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const expense = addTripExpense(u.id, t.id, { description: 'Hotel', amount: 10000, currency: 'USD' });
+	expect(() => updateTripExpense(u.id, expense.id, { description: ' ' })).toThrow();
+	expect(() => updateTripExpense(u.id, expense.id, { amount: -1 })).toThrow();
+	expect(() => updateTripExpense(u.id, expense.id, { currency: '123' })).toThrow();
+	expect(() => updateTripExpense(u.id, expense.id, { category: 'bogus' })).toThrow();
+	expect(() => updateTripExpense(u.id, expense.id, { exchangeRate: 0 })).toThrow();
 });
 
 test('addExpense action accepts an exchange rate and stores base amount', async () => {

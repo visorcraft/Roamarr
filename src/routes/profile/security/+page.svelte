@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import CopyButton from '$lib/components/CopyButton.svelte';
 	import SecurityTabs from '$lib/components/SecurityTabs.svelte';
 	import { startRegistration as webauthnRegister } from '@simplewebauthn/browser';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
@@ -67,6 +68,7 @@
 	let isPublic = $state(false);
 	let selectedScopes = $state<string[]>(['trips:read', 'profile:read']);
 	let dismissed = $state(false);
+	let mcpSetup = $state<null | 'choose' | 'claude' | 'open-webui' | 'other'>(null);
 	const created = $derived(
 		form && 'clientId' in form && !dismissed
 			? { clientId: form.clientId as string, clientSecret: (form.clientSecret as string | null) ?? null }
@@ -292,6 +294,63 @@
 		</section>
 	{/if}
 {:else if activeTab === 'api-clients'}
+	<section class="card mt-6 p-5 sm:p-6">
+		<div class="flex flex-wrap items-start justify-between gap-4">
+			<div>
+				<h2 class="section-title">MCP Clients</h2>
+				<p class="field-help mt-1">Connect Claude Desktop, Open WebUI, or another OAuth-capable MCP application to Roamarr.</p>
+			</div>
+			{#if mcpSetup === null}<button class="btn btn-primary" onclick={() => (mcpSetup = 'choose')}>Setup MCP Client</button>{:else}<button class="btn btn-ghost" onclick={() => (mcpSetup = null)}>Close setup</button>{/if}
+		</div>
+
+		{#if mcpSetup === 'choose'}
+			<div class="mt-5 grid gap-3 sm:grid-cols-3">
+				<button class="card p-4 text-left transition hover:border-brand" onclick={() => (mcpSetup = 'claude')}>
+					<span class="section-title block">Claude Desktop</span>
+					<span class="field-help mt-1 block">Automatic OAuth setup using Connectors.</span>
+				</button>
+				<button class="card p-4 text-left transition hover:border-brand" onclick={() => (mcpSetup = 'open-webui')}>
+					<span class="section-title block">Open WebUI</span>
+					<span class="field-help mt-1 block">Automatic OAuth 2.1 registration.</span>
+				</button>
+				<button class="card p-4 text-left transition hover:border-brand" onclick={() => (mcpSetup = 'other')}>
+					<span class="section-title block">Other</span>
+					<span class="field-help mt-1 block">Create credentials for another MCP client.</span>
+				</button>
+			</div>
+		{/if}
+
+		{#if mcpSetup === 'claude' || mcpSetup === 'open-webui'}
+			<div class="mt-5 border-t pt-5" style="border-color: var(--theme-line)">
+				<div class="flex items-center justify-between gap-3">
+					<h3 class="subsection-title">{mcpSetup === 'claude' ? 'Connect Claude Desktop' : 'Connect Open WebUI'}</h3>
+					<button class="btn btn-ghost btn-sm" onclick={() => (mcpSetup = 'choose')}>Back</button>
+				</div>
+				<div class="mt-4 flex items-center gap-2 rounded-lg bg-surface2 p-3">
+					<code class="min-w-0 flex-1 break-all text-sm">{data.mcpUrl}</code>
+					<CopyButton text={data.mcpUrl} class="btn btn-ghost btn-sm shrink-0" />
+				</div>
+				{#if mcpSetup === 'claude'}
+					<ol class="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted">
+						<li>In Claude Desktop, open <strong>Settings → Connectors</strong>.</li>
+						<li>Choose <strong>Add custom connector</strong>.</li>
+						<li>Enter a name such as <strong>Roamarr</strong> and paste the MCP URL above.</li>
+						<li>Add the connector, select <strong>Connect</strong>, then approve access in Roamarr.</li>
+					</ol>
+					<p class="notice mt-4">Remote connectors require a Claude Pro, Max, Team, or Enterprise plan. Do not add this remote server through <code>claude_desktop_config.json</code>.</p>
+				{:else}
+					<ol class="mt-4 list-decimal space-y-2 pl-5 text-sm text-muted">
+						<li>In Open WebUI, open <strong>Admin Settings → External Tools</strong>.</li>
+						<li>Add a server and select <strong>MCP (Streamable HTTP)</strong>.</li>
+						<li>Paste the MCP URL above and select <strong>OAuth 2.1</strong>.</li>
+						<li>Register and save the client. Enable it from a chat, then approve access in Roamarr.</li>
+					</ol>
+					<p class="notice mt-4">Keep Open WebUI's <code>WEBUI_SECRET_KEY</code> stable so it can decrypt stored OAuth credentials after restarts.</p>
+				{/if}
+			</div>
+		{/if}
+	</section>
+
 	{#if created}
 		<section class="notice notice-warning mt-6 p-5">
 			<h2 class="section-title mb-2">Save your credentials</h2>
@@ -312,9 +371,9 @@
 			</dl>
 			<button class="btn btn-primary mt-3" onclick={() => (dismissed = true)}>I saved them</button>
 		</section>
-	{:else}
+	{:else if mcpSetup === 'other'}
 		<section class="card mt-6 p-5 sm:p-6">
-			<h2 class="section-title mb-4">Create a client</h2>
+			<div class="mb-4 flex items-center justify-between gap-3"><h2 class="section-title">Create another MCP client</h2><button class="btn btn-ghost btn-sm" onclick={() => (mcpSetup = 'choose')}>Back</button></div>
 			<form method="POST" action="?/createClient" class="space-y-4">
 				<div class="field">
 					<label class="label" for="clientName">Client name</label>
@@ -322,6 +381,17 @@
 				</div>
 				<div class="field">
 					<label class="label" for="redirectUris">Redirect URIs (one per line)</label>
+					<p class="field-help mt-1">
+						Enter the callback URL provided by your MCP client. Roamarr sends your browser there after you approve or deny access. This is NOT the URL to Roamarr.
+					</p>
+					<p class="field-help mt-1">
+						The value must match the client's callback exactly, including <code>http</code> or <code>https</code>, hostname, port, path, and trailing slash.
+					</p>
+					<ul class="mt-1 list-disc space-y-1 pl-5 text-sm text-muted">
+						<li>Local application: <code>http://localhost:3000/callback</code></li>
+						<li>Hosted application: <code>https://app.example.com/oauth/callback</code></li>
+						<li>LM Studio: <code>http://127.0.0.1:33389/mcp-oauth-callback</code></li>
+					</ul>
 					<textarea id="redirectUris" name="redirectUris" bind:value={redirectUris} rows="3" placeholder="http://localhost:3000/callback" class="input"></textarea>
 				</div>
 				<div class="field">
@@ -358,9 +428,9 @@
 		</section>
 	{/if}
 
-	{#if data.clients.length}
-		<section class="card mt-6 p-5 sm:p-6">
-			<h2 class="section-title mb-4">Your clients</h2>
+	<section class="card mt-6 p-5 sm:p-6">
+		<h2 class="section-title mb-4">Connected clients</h2>
+		{#if data.clients.length}
 			<ul class="list-stack">
 				{#each data.clients as c (c.clientId)}
 					<li class="list-item flex items-start gap-3">
@@ -385,8 +455,8 @@
 					</li>
 				{/each}
 			</ul>
-		</section>
-	{/if}
+		{:else}<p class="empty-text">No MCP clients connected yet.</p>{/if}
+	</section>
 
 	{#if data.tokens.length}
 		<section class="card mt-6 p-5 sm:p-6">
@@ -412,20 +482,4 @@
 		</section>
 	{/if}
 
-	<section class="card mt-6 p-5 sm:p-6">
-		<h2 class="section-title mb-4">Setup instructions</h2>
-		<p class="text-sm text-muted">
-			Use the discovery URL below to configure an MCP client such as Claude Desktop. The client
-			must support OAuth 2.1 with PKCE.
-		</p>
-		<div class="mt-3">
-			<dt class="label">Discovery URL</dt>
-			<dd class="mt-0.5 break-all rounded-md bg-surface2 px-3 py-1.5 font-mono text-sm text-ink">{data.discoveryUrl}</dd>
-		</div>
-		<div class="mt-4 space-y-1 text-sm text-muted">
-			<p>1. Create a client above and save the client ID (and secret for confidential clients).</p>
-			<p>2. Use this redirect URI in your client: <code>http://localhost:3000/oauth/callback</code> (or another localhost port).</p>
-			<p>3. Authorize the client when prompted; access tokens are valid for one hour.</p>
-		</div>
-	</section>
 {/if}

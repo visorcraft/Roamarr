@@ -4,6 +4,7 @@ import {
 	getClient,
 	validateScopes,
 	createAuthorizationCode,
+	claimDynamicClient,
 	ALL_SCOPES,
 	isClientAllowed
 } from '$lib/server/oauth';
@@ -78,6 +79,7 @@ export const actions: Actions = {
 
 		const requested = scopeStr.split(/\s+/).filter(Boolean);
 		const scopes = validateScopes(requested, client.scopes);
+		claimDynamicClient(clientId, u.id);
 		const { code, redirectUri: ru } = createAuthorizationCode({
 			userId: u.id,
 			clientId,

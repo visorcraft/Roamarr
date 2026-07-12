@@ -50,7 +50,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		tokens: listUserTokens(u.id),
 		allScopes: ALL_SCOPES,
 		scopeDescriptions: SCOPE_DESCRIPTIONS,
-		discoveryUrl: `${url.origin}/.well-known/oauth-authorization-server`
+		mcpUrl: `${url.origin}/mcp`
 	};
 };
 

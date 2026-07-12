@@ -12,8 +12,10 @@ vi.mock('$lib/server/db', async () => {
 import { load, actions } from './authorize/+page.server';
 import { POST as tokenPost } from './token/+server';
 import { POST as revokePost } from './revoke/+server';
+import { POST as registerPost } from './register/+server';
 import {
 	createClient,
+	claimDynamicClient,
 	createAuthorizationCode,
 	verifyAccessToken,
 	type Scope
@@ -43,6 +45,34 @@ describe('oauth routes', () => {
 		ctx.kit.deleteFrom(oauthClients).executeSync();
 		updateSettings({ oauthClientAllowList: null });
 		user = makeUser(ctx.kit);
+	});
+
+	describe('dynamic client registration', () => {
+		test('registers a public PKCE client', async () => {
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ client_name: 'Open WebUI', redirect_uris: ['https://webui.example.com/oauth/callback'], token_endpoint_auth_method: 'none', scope: 'trips:read' })
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(201);
+			const body = await response.json();
+			expect(body).toMatchObject({ client_name: 'Open WebUI', redirect_uris: ['https://webui.example.com/oauth/callback'], token_endpoint_auth_method: 'none', scope: 'trips:read' });
+			expect(body.client_id).toBeTruthy();
+			expect(body.client_secret).toBeUndefined();
+			expect(ctx.kit.selectFrom(oauthClients).executeSync()).toHaveLength(1);
+			claimDynamicClient(body.client_id, user.id);
+			expect(ctx.kit.selectFrom(oauthClients).executeSync()[0].created_by_user_id).toBe(BigInt(user.id));
+		});
+
+		test('rejects insecure non-loopback callbacks', async () => {
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ redirect_uris: ['http://webui.example.com/callback'] })
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+		});
 	});
 
 	describe('authorize', () => {

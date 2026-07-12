@@ -9,6 +9,7 @@ export const GET: RequestHandler = ({ url }) => {
 		authorization_endpoint: `${origin}/oauth/authorize`,
 		token_endpoint: `${origin}/oauth/token`,
 		revocation_endpoint: `${origin}/oauth/revoke`,
+		registration_endpoint: `${origin}/oauth/register`,
 		mcp_endpoint: `${origin}/mcp`,
 		mcp_metadata_endpoint: `${origin}/.well-known/mcp.json`,
 		scopes_supported: ALL_SCOPES,

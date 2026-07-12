@@ -121,8 +121,9 @@ Roamarr can:
   attachments, splits, settlements, budgets, and payment due dates.
 - Import and export trip data as JSON or CSV, including dry-run previews before
   importing.
-- Poll per-user IMAP inboxes for travel confirmations, parse them locally or
-  through a user-configured OpenAI-compatible API, and match them to trips.
+- Poll a global or per-user IMAP inbox for travel confirmations, parse messages
+  with best-effort local rules or an OpenAI-compatible API, and attach imported
+  itinerary items to a highly likely trip match or create a new trip.
 - Merge an incorrect donor trip into a recipient while retaining itinerary,
   documents, expenses, companions, and other trip data.
 - Send reminders and operational notifications in app, by SMTP, per-user SMTP
@@ -130,7 +131,7 @@ Roamarr can:
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
 - Connect external clients via OAuth (58 read/write scopes, PKCE, refresh-token
-  rotation) and expose an MCP/AI integration endpoint with 108 tools, 16
+  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 108 tools, 16
   prompts, and 9 resource templates — covering trips, segments, expenses, polls,
   companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
   templates, and profile preferences. Destructive operations require an explicit
@@ -283,8 +284,9 @@ source.
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
 
-SMTP, webhooks, registration policy, themes, fare providers, backups, and most
-admin settings are configured inside the app after setup.
+SMTP, IMAP, email parsing, webhooks, registration policy, themes, fare
+providers, backups, and most admin settings are configured inside the app after
+setup.
 
 ### Runtime data
 
@@ -350,7 +352,8 @@ Chromium first with `npm run test:e2e:install`, then run the suite with
 After the first setup flow, use the admin pages for:
 
 - Instance name, public registration, and admin controls.
-- SMTP delivery, IMAP polling interval, signed webhooks, and per-user email processing.
+- Global and per-user SMTP/IMAP policy, email parsing providers, polling
+  interval, and signed webhooks.
 - Fare provider accounts and connection tests.
 - Backups, restores, scheduled jobs, audit logs, health information, database
   maintenance, and demo data.
@@ -365,10 +368,124 @@ Use Profile for:
 - Security settings: TOTP authenticator setup, backup codes, and WebAuthn
   passkey management.
 - Per-user theme selection, including High Contrast.
-- OAuth client management (for users creating connected clients).
+- MCP client management and OAuth credentials for manually registered clients.
 
 Use each trip's Share page for user/group access, public links, and calendar
 feed URL management.
+
+### Email processing
+
+Roamarr can monitor one global inbox, individual user inboxes, or both. Inbox
+processing runs through the guarded scheduler; it does not require an inbound
+webhook.
+
+Administrators configure instance-wide behavior under **Configuration →
+Email**:
+
+- **User Access** controls whether users may configure personal IMAP, personal
+  SMTP, and personal AI parsing providers. Per-user IMAP is allowed by default;
+  per-user SMTP and parsing providers are denied by default.
+- **Inbound Emails** configures the optional global IMAP inbox. Global inbox
+  processing is enabled by default on a new installation, but does nothing
+  until valid connection details are saved. For every new message, Roamarr
+  matches the sender address to an enabled user. Mail from an unknown sender is
+  ignored and will not be retried.
+- **AI Parsing** configures a global OpenAI-compatible parsing provider. Supply
+  the provider base URL, exact model ID, and either an API/subscription key or
+  OAuth client credentials.
+- **Outbound Emails** configures global SMTP for system notifications. This
+  connection is not used to ingest incoming travel mail.
+
+Set the scheduler interval under **Configuration → General → Email polling
+interval**. Each user can then open **Profile → Email Settings**:
+
+- **Inbound Emails** enables and configures that user's IMAP mailbox.
+- **AI Parsing** optionally overrides the global parser when per-user providers
+  are allowed. A valid enabled user provider wins. Otherwise Roamarr falls back
+  to the global provider, then to built-in no-AI parsing. Without AI, parsing
+  matches are best effort and may fall short on accuracy.
+- **Outbound Emails** selects personal SMTP when allowed, or reuses the inbound
+  server credentials. Otherwise notifications use global SMTP.
+
+Parsed confirmations are matched against trip dates, confirmation codes,
+travel terms, destinations, and overlap. A highly likely match adds itinerary
+items to the existing trip. Otherwise Roamarr creates a new trip. If a message
+lands on the wrong trip, use **Trips → Merge** to move itinerary items,
+documents, and related trip data from the donor trip into the recipient.
+
+IMAP passwords, SMTP passwords, API/subscription keys, and OAuth client secrets
+are encrypted before storage. Disabling an inbox hides its connection fields
+without deleting the saved credentials.
+
+### MCP clients and OAuth
+
+Roamarr exposes its Streamable HTTP MCP server at:
+
+```text
+https://your-roamarr.example/mcp
+```
+
+OAuth discovery is available at:
+
+```text
+https://your-roamarr.example/.well-known/oauth-authorization-server
+```
+
+The OAuth server supports authorization code flow, mandatory S256 PKCE,
+refresh-token rotation, public clients, confidential clients using
+`client_secret_post`, token revocation, and RFC 7591 Dynamic Client
+Registration at `/oauth/register`.
+
+#### Automatic registration
+
+Clients such as Open WebUI can register automatically:
+
+1. In Open WebUI, open **Admin Settings → External Tools** and add a server.
+2. Select **MCP (Streamable HTTP)**.
+3. Enter the Roamarr `/mcp` URL.
+4. Select **OAuth 2.1**, register the client, and save it.
+5. Enable the tool from a chat and approve Roamarr's consent screen.
+
+Dynamic clients are public PKCE clients unless they explicitly request
+`client_secret_post`. Roamarr validates callback URLs, allowing HTTPS URLs and
+HTTP only for loopback hosts. The first user who approves a dynamically
+registered client can manage it under **Profile → Security → MCP Clients**.
+
+If the administrator configures **Configuration → MCP Clients → Allowed client
+IDs**, open Dynamic Client Registration is disabled. Use manual registration
+instead. If needed, temporarily clear the allow-list, create the manual client,
+then add its generated client ID before restoring the restriction.
+
+#### Manual registration
+
+Use **Profile → Security → MCP Clients** when a client supplies fixed callback
+URLs or does not support Dynamic Client Registration:
+
+1. Enter a recognizable client name.
+2. Copy the client's exact Redirect URI. This is not the Roamarr URL. Scheme,
+   host, port, path, and trailing slash must match exactly.
+3. Select only the scopes the client needs.
+4. Choose a public client for desktop or local applications that cannot safely
+   store a secret. Public clients authenticate with PKCE.
+5. Create the client, then immediately copy its client ID and, for a
+   confidential client, its one-time client secret.
+
+Common callback examples include:
+
+- Local application: `http://localhost:3000/callback`
+- Hosted application: `https://app.example.com/oauth/callback`
+- LM Studio: `http://127.0.0.1:33389/mcp-oauth-callback`
+
+LM Studio can connect by adding the Roamarr `/mcp` URL to its MCP configuration
+and supplying the manually created client ID and secret when static credentials
+are required. Ollama itself is a model server, not an OAuth MCP client; when an
+application uses Ollama as its model backend, register the surrounding MCP host
+application and use that application's callback URL.
+
+Every client is limited to its registered scopes and the scopes approved on the
+consent screen. MCP reads use privacy-safe projections. Sensitive document,
+membership, policy, payment-card, and note fields are stripped from AI-facing
+responses. Destructive MCP tools also require `confirm: true`.
 
 ## Architecture
 

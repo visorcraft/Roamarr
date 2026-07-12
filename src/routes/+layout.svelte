@@ -340,7 +340,7 @@
 						{ href: '/general/maps', label: 'Maps' },
 						{ href: '/general/email', label: 'Email' },
 						{ href: '/general/webhooks', label: 'Webhooks' },
-						{ href: '/general/oauth', label: 'MCP OAuth' }
+						{ href: '/general/oauth', label: 'MCP Clients' }
 					]
 				},
 				{ href: '/users', label: 'Users', icon: 'users' },

@@ -18,6 +18,7 @@
 	const m = $derived(data.mapSettings);
 	const tab = $derived(data.tab);
 	const emailTab = $derived(data.emailTab);
+	const pageTitle = $derived({ general: 'Configuration', maps: 'Maps', email: 'Email', webhook: 'Webhooks', oauth: 'MCP Clients' }[tab]);
 	let globalAiAuthMode = $state<'token' | 'oauth'>('token');
 	let globalImapEnabled = $state(true);
 	onMount(() => {
@@ -70,12 +71,13 @@
 </script>
 
 <header>
-	<h1 class="page-title">Configuration</h1>
+	<h1 class="page-title">{pageTitle}</h1>
 	<p class="page-subtitle">Configure your Roamarr instance and outgoing email.</p>
 </header>
 
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}
 
+{#if tab === 'general'}
 <section class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
 	<div class="metric-card">
 		<p class="metric-label">Users</p>
@@ -98,6 +100,7 @@
 		<p class="metric-value">{data.stats.notifications}</p>
 	</div>
 </section>
+{/if}
 
 <div class="mt-6">
 	<div class="space-y-6">
@@ -543,7 +546,7 @@
 		{#if tab === 'oauth'}
 			<form method="POST" action="?/saveOauth" class="space-y-6">
 				<section class="card p-5 sm:p-6">
-					<h2 class="section-title">MCP OAuth clients</h2>
+					<h2 class="section-title">MCP Clients</h2>
 					<p class="mt-1 text-sm muted">
 						Controls which OAuth clients may connect to Roamarr's MCP server. When the allow-list is empty, users can register and authorize any OAuth client. When it
 						contains one or more client IDs, only those clients may be authorized.

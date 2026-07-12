@@ -158,7 +158,7 @@ export const load: PageServerLoad = ({ locals }) => {
 				s.paymentDueDate > today
 		);
 		segs.sort((a, b) => (a.paymentDueDate ?? '').localeCompare(b.paymentDueDate ?? ''));
-		paymentsDue = segs.map((s) => ({
+		paymentsDue = segs.slice(0, 4).map((s) => ({
 			segmentId: s.id,
 			tripId: s.tripId,
 			tripName: tripMap.get(s.tripId) ?? '',
@@ -203,15 +203,15 @@ export const load: PageServerLoad = ({ locals }) => {
 			activity.push(...comments, ...journal);
 		}
 		activity.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-		activity.splice(10);
+		activity.splice(4);
 	}
 
 	return {
-		upcoming: upcoming.map((t) => ({
+		upcoming: upcoming.slice(0, 4).map((t) => ({
 			...t,
 			destinationLabel: formatDestination(t.destinationCityName, t.destinationCountryCode)
 		})),
-		expiring,
+		expiring: expiring.slice(0, 4),
 		paymentsDue,
 		activity,
 		stats: {

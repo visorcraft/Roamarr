@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from '$lib/components/Icon.svelte';
+	import TripCard from '$lib/components/TripCard.svelte';
 	import { SEG } from '$lib/segmentLabels';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { DateTime } from 'luxon';
@@ -8,14 +9,6 @@
 
 	let { data } = $props();
 
-	function daysUntil(iso: string | null | undefined) {
-		if (!iso) return null;
-		const start = new Date(`${iso}T00:00:00`);
-		const now = new Date();
-		now.setHours(0, 0, 0, 0);
-		const diff = Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-		return diff > 0 ? diff : null;
-	}
 	const firstName = $derived((data.user?.displayName ?? '').split(/\s+/)[0]);
 
 	const stats = $derived([
@@ -52,17 +45,17 @@
 	{/each}
 </section>
 
-<section class="card mt-6 p-5">
+<section class="mt-8">
 	<div class="panel-header">
 		<h2 class="section-title">Today</h2>
 		<span class="meta">{formatDate(DateTime.now().toISODate())}</span>
 	</div>
 	{#if data.agenda.length}
-		<ul class="panel-list">
+		<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			{#each data.agenda as item (`${item.kind}:${item.id}`)}
-				<li>
+				<div>
 					{#if item.kind === 'trip'}
-						<a href={`/trips/${item.id}`} class="row-link">
+						<a href={`/trips/${item.id}`} class="card flex h-full p-5">
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
 									<span class="row-title">{item.name}</span>
@@ -73,7 +66,7 @@
 							</span>
 						</a>
 					{:else}
-						<a href={`/trips/${item.tripId}`} class="row-link">
+						<a href={`/trips/${item.tripId}`} class="card flex h-full items-start justify-between gap-4 p-5">
 							<span class="min-w-0">
 								<span class="flex items-center gap-2">
 									<span class="row-title">{item.title}</span>
@@ -85,98 +78,86 @@
 							<span class="row-meta">{item.time}</span>
 						</a>
 					{/if}
-				</li>
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{:else}
 		<p class="empty-text">Nothing on the agenda today.</p>
 	{/if}
 </section>
 
-<div class="mt-6 grid gap-6 lg:grid-cols-2">
-	<section class="card p-5">
+<div class="mt-8 grid gap-8 xl:grid-cols-2">
+	<section>
 		<div class="panel-header">
 			<h2 class="section-title">Upcoming trips</h2>
 			<a href="/trips" class="link text-sm">All trips</a>
 		</div>
 		{#if data.upcoming.length}
-			<ul class="panel-list">
+			<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
 				{#each data.upcoming as t (t.id)}
-					{@const until = daysUntil(t.startDate)}
-					<li>
-						<a href={`/trips/${t.id}`} class="row-link">
-							<span class="min-w-0">
-								<span class="flex items-center gap-2">
-										<span class="row-title">{t.name}</span>
-									{#if t.isShared}<span class="badge badge-brand">Shared</span>{/if}
-									{#if until != null}<span class="badge badge-compact badge-brand">{until} day{until === 1 ? '' : 's'}</span>{/if}
-								</span>
-								{#if t.destinationLabel}<span class="row-subtitle">{t.destinationLabel}</span>{/if}
-							</span>
-							{#if t.startDate}<span class="row-meta">{formatDate(t.startDate)}</span>{/if}
-						</a>
-					</li>
+					<TripCard trip={t} />
 				{/each}
-			</ul>
+			</div>
 		{:else}
 			<p class="empty-text">No upcoming trips yet.</p>
 		{/if}
 	</section>
 
-	<section class="card p-5">
+	<section>
 		<div class="panel-header">
 			<h2 class="section-title">Documents expiring soon</h2>
 			<a href="/profile/documents" class="link text-sm">Manage</a>
 		</div>
 		{#if data.expiring.length}
-			<ul class="panel-list">
+			<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
 				{#each data.expiring as d (d.id)}
-					<li class="row-static">
+					<div class="card flex items-center justify-between gap-4 p-5">
 						<span class="text-sm font-medium capitalize">{d.type.replace('_', ' ')}</span>
 						<span class="badge badge-amber font-mono">{formatDate(d.expiresOn)}</span>
-					</li>
+					</div>
 				{/each}
-			</ul>
+			</div>
 		{:else}
 			<p class="empty-text">Nothing expiring in the next few months.</p>
 		{/if}
 	</section>
 </div>
 
-<section class="card mt-6 p-5">
+<div class="mt-8 grid gap-8 xl:grid-cols-2">
+<section>
 	<div class="panel-header">
 		<h2 class="section-title">Payments due soon</h2>
 		<a href="/trips" class="link text-sm">All trips</a>
 	</div>
 	{#if data.paymentsDue.length}
-		<ul class="panel-list">
+		<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
 			{#each data.paymentsDue as p (`${p.tripId}-${p.segmentId}`)}
-				<li>
-					<a href={`/trips/${p.tripId}`} class="row-link">
+				<div>
+					<a href={`/trips/${p.tripId}`} class="card flex h-full items-start justify-between gap-4 p-5">
 						<span class="min-w-0">
 							<span class="row-title">{p.title}</span>
 							<span class="row-subtitle">{p.tripName}</span>
 						</span>
 						<span class="row-meta">{formatDate(p.paymentDueDate!)}</span>
 					</a>
-				</li>
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{:else}
 		<p class="empty-text">No payments due soon.</p>
 	{/if}
 </section>
 
 
-<section class="card mt-6 p-5">
+<section>
 	<div class="panel-header">
 		<h2 class="section-title">Recent activity</h2>
 		<a href="/trips" class="link text-sm">All trips</a>
 	</div>
 	{#if data.activity.length}
-		<ul class="panel-list">
+		<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
 			{#each data.activity as a (`${a.kind}-${a.id}`)}
-				<li class="row-static">
+				<div class="card flex items-start justify-between gap-4 p-5">
 					<div class="min-w-0">
 						<div class="flex items-center gap-2">
 							<span class="row-title">{a.title ?? 'Comment'}</span>
@@ -189,10 +170,11 @@
 						{/if}
 					</div>
 					<span class="row-meta">{formatDateTime(a.createdAt)}</span>
-				</li>
+				</div>
 			{/each}
-		</ul>
+		</div>
 	{:else}
 		<p class="empty-text">No recent activity.</p>
 	{/if}
 </section>
+</div>

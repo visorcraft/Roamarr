@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq as kitEq, and as kitAnd, lt as kitLt } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, isNull as kitIsNull, lt as kitLt } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { oauthClients, oauthCodes, oauthTokens } from './db/mongrelSchema';
 import { logAudit } from './audit';
@@ -201,7 +201,7 @@ export function assertClientAllowed(clientId: string): void {
 	}
 }
 
-export function createClient(userId: number, input: CreateClientInput): { client: OAuthClient; plaintextSecret: string | null } {
+export function createClient(userId: number | null, input: CreateClientInput): { client: OAuthClient; plaintextSecret: string | null } {
 	const clientId = input.clientId ?? randomToken(16);
 	assertClientAllowed(clientId);
 	// Reject empty scope arrays. The previous behavior of "empty = ALL_SCOPES"
@@ -227,11 +227,19 @@ export function createClient(userId: number, input: CreateClientInput): { client
 		redirect_uris: JSON.stringify(input.redirectUris),
 		scopes: JSON.stringify(input.scopes),
 		created_at: nowIso(),
-		created_by_user_id: BigInt(userId)
+		created_by_user_id: userId == null ? null : BigInt(userId)
 	} as any).executeSync();
 
-	logAudit(userId, 'oauth_client_create', 'oauth_client', 0, { clientId, name: input.clientName });
+	if (userId != null) logAudit(userId, 'oauth_client_create', 'oauth_client', 0, { clientId, name: input.clientName });
 	return { client: getClient(clientId)!, plaintextSecret };
+}
+
+export function claimDynamicClient(clientId: string, userId: number): void {
+	const updated = kit.updateTable(oauthClients)
+		.set({ created_by_user_id: BigInt(userId) })
+		.where(kitAnd(kitEq(oauthClients.client_id, clientId), kitIsNull(oauthClients.created_by_user_id)))
+		.executeSync();
+	if (updated.length > 0) logAudit(userId, 'oauth_client_claim', 'oauth_client', 0, { clientId });
 }
 
 export function deleteClient(userId: number, clientId: string): boolean {

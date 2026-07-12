@@ -74,6 +74,74 @@ describe('oauth routes', () => {
 			expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
 		});
 
+		test('registers a public PKCE client with a reverse-DNS custom scheme redirect URI', async () => {
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: 'Roamarr Mobile',
+					redirect_uris: ['com.roamarr.mobile://oauth'],
+					token_endpoint_auth_method: 'none',
+					scope: 'trips:read trips:write'
+				})
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(201);
+			const body = await response.json();
+			expect(body.redirect_uris).toEqual(['com.roamarr.mobile://oauth']);
+			expect(body.token_endpoint_auth_method).toBe('none');
+			expect(body.client_secret).toBeUndefined();
+		});
+
+		test('rejects a custom scheme redirect URI for confidential clients', async () => {
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['com.roamarr.mobile://oauth'],
+					token_endpoint_auth_method: 'client_secret_post'
+				})
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+		});
+
+		test('rejects a custom scheme without a reverse-DNS dot', async () => {
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['myapp://callback'],
+					token_endpoint_auth_method: 'none'
+				})
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+		});
+
+		test('rejects dangerous schemes regardless of public/confidential status', async () => {
+			for (const uri of ['javascript://alert', 'data:text/html,<x>', 'file:///etc/passwd']) {
+				const request = new Request('http://localhost/oauth/register', {
+					method: 'POST', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ redirect_uris: [uri], token_endpoint_auth_method: 'none' })
+				});
+				const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+				expect(response.status).toBe(400);
+				expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+			}
+		});
+
+		test('rejects a custom scheme redirect URI carrying credentials or a fragment', async () => {
+			for (const uri of ['com.roamarr.mobile://user:pass@oauth', 'com.roamarr.mobile://oauth#frag']) {
+				const request = new Request('http://localhost/oauth/register', {
+					method: 'POST', headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ redirect_uris: [uri], token_endpoint_auth_method: 'none' })
+				});
+				const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+				expect(response.status).toBe(400);
+				expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+			}
+		});
+
 		test('rejects registration when user MCP clients are disabled', async () => {
 			updateSettings({ allowUserMcpClients: false });
 			const request = new Request('http://localhost/oauth/register', {

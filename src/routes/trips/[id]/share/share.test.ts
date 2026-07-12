@@ -1,12 +1,13 @@
 import { test, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-const ctx = vi.hoisted(() => ({ kit: null as never }));
+const ctx = vi.hoisted(() => ({ kit: null as never, sendMail: vi.fn(async () => true) }));
 vi.mock('$lib/server/db', async () => {
 	const { freshDb } = await import('../../../../../tests/helpers');
 	Object.assign(ctx, freshDb());
 	return ctx;
 });
+vi.mock('$lib/server/notify', () => ({ sendMail: ctx.sendMail }));
 
 import {
 	actions,
@@ -43,6 +44,32 @@ function makeUser(email: string) {
 function makeTrip(ownerId: number, name: string) {
 	return tripsRepo.createTrip(ownerId, { name, calendarToken: randomUUID() });
 }
+
+test('share page grants access and emails the trip link', async () => {
+	const owner = makeUser('mail-owner@x.c');
+	const guest = makeUser('mail-guest@x.c');
+	const trip = makeTrip(owner.id, 'Mail trip');
+	const form = new FormData();
+	form.set('email', guest.email);
+	form.set('permission', 'edit');
+
+	await expect(
+		actions.shareUser({
+			locals: { user: { id: owner.id } },
+			params: { id: String(trip.id) },
+			url: new URL(`https://roamarr.test/trips/${trip.id}/share`),
+			cookies: { set: vi.fn() },
+			request: new Request('https://roamarr.test', { method: 'POST', body: form })
+		} as any)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${trip.id}/share` });
+
+	expect(canEdit(guest.id, trip)).toBe(true);
+	expect(ctx.sendMail).toHaveBeenCalledWith(
+		guest.email,
+		expect.objectContaining({ link: `https://roamarr.test/trips/${trip.id}` }),
+		owner.id
+	);
+});
 
 test('calendar feed is loaded and managed from the share page', async () => {
 	const owner = makeUser('calendar-o@x.c');
@@ -187,6 +214,9 @@ test('share functions default to read and accept edit permission', () => {
 	expect(shares.find((s) => Number(s.shared_with_user_id) === editor.id)?.permission).toBe('edit');
 	expect(canEdit(reader.id, t)).toBe(false);
 	expect(canEdit(editor.id, t)).toBe(true);
+
+	shareWithUserEmail(owner.id, t.id, reader.email, 'edit');
+	expect(tripsRepo.getDirectShareForTrip(t.id, reader.id)?.permission).toBe('edit');
 });
 
 test('group share can be created with edit permission', () => {

@@ -5,13 +5,36 @@ import { getSettings } from '$lib/server/settings';
 
 const failure = (error: string, error_description: string, status = 400) => json({ error, error_description }, { status });
 
-function validRedirectUri(value: unknown): value is string {
+function validHttpsOrLoopbackUri(value: unknown): value is string {
 	if (typeof value !== 'string' || value.length > 2048) return false;
 	try {
 		const url = new URL(value);
 		if (url.hash || url.username || url.password) return false;
 		if (url.protocol === 'https:') return true;
 		return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+	} catch { return false; }
+}
+
+// Schemes that must never be accepted as a redirect target regardless of form.
+const BLOCKED_REDIRECT_SCHEMES = new Set([
+	'http', 'https', 'ws', 'wss', 'javascript', 'data', 'file', 'ftp', 'blob', 'about'
+]);
+
+// Public native clients (RFC 8252) redirect through a claimed custom URL scheme
+// such as `com.roamarr.mobile:/oauth`. Require reverse-DNS form (at least one
+// dot) so generic names like `myapp` cannot be registered, and reject any URI
+// carrying credentials or a fragment. PKCE — mandatory for every client —
+// limits the blast radius if another app claims the same scheme.
+function validCustomSchemeUri(value: unknown): value is string {
+	if (typeof value !== 'string' || value.length > 2048) return false;
+	try {
+		const url = new URL(value);
+		if (url.hash || url.username || url.password) return false;
+		const scheme = url.protocol.replace(/:$/, '').toLowerCase();
+		if (BLOCKED_REDIRECT_SCHEMES.has(scheme)) return false;
+		if (!/^[a-z][a-z0-9+.-]*$/i.test(scheme)) return false;
+		if (!scheme.includes('.')) return false;
+		return true;
 	} catch { return false; }
 }
 
@@ -32,14 +55,19 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		return failure('invalid_client_metadata', 'Dynamic registration is disabled while the client allow-list is configured');
 	if (!getSettings().allowUserMcpClients)
 		return failure('invalid_client_metadata', 'User MCP client setup is disabled by the administrator', 403);
-	if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length < 1 || body.redirect_uris.length > 10 || !body.redirect_uris.every(validRedirectUri))
-		return failure('invalid_redirect_uri', 'Provide 1 to 10 HTTPS callback URLs; loopback HTTP URLs are also allowed');
-
 	const clientName = typeof body.client_name === 'string' ? body.client_name.trim() : 'Dynamically registered MCP client';
 	if (!clientName || clientName.length > 200) return failure('invalid_client_metadata', 'client_name must be 1 to 200 characters');
 	const authMethod = body.token_endpoint_auth_method == null ? 'none' : body.token_endpoint_auth_method;
 	if (authMethod !== 'none' && authMethod !== 'client_secret_post')
 		return failure('invalid_client_metadata', 'token_endpoint_auth_method must be none or client_secret_post');
+	// Custom URL schemes (RFC 8252 native clients) are permitted only for public
+	// PKCE clients. Confidential clients must use HTTPS or loopback HTTP.
+	const allowsCustomScheme = authMethod === 'none';
+	const validUri = (uri: unknown) => validHttpsOrLoopbackUri(uri) || (allowsCustomScheme && validCustomSchemeUri(uri));
+	if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length < 1 || body.redirect_uris.length > 10 || !body.redirect_uris.every(validUri))
+		return failure('invalid_redirect_uri', allowsCustomScheme
+			? 'Provide 1 to 10 HTTPS callback URLs; loopback HTTP URLs are also allowed; public PKCE clients may also use a reverse-DNS custom scheme (e.g. com.example.app:/oauth)'
+			: 'Provide 1 to 10 HTTPS callback URLs; loopback HTTP URLs are also allowed');
 
 	const grantTypes = body.grant_types ?? ['authorization_code', 'refresh_token'];
 	if (!Array.isArray(grantTypes) || grantTypes.some((value) => value !== 'authorization_code' && value !== 'refresh_token') || !grantTypes.includes('authorization_code'))

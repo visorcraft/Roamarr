@@ -1,6 +1,7 @@
 import { redirect, error, type Handle, type HandleServerError, isRedirect, type Redirect } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import { validateSession, updateSessionMetadata } from '$lib/server/auth';
+import { validateOAuthUser, validateSession, updateSessionMetadata } from '$lib/server/auth';
+import { verifyAccessToken, type Scope } from '$lib/server/oauth';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp, isMissingSecret, getBootError } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
@@ -14,7 +15,32 @@ import type { ToastVariant } from '$lib/toast';
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
 
-const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
+const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/register$/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
+
+export function requiredApiScope(path: string, method: string): Scope | null {
+	const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
+	const routes: Array<[RegExp, string]> = [
+		[/^\/api\/trips(?:\/|$)/, 'trips'],
+		[/^\/api\/cards(?:\/|$)/, 'cards'],
+		[/^\/api\/loyalty(?:\/|$)/, 'loyalty'],
+		[/^\/api\/insurance(?:\/|$)/, 'insurance'],
+		[/^\/api\/travel-documents(?:\/|$)/, 'travel-docs'],
+		[/^\/api\/reminders(?:\/|$)/, 'reminders'],
+		[/^\/api\/fare-watches(?:\/|$)/, 'fares'],
+		[/^\/api\/groups(?:\/|$)/, 'sharing'],
+		[/^\/api\/(?:cities|maps)(?:\/|$)/, 'places'],
+		[/^\/api\/mobile-admin(?:\/|$)/, 'admin']
+	];
+	const resource = routes.find(([pattern]) => pattern.test(path))?.[1];
+	return resource ? `${resource}:${access}` as Scope : null;
+}
+
+function jsonError(status: number, message: string) {
+	return applySecurityHeaders(new Response(JSON.stringify({ error: message }), {
+		status,
+		headers: { 'content-type': 'application/json' }
+	}));
+}
 
 function contentSecurityPolicy() {
 	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,
@@ -130,7 +156,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 		}
 
 		const sessionToken = event.cookies.get('session');
-		event.locals.user = await validateSession(sessionToken);
+		const bearer = event.request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
+		event.locals.oauth = bearer ? verifyAccessToken(bearer) ?? undefined : undefined;
+		event.locals.user = event.locals.oauth
+			? validateOAuthUser(event.locals.oauth.userId)
+			: await validateSession(sessionToken);
+		if (bearer && !event.locals.oauth) return jsonError(401, 'Invalid or expired access token');
+		if (bearer && path.startsWith('/api/')) {
+			const oauth = event.locals.oauth!;
+			const scope = requiredApiScope(path, event.request.method);
+			if (!scope || !oauth.scopes.includes(scope)) {
+				return jsonError(403, scope ? `Missing required scope: ${scope}` : 'OAuth access is not allowed for this endpoint');
+			}
+		}
 		if (sessionToken && event.locals.user) {
 			try {
 				updateSessionMetadata(sessionToken, event.getClientAddress(), event.request.headers.get('user-agent') ?? undefined);

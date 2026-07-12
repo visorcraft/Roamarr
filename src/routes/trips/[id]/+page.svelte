@@ -24,6 +24,7 @@
 	import type { PageData, SubmitFunction } from './$types';
 	import TripMap from '$lib/components/TripMap.svelte';
 	import GlobeModal from '$lib/components/GlobeModal.svelte';
+	import Autocomplete, { type AutocompleteSuggestion } from '$lib/components/Autocomplete.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 
@@ -76,6 +77,20 @@
 	let segmentPanelTab = $state<SegmentPanelTab>('details');
 	let deleteSegmentTarget = $state<SegmentRow | null>(null);
 	let reminderFeedback = $state<string | null>(null);
+	let travelerCategory = $state('adult');
+	let inviteTraveler = $state(false);
+	let inviteEmail = $state('');
+
+	async function fetchRoamarrUsers(query: string): Promise<AutocompleteSuggestion[]> {
+		const response = await fetch(`/trips/${data.trip.id}/people/users?q=${encodeURIComponent(query)}`);
+		if (!response.ok) return [];
+		return ((await response.json()) as { users: AutocompleteSuggestion[] }).users;
+	}
+
+	function updateTravelerCategory(value: string) {
+		travelerCategory = value;
+		if (value === 'guide' || value === 'driver') inviteTraveler = false;
+	}
 
 	function toggleType(type: SegmentType) {
 		const next = new Set(selectedTypes);
@@ -780,7 +795,47 @@
 				{/if}
 			</section>
 		{:else if activeTab === 'people'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Travelers</h2><span class="badge badge-slate badge-compact">{data.companions?.length ?? 0}</span></div>{#if data.companions?.length}<div class="trip-modern-list">{#each data.companions as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.name}</strong>{#if c.notes}<p class="trip-modern-panel-muted text-sm">{c.notes}</p>{/if}</div><span class="badge badge-slate badge-compact capitalize">{c.category}</span></div>{/each}</div>{:else}<p class="trip-modern-empty">No travelers yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addCompanion" class="trip-modern-form-inline"><input name="name" class="input flex-1 text-sm" placeholder="Name" required /><select name="category" class="input w-auto text-sm"><option value="adult">Adult</option><option value="child">Child</option><option value="other">Other</option></select><button class="btn btn-primary btn-sm">Add traveler</button></form>{/if}</section>
+			<section class="trip-modern-panel">
+				<div class="trip-modern-panel-head">
+					<div><h2 class="trip-modern-panel-title">People</h2><p class="trip-modern-panel-muted text-sm">Travelers and trip support.</p></div>
+					<span class="badge badge-slate badge-compact">{data.companions?.length ?? 0}</span>
+				</div>
+				{#if data.companions?.length}
+					<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+						{#each data.companions as c (c.id)}
+							<div class="trip-modern-list-row min-h-20">
+								<div class="min-w-0"><strong class="block truncate">{c.name}</strong>{#if c.notes}<p class="trip-modern-panel-muted truncate text-sm">{c.notes}</p>{/if}</div>
+								<span class="badge badge-slate badge-compact shrink-0 capitalize">{c.category}</span>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="trip-modern-empty">No people yet.</p>
+				{/if}
+				{#if isEditor}
+					<form method="POST" action="?/addCompanion" class="trip-modern-person-form" use:enhance>
+						{#if data.owner === true}
+							<div class="sm:col-span-2"><Autocomplete name="selectedUserId" textName="name" id="companion-name" label="Name" value="" valueId={null} placeholder="Type a name or choose a Roamarr user" required fetchSuggestions={fetchRoamarrUsers} onselect={(user) => (inviteEmail = user?.secondary ?? '')} /></div>
+						{:else}
+							<div class="field sm:col-span-2"><label class="label" for="companion-name">Name</label><input id="companion-name" name="name" class="input text-sm" placeholder="Name" required /></div>
+						{/if}
+						<div class="field">
+							<label class="label" for="companion-category">Role</label>
+							<select id="companion-category" name="category" class="input text-sm" value={travelerCategory} onchange={(event) => updateTravelerCategory(event.currentTarget.value)}>
+								<option value="adult">Adult</option><option value="child">Child</option><option value="other">Other</option><option value="guide">Guide</option><option value="driver">Driver</option>
+							</select>
+						</div>
+						{#if data.owner === true && travelerCategory !== 'guide' && travelerCategory !== 'driver'}
+							<label class="checkbox-label self-end pb-2"><input type="checkbox" name="invite" value="1" class="checkbox" bind:checked={inviteTraveler} /> Give Roamarr access</label>
+							{#if inviteTraveler}
+								<div class="field sm:col-span-2"><label class="label" for="companion-email">Email address</label><input id="companion-email" name="email" type="email" class="input text-sm" placeholder="user@example.com" required bind:value={inviteEmail} /></div>
+								<div class="field"><label class="label" for="companion-permission">Permission</label><select id="companion-permission" name="permission" class="input text-sm"><option value="read">Read only</option><option value="edit">Can edit</option></select></div>
+							{/if}
+						{/if}
+						<div class="flex items-end justify-end sm:col-span-2"><button class="btn btn-primary btn-sm">Add person</button></div>
+					</form>
+				{/if}
+			</section>
 		{:else if activeTab === 'notes'}
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addJournalEntry" class="trip-modern-form-grid"><input name="title" class="input text-sm" placeholder="Title" required /><input name="entryDate" type="date" class="input text-sm" required /><textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea><button class="btn btn-primary btn-sm justify-self-end">Add journal entry</button></form><form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
 		{:else if activeTab === 'documents'}

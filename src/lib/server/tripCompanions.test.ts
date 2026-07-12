@@ -17,7 +17,7 @@ import {
 	addCompanion,
 	updateCompanion
 } from './tripCompanions';
-import { trips, tripCompanions, auditLogs } from '$lib/server/db/mongrelSchema';
+import { trips, tripCompanions, tripShares, tripInvitations, auditLogs } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
@@ -27,10 +27,13 @@ function getKit(): KitDatabase {
 }
 
 function event(user: { id: number }, tripId: number, body: URLSearchParams) {
+	const url = new URL('http://localhost/trips/' + tripId);
 	return {
 		locals: { user } as App.Locals,
+		cookies: { set: vi.fn() },
 		params: { id: String(tripId) },
-		request: new Request('http://localhost/trips/' + tripId, {
+		url,
+		request: new Request(url, {
 			method: 'POST',
 			body
 		})
@@ -112,11 +115,68 @@ test('addCompanion action creates a companion and redirects', async () => {
 
 	await expect(
 		addCompanion(event(u, t.id, new URLSearchParams({ name: 'Alice', category: 'adult', notes: 'A' })))
-	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}#people` });
 
 	const rows = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(1);
 	expect(rows[0].name).toBe('Alice');
+});
+
+test('addCompanion shares an existing Roamarr user without claiming self identity', async () => {
+	const kit = getKit();
+	const owner = makeUser(kit, { email: 'invite-owner@x.c', passwordHash: 'x', displayName: 'Owner' });
+	const guest = makeUser(kit, { email: 'invite-guest@x.c', passwordHash: 'x', displayName: 'Guest' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+
+	await expect(
+		addCompanion(
+			event(
+				owner,
+				t.id,
+				new URLSearchParams({
+					name: 'Typed name',
+					selectedUserId: String(guest.id),
+					category: 'adult',
+					invite: '1',
+					email: guest.email,
+					permission: 'edit'
+				})
+			)
+		)
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}#people` });
+
+	const companion = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync()[0]!;
+	const share = kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(t.id))).executeSync()[0]!;
+	expect(companion.name).toBe('Guest');
+	expect(companion.user_id).toBeNull();
+	expect(share.shared_with_user_id).toBe(BigInt(guest.id));
+	expect(share.permission).toBe('edit');
+});
+
+test('guide and driver categories work but reject invitations', async () => {
+	const kit = getKit();
+	const owner = makeUser(kit, { email: 'roles-owner@x.c', passwordHash: 'x', displayName: 'Owner' });
+	const guest = makeUser(kit, { email: 'roles-guest@x.c', passwordHash: 'x', displayName: 'Guest' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+
+	insertTripCompanion(owner.id, t.id, { name: 'Guide', category: 'guide' });
+	insertTripCompanion(owner.id, t.id, { name: 'Driver', category: 'driver' });
+	expect(listTripCompanions(t.id).map((person) => person.category)).toEqual(['guide', 'driver']);
+
+	const result = await addCompanion(
+		event(owner, t.id, new URLSearchParams({ name: 'Nope', category: 'guide', invite: '1', email: guest.email }))
+	);
+	expect(result).toMatchObject({ status: 400, data: { error: expect.stringContaining('cannot be invited') } });
+});
+
+test('addCompanion creates a pending invitation for a new email', async () => {
+	const kit = getKit();
+	const owner = makeUser(kit, { email: 'new-owner@x.c', passwordHash: 'x', displayName: 'Owner' });
+	const trip = makeTrip(kit, owner.id, { name: 'T' });
+	await expect(addCompanion(event(owner, trip.id, new URLSearchParams({ name: 'New Person', category: 'adult', invite: '1', email: 'new-person@x.c', permission: 'read' })))).rejects.toMatchObject({ status: 303, location: `/trips/${trip.id}#people` });
+	expect(kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(trip.id))).executeSync()).toHaveLength(1);
+	expect(kit.selectFrom(tripShares).where(eq(tripShares.trip_id, BigInt(trip.id))).executeSync()).toHaveLength(0);
+	expect(kit.selectFrom(tripInvitations).where(eq(tripInvitations.trip_id, BigInt(trip.id))).executeSync()[0].email).toBe('new-person@x.c');
 });
 
 test('updateCompanion action updates a companion and redirects', async () => {
@@ -133,7 +193,7 @@ test('updateCompanion action updates a companion and redirects', async () => {
 				new URLSearchParams({ companionId: String(c.id), name: 'Benjamin', category: 'adult' })
 			)
 		)
-	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}#people` });
 
 	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
 	expect(row.name).toBe('Benjamin');

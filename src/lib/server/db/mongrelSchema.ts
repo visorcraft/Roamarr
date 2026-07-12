@@ -42,7 +42,7 @@ const MAPS_TILE_PROVIDERS = [
 const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
 const TRAVEL_DOCUMENT_TYPES = ['passport', 'drivers_license', 'global_entry', 'visa'] as const;
-const COMPANION_CATEGORIES = ['adult', 'child', 'other'] as const;
+const COMPANION_CATEGORIES = ['adult', 'child', 'other', 'guide', 'driver'] as const;
 const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
 const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
 const SEGMENT_ATTENDEE_STATUSES = ['going', 'maybe', 'not_going'] as const;
@@ -660,6 +660,29 @@ export const tripShares = table('trip_shares', {
 		)
 	],
 	checks: []
+});
+
+export const tripInvitations = table('trip_invitations', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('trip_invitations_id_seq') }),
+		int('trip_id'),
+		int('invited_by_user_id'),
+		text('email'),
+		text('permission', { enumValues: [...SHARE_PERMISSIONS], default: staticDefault('read') }),
+		text('token_hash'),
+		timestamp('expires_at'),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [
+		unique(['trip_id', 'email'], { name: 'trip_invitations_trip_email_uq' }),
+		unique(['token_hash'], { name: 'trip_invitations_token_uq' })
+	],
+	indexes: [index(['email'], { name: 'trip_invitations_email_idx' })],
+	foreignKeys: [
+		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_trip_invitations_trip_id_trips', onDelete: 'cascade' }),
+		foreignKey(['invited_by_user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_trip_invitations_invited_by_users', onDelete: 'cascade' })
+	]
 });
 
 export const cards = table('cards', {
@@ -1378,6 +1401,7 @@ export const schema = new Schema([
 	groups,
 	groupMembers,
 	tripShares,
+	tripInvitations,
 	cards,
 	cardBenefits,
 	benefitTemplates,

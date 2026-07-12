@@ -9,11 +9,13 @@ import {
 	type CompanionCategory
 } from '$lib/server/db/mongrelSchema';
 import { withTripAction } from '$lib/server/actions';
-import { requireEditableTrip } from '$lib/server/ownership';
+import { requireEditableTrip, requireOwnedTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
 import { bumpTripUpdatedAt } from './tripUpdatedAt';
-import { getUserById } from './repositories/usersRepo';
+import { getUserByEmail, getUserById } from './repositories/usersRepo';
+import { emailTripShare, parseSharePermission, validateShareEmail } from './tripSharing';
+import { setFlash } from './flash';
 
 export interface TripCompanion {
 	id: number;
@@ -326,8 +328,39 @@ export async function addCompanion(event: RequestEvent) {
 	if (input.errors) {
 		return fail(400, { error: 'Please fix the highlighted fields.', errors: input.errors });
 	}
-	insertTripCompanion(u.id, tripId, input);
-	throw redirect(303, `/trips/${tripId}`);
+	const selectedUserId = Number(form.get('selectedUserId'));
+	if (Number.isInteger(selectedUserId) && selectedUserId > 0) {
+		const selectedUser = getUserById(selectedUserId);
+		if (!selectedUser || selectedUser.disabled) return fail(400, { error: 'Choose an active Roamarr user.', errors: {} });
+		input.name = selectedUser.display_name || input.name;
+	}
+	const invite = String(form.get('invite')) === '1';
+	let inviteEmail = '';
+	const permission = parseSharePermission(form.get('permission'));
+	if (invite) {
+		if (input.category === 'guide' || input.category === 'driver') {
+			return fail(400, { error: 'Guides and drivers cannot be invited to a trip.', errors: {} });
+		}
+		if (!permission) return fail(400, { error: 'Invalid permission', errors: {} });
+		requireOwnedTrip(u.id, tripId);
+		inviteEmail = validateShareEmail(String(form.get('email') ?? '')) ?? '';
+		if (!inviteEmail) return fail(400, { error: 'Enter a valid email address.', errors: {} });
+		const invitedUser = getUserByEmail(inviteEmail);
+		if (invitedUser?.disabled) return fail(400, { error: 'That Roamarr user is disabled.', errors: {} });
+		if (selectedUserId > 0 && Number(invitedUser?.id) !== selectedUserId) return fail(400, { error: 'The email does not match the selected Roamarr user.', errors: {} });
+		if (invitedUser && selectedUserId === Number(invitedUser.id)) input.name = invitedUser.display_name || input.name;
+	}
+	const companion = insertTripCompanion(u.id, tripId, input);
+	if (invite) {
+		try {
+			const result = await emailTripShare(u.id, tripId, inviteEmail, permission!, event.url.origin);
+			setFlash(event.cookies, result.sent ? 'Person added and invitation sent.' : { message: 'Person added and access created, but SMTP is not configured or delivery failed.', variant: 'warning' });
+		} catch (cause) {
+			removeTripCompanion(u.id, tripId, companion.id);
+			throw cause;
+		}
+	}
+	throw redirect(303, `/trips/${tripId}#people`);
 }
 
 export async function updateCompanion(event: RequestEvent) {
@@ -339,5 +372,5 @@ export async function updateCompanion(event: RequestEvent) {
 		return fail(400, { error: 'Please fix the highlighted fields.', errors: input.errors });
 	}
 	patchTripCompanion(u.id, tripId, companionId, input);
-	throw redirect(303, `/trips/${tripId}`);
+	throw redirect(303, `/trips/${tripId}#people`);
 }

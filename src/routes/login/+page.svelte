@@ -21,7 +21,8 @@
 				body: JSON.stringify(credential)
 			});
 			if (res.ok) {
-				window.location.href = '/';
+				const next = new URLSearchParams(window.location.search).get('next');
+				window.location.href = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
 			} else {
 				const body = await res.json().catch(() => ({}));
 				passkeyError = body.message || 'Passkey sign-in failed';

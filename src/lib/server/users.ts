@@ -8,6 +8,7 @@ import * as usersRepo from './repositories/usersRepo';
 import { createPasswordResetToken } from './passwordReset';
 import { deliver } from './notify';
 import { revokeTokensForUser } from './oauth';
+import { getSettings } from './settings';
 
 export function normalizeEmail(raw: string): string {
 	return raw.trim().toLowerCase();
@@ -25,6 +26,41 @@ function validateDisplayName(displayName: string): void {
 	if (!displayName || displayName.length > 200) {
 		throw new Error('Display name is required and must be 200 characters or fewer.');
 	}
+}
+
+export async function registerUser(emailRaw: string, password: string, displayNameRaw: string) {
+	const defaults = getSettings();
+	const email = normalizeEmail(emailRaw);
+	const displayName = displayNameRaw.trim();
+	validateEmail(email);
+	validateDisplayName(displayName);
+	if (usersRepo.getUserByEmail(email)) throw new Error('Email already registered.');
+	const user = usersRepo.createUser({
+		email,
+		password_hash: await hashPassword(password),
+		display_name: displayName,
+		role: 'user',
+		disabled: false,
+		must_reset_password: false,
+		timezone: defaults.defaultTimezone,
+		flight_checkin_lead_hours: BigInt(defaults.defaultFlightCheckinLeadHours),
+		document_expiry_lead_days: BigInt(defaults.defaultDocumentExpiryLeadDays),
+		email_notifications: true,
+		webhook_notifications: true,
+		theme_id: 'system',
+		default_currency: defaults.defaultCurrency,
+		calendar_token: null,
+		calendar_token_expires_at: null
+	} as usersRepo.CreateUserInput);
+	return {
+		id: Number(user.id),
+		email: user.email,
+		displayName: user.display_name ?? '',
+		role: user.role,
+		timezone: user.timezone,
+		flightCheckinLeadHours: Number(user.flight_checkin_lead_hours),
+		documentExpiryLeadDays: Number(user.document_expiry_lead_days)
+	};
 }
 
 function countAdmins() {

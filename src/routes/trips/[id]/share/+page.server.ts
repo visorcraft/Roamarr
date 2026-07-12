@@ -5,20 +5,20 @@ import { requireOwnedTrip } from '$lib/server/ownership';
 import { logAudit } from '$lib/server/audit';
 import { listGroupsForUser } from '$lib/server/sharing';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
-import { normalizeEmail } from '$lib/server/users';
 import { parseTripId } from '$lib/server/params';
 import { setFlash } from '$lib/server/flash';
 import type { PageServerLoad } from './$types';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { regenerateCalendarToken, revokeCalendarToken } from '../../shared';
-
-type SharePermission = import('$lib/server/repositories/tripsRepo').SharePermission;
-const SHARE_PERMISSIONS: SharePermission[] = ['read', 'edit'];
-
-function parsePermission(raw: unknown): SharePermission | undefined {
-	const v = typeof raw === 'string' ? raw : 'read';
-	return SHARE_PERMISSIONS.includes(v as SharePermission) ? (v as SharePermission) : undefined;
-}
+import {
+	emailTripShare,
+	parseSharePermission,
+	shareWithUserEmail,
+	listTripInvitations,
+	revokeTripInvitation,
+	validateShareEmail,
+	type SharePermission
+} from '$lib/server/tripSharing';
 
 export function _shareWithUserEmail(
 	ownerId: number,
@@ -26,15 +26,7 @@ export function _shareWithUserEmail(
 	email: string,
 	permission: SharePermission = 'read'
 ) {
-	requireOwnedTrip(ownerId, tripId);
-	const target = usersRepo.getUserByEmail(normalizeEmail(email));
-	if (!target) throw error(404, 'No such user');
-	tripsRepo.createShare({
-		tripId,
-		sharedWithUserId: Number(target.id),
-		permission
-	});
-	logAudit(ownerId, 'trip_share_user', 'trip', tripId, { sharedWithUserId: Number(target.id), permission });
+	return shareWithUserEmail(ownerId, tripId, email, permission);
 }
 
 export function _shareWithGroup(
@@ -110,15 +102,17 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const t = requireOwnedTrip(u.id, parseTripId(params));
 	const rawShares = tripsRepo.listSharesForTrip(t.id);
-	const shares = rawShares.map((s) => ({
-		...s,
-		email: s.sharedWithUserId
-			? (usersRepo.getUserById(s.sharedWithUserId)?.email ?? null)
-			: null,
-		groupName: s.sharedWithGroupId
-			? (tripsRepo.getGroupById(s.sharedWithGroupId)?.name ?? null)
-			: null
-	}));
+	const shares = rawShares.map((s) => {
+		const user = s.sharedWithUserId ? usersRepo.getUserById(s.sharedWithUserId) : null;
+		return {
+			...s,
+			email: user?.email ?? null,
+			displayName: user?.display_name ?? null,
+			groupName: s.sharedWithGroupId
+				? (tripsRepo.getGroupById(s.sharedWithGroupId)?.name ?? null)
+				: null
+		};
+	});
 	const myGroups = listGroupsForUser(u.id);
 	const publicShareUrl = t.publicToken
 		? `${url.origin}/share/${encodeURIComponent(t.publicToken)}`
@@ -126,27 +120,38 @@ export const load: PageServerLoad = ({ locals, params, url }) => {
 	const feedUrl = t.calendarToken
 		? `${url.origin}/trips/${t.id}/calendar/feed?token=${encodeURIComponent(t.calendarToken)}`
 		: null;
-	return { trip: t, shares, groups: myGroups, publicShareUrl, feedUrl };
+	return { trip: t, shares, invitations: listTripInvitations(u.id, t.id), groups: myGroups, publicShareUrl, feedUrl };
 };
 
 export const actions: Actions = {
-	shareUser: async ({ request, locals, params }) => {
+	shareUser: async ({ request, locals, params, url, cookies }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		const permission = parsePermission(f.get('permission'));
+		const permission = parseSharePermission(f.get('permission'));
 		if (!permission) return fail(400, { error: 'Invalid permission' });
-		_shareWithUserEmail(
+		const email = validateShareEmail(String(f.get('email')));
+		if (!email) return fail(400, { error: 'Enter a valid email address' });
+		const result = await emailTripShare(
 			u.id,
 			parseTripId(params),
-			String(f.get('email')),
-			permission
+			email,
+			permission,
+			url.origin
 		);
-		throw redirect(303, `/trips/${params.id}`);
+		setFlash(cookies, result.sent ? (result.pending ? 'Invitation sent.' : 'Trip shared and email sent.') : { message: result.pending ? 'Invitation created, but SMTP is not configured or delivery failed.' : 'Trip shared, but SMTP is not configured or delivery failed.', variant: 'warning' });
+		throw redirect(303, `/trips/${params.id}/share`);
+	},
+	revokeInvitation: async ({ request, locals, params }) => {
+		const user = requireUser(locals);
+		const invitationId = Number((await request.formData()).get('invitationId'));
+		if (!Number.isInteger(invitationId) || invitationId <= 0) return fail(400, { error: 'Invalid invitation' });
+		revokeTripInvitation(user.id, parseTripId(params), invitationId);
+		throw redirect(303, `/trips/${params.id}/share`);
 	},
 	shareGroup: async ({ request, locals, params }) => {
 		const u = requireUser(locals);
 		const f = await request.formData();
-		const permission = parsePermission(f.get('permission'));
+		const permission = parseSharePermission(f.get('permission'));
 		if (!permission) return fail(400, { error: 'Invalid permission' });
 		_shareWithGroup(u.id, parseTripId(params), Number(f.get('groupId')), permission);
 		throw redirect(303, `/trips/${params.id}`);

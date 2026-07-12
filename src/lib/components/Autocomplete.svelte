@@ -15,6 +15,8 @@
 		disabled = false,
 		required = false,
 		fetchSuggestions,
+		textName,
+		onselect,
 		id = name,
 		noResultsText = 'No matches'
 	}: {
@@ -27,6 +29,8 @@
 		disabled?: boolean;
 		required?: boolean;
 		fetchSuggestions: (query: string) => Promise<AutocompleteSuggestion[]>;
+		textName?: string;
+		onselect?: (suggestion: AutocompleteSuggestion | null) => void;
 		id?: string;
 		noResultsText?: string;
 	} = $props();
@@ -60,6 +64,7 @@
 		suggestions = [];
 		open = false;
 		activeIndex = -1;
+		onselect?.(s);
 	}
 
 	function clearSelection() {
@@ -68,6 +73,7 @@
 		selectedLabel = '';
 		suggestions = [];
 		open = false;
+		onselect?.(null);
 	}
 
 	async function runFetch(query: string) {
@@ -91,6 +97,7 @@
 		inputValue = next;
 		selectedId = '';
 		selectedLabel = '';
+		onselect?.(null);
 		if (timer) clearTimeout(timer);
 		timer = setTimeout(() => runFetch(next), 150);
 	}
@@ -163,6 +170,7 @@
 	/>
 	<input
 		{id}
+		name={textName}
 		type="text"
 		role="combobox"
 		class="input {errors[name] ? 'input-error' : ''}"

@@ -66,7 +66,9 @@ export type Scope =
 	| 'user-smtp:write'
 	| 'comments:read'
 	| 'comments:write'
-	| 'search:read';
+	| 'search:read'
+	| 'admin:read'
+	| 'admin:write';
 
 export const ALL_SCOPES: Scope[] = [
 	'trips:read',
@@ -126,7 +128,9 @@ export const ALL_SCOPES: Scope[] = [
 	'user-smtp:write',
 	'comments:read',
 	'comments:write',
-	'search:read'
+	'search:read',
+	'admin:read',
+	'admin:write'
 ];
 
 export { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';

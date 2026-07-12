@@ -2,7 +2,7 @@ import { eq as kitEq, and as kitAnd, ne as kitNe, lt as kitLt, gt as kitGt, inLi
 import { kit } from '$lib/server/db';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
-import type { SegmentType, SegmentStatus, SegmentAttendeeStatus } from '$lib/server/db/mongrelSchema';
+import type { SegmentType, SegmentStatus, SegmentAttendeeStatus, CompanionCategory } from '$lib/server/db/mongrelSchema';
 
 export type KitSegment = Row<typeof segments>;
 export type KitSegmentAttendee = Row<typeof segmentAttendees>;
@@ -19,7 +19,7 @@ export type AttendeeWithCompanion = {
 	segmentId: number;
 	companionId: number;
 	name: string;
-	category: 'adult' | 'child' | 'other';
+	category: CompanionCategory;
 	status: SegmentAttendeeStatus;
 };
 
@@ -187,7 +187,7 @@ function hydrateAttendeesWithCompanions(rows: ReturnType<typeof toAttendeeRow>[]
 			segmentId: r.segmentId,
 			companionId: r.companionId,
 			name: c?.name ?? '',
-			category: (c?.category as 'adult' | 'child' | 'other') ?? 'other',
+			category: (c?.category as CompanionCategory) ?? 'other',
 			status: r.status
 		};
 	});

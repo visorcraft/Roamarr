@@ -4,6 +4,7 @@ import { purgeExpiredSessions } from './auth';
 import { purgeExpiredChallenges } from './passkeys';
 import { purgeExpiredOauth } from './oauth';
 import { refreshWeatherCache, purgeExpiredWeatherCache } from './weather';
+import { purgeExpiredTripInvitations } from './tripSharing';
 import { pruneExpiredRateLimit } from './rateLimit';
 import { pruneExpiredShareWindow } from './emergencyContacts';
 import { pollDueInboxes } from './emailProcessing';
@@ -63,12 +64,13 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 			const sessions = purgeExpiredSessions();
 			const challenges = purgeExpiredChallenges();
 			const oauth = purgeExpiredOauth();
+			const tripInvitations = purgeExpiredTripInvitations();
 			return {
 				reminders,
 				fareChecks,
 				weatherCache,
 				emailProcessing,
-				purges: { sessions, challenges, oauth }
+				purges: { sessions, challenges, oauth, tripInvitations }
 			};
 		})();
 		const summary = await withDeadline(jobs, deadlineMs, 'scheduler tick');

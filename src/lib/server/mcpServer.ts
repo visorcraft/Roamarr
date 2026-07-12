@@ -19,7 +19,7 @@ import { addItem as addChecklistItem, loadChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
-import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES } from './db/mongrelSchema';
+import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, type CompanionCategory } from './db/mongrelSchema';
 import {
 	projectCard,
 	projectLoyalty,
@@ -1290,7 +1290,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						tripId: { type: 'number' },
 						name: { type: 'string' },
-						category: { type: 'string', enum: ['adult', 'child', 'other'] },
+						category: { type: 'string', enum: ['adult', 'child', 'other', 'guide', 'driver'] },
 						dietary: { type: 'string' }
 					},
 					required: ['tripId', 'name']
@@ -1304,6 +1304,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						companionId: { type: 'number' },
 						name: { type: 'string' },
+						category: { type: 'string', enum: ['adult', 'child', 'other', 'guide', 'driver'] },
 						dietary: { type: 'string' }
 					},
 					required: ['companionId']
@@ -2630,7 +2631,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				requireEditableTrip(userId, tripId);
 				const c = insertTripCompanion(userId, tripId, {
 					name: String(args.name ?? ''),
-					category: (args.category as any) ?? 'adult',
+					category: (args.category as CompanionCategory) ?? 'adult',
 					dietary: (args.dietary as string) ?? null
 				});
 				logAudit(userId, 'mcp_companion_create', 'trip_companion', c.id, { tripId });
@@ -2645,6 +2646,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				requireEditableTrip(userId, tripId);
 				patchTripCompanion(userId, tripId, id, {
 					name: (args.name as string) ?? undefined,
+					category: (args.category as CompanionCategory) ?? undefined,
 					dietary: (args.dietary as string) ?? undefined
 				});
 				logAudit(userId, 'mcp_companion_update', 'trip_companion', id, {});

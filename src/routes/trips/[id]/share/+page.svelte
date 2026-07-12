@@ -35,7 +35,10 @@
 						<span class="list-icon">
 							<Icon name="user" class="h-4 w-4" />
 						</span>
-						<span class="list-title text-sm">{s.email}</span>
+						<div class="min-w-0">
+							<p class="list-title text-sm">{s.displayName || s.email}</p>
+							{#if s.displayName}<p class="field-help truncate">{s.email}</p>{/if}
+						</div>
 						<span class="badge badge-slate uppercase">{s.permission}</span>
 					</div>
 					<div class="action-row">
@@ -55,15 +58,26 @@
 	{:else}
 		<p class="empty-text py-4 text-left">Not shared with anyone yet.</p>
 	{/if}
+	{#if data.invitations.length}
+		<h3 class="mt-6 font-semibold">Pending invitations</h3>
+		<ul class="list-stack mt-2">
+			{#each data.invitations as invitation (invitation.id)}
+				<li class="list-item flex items-center justify-between gap-3">
+					<div><p class="list-title text-sm">{invitation.email}</p><p class="field-help uppercase">{invitation.permission} · expires {invitation.expiresAt.slice(0, 10)}</p></div>
+					<form method="POST" action="?/revokeInvitation"><input type="hidden" name="invitationId" value={invitation.id} /><ConfirmButton class="btn btn-danger" message="Revoke this invitation?">Revoke</ConfirmButton></form>
+				</li>
+			{/each}
+		</ul>
+	{/if}
 
 	<form method="POST" action="?/shareUser" class="mt-6 grid gap-4 sm:grid-cols-2" use:enhance={() => { sharingUser = true; return async ({ update }) => { await update(); sharingUser = false; }; }} aria-busy={sharingUser}>
-		<TextField name="email" label="Invite by email" type="email" placeholder="user@example.com" required disabled={sharingUser} />
+		<TextField name="email" label="Email address" type="email" placeholder="user@example.com" required disabled={sharingUser} />
 		<SelectField name="permission" id="permission-user" label="Permission" disabled={sharingUser}>
 				<option value="read">Read</option>
 				<option value="edit">Edit</option>
 		</SelectField>
 		<div class="flex justify-end sm:col-span-2">
-			<button class="btn btn-primary" disabled={sharingUser} class:btn-loading={sharingUser}>Share</button>
+			<button class="btn btn-primary" disabled={sharingUser} class:btn-loading={sharingUser}>Send invitation</button>
 		</div>
 	</form>
 </section>

@@ -501,11 +501,13 @@ Nodemailer, MapLibre GL JS, and Vitest. Recent additions include WebAuthn
 (`@modelcontextprotocol/sdk`), 3D globe rendering (`three`), and tar streaming
 (`tar-fs`).
 
-Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies
-migrations, ensures default settings and benefit templates exist, then starts a
-guarded in-process scheduler. The scheduler runs reminders, fare checks,
-expired-session cleanup, and run pruning without duplicate starts or
-overlapping ticks.
+Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies any
+pending restore, runs migrations, ensures default settings and benefit templates
+exist, then starts a guarded in-process scheduler. The scheduler tick runs
+reminders, fare checks, weather-cache refresh, per-user IMAP ingestion, expiry
+purges (sessions, passkey challenges, OAuth tokens, rate-limit buckets, share
+windows), memtable flush, hourly compaction, and run pruning — without duplicate
+starts or overlapping ticks.
 
 Routes stay thin. Server-side business logic lives under `src/lib/server/`.
 Trip access is centralized in three ownership helpers — `requireOwnedTrip`

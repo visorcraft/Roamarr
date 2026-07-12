@@ -60,5 +60,7 @@ export const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
 	'user-smtp:write': 'Set or clear your SMTP override',
 	'comments:read': 'View trip comments',
 	'comments:write': 'Create and delete your trip comments',
-	'search:read': 'Run global search across your account'
+	'search:read': 'Run global search across your account',
+	'admin:read': 'View users, audit events, and system statistics (admins only)',
+	'admin:write': 'Create, update, delete, and reset users (admins only)'
 };

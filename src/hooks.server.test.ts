@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { createHash, randomBytes } from 'node:crypto';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./lib/server/db', async () => {
@@ -17,10 +18,12 @@ vi.mock('./lib/server/boot', async () => ({
 	getBootError: () => bootMock.bootError
 }));
 
-import { handle } from './hooks.server';
+import { handle, requiredApiScope } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
+import { createAuthorizationCode, createClient } from './lib/server/oauth';
+import { POST as tokenPost } from './routes/oauth/token/+server';
 
 const ev = (path: string) => ({
 	url: new URL('http://x' + path),
@@ -46,6 +49,63 @@ test('anonymous hitting a protected route is redirected to /login', async () => 
 	const res: any = await run('/trips');
 	expect(res.status).toBe(302);
 	expect(res.headers.get('location')).toBe('/login');
+});
+
+test('OAuth registration is public', async () => {
+	updateSettings({ setupComplete: true });
+	expect((await run('/oauth/register') as Response).status).toBe(200);
+});
+
+test('maps mobile API methods to least-privilege scopes', () => {
+	expect(requiredApiScope('/api/cards', 'GET')).toBe('cards:read');
+	expect(requiredApiScope('/api/cards/3', 'DELETE')).toBe('cards:write');
+	expect(requiredApiScope('/api/travel-documents/3', 'PATCH')).toBe('travel-docs:write');
+	expect(requiredApiScope('/api/groups', 'GET')).toBe('sharing:read');
+	expect(requiredApiScope('/api/fare-watches', 'POST')).toBe('fares:write');
+	expect(requiredApiScope('/api/mobile-admin', 'GET')).toBe('admin:read');
+	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBeNull();
+});
+
+test('rejects invalid bearer tokens with JSON instead of login redirect', async () => {
+	updateSettings({ setupComplete: true });
+	const event = ev('/api/cards');
+	event.request = new Request(event.url, { headers: { authorization: 'Bearer invalid' } });
+	const res = await handle({ event: event as any, resolve: async () => new Response('ok') }) as Response;
+	expect(res.status).toBe(401);
+	expect(await res.json()).toEqual({ error: 'Invalid or expired access token' });
+});
+
+test('authenticates valid bearer tokens and exposes their scopes', async () => {
+	updateSettings({ setupComplete: true });
+	const user = makeKitUser({ email: 'mobile@x.c', password_hash: 'x', display_name: 'Mobile' });
+	const { client, plaintextSecret } = createClient(Number(user.id), {
+		clientName: 'Mobile test', redirectUris: ['https://app.example/cb'], scopes: ['cards:read']
+	});
+	const verifier = randomBytes(32).toString('base64url');
+	const { code } = createAuthorizationCode({
+		userId: Number(user.id), clientId: client.clientId, scopes: ['cards:read'],
+		codeChallenge: createHash('sha256').update(verifier).digest('base64url'), redirectUri: client.redirectUris[0]
+	});
+	const tokenResponse = await tokenPost({
+		request: new Request('http://x/oauth/token', { method: 'POST', body: new URLSearchParams({
+			grant_type: 'authorization_code', code, client_id: client.clientId,
+			client_secret: plaintextSecret!, code_verifier: verifier
+		}) }), getClientAddress: () => '127.0.0.1'
+	} as any);
+	const { access_token } = await tokenResponse.json();
+	const event = ev('/api/cards');
+	event.request = new Request(event.url, { headers: { authorization: `Bearer ${access_token}` } });
+	const response = await handle({ event: event as any, resolve: async ({ locals }) => {
+		expect(locals.user?.id).toBe(Number(user.id));
+		expect(locals.oauth?.scopes).toEqual(['cards:read']);
+		return new Response('ok');
+	} }) as Response;
+	expect(response.status).toBe(200);
+	const writeEvent = ev('/api/cards/1');
+	writeEvent.request = new Request(writeEvent.url, { method: 'DELETE', headers: { authorization: `Bearer ${access_token}` } });
+	const denied = await handle({ event: writeEvent as any, resolve: async () => new Response('should not run') }) as Response;
+	expect(denied.status).toBe(403);
+	expect(await denied.json()).toEqual({ error: 'Missing required scope: cards:write' });
 });
 
 function parseCsp(header: string | null) {

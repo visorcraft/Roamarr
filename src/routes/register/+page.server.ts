@@ -1,10 +1,9 @@
 import { error, fail, redirect, type Actions } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import * as usersRepo from '$lib/server/repositories/usersRepo';
 import { getSettings } from '$lib/server/settings';
-import { hashPassword, createSession, sessionCookieOptions } from '$lib/server/auth';
+import { createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
-import { normalizeEmail } from '$lib/server/users';
+import { registerUser } from '$lib/server/users';
 
 function gate() {
 	const s = getSettings();
@@ -17,35 +16,7 @@ export const load: PageServerLoad = () => {
 };
 
 export async function _registerUser(email: string, password: string, displayName: string) {
-	const defaults = getSettings();
-	const existing = usersRepo.getUserByEmail(normalizeEmail(email));
-	if (existing) throw new Error('Email already registered.');
-	const u = usersRepo.createUser({
-		email: normalizeEmail(email),
-		password_hash: await hashPassword(password),
-		display_name: displayName,
-		role: 'user',
-		disabled: false,
-		must_reset_password: false,
-		timezone: defaults.defaultTimezone,
-		flight_checkin_lead_hours: BigInt(defaults.defaultFlightCheckinLeadHours),
-		document_expiry_lead_days: BigInt(defaults.defaultDocumentExpiryLeadDays),
-		email_notifications: true,
-		webhook_notifications: true,
-		theme_id: 'system',
-		default_currency: defaults.defaultCurrency,
-		calendar_token: null,
-		calendar_token_expires_at: null
-	} as usersRepo.CreateUserInput);
-	return {
-		id: Number(u.id),
-		email: u.email,
-		displayName: u.display_name ?? '',
-		role: u.role,
-		timezone: u.timezone,
-		flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
-		documentExpiryLeadDays: Number(u.document_expiry_lead_days)
-	};
+	return registerUser(email, password, displayName);
 }
 
 export const actions: Actions = {

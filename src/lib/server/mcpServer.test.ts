@@ -73,6 +73,16 @@ describe('mcpServer', () => {
 		expect(res.content[0].text).toContain('trips:write');
 	});
 
+	test('companion tools accept guide and driver roles', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Role trip' });
+		const { client } = await connect(userId, ['companions:write', 'companions:read']);
+		const created: any = await client.callTool({ name: 'roamarr_companion_create', arguments: { tripId: trip.id, name: 'Pat', category: 'guide' } });
+		const companionId = JSON.parse(created.content[0].text).id;
+		await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId, category: 'driver' } });
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items[0].category).toBe('driver');
+	});
+
 	test('trips:write creates a trip owned by the token user', async () => {
 		const { client } = await connect(userId, ['trips:write', 'trips:read']);
 		const res: any = await client.callTool({ name: 'roamarr_trip_create', arguments: { name: 'Lisbon' } });

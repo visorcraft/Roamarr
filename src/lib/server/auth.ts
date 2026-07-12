@@ -56,6 +56,11 @@ function toAppUser(u: KitUser): AppUser {
 	};
 }
 
+export function validateOAuthUser(userId: number) {
+	const user = usersRepo.getUserById(userId);
+	return user && !user.disabled ? toAppUser(user) : null;
+}
+
 export async function hashPassword(pw: string) {
 	if (pw.length < 8 || Buffer.byteLength(pw) > 1024)
 		throw new Error('password must be 8–1024 bytes');

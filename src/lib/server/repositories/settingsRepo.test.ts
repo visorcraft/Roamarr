@@ -31,6 +31,7 @@ test('getSettings returns the singleton row with defaults', () => {
 	expect(s.sessionCookieSameSite).toBe('lax');
 	expect(s.allowUserImap).toBe(true);
 	expect(s.globalImapEnabled).toBe(true);
+	expect(s.allowUserMcpClients).toBe(false);
 	expect(s.allowUserSmtp).toBe(false);
 	expect(s.allowUserParsingProviders).toBe(false);
 });

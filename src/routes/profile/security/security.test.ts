@@ -10,6 +10,7 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { load, actions } from './+page.server';
+import { load as mcpClientsLoad } from '../mcp-clients/+page.server';
 import { hashPassword } from '$lib/server/auth';
 import { generateSecret, enableTwoFactor, getTwoFactorState } from '$lib/server/twoFactor';
 import {
@@ -21,6 +22,7 @@ import {
 	oauthTokens
 } from '$lib/server/db/mongrelSchema';
 import { makeUser } from '../../../../tests/helpers';
+import { getSettings, updateSettings } from '$lib/server/settings';
 
 function kitDb(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -48,6 +50,21 @@ beforeEach(() => {
 	kit.deleteFrom(twoFactorBackupCodes).executeSync();
 	kit.deleteFrom(userTwoFactor).executeSync();
 	kit.deleteFrom(users).executeSync();
+	updateSettings({ allowUserMcpClients: true });
+});
+
+test('MCP clients policy blocks the dedicated page when disabled', async () => {
+	const u = makeUser(kitDb(), { email: 'mcp@x.c' });
+	expect(getSettings().allowUserMcpClients).toBe(true);
+	updateSettings({ allowUserMcpClients: false });
+	await expect(mcpClientsLoad({ locals: { user: u }, url: new URL('http://localhost/profile/mcp-clients') } as any))
+		.rejects.toMatchObject({ status: 404 });
+});
+
+test('old MCP clients security tab redirects to the dedicated page', async () => {
+	const u = makeUser(kitDb(), { email: 'old-mcp@x.c' });
+	await expect(load({ locals: { user: u }, url: new URL('http://localhost/profile/security?tab=api-clients') } as any))
+		.rejects.toMatchObject({ status: 303, location: '/profile/mcp-clients' });
 });
 
 test('load returns security data', async () => {

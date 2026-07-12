@@ -36,6 +36,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 		themeColor: theme.themeColor,
 		instanceName: s.instanceName,
 		allowRegistration: s.allowRegistration,
+		allowUserMcpClients: s.allowUserMcpClients,
 		dateFormat: s.defaultDateFormat || 'yyyy-MM-dd',
 		datetimeFormat: s.defaultDatetimeFormat || 'yyyy-MM-dd h:mm a',
 		flash: locals.flash,

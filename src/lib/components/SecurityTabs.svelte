@@ -4,8 +4,7 @@
 	const tabs = [
 		{ id: 'password', label: 'Password' },
 		{ id: '2fa', label: '2FA' },
-		{ id: 'passkeys', label: 'Passkeys' },
-		{ id: 'api-clients', label: 'MCP Clients' }
+		{ id: 'passkeys', label: 'Passkeys' }
 	];
 
 	const activeTab = $derived(page.url.searchParams.get('tab') ?? tabs[0].id);

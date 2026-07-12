@@ -81,6 +81,7 @@ export function _saveAdminSettings(
 		mapsTileApiKey?: string;
 		sessionCookieSameSite?: SessionCookieSameSite;
 		oauthClientAllowList?: string[] | null;
+		allowUserMcpClients?: boolean;
 	}
 ) {
 	if (
@@ -154,6 +155,7 @@ export function _saveAdminSettings(
 	if (i.mapsTileAttribution !== undefined) patch.mapsTileAttribution = i.mapsTileAttribution ?? null;
 	if (i.sessionCookieSameSite !== undefined) patch.sessionCookieSameSite = i.sessionCookieSameSite ?? 'lax';
 	if (i.oauthClientAllowList !== undefined) patch.oauthClientAllowList = i.oauthClientAllowList ?? null;
+	if (i.allowUserMcpClients !== undefined) patch.allowUserMcpClients = i.allowUserMcpClients;
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
 	if (i.globalImapPassword !== undefined) patch.globalImapPassword = i.globalImapPassword ? encrypt(i.globalImapPassword) : null;
 	if (i.globalAiToken !== undefined) patch.globalAiToken = i.globalAiToken ? encrypt(i.globalAiToken) : null;
@@ -331,8 +333,10 @@ export const actions: Actions = {
 			.split('\n')
 			.map((s) => s.trim())
 			.filter(Boolean);
+		const allowUserMcpClients = f.get('allowUserMcpClients') === 'on';
 		_saveAdminSettings(u.id, {
-			oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null
+			allowUserMcpClients,
+			...(allowUserMcpClients ? { oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null } : {})
 		});
 		setFlash(cookies, 'OAuth client settings saved.');
 		throw redirect(303, TAB_REDIRECTS.oauth);

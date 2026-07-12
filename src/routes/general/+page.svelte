@@ -21,9 +21,11 @@
 	const pageTitle = $derived({ general: 'Configuration', maps: 'Maps', email: 'Email', webhook: 'Webhooks', oauth: 'MCP Clients' }[tab]);
 	let globalAiAuthMode = $state<'token' | 'oauth'>('token');
 	let globalImapEnabled = $state(true);
+	let allowUserMcpClients = $state(false);
 	onMount(() => {
 		globalAiAuthMode = s.globalAiAuthMode ?? 'token';
 		globalImapEnabled = s.globalImapEnabled;
+		allowUserMcpClients = s.allowUserMcpClients;
 	});
 
 	const currencyOptions = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'NZD', 'MXN'];
@@ -551,6 +553,8 @@
 						Controls which OAuth clients may connect to Roamarr's MCP server. When the allow-list is empty, users can register and authorize any OAuth client. When it
 						contains one or more client IDs, only those clients may be authorized.
 					</p>
+					<label class="checkbox-label mt-4" for="allowUserMcpClients"><input id="allowUserMcpClients" name="allowUserMcpClients" type="checkbox" class="checkbox" bind:checked={allowUserMcpClients} />Allow users to set up MCP Clients</label>
+					{#if allowUserMcpClients}
 					<div class="settings-rows mt-4">
 						<div class="settings-row items-start">
 							<div class="self-start">
@@ -566,6 +570,7 @@
 							></textarea>
 						</div>
 					</div>
+					{/if}
 
 					<div class="mt-6 flex justify-end">
 						<button class="btn btn-primary">Save OAuth settings</button>

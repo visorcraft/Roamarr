@@ -1,6 +1,7 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { ALL_SCOPES, createClient, getOAuthClientAllowList, type Scope } from '$lib/server/oauth';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { getSettings } from '$lib/server/settings';
 
 const failure = (error: string, error_description: string, status = 400) => json({ error, error_description }, { status });
 
@@ -29,6 +30,8 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 
 	if ((getOAuthClientAllowList()?.length ?? 0) > 0)
 		return failure('invalid_client_metadata', 'Dynamic registration is disabled while the client allow-list is configured');
+	if (!getSettings().allowUserMcpClients)
+		return failure('invalid_client_metadata', 'User MCP client setup is disabled by the administrator', 403);
 	if (!Array.isArray(body.redirect_uris) || body.redirect_uris.length < 1 || body.redirect_uris.length > 10 || !body.redirect_uris.every(validRedirectUri))
 		return failure('invalid_redirect_uri', 'Provide 1 to 10 HTTPS callback URLs; loopback HTTP URLs are also allowed');
 

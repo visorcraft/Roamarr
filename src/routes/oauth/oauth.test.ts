@@ -43,7 +43,7 @@ describe('oauth routes', () => {
 		resetRateLimit();
 		ctx.kit.deleteFrom(oauthTokens).executeSync();
 		ctx.kit.deleteFrom(oauthClients).executeSync();
-		updateSettings({ oauthClientAllowList: null });
+		updateSettings({ oauthClientAllowList: null, allowUserMcpClients: true });
 		user = makeUser(ctx.kit);
 	});
 
@@ -72,6 +72,16 @@ describe('oauth routes', () => {
 			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
 			expect(response.status).toBe(400);
 			expect(await response.json()).toMatchObject({ error: 'invalid_redirect_uri' });
+		});
+
+		test('rejects registration when user MCP clients are disabled', async () => {
+			updateSettings({ allowUserMcpClients: false });
+			const request = new Request('http://localhost/oauth/register', {
+				method: 'POST', headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ redirect_uris: ['https://webui.example.com/callback'] })
+			});
+			const response = await registerPost({ request, getClientAddress: () => '127.0.0.1' } as any);
+			expect(response.status).toBe(403);
 		});
 	});
 

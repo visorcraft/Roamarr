@@ -282,7 +282,7 @@
 		label: string;
 		admin?: boolean;
 		items: NavItem[];
-	}[] = [
+	}[] = $derived([
 		{
 			label: 'Plan',
 			items: [
@@ -302,6 +302,7 @@
 						{ href: '/profile', label: 'Account' },
 						{ href: '/profile/contacts', label: 'Emergency Contacts' },
 						{ href: '/profile/email_processing', label: 'Email Settings', activePaths: ['/profile/email_parsing', '/profile/email_sender'] },
+						...(data.allowUserMcpClients ? [{ href: '/profile/mcp-clients', label: 'MCP Clients' }] : []),
 						{ href: '/profile/security', label: 'Security' }
 					]
 				},
@@ -359,7 +360,7 @@
 				}
 			]
 		}
-	];
+	]);
 
 	const STORAGE_KEY = 'roamarr.sidebar.sections';
 

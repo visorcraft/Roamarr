@@ -449,7 +449,12 @@ Clients such as Open WebUI can register automatically:
 Dynamic clients are public PKCE clients unless they explicitly request
 `client_secret_post`. Roamarr validates callback URLs, allowing HTTPS URLs and
 HTTP only for loopback hosts. The first user who approves a dynamically
-registered client can manage it under **Profile → Security → MCP Clients**.
+registered client can manage it under **Profile → MCP Clients**.
+
+Administrators can hide and block this page, manual registration, and Dynamic
+Client Registration by disabling **Configuration → MCP Clients → Allow users to
+set up MCP Clients**. This policy is disabled by default on new installations.
+Existing issued tokens remain independently revocable.
 
 If the administrator configures **Configuration → MCP Clients → Allowed client
 IDs**, open Dynamic Client Registration is disabled. Use manual registration
@@ -458,7 +463,7 @@ then add its generated client ID before restoring the restriction.
 
 #### Manual registration
 
-Use **Profile → Security → MCP Clients** when a client supplies fixed callback
+Use **Profile → MCP Clients** when a client supplies fixed callback
 URLs or does not support Dynamic Client Registration:
 
 1. Enter a recognizable client name.

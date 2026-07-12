@@ -291,8 +291,10 @@ test('oauthClientAllowList round-trips and clears when empty', () => {
 		defaultCurrency: 'USD',
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90,
+		allowUserMcpClients: false,
 		oauthClientAllowList: ['client-a', 'client-b']
 	});
+	expect(getSettings().allowUserMcpClients).toBe(false);
 	expect(getSettings().oauthClientAllowList).toEqual(['client-a', 'client-b']);
 
 	saveAdminSettings(Number(u.id), {

@@ -36,6 +36,7 @@ function securityUrl(tab: string) {
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
+	if (url.searchParams.get('tab') === 'api-clients') throw redirect(303, '/profile/mcp-clients');
 	const u = requireUser(locals);
 	const state = getTwoFactorState(u.id);
 	const setup = generateSecret(u.email);

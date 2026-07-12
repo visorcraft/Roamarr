@@ -11,7 +11,8 @@
 
 	let { data, form } = $props();
 
-	const activeTab = $derived(page.url.searchParams.get('tab') ?? 'password');
+	const mcpPage = $derived(page.url.pathname === '/profile/mcp-clients');
+	const activeTab = $derived(mcpPage ? 'api-clients' : page.url.searchParams.get('tab') ?? 'password');
 	const tfa = $derived(data.state);
 	const backupCodes = $derived(form?.backupCodes as string[] | undefined);
 
@@ -78,12 +79,12 @@
 
 <header class="page-header">
 	<div>
-		<h1 class="page-title">Security</h1>
-		<p class="page-subtitle">Manage your password, two-factor authentication, passkeys, and API connections.</p>
+		<h1 class="page-title">{mcpPage ? 'MCP Clients' : 'Security'}</h1>
+		<p class="page-subtitle">{mcpPage ? 'Connect and manage applications that access Roamarr through MCP.' : 'Manage your password, two-factor authentication, and passkeys.'}</p>
 	</div>
 </header>
 
-<SecurityTabs />
+{#if !mcpPage}<SecurityTabs />{/if}
 
 {#if form?.error}<p class="notice notice-error mt-6">{form.error}</p>{/if}
 

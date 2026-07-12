@@ -21,15 +21,22 @@ export function requiredApiScope(path: string, method: string): Scope | null {
 	const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
 	const routes: Array<[RegExp, string]> = [
 		[/^\/api\/trips(?:\/|$)/, 'trips'],
+		[/^\/api\/mobile\/trips(?:\/|$)/, 'trips'],
+		[/^\/api\/mobile\/trip-transfer(?:\/|$)/, 'trips'],
+		[/^\/api\/mobile\/expenses(?:\/|$)/, 'expenses'],
 		[/^\/api\/cards(?:\/|$)/, 'cards'],
 		[/^\/api\/loyalty(?:\/|$)/, 'loyalty'],
 		[/^\/api\/insurance(?:\/|$)/, 'insurance'],
 		[/^\/api\/travel-documents(?:\/|$)/, 'travel-docs'],
 		[/^\/api\/reminders(?:\/|$)/, 'reminders'],
+		[/^\/api\/mobile\/notifications(?:\/|$)/, 'notifications'],
 		[/^\/api\/fare-watches(?:\/|$)/, 'fares'],
+		[/^\/api\/fare-providers(?:\/|$)/, 'fares'],
 		[/^\/api\/groups(?:\/|$)/, 'sharing'],
 		[/^\/api\/(?:cities|maps)(?:\/|$)/, 'places'],
-		[/^\/api\/mobile-admin(?:\/|$)/, 'admin']
+		[/^\/api\/mobile-admin(?:\/|$)/, 'admin'],
+		[/^\/api\/mobile\/security(?:\/|$)/, 'security'],
+		[/^\/api\/webauthn\/register(?:\/|$)/, 'security']
 	];
 	const resource = routes.find(([pattern]) => pattern.test(path))?.[1];
 	return resource ? `${resource}:${access}` as Scope : null;

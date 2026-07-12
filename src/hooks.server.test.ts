@@ -62,8 +62,14 @@ test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/travel-documents/3', 'PATCH')).toBe('travel-docs:write');
 	expect(requiredApiScope('/api/groups', 'GET')).toBe('sharing:read');
 	expect(requiredApiScope('/api/fare-watches', 'POST')).toBe('fares:write');
+	expect(requiredApiScope('/api/fare-providers', 'PATCH')).toBe('fares:write');
 	expect(requiredApiScope('/api/mobile-admin', 'GET')).toBe('admin:read');
-	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBeNull();
+	expect(requiredApiScope('/api/mobile/trips/1/poster', 'POST')).toBe('trips:write');
+	expect(requiredApiScope('/api/mobile/trip-transfer', 'GET')).toBe('trips:read');
+	expect(requiredApiScope('/api/mobile/expenses/1/attachments', 'GET')).toBe('expenses:read');
+	expect(requiredApiScope('/api/mobile/notifications', 'PATCH')).toBe('notifications:write');
+	expect(requiredApiScope('/api/mobile/security', 'POST')).toBe('security:write');
+	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBe('security:write');
 });
 
 test('rejects invalid bearer tokens with JSON instead of login redirect', async () => {

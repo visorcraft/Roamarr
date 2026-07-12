@@ -62,5 +62,7 @@ export const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
 	'comments:write': 'Create and delete your trip comments',
 	'search:read': 'Run global search across your account',
 	'admin:read': 'View users, audit events, and system statistics (admins only)',
-	'admin:write': 'Create, update, delete, and reset users (admins only)'
+	'admin:write': 'Create, update, delete, and reset users (admins only)',
+	'security:read': 'View your security settings, sessions, passkeys, and OAuth clients',
+	'security:write': 'Change security settings and revoke your sessions or credentials'
 };

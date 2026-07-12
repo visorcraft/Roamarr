@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test('update instance name', async ({ page }) => {
 	await page.goto('/general', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('General');
+	await expect(page.locator('h1')).toHaveText('Configuration');
 
 	const newName = `Roamarr E2E ${Date.now()}`;
 	await page.getByLabel('Instance name').fill(newName);

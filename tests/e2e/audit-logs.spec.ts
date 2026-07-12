@@ -2,7 +2,7 @@ import { test, expect } from './fixtures';
 
 test('applying filters resets pagination to page 1', async ({ page }) => {
 	await page.goto('/audit-logs?page=2', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('Audit log');
+	await expect(page.locator('h1')).toHaveText('Audit Logs');
 
 	const response = page.waitForResponse((res) => {
 		const url = new URL(res.url());
@@ -14,7 +14,7 @@ test('applying filters resets pagination to page 1', async ({ page }) => {
 
 test('resetting filters returns to page 1', async ({ page }) => {
 	await page.goto('/audit-logs?page=2&action=login', { waitUntil: 'networkidle' });
-	await expect(page.locator('h1')).toContainText('Audit log');
+	await expect(page.locator('h1')).toHaveText('Audit Logs');
 
 	const response = page.waitForResponse((res) => {
 		const url = new URL(res.url());

@@ -1484,7 +1484,7 @@ button.card:hover,
 		@apply bg-amber-500/15 text-amber-300 ring-amber-400/30;
 	}
 
-	/* Trip detail — Seerr-inspired hero + TripIt timeline */
+	/* Trip detail — Seerr-inspired hero + Trip Tracker timeline */
 	.trip-detail {
 		@apply -mt-6 lg:-mt-8;
 	}

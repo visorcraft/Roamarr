@@ -95,7 +95,7 @@
 
 ## What is Roamarr?
 
-Roamarr is a TripIt-style travel organizer you run yourself. It is built as a
+Roamarr is a Trip Tracker-style travel organizer you run yourself. It is built as a
 single Node.js application with a MongrelDB database, server-rendered SvelteKit
 pages, and a practical app shell designed for repeated use rather than a
 marketing dashboard.

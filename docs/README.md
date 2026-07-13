@@ -4,7 +4,7 @@
 # Roamarr Documentation
 
 Welcome to the Roamarr documentation. Roamarr is a self-hosted,
-single-container travel organizer — a TripIt-style tool for managing trips,
+single-container travel organizer — a Trip Tracker-style tool for managing trips,
 segments, sharing, reminders, documents, and more.
 
 ## Getting started

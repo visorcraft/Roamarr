@@ -1694,7 +1694,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						startDate: t.startDate, endDate: t.endDate, status: t.status
 					})),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_trip_get': {
@@ -1853,7 +1852,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					lastVisitedOn: p.lastVisitedOn,
 					source: p.source
 				}));
-				return textResult({ items, nextCursor: page.nextCursor, truncated: page.truncated });
+				return textResult({ items, nextCursor: page.nextCursor, });
 			}
 			case 'roamarr_places_mark': {
 				if (!hasScope(scopes, 'places:write')) return scopeError('places:write');
@@ -2014,7 +2013,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					tripId,
 					items: page.items,
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_expense_update': {
@@ -2108,7 +2106,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						status: r.status
 					})),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_reminder_update': {
@@ -2152,7 +2149,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				return textResult({
 					items: page.items.map((c) => projectCard(c)),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_card_create': {
@@ -2204,7 +2200,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				return textResult({
 					items: page.items.map((l) => projectLoyalty(l)),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_loyalty_create': {
@@ -2254,7 +2249,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				return textResult({
 					items: page.items.map((p) => projectInsurance(p)),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_insurance_create': {
@@ -2311,7 +2305,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				return textResult({
 					items: page.items.map((d) => projectTravelDocument(d)),
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_travel_doc_create': {
@@ -2368,7 +2361,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					tripId,
 					items: page.items,
 					nextCursor: page.nextCursor,
-					truncated: page.truncated
 				});
 			}
 			case 'roamarr_doc_link_create': {

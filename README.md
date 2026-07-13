@@ -523,6 +523,22 @@ under `src/lib/server/db/`. Map rendering uses MapLibre GL JS
 with configurable raster tile providers; city data is imported from GeoNames
 `cities1000.zip`.
 
+### Map and globe attribution
+
+Roamarr bundles and renders data from third-party sources:
+
+- Country borders in the 3D globe (`static/maps/countries.geojson`) are from
+  [Natural Earth](https://www.naturalearthdata.com/) (public domain).
+- The optional Earth texture is NASA's
+  [Blue Marble](https://visibleearth.nasa.gov/collection/1484/blue-marble)
+  imagery (public domain).
+- City points and labels come from
+  [GeoNames](https://www.geonames.org/) under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Default raster tiles come from
+  [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, with
+  attribution passed through from the configured tile provider.
+
 ## Contribute
 
 Contributions are welcome through the standard fork-and-pull-request workflow.

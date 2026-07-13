@@ -815,20 +815,20 @@
 				{#if isEditor}
 					<form method="POST" action="?/addCompanion" class="trip-modern-person-form" use:enhance>
 						{#if data.owner === true}
-							<div class="sm:col-span-2"><Autocomplete name="selectedUserId" textName="name" id="companion-name" label="Name" value="" valueId={null} placeholder="Type a name or choose a Roamarr user" required fetchSuggestions={fetchRoamarrUsers} onselect={(user) => (inviteEmail = user?.secondary ?? '')} /></div>
+							<div class="field"><Autocomplete name="selectedUserId" textName="name" id="companion-name" label="Name" value="" valueId={null} placeholder="Type a name or choose a user" required fetchSuggestions={fetchRoamarrUsers} onselect={(user) => (inviteEmail = user?.secondary ?? '')} /></div>
 						{:else}
-							<div class="field sm:col-span-2"><label class="label" for="companion-name">Name</label><input id="companion-name" name="name" class="input text-sm" placeholder="Name" required /></div>
+							<div class="field"><label class="label" for="companion-name">Name</label><input id="companion-name" name="name" class="input text-sm" placeholder="Name" required /></div>
 						{/if}
 						<div class="field">
 							<label class="label" for="companion-category">Role</label>
 							<select id="companion-category" name="category" class="input text-sm" value={travelerCategory} onchange={(event) => updateTravelerCategory(event.currentTarget.value)}>
-								<option value="adult">Adult</option><option value="child">Child</option><option value="other">Other</option><option value="guide">Guide</option><option value="driver">Driver</option>
+								<option value="adult">Adult</option><option value="child">Child</option><option value="guide">Guide</option><option value="driver">Driver</option><option value="other">Other</option>
 							</select>
 						</div>
 						{#if data.owner === true && travelerCategory !== 'guide' && travelerCategory !== 'driver'}
-							<label class="checkbox-label self-end pb-2"><input type="checkbox" name="invite" value="1" class="checkbox" bind:checked={inviteTraveler} /> Give Roamarr access</label>
+							<label class="checkbox-label self-end pb-2 sm:col-span-2"><input type="checkbox" name="invite" value="1" class="checkbox" bind:checked={inviteTraveler} /> Invite to Roamarr</label>
 							{#if inviteTraveler}
-								<div class="field sm:col-span-2"><label class="label" for="companion-email">Email address</label><input id="companion-email" name="email" type="email" class="input text-sm" placeholder="user@example.com" required bind:value={inviteEmail} /></div>
+								<div class="field"><label class="label" for="companion-email">Email address</label><input id="companion-email" name="email" type="email" class="input text-sm" placeholder="user@example.com" required bind:value={inviteEmail} /></div>
 								<div class="field"><label class="label" for="companion-permission">Permission</label><select id="companion-permission" name="permission" class="input text-sm"><option value="read">Read only</option><option value="edit">Can edit</option></select></div>
 							{/if}
 						{/if}

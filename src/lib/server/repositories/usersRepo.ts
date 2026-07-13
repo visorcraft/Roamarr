@@ -1,4 +1,4 @@
-import { eq as kitEq, and, ne, lt, asc } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and, ne, lt, asc, desc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 import { compareRows } from '$lib/server/sortUtils';
@@ -135,7 +135,7 @@ export function listSessionsForUser(userId: number): KitSession[] {
 	return kit
 		.selectFrom(sessions)
 		.where(kitEq(sessions.user_id, toBigInt(userId)))
-		.orderBy(asc(sessions.created_at))
+		.orderBy(desc(sessions.created_at))
 		.executeSync();
 }
 

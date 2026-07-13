@@ -26,6 +26,7 @@ import {
 	projectLoyalty,
 	projectInsurance,
 	projectTravelDocument,
+	paginateList,
 	requireConfirm
 } from './mcpHelpers';
 
@@ -444,8 +445,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		tools: [
 			{
 				name: 'roamarr_trip_list',
-				description: 'List all trips for the authenticated user.',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List all trips for the authenticated user. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_trip_get',
@@ -572,8 +579,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_places_list',
-				description: 'List visited countries and U.S. states.',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List visited countries and U.S. states. Cursor-paginated across both collections.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_places_mark',
@@ -823,8 +836,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// ---- Round 2: wallet, sharing, calendar, contacts, profile, notifications ----
 			{
 				name: 'roamarr_card_list',
-				description: 'List your payment cards (network + last4 only; never full PAN).',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List your payment cards (network + last4 only; never full PAN). Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_card_create',
@@ -860,8 +879,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_loyalty_list',
-				description: 'List your loyalty programs. Member numbers are redacted by default.',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List your loyalty programs. Member numbers are redacted by default. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_loyalty_create',
@@ -900,8 +925,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_insurance_list',
-				description: 'List your insurance policies. Policy numbers and notes redacted by default.',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List your insurance policies. Policy numbers and notes redacted by default. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_insurance_create',
@@ -943,8 +974,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_travel_doc_list',
-				description: 'List your travel documents (passport, visa, etc.). Encrypted numbers redacted.',
-				inputSchema: { type: 'object', properties: {} }
+				description: 'List your travel documents (passport, visa, etc.). Encrypted numbers redacted. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
 			},
 			{
 				name: 'roamarr_travel_doc_create',
@@ -986,10 +1023,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_doc_link_list',
-				description: 'List per-trip document links for a trip.',
+				description: 'List per-trip document links for a trip. Cursor-paginated.',
 				inputSchema: {
 					type: 'object',
-					properties: { tripId: { type: 'number' } },
+					properties: {
+						tripId: { type: 'number' },
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					},
 					required: ['tripId']
 				}
 			},
@@ -1640,12 +1681,21 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// which silently hid trips shared with the calling user.
 				const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
 				const trips = tripIds.map((id) => safeTripProjection(id, userId));
-				return textResult(trips.map((t) => ({
-					id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
-					destinationCountryCode: t.destinationCountryCode,
-					destinationCityName: t.destinationCityName,
-					startDate: t.startDate, endDate: t.endDate, status: t.status
-				})));
+				const page = paginateList(
+					trips,
+					args,
+					(t) => t.id
+				);
+				return textResult({
+					items: page.items.map((t) => ({
+						id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
+						destinationCountryCode: t.destinationCountryCode,
+						destinationCityName: t.destinationCityName,
+						startDate: t.startDate, endDate: t.endDate, status: t.status
+					})),
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_trip_get': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
@@ -1780,7 +1830,30 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_places_list': {
 				if (!hasScope(scopes, 'places:read')) return scopeError('places:read');
-				return textResult(listVisited(userId));
+				// Ponytail: paginate a flat (kind, code, createdAt) view across
+				// both collections so the cursor covers them as one stream.
+				const visited = listVisited(userId);
+				const flat = [
+					...visited.countries.map((p) => ({ kind: 'country' as const, ...p })),
+					...visited.usStates.map((p) => ({ kind: 'state' as const, ...p }))
+				].sort((a, b) => {
+					if (a.createdAt !== b.createdAt) return b.createdAt.localeCompare(a.createdAt);
+					return a.code.localeCompare(b.code);
+				});
+				const page = paginateList(
+					flat,
+					args,
+					(p) => `${p.kind}:${p.code}`
+				);
+				const items = page.items.map((p) => ({
+					kind: p.kind,
+					code: p.code,
+					visitedOn: p.visitedOn,
+					firstVisitedOn: p.firstVisitedOn,
+					lastVisitedOn: p.lastVisitedOn,
+					source: p.source
+				}));
+				return textResult({ items, nextCursor: page.nextCursor, truncated: page.truncated });
 			}
 			case 'roamarr_places_mark': {
 				if (!hasScope(scopes, 'places:write')) return scopeError('places:write');
@@ -1933,25 +2006,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_expense_list': {
 				if (!hasScope(scopes, 'expenses:read')) return scopeError('expenses:read');
 				const { listTripExpenses } = await import('./tripExpenses/repository');
-				const { clampLimit, encodeCursor, decodeCursor } = await import('./mcpHelpers');
 				const tripId = Number(args.tripId);
 				requireViewableTrip(userId, tripId);
 				const all = listTripExpenses(tripId);
-				const limit = clampLimit(args.limit);
-				// Cursor is an opaque base64 of the last-seen primary key.
-				// Decode it and find the position after the matching row.
-				const cursorRaw = decodeCursor(args.cursor as string | null);
-				let start = 0;
-				if (cursorRaw) {
-					const idx = all.findIndex((e) => String(e.id) === cursorRaw);
-					start = idx >= 0 ? idx + 1 : 0;
-				}
-				const slice = all.slice(start, start + limit);
-				const nextId = start + limit < all.length ? all[start + limit].id : null;
+				const page = paginateList(all, args, (e) => e.id);
 				return textResult({
 					tripId,
-					items: slice,
-					nextCursor: nextId != null ? encodeCursor(String(nextId)) : null
+					items: page.items,
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
 				});
 			}
 			case 'roamarr_expense_update': {
@@ -2018,7 +2081,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_reminder_list': {
 				if (!hasScope(scopes, 'reminders:read')) return scopeError('reminders:read');
 				const { listRemindersForUser } = await import('./reminders');
-				const { clampLimit, encodeCursor, decodeCursor } = await import('./mcpHelpers');
 				const { listSegmentsForTrip } = await import('./repositories/segmentsRepo');
 				const { requireViewableTrip } = await import('./ownership');
 				const all = listRemindersForUser(userId);
@@ -2033,17 +2095,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 							(r.refType === 'segment' && segIds.has(r.refId))
 						)
 					: all;
-				const limit = clampLimit(args.limit);
-				const cursorRaw = decodeCursor(args.cursor as string | null);
-				let start = 0;
-				if (cursorRaw) {
-					const idx = filtered.findIndex((r) => String(r.id) === cursorRaw);
-					start = idx >= 0 ? idx + 1 : 0;
-				}
-				const slice = filtered.slice(start, start + limit);
-				const nextId = start + limit < filtered.length ? filtered[start + limit].id : null;
+				const page = paginateList(filtered, args, (r) => r.id);
 				return textResult({
-					items: slice.map((r) => ({
+					items: page.items.map((r) => ({
 						id: r.id,
 						refType: r.refType,
 						refId: r.refId,
@@ -2053,7 +2107,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						fireAt: r.fireAt,
 						status: r.status
 					})),
-					nextCursor: nextId != null ? encodeCursor(String(nextId)) : null
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
 				});
 			}
 			case 'roamarr_reminder_update': {
@@ -2092,7 +2147,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_card_list': {
 				if (!hasScope(scopes, 'cards:read')) return scopeError('cards:read');
 				const { listCards } = await import('./repositories/profileRepo');
-				return textResult({ items: listCards(userId).map((c) => projectCard(c)) });
+				const cards = listCards(userId);
+				const page = paginateList(cards, args, (c) => c.id);
+				return textResult({
+					items: page.items.map((c) => projectCard(c)),
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_card_create': {
 				if (!hasScope(scopes, 'cards:write')) return scopeError('cards:write');
@@ -2138,7 +2199,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_loyalty_list': {
 				if (!hasScope(scopes, 'loyalty:read')) return scopeError('loyalty:read');
 				const { listLoyaltyPrograms } = await import('./repositories/profileRepo');
-				return textResult({ items: listLoyaltyPrograms(userId).map((l) => projectLoyalty(l)) });
+				const programs = listLoyaltyPrograms(userId);
+				const page = paginateList(programs, args, (l) => l.id);
+				return textResult({
+					items: page.items.map((l) => projectLoyalty(l)),
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_loyalty_create': {
 				if (!hasScope(scopes, 'loyalty:write')) return scopeError('loyalty:write');
@@ -2182,7 +2249,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_insurance_list': {
 				if (!hasScope(scopes, 'insurance:read')) return scopeError('insurance:read');
 				const { listInsurancePolicies } = await import('./repositories/profileRepo');
-				return textResult({ items: listInsurancePolicies(userId).map((p) => projectInsurance(p)) });
+				const policies = listInsurancePolicies(userId);
+				const page = paginateList(policies, args, (p) => p.id);
+				return textResult({
+					items: page.items.map((p) => projectInsurance(p)),
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_insurance_create': {
 				if (!hasScope(scopes, 'insurance:write')) return scopeError('insurance:write');
@@ -2233,7 +2306,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_travel_doc_list': {
 				if (!hasScope(scopes, 'travel-docs:read')) return scopeError('travel-docs:read');
 				const { listTravelDocuments } = await import('./repositories/profileRepo');
-				return textResult({ items: listTravelDocuments(userId).map((d) => projectTravelDocument(d)) });
+				const docs = listTravelDocuments(userId);
+				const page = paginateList(docs, args, (d) => d.id);
+				return textResult({
+					items: page.items.map((d) => projectTravelDocument(d)),
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_travel_doc_create': {
 				if (!hasScope(scopes, 'travel-docs:write')) return scopeError('travel-docs:write');
@@ -2283,7 +2362,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { listDocumentLinksForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
 				requireViewableTrip(userId, tripId);
-				return textResult({ tripId, items: listDocumentLinksForTrip(tripId) });
+				const links = listDocumentLinksForTrip(tripId);
+				const page = paginateList(links, args, (l) => l.id);
+				return textResult({
+					tripId,
+					items: page.items,
+					nextCursor: page.nextCursor,
+					truncated: page.truncated
+				});
 			}
 			case 'roamarr_doc_link_create': {
 				if (!hasScope(scopes, 'doc-links:write')) return scopeError('doc-links:write');

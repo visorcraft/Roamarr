@@ -42,6 +42,42 @@ export function clampLimit(value: unknown, fallback = 50, max = 200): number {
 	return value;
 }
 
+/**
+ * Cursor pagination for MCP list tools. The caller supplies the full list
+ * (already capped upstream by `KIT_EXECUTE_SYNC_CAP`) and an `args` bag with
+ * optional `limit` and `cursor` strings. Returns the slice, the next cursor
+ * (or null when the page exhausts the list), and a `truncated` flag that
+ * is true when the upstream list hit the engine cap and may be missing rows
+ * older than the cursor window.
+ *
+ * `getKey(item)` should return the primary key used as the cursor token.
+ */
+export function paginateList<T>(
+	rows: readonly T[],
+	args: { limit?: unknown; cursor?: unknown },
+	getKey: (item: T) => string | number
+): { items: T[]; nextCursor: string | null; truncated: boolean } {
+	const limit = clampLimit(args.limit);
+	const cursorKey = decodeCursor((args.cursor as string | null | undefined) ?? null);
+	let start = 0;
+	if (cursorKey != null) {
+		const idx = rows.findIndex((r) => String(getKey(r)) === cursorKey);
+		start = idx >= 0 ? idx + 1 : 0;
+	}
+	const slice = rows.slice(start, start + limit);
+	const hasMoreInWindow = start + limit < rows.length;
+	const nextKey = hasMoreInWindow ? getKey(rows[start + limit]) : null;
+	return {
+		items: slice,
+		nextCursor: nextKey != null ? encodeCursor(String(nextKey)) : null,
+		// ponytail: `rows.length === 9500` is the engine-cap sentinel; the
+		// caller cannot tell whether the underlying table actually ends here
+		// or whether older rows were silently truncated. Surface the
+		// uncertainty to the client so they don't assume completeness.
+		truncated: rows.length >= 9500
+	};
+}
+
 // Privacy projections. All return a NEW object; never mutate the input.
 // Card numbers are never stored as full PAN, only network + last4. This
 // helper is a defensive layer: if a future code path accidentally returns

@@ -239,7 +239,7 @@ describe('mcpServer', () => {
 		const res: any = await client.callTool({ name: 'roamarr_places_list', arguments: {} });
 		expect(res.isError).toBeFalsy();
 		const body = JSON.parse(res.content[0].text);
-		expect(body.countries.map((c: any) => c.code)).toContain('PT');
+		expect(body.items.map((p: any) => p.code)).toContain('PT');
 	});
 
 	test('trip_update schema rejects cancelled status', async () => {
@@ -681,7 +681,7 @@ describe('mcpServer', () => {
 			const { otherId, trip } = setupSharedTrip('read');
 			const { client } = await connect(otherId, ['trips:read']);
 			const res: any = await client.callTool({ name: 'roamarr_trip_list', arguments: {} });
-			const ids = JSON.parse(res.content[0].text).map((t: any) => t.id);
+			const ids = JSON.parse(res.content[0].text).items.map((t: any) => t.id);
 			expect(ids).toContain(trip.id);
 		});
 

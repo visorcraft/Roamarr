@@ -482,7 +482,6 @@
 }
 
 @layer components {
-	/* Application shell */
 	.brand-mark {
 		position: relative;
 		background: transparent;
@@ -653,7 +652,6 @@
 		cursor: pointer;
 	}
 
-	/* Page chrome */
 	.page-header {
 		@apply flex flex-wrap items-end justify-between gap-4;
 	}
@@ -670,7 +668,6 @@
 		color: var(--theme-readable-muted);
 	}
 
-	/* Surfaces */
 	.card {
 		@apply rounded-lg bg-surface/80 ring-1 ring-white/10 shadow-xl shadow-black/25 backdrop-blur-sm;
 		background: var(--theme-panel);
@@ -965,7 +962,6 @@ button.card:hover,
 		overflow-wrap: anywhere;
 	}
 
-	/* Buttons: use `.btn` plus one visual variant, with optional size/tone modifiers. */
 	.btn {
 		@apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-not-allowed disabled:opacity-50;
 		--tw-ring-offset-color: var(--theme-canvas);
@@ -988,8 +984,6 @@ button.card:hover,
 		background: color-mix(in oklab, var(--theme-brand) 82%, black);
 		box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--theme-brand) 70%, black);
 	}
-	/* Themes where the solid brand background drops contrast: use the badge-brand
-	   recipe (translucent active tint + themed strong text) instead. */
 	[data-theme='midnight-travels'] .btn-primary,
 	[data-theme='light'] .btn-primary,
 	[data-theme='high-contrast'] .btn-primary,
@@ -1125,7 +1119,6 @@ button.card:hover,
 		color: var(--theme-strong);
 	}
 
-	/* Form controls */
 	.field {
 		@apply grid gap-1.5;
 	}
@@ -1345,7 +1338,6 @@ button.card:hover,
 		background: var(--theme-brand);
 	}
 
-	/* Badges */
 	.badge {
 		@apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs leading-snug font-semibold ring-1 ring-inset;
 	}
@@ -1382,7 +1374,6 @@ button.card:hover,
 		color: var(--theme-ink);
 	}
 
-	/* Data tables */
 	.table {
 		@apply w-full text-left text-sm;
 	}
@@ -1407,7 +1398,6 @@ button.card:hover,
 		background: color-mix(in oklab, var(--theme-surface2) 36%, transparent);
 	}
 
-	/* Inline notice/error */
 	.notice {
 		@apply rounded-lg px-3 py-2 text-sm ring-1 ring-inset;
 	}
@@ -1429,11 +1419,8 @@ button.card:hover,
 		color: var(--theme-brand-readable);
 	}
 
-	/* Toast */
 	.toast {
 		@apply fixed right-4 top-4 z-50 flex max-w-sm items-center gap-3 rounded-xl bg-surface/95 px-4 py-3 text-sm shadow-xl backdrop-blur-xl;
-		/* Use the theme var directly: the `text-ink` utility is frozen to the default
-		   theme at :root, so it stays light and is unreadable on the Light surface. */
 		color: var(--theme-ink);
 		background: color-mix(in oklab, var(--theme-surface) 95%, transparent);
 		box-shadow:
@@ -1484,7 +1471,6 @@ button.card:hover,
 		@apply bg-amber-500/15 text-amber-300 ring-amber-400/30;
 	}
 
-	/* Trip detail — Seerr-inspired hero + Trip Tracker timeline */
 	.trip-detail {
 		@apply -mt-6 lg:-mt-8;
 	}
@@ -1559,7 +1545,6 @@ button.card:hover,
 				color-mix(in oklab, var(--theme-brand) 8%, transparent)
 			);
 	}
-	/* When a trip has a map, it fills the hero as the background image. */
 	.trip-hero--map .trip-hero-backdrop {
 		display: none;
 	}
@@ -1569,9 +1554,6 @@ button.card:hover,
 	.trip-hero-map-layer :where(button) {
 		pointer-events: auto;
 	}
-	/* Cover-photo style: darken only the top (controls) and bottom (title) so the map
-	   stays vibrant in the middle and the band reads as imagery, not a muddy panel —
-	   consistent in both light and dark themes. */
 	.trip-hero-map-scrim {
 		@apply pointer-events-none absolute inset-0;
 		background: linear-gradient(
@@ -1584,30 +1566,22 @@ button.card:hover,
 			rgba(3, 7, 18, 0.92) 100%
 		);
 	}
-	/* The map scrim handles legibility; the default hero scrim would only over-darken. */
 	.trip-hero--map .trip-hero-scrim {
 		display: none;
 	}
-	/* Content overlays the map. Clicks on empty/text areas fall through to the map
-	   (opening the globe); the real controls stay interactive. */
 	.trip-hero--map .trip-hero-content {
 		@apply pointer-events-none flex flex-col justify-between gap-6;
 		min-height: 14rem;
-		/* Text sits over a darkened map, so force the trip-detail readable vars to white
-		   (they default to dark in the Light theme via light-dark()). */
 		--trip-readable: #fff;
 		--trip-readable-strong: #fff;
-		/* Halo keeps the top-row link/badges legible over the brighter part of the map. */
 		text-shadow: 0 1px 2px rgba(3, 7, 18, 0.55);
 	}
 	.trip-hero--map .trip-hero-content :where(.back-link, .app-user-menu, .trip-poster-form) {
 		pointer-events: auto;
 	}
-	/* Force legible light text over the imagery in any theme. */
 	.trip-hero--map .trip-hero-title {
 		color: #fff;
 	}
-	/* Back-link as a solid chip so it reads over any part of the map, in any theme. */
 	.trip-hero--map .back-link {
 		align-self: flex-start;
 		color: #fff;
@@ -1622,8 +1596,6 @@ button.card:hover,
 		color: #fff;
 		background: rgba(3, 7, 18, 0.74);
 	}
-	/* Badges sit on imagery; give them a solid dark chip so they read in any theme.
-	   !important because the .trip-detail badge rules out-cascade scoped selectors. */
 	.trip-hero--map .badge {
 		background: rgba(3, 7, 18, 0.6) !important;
 		color: #fff !important;
@@ -1777,9 +1749,6 @@ button.card:hover,
 		@apply mt-4;
 	}
 
-	/* Grid.js theme overrides
-	   All rules are token-driven so the same set themes cleanly across all 16 themes,
-	   including the high-contrast override of --theme-line and --theme-brand. */
 	.grid-host {
 		color: var(--theme-ink);
 		background: transparent;
@@ -2228,8 +2197,6 @@ button.card:hover,
 		color: var(--trip-readable-danger);
 	}
 
-	/* Theme-aware text colors inside themed surfaces.
-	   Placed in the utilities layer so these overrides win over Tailwind utilities. */
 	:is(.card, .metric-card, .list-item, .list-item-compact, .empty-state, .trip-sidebar-card, .trip-timeline-card, .theme-option)
 		.text-white {
 		color: var(--theme-strong);

@@ -11,7 +11,6 @@ import {
 	type Update
 } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
-import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import {
 	geonamesCities,
 	fareProviders,
@@ -213,7 +212,7 @@ export function listFareProvidersForUser(userId: number): FareProviderAccount[] 
 		.selectFrom(fareProviders)
 		.where(eq(fareProviders.user_id, BigInt(userId)))
 		.orderBy(asc(fareProviders.id))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toFareProviderAccount);
 }
@@ -416,7 +415,7 @@ export function listFareWatchesForUser(userId: number): FareWatch[] {
 		.selectFrom(fareWatches)
 		.where(inList(fareWatches.provider_id, providerIds))
 		.orderBy(asc(fareWatches.id))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toFareWatch);
 }

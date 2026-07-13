@@ -1,6 +1,5 @@
 import { eq as kitEq, inList as kitInList, asc as kitAsc, and as kitAnd } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
-import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import {
 	tripTemplates,
 	packingTemplates,
@@ -104,7 +103,7 @@ export function listTripTemplates(userId: number): TripTemplate[] {
 		.selectFrom(tripTemplates)
 		.where(kitEq(tripTemplates.user_id, toBigInt(userId)))
 		.orderBy(kitAsc(nameColumn))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toTripTemplate);
 }
@@ -165,7 +164,7 @@ function hydratePackingTemplates(rows: KitPackingTemplate[]): PackingTemplate[] 
 		.selectFrom(packingTemplateItems)
 		.where(kitInList(packingTemplateItems.template_id, templateIds.map(toBigInt)))
 		.orderBy(kitAsc(packingTemplateItems.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	const itemsByTemplate = new Map<number, PackingTemplateItem[]>();
 	for (const row of itemRows) {
@@ -186,7 +185,7 @@ export function listPackingTemplates(userId: number): PackingTemplate[] {
 		.selectFrom(packingTemplates)
 		.where(kitEq(packingTemplates.user_id, toBigInt(userId)))
 		.orderBy(kitAsc(nameColumn))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return hydratePackingTemplates(rows);
 }
@@ -265,7 +264,7 @@ export function listPackingTemplateItems(templateId: number): PackingTemplateIte
 		.selectFrom(packingTemplateItems)
 		.where(kitEq(packingTemplateItems.template_id, toBigInt(templateId)))
 		.orderBy(kitAsc(packingTemplateItems.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toPackingTemplateItem);
 }

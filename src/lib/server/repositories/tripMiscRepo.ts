@@ -8,7 +8,6 @@ import {
 	type Update
 } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
-import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import {
 	tripChecklists,
 	tripChecklistItems,
@@ -123,7 +122,7 @@ export function listItemsForChecklist(checklistId: number): ChecklistItemWithNam
 		.selectFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.checklist_id, kitId(checklistId)))
 		.orderBy(asc(tripChecklistItems.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	if (rows.length === 0) return [];
 
@@ -260,7 +259,7 @@ export function listJournalEntriesForTrip(tripId: number): JournalEntry[] {
 			desc(tripJournalEntries.created_at),
 			desc(tripJournalEntries.id)
 		)
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toJournalEntry);
 }
@@ -353,7 +352,7 @@ export function listDocumentLinksForTrip(tripId: number): DocumentLink[] {
 		.selectFrom(tripDocumentLinks)
 		.where(eq(tripDocumentLinks.trip_id, kitId(tripId)))
 		.orderBy(desc(tripDocumentLinks.created_at), desc(tripDocumentLinks.id))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toDocumentLink);
 }
@@ -448,7 +447,7 @@ export function listHomeTasksForTrip(tripId: number): HomeTask[] {
 		.selectFrom(tripHomeTasks)
 		.where(eq(tripHomeTasks.trip_id, kitId(tripId)))
 		.orderBy(asc(tripHomeTasks.sort_order), asc(tripHomeTasks.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toHomeTask);
 }
@@ -675,7 +674,7 @@ export function listEntryRequirementsForTrip(tripId: number): EntryRequirement[]
 		.selectFrom(tripEntryRequirements)
 		.where(eq(tripEntryRequirements.trip_id, kitId(tripId)))
 		.orderBy(asc(tripEntryRequirements.country), asc(tripEntryRequirements.requirement_type))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toEntryRequirement);
 }

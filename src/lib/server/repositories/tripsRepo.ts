@@ -1,6 +1,5 @@
 import { eq as kitEq, and as kitAnd, and, inList, asc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
-import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import { compareRows } from '$lib/server/sortUtils';
 import {
 	users as usersTable,
@@ -170,7 +169,7 @@ export function listTripsForUser(userId: number): Trip[] {
 		.selectFrom(trips)
 		.where(kitEq(trips.owner_id, kitId(userId)))
 		.orderBy(asc(trips.start_date))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	return rows.map(toTrip);
 }
@@ -367,7 +366,7 @@ export function listCommentsForTrip(tripId: number): TripCommentWithAuthor[] {
 		.selectFrom(tripComments)
 		.where(kitEq(tripComments.trip_id, kitId(tripId)))
 		.orderBy(asc(tripComments.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	if (rows.length === 0) return [];
 

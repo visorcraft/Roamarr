@@ -1,6 +1,5 @@
 import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
-import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import { tripPolls, tripPollOptions, tripPollVotes } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert } from '@visorcraft/mongreldb-kit';
 
@@ -80,7 +79,7 @@ export function listPollsForTrip(tripId: number): Poll[] {
 		.selectFrom(tripPolls)
 		.where(kitEq(tripPolls.trip_id, toBigInt(tripId)))
 		.orderBy(kitAsc(tripPolls.created_at))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	if (rows.length === 0) return [];
 
@@ -91,7 +90,7 @@ export function listPollsForTrip(tripId: number): Poll[] {
 		.selectFrom(tripPollOptions)
 		.where(kitInList(tripPollOptions.poll_id, pollIds.map(toBigInt)))
 		.orderBy(kitAsc(tripPollOptions.sort_order))
-		.limit(KIT_EXECUTE_SYNC_CAP)
+		
 		.executeSync();
 	const options = optionRows.map(toOption);
 

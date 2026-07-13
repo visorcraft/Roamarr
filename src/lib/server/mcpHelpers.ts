@@ -44,11 +44,11 @@ export function clampLimit(value: unknown, fallback = 50, max = 200): number {
 
 /**
  * Cursor pagination for MCP list tools. The caller supplies the full list
- * (already capped upstream by `KIT_EXECUTE_SYNC_CAP`) and an `args` bag with
- * optional `limit` and `cursor` strings. Returns the slice, the next cursor
- * (or null when the page exhausts the list), and a `truncated` flag that
- * is true when the upstream list hit the engine cap and may be missing rows
- * older than the cursor window.
+ * and an `args` bag with optional `limit` and `cursor` strings. Returns the
+ * slice, the next cursor (or null when the page exhausts the list), and a
+ * `truncated` flag — currently always `false` now that MongrelDB Kit 0.52.2+
+ * removed the JS Kit's 10000-row read cap, but kept in the response shape for
+ * forward compatibility if a future engine constraint reintroduces the need.
  *
  * `getKey(item)` should return the primary key used as the cursor token.
  */
@@ -70,11 +70,7 @@ export function paginateList<T>(
 	return {
 		items: slice,
 		nextCursor: nextKey != null ? encodeCursor(String(nextKey)) : null,
-		// ponytail: `rows.length === 9500` is the engine-cap sentinel; the
-		// caller cannot tell whether the underlying table actually ends here
-		// or whether older rows were silently truncated. Surface the
-		// uncertainty to the client so they don't assume completeness.
-		truncated: rows.length >= 9500
+		truncated: false
 	};
 }
 

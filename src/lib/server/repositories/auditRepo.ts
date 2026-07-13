@@ -59,7 +59,9 @@ export interface AdminStats {
 	notifications: number;
 }
 
-export const AUDIT_SEARCH_SCAN_LIMIT = 10_000;
+// ponytail: must stay below MongrelDB Kit 0.52+ `selectFrom().executeSync()`
+// 10000-row cap so the bounded scan window is servable in a single fetch.
+export const AUDIT_SEARCH_SCAN_LIMIT = 9_500;
 
 function toBigInt(id: number): bigint {
 	return BigInt(id);
@@ -182,6 +184,9 @@ export function listAuditLogs(filters: AuditFilters = {}): AuditListResult {
 		rowsQuery = rowsQuery.where(where);
 	}
 	// ponytail: bounded in-memory search; move search into DB if audit logs need deeper full-text lookup.
+	// MongrelDB Kit 0.52+ caps each `selectFrom().executeSync()` at 10000 rows
+	// regardless of `.limit()`. AUDIT_SEARCH_SCAN_LIMIT is set below that cap so
+	// the engine can serve the whole window in a single fetch.
 	const rows = rowsQuery.limit(AUDIT_SEARCH_SCAN_LIMIT).executeSync();
 
 	const userIds = rows.map((r) => idFromBigInt(r.user_id));

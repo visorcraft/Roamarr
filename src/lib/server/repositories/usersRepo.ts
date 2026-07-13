@@ -1,5 +1,6 @@
 import { eq as kitEq, and, ne, lt, asc, desc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
+import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 import { compareRows } from '$lib/server/sortUtils';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
@@ -28,7 +29,7 @@ export function getUserByCalendarToken(token: string): KitUser | null {
 }
 
 export function listAllUsers(): KitUser[] {
-	return kit.selectFrom(users).orderBy(asc(users.email)).executeSync();
+	return kit.selectFrom(users).orderBy(asc(users.email)).limit(KIT_EXECUTE_SYNC_CAP).executeSync();
 }
 
 export interface ListUsersOptions {
@@ -136,6 +137,7 @@ export function listSessionsForUser(userId: number): KitSession[] {
 		.selectFrom(sessions)
 		.where(kitEq(sessions.user_id, toBigInt(userId)))
 		.orderBy(desc(sessions.created_at))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 }
 

@@ -1,5 +1,6 @@
 import { eq as kitEq, and as kitAnd, asc, joinEq, inList as kitInList } from '@visorcraft/mongreldb-kit';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import {
 	runSyncTxn,
 	toCells,
@@ -121,6 +122,7 @@ export function listExpensesForTrip(tripId: number): ExpenseRow[] {
 		.selectFrom(tripExpenses)
 		.where(kitEq(tripExpenses.trip_id, toBigInt(tripId)))
 		.orderBy(asc(tripExpenses.created_at))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toExpenseRow);
 }

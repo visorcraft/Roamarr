@@ -1,6 +1,7 @@
 import { eq, and, ne, asc, desc, inList, lte } from '@visorcraft/mongreldb-kit';
 import { error } from '@sveltejs/kit';
 import { kit } from '$lib/server/db';
+import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import {
 	travelDocuments,
 	loyaltyPrograms,
@@ -110,6 +111,7 @@ export function listTravelDocuments(userId: number): TravelDocument[] {
 		.selectFrom(travelDocuments)
 		.where(eq(travelDocuments.user_id, toBigInt(userId)))
 		.orderBy(desc(travelDocuments.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toTravelDocument);
 }
@@ -334,6 +336,7 @@ export function listLoyaltyPrograms(userId: number): LoyaltyProgram[] {
 		.selectFrom(loyaltyPrograms)
 		.where(eq(loyaltyPrograms.user_id, toBigInt(userId)))
 		.orderBy(asc(loyaltyPrograms.program_name))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toLoyaltyProgram);
 }
@@ -503,6 +506,7 @@ export function listCards(userId: number): Card[] {
 		.selectFrom(cards)
 		.where(eq(cards.user_id, toBigInt(userId)))
 		.orderBy(desc(cards.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toCard);
 }
@@ -651,6 +655,7 @@ export function listBenefitsForCard(cardId: number): CardBenefit[] {
 		.selectFrom(cardBenefits)
 		.where(eq(cardBenefits.card_id, toBigInt(cardId)))
 		.orderBy(asc(cardBenefits.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toCardBenefit);
 }
@@ -798,6 +803,7 @@ export function listInsurancePolicies(userId: number): InsurancePolicy[] {
 		.selectFrom(insurancePolicies)
 		.where(eq(insurancePolicies.user_id, toBigInt(userId)))
 		.orderBy(desc(insurancePolicies.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toInsurancePolicy);
 }

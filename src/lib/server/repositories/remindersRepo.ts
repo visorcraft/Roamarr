@@ -8,6 +8,7 @@ import {
 	lt as kitLt,
 	isNull as kitIsNull,
 } from '@visorcraft/mongreldb-kit';
+import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import { kit } from '$lib/server/db';
 import {
 	reminders as kitReminders,
@@ -133,6 +134,7 @@ export function listRemindersForUser(userId: number): ReminderRow[] {
 		.selectFrom(kitReminders)
 		.where(kitEq(kitReminders.user_id, toBigInt(userId)))
 		.orderBy(kitDesc(kitReminders.fire_at), kitDesc(kitReminders.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync();
 	return rows.map(toReminderRow);
 }
@@ -384,6 +386,7 @@ export function listNotificationsForUser(userId: number, opts: ListNotifications
 		.selectFrom(kitNotifications)
 		.where(kitAnd(...conditions))
 		.orderBy(kitDesc(kitNotifications.created_at), kitDesc(kitNotifications.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toNotificationRow);
 
@@ -533,6 +536,7 @@ export function listRecentSchedulerRuns(limit: number): SchedulerRunRow[] {
 	return kit
 		.selectFrom(kitSchedulerRuns)
 		.orderBy(kitDesc(kitSchedulerRuns.started_at), kitDesc(kitSchedulerRuns.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.slice(0, limit)
 		.map(toSchedulerRunRow);
@@ -557,6 +561,7 @@ export function listSchedulerRuns(opts: ListSchedulerRunsOptions = {}): Schedule
 	let rows = kit
 		.selectFrom(kitSchedulerRuns)
 		.orderBy(kitDesc(kitSchedulerRuns.started_at), kitDesc(kitSchedulerRuns.id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toSchedulerRunRow);
 	const q = opts.search?.trim().toLowerCase();

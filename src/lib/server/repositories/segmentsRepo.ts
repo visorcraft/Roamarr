@@ -1,5 +1,6 @@
 import { eq as kitEq, and as kitAnd, ne as kitNe, lt as kitLt, gt as kitGt, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
+import { KIT_EXECUTE_SYNC_CAP } from '$lib/server/db/scanCap';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import type { SegmentType, SegmentStatus, SegmentAttendeeStatus, CompanionCategory } from '$lib/server/db/mongrelSchema';
@@ -91,6 +92,7 @@ export function listSegmentsForTrips(tripIds: number[]) {
 		.selectFrom(segments)
 		.where(kitInList(segments.trip_id, tripIds.map(toBigInt)))
 		.orderBy(kitAsc(segments.start_at))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toSegmentRow);
 }
@@ -151,6 +153,7 @@ export function listAttendeesForSegment(segmentId: number): AttendeeWithCompanio
 		.selectFrom(segmentAttendees)
 		.where(kitEq(segmentAttendees.segment_id, toBigInt(segmentId)))
 		.orderBy(kitAsc(segmentAttendees.companion_id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toAttendeeRow);
 	return hydrateAttendeesWithCompanions(rows);
@@ -165,6 +168,7 @@ export function listAttendeesForSegments(segmentIds: number[]): Map<number, Atte
 		.selectFrom(segmentAttendees)
 		.where(kitInList(segmentAttendees.segment_id, segmentIds.map(toBigInt)))
 		.orderBy(kitAsc(segmentAttendees.companion_id))
+		.limit(KIT_EXECUTE_SYNC_CAP)
 		.executeSync()
 		.map(toAttendeeRow);
 

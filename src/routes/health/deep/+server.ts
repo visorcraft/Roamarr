@@ -22,17 +22,28 @@ export const GET: RequestHandler = async ({ getClientAddress }) => {
 	let details: Record<string, unknown> | undefined;
 
 	try {
-		const secret = process.env.ROAMARR_SECRET;
-		if (!secret) {
-			throw new Error('ROAMARR_SECRET is not set');
-		}
-		const kitDb = KitDatabase.openEncryptedSync(getDatabasePath(), schema, secret);
-		try {
-			const checkReport = kitDb.check() as { ok: boolean };
+		// MongrelDB allows a single handle per database per process
+		// ("reuse the existing Arc<Database>"), so when the app singleton is
+		// open the integrity check must run through it. A fresh independent
+		// handle is only possible before the singleton exists (early boot).
+		const existing = getExistingDb();
+		if (existing) {
+			const checkReport = existing.check() as { ok: boolean };
 			dbOk = checkReport.ok === true;
 			details = { check: { ok: checkReport.ok } };
-		} finally {
-			kitDb.close();
+		} else {
+			const secret = process.env.ROAMARR_SECRET;
+			if (!secret) {
+				throw new Error('ROAMARR_SECRET is not set');
+			}
+			const kitDb = KitDatabase.openEncryptedSync(getDatabasePath(), schema, secret);
+			try {
+				const checkReport = kitDb.check() as { ok: boolean };
+				dbOk = checkReport.ok === true;
+				details = { check: { ok: checkReport.ok } };
+			} finally {
+				kitDb.close();
+			}
 		}
 	} catch (e) {
 		dbOk = false;

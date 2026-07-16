@@ -63,6 +63,9 @@ test('deep health reports sqlDiagnostic ok false when kit singleton is not open'
 
 test('deep health masks internal error messages on integrity failure', async () => {
 	(isSchedulerRunning as any).mockReturnValue(true);
+	// The engine permits one handle per process, so a failing independent open
+	// can only be exercised with the singleton closed.
+	closeDb();
 	const bogusDir = mkdtempSync(join(tmpdir(), 'roamarr-health-bogus-'));
 	const original = process.env.DATABASE_PATH;
 	process.env.DATABASE_PATH = bogusDir;

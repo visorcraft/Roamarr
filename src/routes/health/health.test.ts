@@ -94,8 +94,11 @@ test('deep health returns 503 when scheduler is not running', async () => {
 
 test('deep health masks internal error messages on integrity failure', async () => {
 	(globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler = true;
-	// Point the database path at an empty directory so the native open succeeds
-	// but the integrity check fails. The error detail must NOT surface raw.
+	// The engine permits one handle per process, so a failing independent open
+	// can only be exercised with the singleton closed. Point the database path
+	// at an empty directory so the route's own open fails; the error detail
+	// must NOT surface raw.
+	closeDb();
 	const bogusDir = join(tmpdir(), `roamarr-health-bogus-${Date.now()}-db`);
 	mkdirSync(bogusDir, { recursive: true });
 	const original = process.env.DATABASE_PATH;

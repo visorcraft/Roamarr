@@ -3,7 +3,7 @@ import { test, expect } from 'vitest';
 import SegmentEditForm from './SegmentEditForm.svelte';
 
 const segment = {
-	id: 42, title: 'Flight to Lisbon', startAt: '2026-08-01T09:00:00Z', startTz: 'UTC',
+	id: 42, type: 'flight', title: 'Flight to Lisbon', startAt: '2026-08-01T09:00:00Z', startTz: 'UTC',
 	endAt: '2026-08-01T13:00:00Z', endTz: 'UTC', meetingAt: null, meetingPoint: 'Gate A12',
 	countryCode: 'PT', cityName: 'Lisbon', venue: 'LIS', confirmationNumber: 'ABC123',
 	paymentStatus: 'deposit_paid', paymentDueDate: '2026-07-15', detailsJson: '{}', cardId: null
@@ -38,4 +38,18 @@ test('SegmentEditForm shows validation errors', () => {
 	});
 	expect(body).toContain('Name it.');
 	expect(body).toContain('Bad end.');
+});
+
+test('SegmentEditForm uses hotel check-in and check-out labels', () => {
+	const { body } = render(SegmentEditForm, { props: { segment: { ...segment, type: 'hotel' }, tripId: 7, onCancel: () => {} } });
+	expect(body).toContain('Check-in');
+	expect(body).toContain('Check-out');
+	expect(body).not.toContain('>Ends<');
+});
+
+test('SegmentEditForm uses flight departure and arrival labels', () => {
+	const { body } = render(SegmentEditForm, { props: { segment, tripId: 7, onCancel: () => {} } });
+	expect(body).toContain('Departure');
+	expect(body).toContain('Arrival');
+	expect(body).not.toContain('>Ends<');
 });

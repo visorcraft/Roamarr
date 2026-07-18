@@ -24,7 +24,9 @@ test('StandardPlanForm shows field errors', () => {
 });
 
 test('delegate forms add their extra fields on top of StandardPlanForm', () => {
-	expect(render(HotelForm, { props: {} }).body).toContain('name="detail_phone"');
+	const hotel = render(HotelForm, { props: {} }).body;
+	expect(hotel).toContain('name="detail_phone"');
+	expect(hotel).toContain('Check-out time');
 	expect(render(FoodForm, { props: {} }).body).toContain('name="detail_partySize"');
 	expect(render(TrainForm, { props: {} }).body).toContain('name="detail_seat"');
 	// BoatForm is a pure wrapper (labels only) and still surfaces the base fields

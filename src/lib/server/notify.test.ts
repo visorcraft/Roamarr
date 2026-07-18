@@ -18,7 +18,7 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 	return new Response('ok', { status: 200 });
 });
 
-import { deliver, isAllowedWebhookUrl, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
+import { deliver, isAllowedWebhookUrl, sendMail, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
 import { SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
@@ -60,6 +60,13 @@ test('always writes in-app; emails only when SMTP configured', async () => {
 	await deliver(Number(u.id), { title: 'Hi2', body: 'There2' });
 	expect(sent.length).toBe(1);
 	expect(sent[0].to).toBe('a@x.c');
+});
+
+test('sends a labeled HTML link with a plain-text fallback', async () => {
+	updateSettings({ smtpHost: 'smtp.x', smtpPort: 587, smtpFrom: 'r@x.c', smtpPass: encrypt('pw') });
+	await sendMail('a@x.c', { title: 'Trip added', body: 'Roamarr added the trip.', link: 'https://roamarr.example/trips/1', linkLabel: 'View Trip' });
+	expect(sent.at(-1)?.text).toContain('View Trip: https://roamarr.example/trips/1');
+	expect(sent.at(-1)?.html).toContain('<a href="https://roamarr.example/trips/1">View Trip</a>');
 });
 
 test('POSTs JSON to webhookUrl when configured', async () => {

@@ -58,7 +58,16 @@ export function withDeadline<T>(promise: Promise<T>, ms: number, label: string):
 	}) as Promise<T>;
 }
 
-type NotificationMessage = { title: string; body: string; link?: string };
+export type NotificationMessage = { title: string; body: string; link?: string; linkLabel?: string };
+
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!);
+}
+
+function mailHtml(msg: NotificationMessage): string | undefined {
+	if (!msg.link) return undefined;
+	return `<p>${escapeHtml(msg.body).replaceAll('\n', '<br>')}</p><p><a href="${escapeHtml(msg.link)}">${escapeHtml(msg.linkLabel ?? msg.link)}</a></p>`;
+}
 
 interface Channel {
 	send(userId: number, msg: NotificationMessage): Promise<void>;
@@ -154,7 +163,8 @@ export async function sendMail(
 			from: resolved.from,
 			to,
 			subject: msg.title,
-			text: msg.body + (msg.link ? `\n\n${msg.link}` : '')
+			text: msg.body + (msg.link ? `\n\n${msg.linkLabel ? `${msg.linkLabel}: ` : ''}${msg.link}` : ''),
+			html: mailHtml(msg)
 		}),
 		SMTP_SEND_DEADLINE_MS,
 		'SMTP send'

@@ -11,7 +11,7 @@ import { kit } from './db';
 import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helpers';
 
 
-import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate } from './segments';
+import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate, patchSegment } from './segments';
 import { segments, auditLogs } from './db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 
@@ -356,6 +356,13 @@ test('updateSegment preserves existing payment status when omitted', () => {
 	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
 	expect(row.payment_status).toBe('fully_paid');
 	expect(row.title).toBe('UA1 renamed');
+});
+
+test('patchSegment updates type and payment status', () => {
+	const u = makeUser(kit, { email: 'mcp-pay@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, { type: 'hotel', title: 'Hotel', startAt: '2026-01-01T14:00:00Z', startTz: 'UTC' });
+	expect(patchSegment(u.id, s.id, { type: 'shuttle', paymentStatus: 'fully_paid' })).toMatchObject({ type: 'shuttle', paymentStatus: 'fully_paid' });
 });
 
 test('deleteSegments removes multiple segments and ignores invalid ids', () => {

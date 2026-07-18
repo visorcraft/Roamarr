@@ -44,7 +44,7 @@ export const SEG = {
 	},
 	parking: {
 		label: 'Parking',
-		icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 8h4a2 2 0 0 1 0 4H9V8Z"/>'
+		icon: '<circle cx="12" cy="12" r="9"/><path d="M10 17V7h4a3 3 0 0 1 0 6h-4"/>'
 	},
 	boat: {
 		label: 'Boat',
@@ -98,4 +98,3 @@ export const ADD_SEGMENT_WIZARD_TYPES = [
 	{ type: 'rideshare', label: 'Rideshare' },
 	{ type: 'shuttle', label: 'Shuttle' }
 ] as const satisfies ReadonlyArray<{ type: SegmentType; label: string }>;
-

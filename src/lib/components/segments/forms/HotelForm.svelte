@@ -12,5 +12,10 @@
 	locationLabel="Address"
 	locationPlaceholder="Enter address"
 	requireEnd={true}
+	startDateLabel="Check-in date"
+	startTimeLabel="Check-in time"
+	endDateLabel="Check-out date"
+	endTimeLabel="Check-out time"
+	endTimezoneLabel="Check-out timezone"
 />
 <TextField name="detail_phone" label="Phone" type="tel" placeholder="Hotel phone" class="sm:col-span-2" />

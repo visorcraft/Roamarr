@@ -16,7 +16,12 @@
 		countryCode = '',
 		cityName = '',
 		venue = '',
-		requireEnd = false
+		requireEnd = false,
+		startDateLabel = 'Start date',
+		startTimeLabel = 'Start time',
+		endDateLabel = 'End date',
+		endTimeLabel = 'End time',
+		endTimezoneLabel = 'End timezone'
 	}: {
 		errors?: Record<string, string>;
 		titleLabel?: string;
@@ -27,12 +32,17 @@
 		cityName?: string;
 		venue?: string;
 		requireEnd?: boolean;
+		startDateLabel?: string;
+		startTimeLabel?: string;
+		endDateLabel?: string;
+		endTimeLabel?: string;
+		endTimezoneLabel?: string;
 	} = $props();
 </script>
 
 <TextField name="title" label={titleLabel} placeholder={titlePlaceholder} required class="sm:col-span-2" {errors} />
 
-<DateTimeRangeFields {errors} {requireEnd} />
+<DateTimeRangeFields {errors} {requireEnd} {startDateLabel} {startTimeLabel} {endDateLabel} {endTimeLabel} {endTimezoneLabel} />
 
 <SelectField name="countryCode" label="Country" {errors}>
 	<option value="" selected={!countryCode}>Select country</option>

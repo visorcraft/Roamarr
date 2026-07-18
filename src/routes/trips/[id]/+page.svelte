@@ -596,8 +596,15 @@
 	function segmentDetailRows(segment: SegmentRow): DetailRow[] {
 		const rows: DetailRow[] = [];
 		const local = segmentLocalDateTime(segment);
-		if (local && segment.startAt) rows.push({ icon: 'calendar', label: 'Date & time', value: `${formatDate(local.toISODate()!)} · ${formatTime(segment.startAt, segment.startTz ?? 'UTC')}` });
-		else rows.push({ icon: 'calendar', label: 'Date & time', value: 'Unscheduled' });
+		const hotel = segment.type === 'hotel';
+		const flight = segment.type === 'flight';
+		if (local && segment.startAt) rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : 'Date & time', value: `${formatDate(local.toISODate()!)} · ${formatTime(segment.startAt, segment.startTz ?? 'UTC')}` });
+		else rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : 'Date & time', value: 'Unscheduled' });
+		if ((hotel || flight) && segment.endAt) {
+			const endTz = segment.endTz ?? segment.startTz ?? 'UTC';
+			const end = DateTime.fromISO(segment.endAt, { zone: 'utc' }).setZone(endTz);
+			rows.push({ icon: 'calendar', label: hotel ? 'Check-out' : 'Arrival', value: `${formatDate(end.toISODate()!)} · ${formatTime(segment.endAt, endTz)}` });
+		}
 		const location = segmentSubtitle(segment);
 		if (location) rows.push({ icon: 'location', label: 'Location', value: location });
 		const duration = formatSegmentDuration(segment.startAt, segment.endAt);
@@ -712,7 +719,7 @@
 						{#each dayGroups as group (group.key)}
 							<section class="trip-modern-day-card {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
 								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3"><span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
-								<div class="trip-modern-day-body">
+								<div class="trip-modern-day-body" class:trip-modern-day-body-editing={group.segments.some((segment) => segment.id === editingId)}>
 									{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}
 										{@const duration = formatSegmentDuration(s.startAt, s.endAt)}
 										{@const sideLabel = segmentSideLabel(s)}

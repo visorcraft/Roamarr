@@ -263,17 +263,19 @@ export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
 }
 
 // Partial segment update for MCP clients. Only the user-facing fields are
-// accepted: title, startAt, endAt, cityName, countryCode. Internal fields
+// accepted: type, title, startAt, endAt, cityName, countryCode, paymentStatus. Internal fields
 // (status, type, trip_id, etc.) are not exposed.
 export function patchSegment(
 	userId: number,
 	segId: number,
 	patch: {
+		type?: SegmentType;
 		title?: string;
 		startAt?: string;
 		endAt?: string | null;
 		cityName?: string | null;
 		countryCode?: string | null;
+		paymentStatus?: string;
 	}
 ) {
 	// Resolve segment first to get tripId; ownership check follows.
@@ -281,6 +283,7 @@ export function patchSegment(
 	if (!seg) throw error(404, 'Segment not found');
 	const verified = requireSegmentOnTrip(userId, seg.tripId, segId);
 	const repoPatch: Record<string, unknown> = { updated_at: nowIso() };
+	if (patch.type !== undefined) repoPatch.type = patch.type;
 	if (patch.title !== undefined) repoPatch.title = patch.title;
 	if (patch.startAt !== undefined) {
 		repoPatch.start_at = patch.startAt;
@@ -289,6 +292,7 @@ export function patchSegment(
 	if (patch.endAt !== undefined) repoPatch.end_at = patch.endAt;
 	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
 	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
+	if (patch.paymentStatus !== undefined) repoPatch.payment_status = normalizePaymentStatus(patch.paymentStatus);
 	const updated = updateSegmentRepo(verified.id, repoPatch);
 	if (!updated) throw error(404, 'Segment not found');
 	// Refresh reminders so flight_checkin arms against the new startAt

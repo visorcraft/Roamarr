@@ -37,6 +37,10 @@
 	background: color-mix(in oklab, var(--theme-brand) 16%, var(--trip-modern-line));
 }
 
+.trip-modern .trip-modern-day-body-editing::before {
+	display: none;
+}
+
 .trip-modern .trip-modern-segment:first-child .trip-modern-type-node {
 	anchor-name: --trip-timeline-start;
 }

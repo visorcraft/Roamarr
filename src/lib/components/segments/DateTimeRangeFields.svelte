@@ -4,12 +4,26 @@
 	let {
 		errors = {},
 		idPrefix = 'segment',
-		requireEnd = false
-	}: { errors?: Record<string, string>; idPrefix?: string; requireEnd?: boolean } = $props();
+		requireEnd = false,
+		startDateLabel = 'Start date',
+		startTimeLabel = 'Start time',
+		endDateLabel = 'End date',
+		endTimeLabel = 'End time',
+		endTimezoneLabel = 'End timezone'
+	}: {
+		errors?: Record<string, string>;
+		idPrefix?: string;
+		requireEnd?: boolean;
+		startDateLabel?: string;
+		startTimeLabel?: string;
+		endDateLabel?: string;
+		endTimeLabel?: string;
+		endTimezoneLabel?: string;
+	} = $props();
 </script>
 
 <div class="field">
-	<label class="label" for="{idPrefix}-startDate">Start date</label>
+	<label class="label" for="{idPrefix}-startDate">{startDateLabel}</label>
 	<input
 		id="{idPrefix}-startDate"
 		name="startDate"
@@ -20,7 +34,7 @@
 	{#if errors.startDate}<p class="field-error">{errors.startDate}</p>{/if}
 </div>
 <div class="field">
-	<label class="label" for="{idPrefix}-startTime">Start time</label>
+	<label class="label" for="{idPrefix}-startTime">{startTimeLabel}</label>
 	<input id="{idPrefix}-startTime" name="startTime" type="time" class="input {errors.localStart ? 'input-error' : ''}" />
 	{#if errors.localStart}<p class="field-error">{errors.localStart}</p>{/if}
 </div>
@@ -35,7 +49,7 @@
 	{#if errors.startTz}<p class="field-error">{errors.startTz}</p>{/if}
 </div>
 <div class="field">
-	<label class="label" for="{idPrefix}-endDate">End date</label>
+	<label class="label" for="{idPrefix}-endDate">{endDateLabel}</label>
 	<input
 		id="{idPrefix}-endDate"
 		name="endDate"
@@ -46,12 +60,12 @@
 	{#if errors.endDate}<p class="field-error">{errors.endDate}</p>{/if}
 </div>
 <div class="field">
-	<label class="label" for="{idPrefix}-endTime">End time</label>
+	<label class="label" for="{idPrefix}-endTime">{endTimeLabel}</label>
 	<input id="{idPrefix}-endTime" name="endTime" type="time" class="input {errors.endAt ? 'input-error' : ''}" />
 	{#if errors.endAt}<p class="field-error">{errors.endAt}</p>{/if}
 </div>
 <div class="field">
-	<label class="label" for="{idPrefix}-endTz">End timezone</label>
+	<label class="label" for="{idPrefix}-endTz">{endTimezoneLabel}</label>
 	<TimezoneSelect
 		id="{idPrefix}-endTz"
 		name="endTz"

@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return context;
 });
 
-import { findUserForEmailSender, getEmailProcessingConfig, matchTrip, parseAiJson, parseEmailForUser, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
+import { buildEmailIngestionReply, findUserForEmailSender, getEmailProcessingConfig, matchTrip, parseAiJson, parseEmailForUser, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
 import { updateSettings } from './settings';
 import { encrypt } from './crypto';
 import { userEmailProcessingConfigs } from './db/mongrelSchema';
@@ -68,6 +68,21 @@ test('global inbox sender matching accepts enabled users only', () => {
 	const user = makeUser(db(), { email: 'sender@example.com' });
 	expect(findUserForEmailSender('SENDER@example.com')?.id).toBe(BigInt(user.id));
 	expect(findUserForEmailSender('missing@example.com')).toBeNull();
+});
+
+test('ingestion replies explain each result and link to the trip', () => {
+	const user = makeUser(db(), { email: 'reply@example.com' });
+	const trip = makeTrip(db(), user.id, { name: 'Tokyo' });
+	process.env.ORIGIN = 'https://roamarr.example.com/';
+	expect(buildEmailIngestionReply({ tripId: trip.id, created: false })).toMatchObject({
+		body: 'Roamarr added the travel item to "Tokyo".',
+		link: `https://roamarr.example.com/trips/${trip.id}`,
+		linkLabel: 'View Trip'
+	});
+	expect(buildEmailIngestionReply({ tripId: trip.id, created: true }).body).toContain('created "Tokyo"');
+	expect(buildEmailIngestionReply(null).body).toContain('could not find travel details');
+	expect(buildEmailIngestionReply(null, true).body).toContain('because an error occurred');
+	delete process.env.ORIGIN;
 });
 
 test('AI parser accepts reasoning and fenced JSON', () => {

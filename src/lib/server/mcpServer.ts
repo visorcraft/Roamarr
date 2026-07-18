@@ -629,16 +629,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// Round 1: trip planning vertical — 17 new tools.
 			{
 				name: 'roamarr_segment_update',
-				description: 'Update an existing segment. Pass any subset of: title, startAt, endAt, cityName, countryCode.',
+				description: 'Update an existing segment. Pass any subset of: type, title, startAt, endAt, cityName, countryCode, paymentStatus.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						segmentId: { type: 'number' },
+						type: { type: 'string', enum: [...SEGMENT_TYPES] },
 						title: { type: 'string' },
 						startAt: { type: 'string', description: 'ISO timestamp' },
 						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
 						cityName: { type: 'string' },
-						countryCode: { type: 'string' }
+						countryCode: { type: 'string' },
+						paymentStatus: { type: 'string', enum: ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] }
 					},
 					required: ['segmentId']
 				}
@@ -1904,11 +1906,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { patchSegment } = await import('./segments');
 				const segId = Number(args.segmentId);
 				patchSegment(userId, segId, {
+					type: args.type as import('$lib/segmentLabels').SegmentType | undefined,
 					title: args.title as string | undefined,
 					startAt: args.startAt as string | undefined,
 					endAt: args.endAt as string | undefined,
 					cityName: args.cityName as string | undefined,
-					countryCode: args.countryCode as string | undefined
+					countryCode: args.countryCode as string | undefined,
+					paymentStatus: args.paymentStatus as string | undefined
 				});
 				logAudit(userId, 'mcp_segment_update', 'segment', segId, {});
 				return textResult({ ok: true, segmentId: segId });

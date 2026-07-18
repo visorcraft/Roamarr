@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { ImapFlow } from 'imapflow';
-import { simpleParser } from 'mailparser';
+import { simpleParser, type ParsedMail } from 'mailparser';
 import { and, eq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import {
@@ -17,6 +17,7 @@ import { upsertRemindersForSegment } from './reminders';
 import { logAudit } from './audit';
 import * as usersRepo from './repositories/usersRepo';
 import { normalizeEmail } from './users';
+import { sendMail, type NotificationMessage } from './notify';
 import type { Insert, Row } from '@visorcraft/mongreldb-kit';
 
 export type MailSecurity = 'none' | 'starttls' | 'ssl/tls';
@@ -318,6 +319,56 @@ function alreadyProcessed(userId: number, messageId: string): boolean {
 	return !!kit.selectFrom(emailIngestions).where(and(eq(emailIngestions.user_id, BigInt(userId)), eq(emailIngestions.message_id, messageId))).executeSync()[0];
 }
 
+export function buildEmailIngestionReply(
+	result: { tripId: number; created: boolean } | null,
+	failed = false
+): NotificationMessage {
+	if (!result) return {
+		title: 'Roamarr could not add your travel email',
+		body: failed
+			? 'Roamarr could not add this email because an error occurred.\n\nCheck the email. Send it again with the travel dates, destination, and reservation details.'
+			: 'Roamarr could not find travel details in this email.\n\nCheck the email. Send it again with the travel dates, destination, and reservation details.'
+	};
+	const trip = tripsRepo.getTripById(result.tripId)!;
+	const origin = process.env.ORIGIN?.replace(/\/$/, '');
+	return {
+		title: 'Roamarr added your travel email',
+		body: result.created
+			? `Roamarr did not find a matching trip. Roamarr created "${trip.name}" and added the travel item.`
+			: `Roamarr added the travel item to "${trip.name}".`,
+		link: origin ? `${origin}/trips/${trip.id}` : undefined,
+		linkLabel: origin ? 'View Trip' : undefined
+	};
+}
+
+async function replyToSender(
+	userId: number,
+	to: string | undefined,
+	result: { tripId: number; created: boolean } | null,
+	failed = false
+) {
+	if (!to) return;
+	try { await sendMail(to, buildEmailIngestionReply(result, failed), userId); }
+	catch (error) { console.error('[email-processing] reply', error); }
+}
+
+async function processInboxMessage(userId: number, row: ConfigRow | null, mail: ParsedMail, messageId: string): Promise<boolean> {
+	try {
+		const parsed = await parseForUser(row, mail.subject ?? '', mail.text ?? '');
+		const result = ingestParsedEmail(userId, parsed);
+		kit.insertInto(emailIngestions).values({ user_id: BigInt(userId), message_id: messageId, subject: mail.subject ?? null,
+			status: result ? 'imported' : 'ignored', trip_id: result ? BigInt(result.tripId) : null, error: null } as Insert<typeof emailIngestions>).executeSync();
+		await replyToSender(userId, mail.from?.value[0]?.address, result);
+		return !!result;
+	} catch (error) {
+		const detail = error instanceof Error ? error.message.slice(0, 500) : 'Email processing failed';
+		kit.insertInto(emailIngestions).values({ user_id: BigInt(userId), message_id: messageId, subject: mail.subject ?? null,
+			status: 'failed', trip_id: null, error: detail } as Insert<typeof emailIngestions>).executeSync();
+		await replyToSender(userId, mail.from?.value[0]?.address, null, true);
+		return false;
+	}
+}
+
 export async function pollUserInbox(userId: number): Promise<{ processed: number; imported: number }> {
 	if (!getSettings().allowUserImap) return { processed: 0, imported: 0 };
 	const row = getRow(userId);
@@ -336,11 +387,8 @@ export async function pollUserInbox(userId: number): Promise<{ processed: number
 				const mail = await simpleParser(message.source);
 				const messageId = mail.messageId || createHash('sha256').update(message.source).digest('hex');
 				if (!alreadyProcessed(userId, messageId)) {
-					const parsed = await parseForUser(row, mail.subject ?? '', mail.text ?? '');
-					const result = ingestParsedEmail(userId, parsed);
-					kit.insertInto(emailIngestions).values({ user_id: BigInt(userId), message_id: messageId, subject: mail.subject ?? null,
-						status: result ? 'imported' : 'ignored', trip_id: result ? BigInt(result.tripId) : null, error: null } as Insert<typeof emailIngestions>).executeSync();
-					processed++; if (result) imported++;
+					if (await processInboxMessage(userId, row, mail, messageId)) imported++;
+					processed++;
 				}
 				await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
 				highestUid = Math.max(highestUid, uid);
@@ -379,11 +427,8 @@ export async function pollGlobalInbox(): Promise<{ processed: number; imported: 
 					const userId = Number(user.id);
 					const messageId = mail.messageId || createHash('sha256').update(message.source).digest('hex');
 					if (!alreadyProcessed(userId, messageId)) {
-						const parsed = await parseForUser(getRow(userId), mail.subject ?? '', mail.text ?? '');
-						const result = ingestParsedEmail(userId, parsed);
-						kit.insertInto(emailIngestions).values({ user_id: user.id, message_id: messageId, subject: mail.subject ?? null,
-							status: result ? 'imported' : 'ignored', trip_id: result ? BigInt(result.tripId) : null, error: null } as Insert<typeof emailIngestions>).executeSync();
-						processed++; if (result) imported++;
+						if (await processInboxMessage(userId, getRow(userId), mail, messageId)) imported++;
+						processed++;
 					}
 				}
 				await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });

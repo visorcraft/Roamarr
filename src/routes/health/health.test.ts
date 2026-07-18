@@ -48,6 +48,7 @@ test('health returns ok when db directory and scheduler are healthy', async () =
 
 test('health reports false when db directory is missing', async () => {
 	(globalThis as { __roamarr_scheduler?: boolean }).__roamarr_scheduler = true;
+	closeDb();
 	rmSync(dbDir, { recursive: true, force: true });
 	const res = await healthGet(healthEvent());
 	expect(res.status).toBe(200);

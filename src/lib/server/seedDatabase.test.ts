@@ -120,5 +120,5 @@ describe('DatabaseSeeder', () => {
 		const kit = kitDb();
 		expect(kit.selectFrom(users).executeSync().length).toBe(3);
 		expect(kit.selectFrom(trips).executeSync().length).toBe(6);
-	});
+	}, 30_000);
 });

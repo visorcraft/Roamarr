@@ -166,12 +166,24 @@ test('sets baseline security and CSP headers on a public response', async () => 
 	expect(parsed.get('style-src')).toContain("'unsafe-inline'");
 	expect(parsed.get('style-src')).toContain('https://fonts.googleapis.com');
 	expect(parsed.get('font-src')).toContain('https://fonts.gstatic.com');
+	expect(parsed.get('form-action')).toEqual(["'self'"]);
 	expect(parsed.get('frame-ancestors')).toEqual(["'none'"]);
 	expect(parsed.get('object-src')).toEqual(["'none'"]);
 	// MapLibre needs a blob worker and the configured tile origin (default: OpenStreetMap).
 	expect(parsed.get('worker-src')).toContain('blob:');
 	expect(parsed.get('img-src')).toContain('blob:');
 	expect(parsed.get('connect-src')).toContain('https://tile.openstreetmap.org');
+});
+
+test('allows OAuth consent to redirect to the validated client callback', async () => {
+	updateSettings({ setupComplete: true });
+	const event = ev('/oauth/authorize');
+	event.locals = { user: { id: 1 } } as any;
+	const response = await handle({
+		event: event as any,
+		resolve: async () => new Response('consent')
+	}) as Response;
+	expect(parseCsp(response.headers.get('Content-Security-Policy')).has('form-action')).toBe(false);
 });
 
 test('sets CSP headers on a public share link', async () => {

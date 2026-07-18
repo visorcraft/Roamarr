@@ -19,6 +19,13 @@
 	const tab = $derived(data.tab);
 	const emailTab = $derived(data.emailTab);
 	const pageTitle = $derived({ general: 'Configuration', maps: 'Maps', email: 'Email', webhook: 'Webhooks', oauth: 'MCP Clients' }[tab]);
+	const pageSubtitle = $derived({
+		general: 'Configure instance-wide defaults and access policies.',
+		maps: 'Choose map tiles, location data, and display settings.',
+		email: 'Configure outgoing email, inbox processing, and AI parsing.',
+		webhook: 'Send signed notifications to an external webhook.',
+		oauth: 'Manage MCP client access and OAuth registration.'
+	}[tab]);
 	let globalAiAuthMode = $state<'token' | 'oauth'>('token');
 	let globalImapEnabled = $state(true);
 	let allowUserMcpClients = $state(false);
@@ -74,7 +81,7 @@
 
 <header>
 	<h1 class="page-title">{pageTitle}</h1>
-	<p class="page-subtitle">Configure your Roamarr instance and outgoing email.</p>
+	<p class="page-subtitle">{pageSubtitle}</p>
 </header>
 
 {#if form?.error}<p class="notice notice-error mt-4">{form.error}</p>{/if}

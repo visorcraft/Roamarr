@@ -57,7 +57,7 @@ function jsonError(status: number, message: string) {
 	}));
 }
 
-function contentSecurityPolicy() {
+function contentSecurityPolicy(path = '') {
 	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,
 	// and blob: workers since MapLibre runs its renderer in a blob-sourced Web Worker.
 	const tiles = tileCspOrigins();
@@ -69,11 +69,13 @@ function contentSecurityPolicy() {
 		'img-src': ["'self'", 'data:', 'blob:', ...tiles],
 		'connect-src': [...(dev ? ["'self'", 'ws:', 'wss:'] : ["'self'"]), ...tiles],
 		'worker-src': ["'self'", 'blob:'],
-		'form-action': ["'self'"],
 		'base-uri': ["'self'"],
 		'frame-ancestors': ["'none'"],
 		'object-src': ["'none'"]
 	};
+	// OAuth consent redirects the form submission to the client's validated,
+	// registered callback. form-action 'self' blocks that redirect in browsers.
+	if (path !== '/oauth/authorize') directives['form-action'] = ["'self'"];
 	return Object.entries(directives)
 		.map(([directive, values]) => `${directive} ${values.join(' ')}`)
 		.join('; ');
@@ -126,11 +128,11 @@ function safeIsSetupComplete(): boolean {
 	}
 }
 
-function applySecurityHeaders(response: Response) {
+function applySecurityHeaders(response: Response, path = '') {
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set('Content-Security-Policy', contentSecurityPolicy());
+	response.headers.set('Content-Security-Policy', contentSecurityPolicy(path));
 	// HSTS is ignored by browsers over plain HTTP, so it is safe to send in dev,
 	// but only meaningful when the app is served over HTTPS.
 	response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
@@ -158,7 +160,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
 		if (event.request.method === 'OPTIONS' && isOAuthCorsPath(path)) {
-			return applyOAuthCors(applySecurityHeaders(new Response(null, { status: 204 })), path);
+			return applyOAuthCors(applySecurityHeaders(new Response(null, { status: 204 }), path), path);
 		}
 		const bootError = getBootError();
 
@@ -183,7 +185,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 					throw redirect(307, '/setup');
 				}
 			}
-			return applyOAuthCors(applySecurityHeaders(await resolve(event)), path);
+			return applyOAuthCors(applySecurityHeaders(await resolve(event), path), path);
 		}
 
 		const sessionToken = event.cookies.get('session');
@@ -237,9 +239,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 			if (!allowed) throw redirect(302, '/profile/change-password');
 		}
 
-		return applyOAuthCors(applySecurityHeaders(await resolve(event)), path);
+		return applyOAuthCors(applySecurityHeaders(await resolve(event), path), path);
 	} catch (e) {
-		if (isRedirect(e)) return applySecurityHeaders(redirectResponse(e));
+		if (isRedirect(e)) return applySecurityHeaders(redirectResponse(e), event.url.pathname);
 
 		// Catch native engine errors (InvalidArgument, KitValidationError, NOT
 		// NULL violations, type mismatches) that escape repo-level wrappers.

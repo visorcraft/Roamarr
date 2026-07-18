@@ -5,7 +5,11 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
 	preprocess: vitePreprocess(),
 	kit: {
-		adapter: adapter()
+		adapter: adapter(),
+		// OAuth token clients submit application/x-www-form-urlencoded without an
+		// Origin header. hooks.server.ts keeps the same-origin check everywhere
+		// except the machine-to-machine token and revocation endpoints.
+		csrf: { trustedOrigins: ['*'] }
 	}
 };
 

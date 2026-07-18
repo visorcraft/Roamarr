@@ -18,7 +18,7 @@ vi.mock('./lib/server/boot', async () => ({
 	getBootError: () => bootMock.bootError
 }));
 
-import { handle, requiredApiScope } from './hooks.server';
+import { handle, isForbiddenCrossSiteForm, requiredApiScope } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
@@ -65,6 +65,21 @@ test('OAuth browser clients receive CORS preflight and response headers', async 
 	expect(response.headers.get('access-control-allow-origin')).toBe('*');
 	const discovery = await handle({ event: ev('/.well-known/oauth-authorization-server') as any, resolve: async () => new Response('{}') }) as Response;
 	expect(discovery.headers.get('access-control-allow-origin')).toBe('*');
+});
+
+test('keeps form CSRF protection while allowing OAuth protocol POSTs without Origin', () => {
+	const form = (path: string, origin?: string) => new Request(`https://roamarr.example${path}`, {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/x-www-form-urlencoded',
+			...(origin ? { origin } : {})
+		}
+	});
+	expect(isForbiddenCrossSiteForm(form('/login'), new URL('https://roamarr.example/login'))).toBe(true);
+	expect(isForbiddenCrossSiteForm(form('/login', 'https://evil.example'), new URL('https://roamarr.example/login'))).toBe(true);
+	expect(isForbiddenCrossSiteForm(form('/login', 'https://roamarr.example'), new URL('https://roamarr.example/login'))).toBe(false);
+	expect(isForbiddenCrossSiteForm(form('/oauth/token'), new URL('https://roamarr.example/oauth/token'))).toBe(false);
+	expect(isForbiddenCrossSiteForm(form('/oauth/revoke'), new URL('https://roamarr.example/oauth/revoke'))).toBe(false);
 });
 
 test('maps mobile API methods to least-privilege scopes', () => {

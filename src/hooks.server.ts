@@ -16,6 +16,19 @@ import type { ToastVariant } from '$lib/toast';
 bootApp();
 
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/register$/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
+const OAUTH_FORM_ENDPOINTS = new Set(['/oauth/token', '/oauth/revoke']);
+const FORM_CONTENT_TYPES = new Set([
+	'application/x-www-form-urlencoded',
+	'multipart/form-data',
+	'text/plain'
+]);
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export function isForbiddenCrossSiteForm(request: Request, url: URL): boolean {
+	if (OAUTH_FORM_ENDPOINTS.has(url.pathname) || !UNSAFE_METHODS.has(request.method)) return false;
+	const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+	return !!contentType && FORM_CONTENT_TYPES.has(contentType) && request.headers.get('origin') !== url.origin;
+}
 
 export function requiredApiScope(path: string, method: string): Scope | null {
 	const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
@@ -159,6 +172,11 @@ function redirectResponse(e: Redirect) {
 export const handle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
+		if (!dev && isForbiddenCrossSiteForm(event.request, event.url)) {
+			return new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
+				status: 403
+			});
+		}
 		if (event.request.method === 'OPTIONS' && isOAuthCorsPath(path)) {
 			return applyOAuthCors(applySecurityHeaders(new Response(null, { status: 204 }), path), path);
 		}

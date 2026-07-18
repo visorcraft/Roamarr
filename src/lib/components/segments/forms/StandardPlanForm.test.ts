@@ -5,6 +5,8 @@ import BoatForm from './BoatForm.svelte';
 import HotelForm from './HotelForm.svelte';
 import FoodForm from './FoodForm.svelte';
 import TrainForm from './TrainForm.svelte';
+import ShuttleForm from './ShuttleForm.svelte';
+import RideshareForm from './RideshareForm.svelte';
 
 // Safety net for form-field consolidation: locks submission-affecting field
 // names so a migration to shared components cannot silently drop/rename one.
@@ -31,4 +33,6 @@ test('delegate forms add their extra fields on top of StandardPlanForm', () => {
 	expect(render(TrainForm, { props: {} }).body).toContain('name="detail_seat"');
 	// BoatForm is a pure wrapper (labels only) and still surfaces the base fields
 	expect(render(BoatForm, { props: {} }).body).toContain('name="title"');
+	expect(render(ShuttleForm, { props: {} }).body).toContain('Pick-up time');
+	expect(render(RideshareForm, { props: {} }).body).toContain('Drop-off time');
 });

@@ -17,6 +17,10 @@ export const SEGMENT_TYPES = [
 ] as const;
 export type SegmentType = (typeof SEGMENT_TYPES)[number];
 
+export function usesPickupDropoff(type: string): boolean {
+	return type === 'rental_car' || type === 'rideshare' || type === 'shuttle';
+}
+
 export const SEG = {
 	flight: {
 		label: 'Flight',
@@ -32,7 +36,7 @@ export const SEG = {
 	},
 	rental_car: {
 		label: 'Rental car',
-		icon: '<path d="M3 16v-3a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><path d="M3 16h18v2H3z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/>'
+		icon: '<path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.6 5H8.4a2 2 0 0 0-1.9 1.3L5 10 3 8"/><path d="M7 14h.01"/><path d="M17 14h.01"/><rect width="18" height="8" x="3" y="10" rx="2"/><path d="M5 18v2"/><path d="M19 18v2"/>'
 	},
 	note: {
 		label: 'Note',
@@ -44,7 +48,7 @@ export const SEG = {
 	},
 	parking: {
 		label: 'Parking',
-		icon: '<circle cx="12" cy="12" r="9"/><path d="M10 17V7h4a3 3 0 0 1 0 6h-4"/>'
+		icon: '<circle cx="12" cy="12" r="10"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>'
 	},
 	boat: {
 		label: 'Boat',
@@ -72,7 +76,7 @@ export const SEG = {
 	},
 	rideshare: {
 		label: 'Rideshare',
-		icon: '<path d="M3 16v-3a2 2 0 0 1 2-2h11l2 2h2a2 2 0 0 1 2 2v3"/><path d="M3 16h18v2H3z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/><path d="M16 11h3l2 2"/>'
+		icon: '<path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.6 5H8.4a2 2 0 0 0-1.9 1.3L5 10 3 8"/><path d="M7 14h.01"/><path d="M17 14h.01"/><rect width="18" height="8" x="3" y="10" rx="2"/><path d="M5 18v2"/><path d="M19 18v2"/>'
 	},
 	shuttle: {
 		label: 'Shuttle',

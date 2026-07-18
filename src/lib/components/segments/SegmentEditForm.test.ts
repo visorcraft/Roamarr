@@ -53,3 +53,10 @@ test('SegmentEditForm uses flight departure and arrival labels', () => {
 	expect(body).toContain('Arrival');
 	expect(body).not.toContain('>Ends<');
 });
+
+test('SegmentEditForm uses transportation pick-up and drop-off labels', () => {
+	const { body } = render(SegmentEditForm, { props: { segment: { ...segment, type: 'shuttle' }, tripId: 7, onCancel: () => {} } });
+	expect(body).toContain('Pick-up');
+	expect(body).toContain('Drop-off');
+	expect(body).not.toContain('>Ends<');
+});

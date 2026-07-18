@@ -7,6 +7,7 @@
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import { toDatetimeLocal } from '$lib/segments/datetimeLocal';
 	import { COUNTRIES } from '$lib/countries';
+	import { usesPickupDropoff } from '$lib/segmentLabels';
 
 	interface SegmentEdit {
 		id?: number;
@@ -45,6 +46,7 @@
 	const fid = (k: string) => `${k}-${s.id ?? ''}`;
 	const hotel = $derived(s.type === 'hotel');
 	const flight = $derived(s.type === 'flight');
+	const pickupDropoff = $derived(usesPickupDropoff(s.type));
 
 	let isDirty = $state(false);
 </script>
@@ -52,15 +54,15 @@
 <form method="POST" action={`/trips/${tripId}/segments?/update`} class="trip-timeline-card grid gap-4 sm:grid-cols-2" oninput={() => (isDirty = true)}>
 	<input type="hidden" name="segmentId" value={s.id} />
 	<TextField name="title" id={fid('title')} label="Title" value={s.title} required {errors} />
-	<TextField name="localStart" id={fid('localStart')} label={hotel ? 'Check-in' : flight ? 'Departure' : 'Starts'} type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} required {errors} />
+	<TextField name="localStart" id={fid('localStart')} label={hotel ? 'Check-in' : flight ? 'Departure' : pickupDropoff ? 'Pick-up' : 'Starts'} type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} required {errors} />
 	<div class="field">
 		<label class="label" for={fid('startTz')}>Timezone</label>
 		<TimezoneSelect id={fid('startTz')} name="startTz" value={s.startTz} class="input {errors.startTz ? 'input-error' : ''}" />
 		{#if errors.startTz}<p class="field-error">{errors.startTz}</p>{/if}
 	</div>
-	<TextField name="endAt" id={fid('endAt')} label={hotel ? 'Check-out' : flight ? 'Arrival' : 'Ends'} type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} {errors} />
+	<TextField name="endAt" id={fid('endAt')} label={hotel ? 'Check-out' : flight ? 'Arrival' : pickupDropoff ? 'Drop-off' : 'Ends'} type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} {errors} />
 	<div class="field">
-		<label class="label" for={fid('endTz')}>{hotel ? 'Check-out timezone' : flight ? 'Arrival timezone' : 'End timezone'}</label>
+		<label class="label" for={fid('endTz')}>{hotel ? 'Check-out timezone' : flight ? 'Arrival timezone' : pickupDropoff ? 'Drop-off timezone' : 'End timezone'}</label>
 		<TimezoneSelect id={fid('endTz')} name="endTz" value={s.endTz ?? s.startTz} class="input {errors.endTz ? 'input-error' : ''}" />
 		{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
 	</div>

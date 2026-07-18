@@ -22,8 +22,8 @@
 
 <section class="segment-form-section sm:col-span-2">
 	<div class="grid gap-4 sm:grid-cols-3">
-		<TextField name="startDate" label="Pickup date" type="date" required errorKey={['startDate', 'localStart']} {errors} />
-		<TextField name="startTime" label="Pickup time" type="time" />
+		<TextField name="startDate" label="Pick-up date" type="date" required errorKey={['startDate', 'localStart']} {errors} />
+		<TextField name="startTime" label="Pick-up time" type="time" />
 		<div class="field">
 			<label class="label" for="startTz">Timezone</label>
 			<TimezoneSelect id="startTz" name="startTz" value="UTC" class="input {errors.startTz ? 'input-error' : ''}" />

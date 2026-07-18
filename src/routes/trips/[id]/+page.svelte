@@ -8,7 +8,7 @@
 	import SegmentEditForm from '$lib/components/segments/SegmentEditForm.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
-	import { SEG, SEGMENT_TYPES, type SegmentType } from '$lib/segmentLabels';
+	import { SEG, SEGMENT_TYPES, usesPickupDropoff, type SegmentType } from '$lib/segmentLabels';
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
 	import { renderMarkdown } from '$lib/markdown';
@@ -598,12 +598,13 @@
 		const local = segmentLocalDateTime(segment);
 		const hotel = segment.type === 'hotel';
 		const flight = segment.type === 'flight';
-		if (local && segment.startAt) rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : 'Date & time', value: `${formatDate(local.toISODate()!)} · ${formatTime(segment.startAt, segment.startTz ?? 'UTC')}` });
-		else rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : 'Date & time', value: 'Unscheduled' });
-		if ((hotel || flight) && segment.endAt) {
+		const pickupDropoff = usesPickupDropoff(segment.type);
+		if (local && segment.startAt) rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : pickupDropoff ? 'Pick-up' : 'Date & time', value: `${formatDate(local.toISODate()!)} · ${formatTime(segment.startAt, segment.startTz ?? 'UTC')}` });
+		else rows.push({ icon: 'calendar', label: hotel ? 'Check-in' : flight ? 'Departure' : pickupDropoff ? 'Pick-up' : 'Date & time', value: 'Unscheduled' });
+		if ((hotel || flight || pickupDropoff) && segment.endAt) {
 			const endTz = segment.endTz ?? segment.startTz ?? 'UTC';
 			const end = DateTime.fromISO(segment.endAt, { zone: 'utc' }).setZone(endTz);
-			rows.push({ icon: 'calendar', label: hotel ? 'Check-out' : 'Arrival', value: `${formatDate(end.toISODate()!)} · ${formatTime(segment.endAt, endTz)}` });
+			rows.push({ icon: 'calendar', label: hotel ? 'Check-out' : flight ? 'Arrival' : 'Drop-off', value: `${formatDate(end.toISODate()!)} · ${formatTime(segment.endAt, endTz)}` });
 		}
 		const location = segmentSubtitle(segment);
 		if (location) rows.push({ icon: 'location', label: 'Location', value: location });

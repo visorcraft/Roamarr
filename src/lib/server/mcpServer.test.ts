@@ -208,6 +208,38 @@ describe('mcpServer', () => {
 		expect(body.trip.notes).toBeUndefined();
 	});
 
+	test('day plan and segment update preserve itinerary details', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Hotel details' });
+		const { client } = await connect(userId, ['segments:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_day_plan',
+			arguments: {
+				tripId: trip.id,
+				type: 'hotel',
+				title: 'Hotel',
+				startAt: '2026-08-01T15:00:00Z',
+				location: '123 Main St',
+				confirmationNumber: 'ABC123',
+				notes: 'Paid with travel credit',
+				details: { room: 'Twin' },
+				paymentStatus: 'fully_paid'
+			}
+		});
+		const segmentId = JSON.parse(created.content[0].text).id;
+		await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId, details: { guests: '2' }, notes: 'Updated note' }
+		});
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		const segment = getSegmentById(segmentId)!;
+		expect(segment).toMatchObject({
+			location: '123 Main St',
+			confirmationNumber: 'ABC123',
+			paymentStatus: 'fully_paid'
+		});
+		expect(JSON.parse(segment.detailsJson!)).toEqual({ room: 'Twin', guests: '2', notes: 'Updated note' });
+	});
+
 	test('search finds trips by itinerary content', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Summer' });
 		const { createSegment } = await import('./repositories/segmentsRepo');

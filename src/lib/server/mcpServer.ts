@@ -531,7 +531,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
-						notes: { type: 'string' }
+						location: { type: 'string' },
+						confirmationNumber: { type: 'string' },
+						notes: { type: 'string' },
+						details: { type: 'object' },
+						paymentStatus: { type: 'string', enum: ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] }
 					},
 					required: ['tripId', 'type', 'title', 'startAt']
 				}
@@ -647,7 +651,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// Round 1: trip planning vertical — 17 new tools.
 			{
 				name: 'roamarr_segment_update',
-				description: 'Update an existing segment. Pass any subset of: type, title, startAt, endAt, cityName, countryCode, paymentStatus.',
+				description: 'Update an existing segment and its user-facing itinerary details.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -658,6 +662,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
+						location: { type: 'string' },
+						confirmationNumber: { type: 'string' },
+						notes: { type: 'string' },
+						details: { type: 'object' },
 						paymentStatus: { type: 'string', enum: ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] }
 					},
 					required: ['segmentId']
@@ -1775,7 +1783,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					startTz: 'UTC',
 					endAt: (args.endAt as string) || undefined,
 					cityName: (args.cityName as string) || undefined,
-					countryCode: (args.countryCode as string) || undefined
+					countryCode: (args.countryCode as string) || undefined,
+					location: (args.location as string) || undefined,
+					confirmationNumber: (args.confirmationNumber as string) || undefined,
+					details: {
+						...((args.details as Record<string, unknown> | undefined) ?? {}),
+						...(args.notes ? { notes: args.notes } : {})
+					},
+					paymentStatus: args.paymentStatus as string | undefined
 				});
 				logAudit(userId, 'mcp_day_plan', 'segment', seg.id, { tripId: seg.tripId });
 				return textResult({ id: seg.id, tripId: seg.tripId, type: args.type, title: args.title });
@@ -1929,6 +1944,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					endAt: args.endAt as string | undefined,
 					cityName: args.cityName as string | undefined,
 					countryCode: args.countryCode as string | undefined,
+					location: args.location as string | undefined,
+					confirmationNumber: args.confirmationNumber as string | undefined,
+					notes: args.notes as string | undefined,
+					details: args.details as Record<string, unknown> | undefined,
 					paymentStatus: args.paymentStatus as string | undefined
 				});
 				logAudit(userId, 'mcp_segment_update', 'segment', segId, {});

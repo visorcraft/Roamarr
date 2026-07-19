@@ -263,7 +263,7 @@ export function updateSegmentStatus(segmentId: number, status: SegmentStatus) {
 }
 
 // Partial segment update for MCP clients. Only the user-facing fields are
-// accepted: type, title, startAt, endAt, cityName, countryCode, paymentStatus. Internal fields
+// accepted: user-facing itinerary fields only. Internal fields
 // (status, type, trip_id, etc.) are not exposed.
 export function patchSegment(
 	userId: number,
@@ -275,6 +275,10 @@ export function patchSegment(
 		endAt?: string | null;
 		cityName?: string | null;
 		countryCode?: string | null;
+		location?: string | null;
+		confirmationNumber?: string | null;
+		notes?: string;
+		details?: Record<string, unknown>;
 		paymentStatus?: string;
 	}
 ) {
@@ -292,6 +296,21 @@ export function patchSegment(
 	if (patch.endAt !== undefined) repoPatch.end_at = patch.endAt;
 	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
 	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
+	if (patch.location !== undefined) repoPatch.location = patch.location;
+	if (patch.confirmationNumber !== undefined) repoPatch.confirmation_number = patch.confirmationNumber;
+	if (patch.details !== undefined || patch.notes !== undefined) {
+		let details: Record<string, unknown> = {};
+		try {
+			details = seg.detailsJson ? JSON.parse(seg.detailsJson) : {};
+		} catch {
+			// Replace invalid legacy JSON with valid details.
+		}
+		repoPatch.details_json = JSON.stringify({
+			...details,
+			...(patch.details ?? {}),
+			...(patch.notes !== undefined ? { notes: patch.notes } : {})
+		});
+	}
 	if (patch.paymentStatus !== undefined) repoPatch.payment_status = normalizePaymentStatus(patch.paymentStatus);
 	const updated = updateSegmentRepo(verified.id, repoPatch);
 	if (!updated) throw error(404, 'Segment not found');

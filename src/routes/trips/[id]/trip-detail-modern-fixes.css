@@ -179,7 +179,9 @@
 
 .trip-modern .trip-modern-main-board .trip-modern-day-head {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	align-items: flex-start;
+	justify-content: stretch;
 	gap: 0.55rem;
 	padding: 0.9rem;
 }

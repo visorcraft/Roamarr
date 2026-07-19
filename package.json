@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.33.14",
+	"version": "0.33.15",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {

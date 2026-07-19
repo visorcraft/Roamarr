@@ -68,18 +68,46 @@ test('OAuth browser clients receive CORS preflight and response headers', async 
 });
 
 test('keeps form CSRF protection while allowing OAuth protocol POSTs without Origin', () => {
-	const form = (path: string, origin?: string) => new Request(`https://roamarr.example${path}`, {
-		method: 'POST',
-		headers: {
-			'content-type': 'application/x-www-form-urlencoded',
-			...(origin ? { origin } : {})
-		}
-	});
+	const form = (path: string, origin?: string, auth?: string) =>
+		new Request(`https://roamarr.example${path}`, {
+			method: 'POST',
+			headers: {
+				'content-type': 'application/x-www-form-urlencoded',
+				...(origin ? { origin } : {}),
+				...(auth ? { authorization: auth } : {})
+			}
+		});
 	expect(isForbiddenCrossSiteForm(form('/login'), new URL('https://roamarr.example/login'))).toBe(true);
 	expect(isForbiddenCrossSiteForm(form('/login', 'https://evil.example'), new URL('https://roamarr.example/login'))).toBe(true);
 	expect(isForbiddenCrossSiteForm(form('/login', 'https://roamarr.example'), new URL('https://roamarr.example/login'))).toBe(false);
 	expect(isForbiddenCrossSiteForm(form('/oauth/token'), new URL('https://roamarr.example/oauth/token'))).toBe(false);
 	expect(isForbiddenCrossSiteForm(form('/oauth/revoke'), new URL('https://roamarr.example/oauth/revoke'))).toBe(false);
+});
+
+test('allows Bearer-authenticated multipart API uploads without matching Origin', () => {
+	const multiport = (path: string, origin?: string, auth?: string) =>
+		new Request(`https://roamarr.example${path}`, {
+			method: 'POST',
+			headers: {
+				'content-type': 'multipart/form-data; boundary=----x',
+				...(origin ? { origin } : {}),
+				...(auth ? { authorization: auth } : {})
+			}
+		});
+	const url = new URL('https://roamarr.example/api/mobile/trips/1/poster');
+	// Native mobile upload: multipart + Bearer, no Origin
+	expect(
+		isForbiddenCrossSiteForm(multiport('/api/mobile/trips/1/poster', undefined, 'Bearer tok'), url)
+	).toBe(false);
+	// Native with a non-site Origin still allowed when Bearer is present
+	expect(
+		isForbiddenCrossSiteForm(
+			multiport('/api/mobile/trips/1/poster', 'https://evil.example', 'Bearer tok'),
+			url
+		)
+	).toBe(false);
+	// Cookie-session form-style multipart without Bearer remains blocked
+	expect(isForbiddenCrossSiteForm(multiport('/api/mobile/trips/1/poster'), url)).toBe(true);
 });
 
 test('maps mobile API methods to least-privilege scopes', () => {

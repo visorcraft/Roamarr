@@ -26,6 +26,10 @@ const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export function isForbiddenCrossSiteForm(request: Request, url: URL): boolean {
 	if (OAUTH_FORM_ENDPOINTS.has(url.pathname) || !UNSAFE_METHODS.has(request.method)) return false;
+	// Cookie-session browser form CSRF only. Mobile/native clients authenticate with
+	// Bearer tokens and often omit Origin (or send a non-site Origin) on multipart
+	// uploads — blocking those breaks poster/receipt uploads from the app.
+	if (/^Bearer\s+\S+/i.test(request.headers.get('authorization') ?? '')) return false;
 	const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
 	return !!contentType && FORM_CONTENT_TYPES.has(contentType) && request.headers.get('origin') !== url.origin;
 }

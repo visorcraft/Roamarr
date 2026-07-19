@@ -159,9 +159,18 @@
 
 .trip-modern .trip-modern-main-board {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+	grid-auto-flow: column;
+	grid-auto-columns: minmax(20rem, 22rem);
+	grid-template-columns: none;
 	gap: 1rem;
 	align-items: start;
+	overflow-x: auto;
+	padding-bottom: 0.75rem;
+	scroll-snap-type: x proximity;
+}
+
+.trip-modern .trip-modern-main-board .trip-modern-day-card {
+	scroll-snap-align: start;
 }
 
 .trip-modern .trip-modern-main-board .trip-modern-day-card + .trip-modern-day-card {
@@ -205,6 +214,23 @@
 
 .trip-modern .trip-modern-main-board .trip-modern-chevron {
 	display: none;
+}
+
+.trip-modern .trip-modern-main-board .trip-modern-segment-subtitle {
+	display: -webkit-box;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+}
+
+.trip-modern .trip-modern-main-board .trip-modern-meta-pill {
+	min-width: 0;
+}
+
+.trip-modern .trip-modern-main-board .trip-modern-meta-pill > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .trip-modern .trip-modern-selected-footer {

@@ -15,7 +15,22 @@ export const GET: RequestHandler = ({ locals, params }) => {
 		startDate: trip.startDate, endDate: trip.endDate, status: trip.status, notes: trip.notes,
 		tags: (() => { try { return JSON.parse(trip.tags); } catch { return []; } })(), baseCurrency: trip.baseCurrency,
 		defaultVisibility: trip.defaultVisibility, archived: trip.archived, favorite: trip.favorite,
-		posterAttachmentId: trip.posterAttachmentId, segments: view.segments.map(({ confirmationNumber: _confirmationNumber, detailsJson: _detailsJson, ...segment }) => segment),
+		posterAttachmentId: trip.posterAttachmentId,
+		// Mobile print + itinerary UI need confirmation + type details (not secrets).
+		segments: view.segments.map((segment) => {
+			let details: Record<string, unknown> = {};
+			try {
+				details = segment.detailsJson ? JSON.parse(segment.detailsJson) : {};
+			} catch {
+				details = {};
+			}
+			const { detailsJson: _detailsJson, ...rest } = segment;
+			return {
+				...rest,
+				confirmationNumber: segment.confirmationNumber ?? null,
+				details
+			};
+		}),
 		canEdit: true, owner: view.owner
 	} });
 };

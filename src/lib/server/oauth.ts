@@ -142,8 +142,9 @@ export { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
 const CODE_TTL_SEC = 5 * 60;
-const ACCESS_TTL_SEC = 60 * 60;
-const REFRESH_TTL_SEC = 30 * 24 * 60 * 60;
+// OAuth grants remain valid until the user revokes them. Keep expires_in for
+// client compatibility, but authorization is controlled by revoked_at.
+const ACCESS_TTL_SEC = 2_147_483_647;
 
 export interface OAuthClient {
 	clientId: string;
@@ -385,9 +386,6 @@ export function refreshAccessToken(params: {
 	if (!row) return { error: 'invalid_grant' };
 	if (row.revoked_at) return { error: 'invalid_grant' };
 	if (row.client_id !== params.clientId) return { error: 'invalid_grant' };
-	if (row.refresh_expires_at && Date.now() > new Date(row.refresh_expires_at as string).getTime())
-		return { error: 'invalid_grant' };
-
 	const clientAuth = authenticateClient(params.clientId, params.clientSecret ?? null);
 	if ('error' in clientAuth) return clientAuth;
 
@@ -419,7 +417,7 @@ function issueTokens(params: {
 		user_id: BigInt(params.userId),
 		scopes: JSON.stringify(params.scopes),
 		expires_at: utcIsoAfter({ seconds: ACCESS_TTL_SEC }),
-		refresh_expires_at: utcIsoAfter({ seconds: REFRESH_TTL_SEC }),
+		refresh_expires_at: null,
 		revoked_at: null,
 		created_at: nowIso(),
 		last_used_at: null
@@ -447,8 +445,6 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 		.executeSync()[0];
 	if (!row) return null;
 	if (row.revoked_at) return null;
-	if (Date.now() > new Date(row.expires_at as string).getTime()) return null;
-
 	// Enforce the "disabled users cannot authenticate" invariant: oauth_tokens has
 	// no FK to users, so a disabled/deleted user's token would otherwise live until
 	// natural expiry.
@@ -489,18 +485,13 @@ export function revokeTokensForUser(userId: number): number {
 }
 
 /**
- * Delete expired authorization codes and fully-expired tokens. oauth_* rows are
- * filtered at read time, but without a sweep they grow unbounded. Run from the
- * scheduler alongside the session/challenge purges.
+ * Delete expired one-time authorization codes. Bearer grants remain until
+ * explicit revocation.
  */
 export function purgeExpiredOauth(): { codes: number; tokens: number } {
 	const now = nowIso();
 	const codes = kit.deleteFrom(oauthCodes).where(kitLt(oauthCodes.expires_at, now)).executeSync();
-	const tokens = kit
-		.deleteFrom(oauthTokens)
-		.where(kitLt(oauthTokens.refresh_expires_at, now))
-		.executeSync();
-	return { codes: Number(codes), tokens: Number(tokens) };
+	return { codes: Number(codes), tokens: 0 };
 }
 
 export function revokeTokenForUser(userId: number, token: string): boolean {

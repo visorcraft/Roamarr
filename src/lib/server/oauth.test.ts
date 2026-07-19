@@ -79,6 +79,15 @@ describe('oauth', () => {
 		expect(auth?.scopes).toEqual(['trips:read']);
 	});
 
+	test('access tokens remain valid until revoked', () => {
+		const { result } = issueTokens();
+		if ('error' in result) throw new Error('exchange failed');
+		ctx.kit.updateTable(oauthTokens).set({ expires_at: '2000-01-01T00:00:00.000Z' }).executeSync();
+		expect(verifyAccessToken(result.accessToken)?.userId).toBe(userId);
+		revokeTokensForUser(userId);
+		expect(verifyAccessToken(result.accessToken)).toBeNull();
+	});
+
 	test('wrong PKCE verifier is rejected and the code is single-use', () => {
 		const { client, plaintextSecret } = newClient();
 		const { challenge } = pkcePair();

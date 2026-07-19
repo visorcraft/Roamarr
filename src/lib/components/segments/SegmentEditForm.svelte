@@ -73,7 +73,7 @@
 		{/each}
 	</SelectField>
 	<CityAutocomplete countryCode={s.countryCode ?? ''} name="cityName" value={s.cityName ?? ''} latName="cityLat" lngName="cityLng" {errors} />
-	<TextField name="venue" id={fid('venue')} label="Venue" value={s.venue ?? ''} class="sm:col-span-2" {errors} />
+	<TextField name="venue" id={fid('venue')} label={hotel ? 'Address' : 'Venue'} value={s.venue ?? ''} class="sm:col-span-2" {errors} />
 	<TextField name="confirmationNumber" id={fid('confirmationNumber')} label="Confirmation #" value={s.confirmationNumber ?? ''} {errors} />
 	<TextField name="meetingPoint" id={fid('meetingPoint')} label="Meeting / rally point" value={s.meetingPoint ?? ''} maxlength="200" class="sm:col-span-2" {errors} />
 	<TextField name="meetingAt" id={fid('meetingAt')} label="Rally time" type="datetime-local" value={toDatetimeLocal(s.meetingAt, s.startTz ?? 'UTC')} {errors} />

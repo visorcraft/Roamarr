@@ -532,6 +532,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },
+						venue: { type: 'string', description: 'Venue or street address shown in the itinerary editor' },
 						confirmationNumber: { type: 'string' },
 						notes: { type: 'string' },
 						details: { type: 'object' },
@@ -663,6 +664,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },
+						venue: { type: 'string', description: 'Venue or street address shown in the itinerary editor' },
 						confirmationNumber: { type: 'string' },
 						notes: { type: 'string' },
 						details: { type: 'object' },
@@ -1785,6 +1787,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					cityName: (args.cityName as string) || undefined,
 					countryCode: (args.countryCode as string) || undefined,
 					location: (args.location as string) || undefined,
+					venue:
+						(args.venue as string) ||
+						(String(args.type) === 'hotel' ? (args.location as string) : undefined),
 					confirmationNumber: (args.confirmationNumber as string) || undefined,
 					details: {
 						...((args.details as Record<string, unknown> | undefined) ?? {}),
@@ -1937,6 +1942,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'segments:write')) return scopeError('segments:write');
 				const { patchSegment } = await import('./segments');
 				const segId = Number(args.segmentId);
+				const existing = segmentsRepo.getSegmentById(segId);
 				patchSegment(userId, segId, {
 					type: args.type as import('$lib/segmentLabels').SegmentType | undefined,
 					title: args.title as string | undefined,
@@ -1945,6 +1951,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					cityName: args.cityName as string | undefined,
 					countryCode: args.countryCode as string | undefined,
 					location: args.location as string | undefined,
+					venue:
+						(args.venue as string | undefined) ??
+						(existing?.type === 'hotel' ? (args.location as string | undefined) : undefined),
 					confirmationNumber: args.confirmationNumber as string | undefined,
 					notes: args.notes as string | undefined,
 					details: args.details as Record<string, unknown> | undefined,

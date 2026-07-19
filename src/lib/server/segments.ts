@@ -276,6 +276,7 @@ export function patchSegment(
 		cityName?: string | null;
 		countryCode?: string | null;
 		location?: string | null;
+		venue?: string | null;
 		confirmationNumber?: string | null;
 		notes?: string;
 		details?: Record<string, unknown>;
@@ -297,6 +298,7 @@ export function patchSegment(
 	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
 	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
 	if (patch.location !== undefined) repoPatch.location = patch.location;
+	if (patch.venue !== undefined) repoPatch.venue = patch.venue;
 	if (patch.confirmationNumber !== undefined) repoPatch.confirmation_number = patch.confirmationNumber;
 	if (patch.details !== undefined || patch.notes !== undefined) {
 		let details: Record<string, unknown> = {};

@@ -234,6 +234,7 @@ describe('mcpServer', () => {
 		const segment = getSegmentById(segmentId)!;
 		expect(segment).toMatchObject({
 			location: '123 Main St',
+			venue: '123 Main St',
 			confirmationNumber: 'ABC123',
 			paymentStatus: 'fully_paid'
 		});

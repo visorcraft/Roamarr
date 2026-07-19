@@ -23,6 +23,8 @@ test('SegmentEditForm renders all expected fields with per-segment ids', () => {
 	expect(body).toContain('value="ABC123"');
 	// form posts to the update action for the right trip
 	expect(body).toContain('action="/trips/7/segments?/update"');
+	expect(body).toContain('Additional details');
+	expect(body).not.toContain('Details (JSON)');
 });
 
 test('SegmentEditForm renders card select when cards are provided', () => {

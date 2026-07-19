@@ -205,7 +205,7 @@
 
 .trip-modern .trip-modern-main-board .trip-modern-day-head > .flex {
 	width: 100%;
-	justify-content: space-between;
+	justify-content: flex-end;
 }
 
 .trip-modern .trip-modern-main-board .trip-modern-day-body {

@@ -84,11 +84,15 @@
 		<option value="refunded" selected={s.paymentStatus === 'refunded'}>Refunded</option>
 	</SelectField>
 	<TextField name="paymentDueDate" id={fid('paymentDueDate')} label="Payment due" type="date" value={s.paymentDueDate ?? ''} {errors} />
-	<div class="field sm:col-span-2">
-		<label class="label" for={fid('detailsJson')}>Details (JSON)</label>
-		<textarea id={fid('detailsJson')} name="detailsJson" class="input h-20 font-mono text-xs {errors.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
-		{#if errors.detailsJson}<p class="field-error">{errors.detailsJson}</p>{/if}
-	</div>
+	<details class="panel-subtle sm:col-span-2" open={Boolean(errors.detailsJson)}>
+		<summary class="cursor-pointer font-semibold">Additional details</summary>
+		<div class="field mt-3">
+			<label class="label" for={fid('detailsJson')}>Stored data</label>
+			<p class="mb-2 text-sm text-muted">Roamarr keeps booking-specific fields here. Usually no changes are needed.</p>
+			<textarea id={fid('detailsJson')} name="detailsJson" class="input h-20 font-mono text-xs {errors.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
+			{#if errors.detailsJson}<p class="field-error">{errors.detailsJson}</p>{/if}
+		</div>
+	</details>
 	{#if cards?.length}
 		<CardSelect {cards} name="cardId" value={s.cardId} {errors} />
 	{/if}

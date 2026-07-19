@@ -17,5 +17,14 @@ test('add a note segment to a trip', async ({ page }) => {
 	await page.click('button:has-text("Save")');
 	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'networkidle' });
 
-	await expect(page.locator('.trip-modern-segment-title', { hasText: title })).toBeVisible();
+	const segment = page.locator('.trip-modern-segment', { hasText: title });
+	await expect(segment).toBeVisible();
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await segment.click();
+	const details = page.getByRole('dialog', { name: 'Selected segment details' });
+	await expect(details).toBeVisible();
+	expect(await details.boundingBox()).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
+	await details.getByRole('button', { name: 'Close selected segment' }).click();
+	await expect(details).toBeHidden();
 });

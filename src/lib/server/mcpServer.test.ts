@@ -13,6 +13,7 @@ vi.mock('$lib/server/db', async () => {
 import { createMcpServer } from './mcpServer';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
+import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
@@ -166,6 +167,32 @@ describe('mcpServer', () => {
 		const row = ctx.kit.selectFrom(trips).where(kitEq(trips.id, BigInt(created.id))).executeSync()[0];
 		expect(row.owner_id).toBe(BigInt(userId));
 		expect(row.name).toBe('Lisbon');
+	});
+
+	test('trip writes resolve destination city coordinates', async () => {
+		travelDataRepo.importCitiesBatch([
+			{ geonameId: 1609350, name: 'Bangkok', asciiName: 'Bangkok', countryCode: 'TH', lat: 13.7525, lng: 100.4942, population: 10539000, timezone: 'Asia/Bangkok' }
+		]);
+		const { client } = await connect(userId, ['trips:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_trip_create',
+			arguments: { name: 'Thailand', destinationCountryCode: 'TH', destinationCityName: 'bangkok' }
+		});
+		const tripId = JSON.parse(created.content[0].text).id;
+		expect(tripsRepo.getTripById(tripId)).toMatchObject({
+			destinationCityName: 'Bangkok',
+			destinationCityLat: 13.7525,
+			destinationCityLng: 100.4942
+		});
+
+		await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId, destinationCityName: 'Bangkok' }
+		});
+		expect(tripsRepo.getTripById(tripId)).toMatchObject({
+			destinationCityLat: 13.7525,
+			destinationCityLng: 100.4942
+		});
 	});
 
 	test('trip_get includes itinerary segments for the owner', async () => {

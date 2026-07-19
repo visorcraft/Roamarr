@@ -19,7 +19,14 @@ export interface GlobeCity {
 }
 
 export function findCity(countryCode: string, name: string): CityResult | null {
-	const city = repo.findCityByCountryAndName(countryCode, name);
+	const normalized = name.toLowerCase();
+	const city =
+		repo.findCityByCountryAndName(countryCode, name) ??
+		repo.searchCities(name, countryCode, 20).find(
+			(candidate) =>
+				candidate.name.toLowerCase() === normalized ||
+				candidate.asciiName.toLowerCase() === normalized
+		);
 	if (!city) return null;
 	return {
 		geonameId: city.geonameId,

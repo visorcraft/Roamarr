@@ -41,6 +41,7 @@ test('findCity returns matching city', () => {
 	]);
 	const result = findCity('FR', 'Paris');
 	expect(result?.lat).toBe(48.85);
+	expect(findCity('fr', 'paris')?.lat).toBe(48.85);
 });
 
 test('searchCities filters by country and prefix', () => {

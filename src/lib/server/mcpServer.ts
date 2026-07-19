@@ -20,6 +20,7 @@ import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
+import { findCity } from './cities';
 import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, type CompanionCategory } from './db/mongrelSchema';
 import {
 	projectCard,
@@ -63,6 +64,23 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 	if (v.ok()) return { ok: true };
 	const messages = Object.values(v.errors);
 	return { ok: false, error: messages.join('; ') };
+}
+
+function destinationCityPatch(
+	args: Record<string, unknown>,
+	current?: ReturnType<typeof tripsRepo.getTripById>
+) {
+	const destinationCityName = args.destinationCityName as string | undefined;
+	const destinationCountryCode = args.destinationCountryCode as string | undefined;
+	const name = destinationCityName ?? current?.destinationCityName;
+	const countryCode = destinationCountryCode ?? current?.destinationCountryCode;
+	const city = name && countryCode ? findCity(countryCode, name) : null;
+	return {
+		destinationCountryCode,
+		destinationCityName: city?.name ?? destinationCityName,
+		destinationCityLat: (args.destinationCityLat as number | undefined) ?? city?.lat,
+		destinationCityLng: (args.destinationCityLng as number | undefined) ?? city?.lng
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -1706,12 +1724,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_create': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const destination = destinationCityPatch(args);
 				const trip = tripsRepo.createTrip(userId, {
 					name: String(args.name ?? ''),
 					destination: args.destination as string | undefined,
-					destinationCountryCode: args.destinationCountryCode as string | undefined,
-					destinationCityName: args.destinationCityName as string | undefined,
-					destinationCityLat: args.destinationCityLat as number | undefined, destinationCityLng: args.destinationCityLng as number | undefined,
+					...destination,
 					startDate: args.startDate as string | undefined,
 					endDate: args.endDate as string | undefined, notes: args.notes as string | undefined,
 					tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined, baseCurrency: args.baseCurrency as string | undefined,
@@ -1728,11 +1745,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// Editors of shared trips can update trip metadata, matching
 				// the web UI /trips/[id]/edit save action (requireEditableTrip).
 				requireEditableTrip(userId, tripId);
+				const destination = destinationCityPatch(args, tripsRepo.getTripById(tripId));
 				const updated = tripsRepo.updateTrip(tripId, {
 					name: args.name as string | undefined,
 					destination: args.destination as string | undefined,
-					destinationCountryCode: args.destinationCountryCode as string | undefined, destinationCityName: args.destinationCityName as string | undefined,
-					destinationCityLat: args.destinationCityLat as number | undefined, destinationCityLng: args.destinationCityLng as number | undefined,
+					...destination,
 					startDate: args.startDate as string | undefined,
 					endDate: args.endDate as string | undefined,
 					notes: args.notes as string | undefined, tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined,
@@ -2585,8 +2602,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_profile_get': {
 				if (!hasScope(scopes, 'profile-prefs:read')) return scopeError('profile-prefs:read');
 				const { getUserById } = await import('./repositories/usersRepo');
+				const { getSettings } = await import('./settings');
 				const u = getUserById(userId);
 				if (!u) return { content: [{ type: 'text' as const, text: 'User not found' }], isError: true };
+				const settings = getSettings();
 				return textResult({
 					role: u.role,
 					displayName: u.display_name,
@@ -2594,7 +2613,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					defaultCurrency: u.default_currency,
 					flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
 					documentExpiryLeadDays: Number(u.document_expiry_lead_days),
-					themeId: u.theme_id
+					themeId: u.theme_id,
+					// Instance display formats (same values the web UI uses) for mobile clients.
+					dateFormat: settings.defaultDateFormat || 'yyyy-MM-dd',
+					datetimeFormat: settings.defaultDatetimeFormat || 'yyyy-MM-dd h:mm a'
 				});
 			}
 			case 'roamarr_profile_update': {

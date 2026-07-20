@@ -93,7 +93,7 @@ https://your-origin/.well-known/oauth-authorization-server
 
 The client should use the returned `authorization_endpoint` and
 `token_endpoint` values. The discovery URL is also displayed under **Setup
-instructions** on the API Clients tab. Roamarr uses manual client registration;
+instructions** on the MCP Clients page. Roamarr uses manual client registration;
 it does not advertise a dynamic `registration_endpoint`.
 
 ### Step 3 — Run the authorization-code + PKCE flow

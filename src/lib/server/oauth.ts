@@ -147,8 +147,6 @@ export function getAvailableScopes(): Scope[] {
 		: ALL_SCOPES.filter((scope) => scope !== PRIVATE_DETAILS_SCOPE);
 }
 
-export { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
-
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
 const CODE_TTL_SEC = 5 * 60;
@@ -310,7 +308,7 @@ export function createAuthorizationCode(params: {
 	return { code, redirectUri: params.redirectUri };
 }
 
-export function verifyPkce(verifier: string, challenge: string): boolean {
+function verifyPkce(verifier: string, challenge: string): boolean {
 	const hash = createHash('sha256').update(verifier).digest('base64url');
 	return hash === challenge;
 }

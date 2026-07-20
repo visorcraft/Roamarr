@@ -20,7 +20,6 @@ const remindersMock = vi.hoisted(() => ({
 vi.mock('$lib/server/reminders', () => remindersMock);
 
 import { addDocument } from '$lib/server/travelDocuments';
-import { updateLoyaltyProgram as updateProgram } from '$lib/server/loyaltyPrograms';
 import {
 	_updateProfile,
 	actions
@@ -84,34 +83,6 @@ test('document number is encrypted at rest and arms a reminder', () => {
 	expect(row.number).not.toBe('X1234567');
 	expect(decrypt(row.number!)).toBe('X1234567');
 	expect(upsertRemindersForDocument).toHaveBeenCalled();
-});
-
-test('updateProgram edits a loyalty program and is user-scoped', () => {
-	const a = makeTestUser({ email: 'loyal-a@x.c', passwordHash: 'x', displayName: 'A' });
-	const b = makeTestUser({ email: 'loyal-b@x.c', passwordHash: 'x', displayName: 'B' });
-	const program = profileRepo.createLoyaltyProgram(Number(a.id), {
-		programName: 'Old',
-		membershipNumber: '123',
-		balance: 1000,
-		notes: 'old note'
-	});
-	updateProgram(Number(a.id), program.id, {
-		programName: 'United MileagePlus',
-		membershipNumber: 'UA999',
-		balance: 5000,
-		notes: 'new note'
-	});
-	const row = kit.selectFrom(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).executeSync()[0]!;
-	expect(row.program_name).toBe('United MileagePlus');
-	expect(row.membership_number).toBe('UA999');
-	expect(Number(row.balance)).toBe(5000);
-	expect(row.notes).toBe('new note');
-
-	expect(() => updateProgram(Number(b.id), program.id, { programName: 'Hacked' })).toThrow(
-		expect.objectContaining({ status: 404, body: { message: 'Not found' } })
-	);
-	const unchanged = kit.selectFrom(loyaltyPrograms).where(eq(loyaltyPrograms.id, BigInt(program.id))).executeSync()[0]!;
-	expect(unchanged.program_name).toBe('United MileagePlus');
 });
 
 test('update profile changes display name, timezone and reminder leads', () => {

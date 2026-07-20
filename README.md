@@ -130,13 +130,14 @@ Roamarr can:
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
-- Connect external clients via OAuth (58 read/write scopes, PKCE, refresh-token
+- Connect external clients via OAuth (59 scopes, PKCE, refresh-token
   rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 108 tools, 16
   prompts, and 9 resource templates — covering trips, segments, expenses, polls,
   companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
   templates, and profile preferences. Destructive operations require an explicit
-  `confirm: true`; sensitive fields (PAN, policy/member/document numbers, notes)
-  are stripped on every AI-bound response.
+  `confirm: true`. Payment-card, policy, membership, and travel-document numbers
+  stay redacted. Administrators can optionally let users approve private trip
+  notes, confirmation numbers, and itinerary details per MCP client.
 - Run admin workflows for setup, users, registration, audit logs, scheduled
   jobs, backups, restores, demo data, instance stats, health checks, database
   maintenance (integrity check, compaction, flush, and doctor), and map
@@ -247,7 +248,7 @@ image rebuild, use `compose.local.yml`:
 
 ```bash
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
-rtk podman compose -f compose.local.yml up -d
+podman compose -f compose.local.yml up -d
 ```
 
 This bind-mounts the working tree and serves the Vite dev server on
@@ -456,6 +457,12 @@ Client Registration by disabling **Configuration → MCP Clients → Allow users
 set up MCP Clients**. This policy is disabled by default on new installations.
 Existing issued tokens remain independently revocable.
 
+Private trip details are also disabled by default. An administrator must enable
+**Configuration → MCP Clients → Allow private travel details through MCP**, and
+each user must separately approve the optional `private-details:read` permission
+for that client. Payment-card, policy, membership, and travel-document numbers
+remain redacted.
+
 If the administrator configures **Configuration → MCP Clients → Allowed client
 IDs**, open Dynamic Client Registration is disabled. Use manual registration
 instead. If needed, temporarily clear the allow-list, create the manual client,
@@ -489,8 +496,10 @@ application and use that application's callback URL.
 
 Every client is limited to its registered scopes and the scopes approved on the
 consent screen. MCP reads use privacy-safe projections. Sensitive document,
-membership, policy, payment-card, and note fields are stripped from AI-facing
-responses. Destructive MCP tools also require `confirm: true`.
+membership, policy, and payment-card numbers remain stripped from AI-facing
+responses. Private trip notes, confirmation numbers, and itinerary details need
+both the administrator gate and per-client user consent. Destructive MCP tools
+also require `confirm: true`.
 
 ## Architecture
 

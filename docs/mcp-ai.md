@@ -27,7 +27,7 @@ The discovery document builds its endpoint URLs from that origin.
 
 ## Quick setup
 
-1. Sign in to Roamarr and open **Profile → Security → API Clients**.
+1. Sign in to Roamarr and open **Profile → MCP Clients**.
 2. Under **Create a client**, enter a recognizable name and the exact redirect
    URI supplied by your AI client.
 3. Select only the scopes the client needs.
@@ -58,7 +58,7 @@ Start read-only. Add write scopes only after the read connection works.
 
 Roamarr currently exposes 59 scopes. Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
-API Clients UI come from `src/lib/oauthScopes.ts`.
+MCP Clients UI come from `src/lib/oauthScopes.ts`.
 
 Use separate clients for separate assistants. This keeps grants small and lets
 you revoke one integration without disrupting another.

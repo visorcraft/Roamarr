@@ -22,7 +22,7 @@ import {
 } from '$lib/server/oauth';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { updateSettings } from '$lib/server/settings';
-import { oauthTokens, oauthClients } from '$lib/server/db/mongrelSchema';
+import { oauthTokens, oauthClients, oauthCodes } from '$lib/server/db/mongrelSchema';
 import { makeUser } from '../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
 
@@ -43,7 +43,7 @@ describe('oauth routes', () => {
 		resetRateLimit();
 		ctx.kit.deleteFrom(oauthTokens).executeSync();
 		ctx.kit.deleteFrom(oauthClients).executeSync();
-		updateSettings({ oauthClientAllowList: null, allowUserMcpClients: true });
+		updateSettings({ oauthClientAllowList: null, allowUserMcpClients: true, allowMcpPii: false });
 		user = makeUser(ctx.kit);
 	});
 
@@ -187,6 +187,67 @@ describe('oauth routes', () => {
 			expect(result.client.clientId).toBe(client.clientId);
 			expect(result.scopes).toEqual(['trips:read', 'places:read']);
 			expect(result.state).toBe('xyz');
+		});
+
+		test('private details require both admin enablement and user approval', async () => {
+			updateSettings({ allowMcpPii: true });
+			const { client } = makeClient({
+				scopes: ['trips:read', 'private-details:read']
+			});
+			const { challenge } = pkcePair();
+			const url = new URL('http://localhost/oauth/authorize');
+			url.searchParams.set('response_type', 'code');
+			url.searchParams.set('client_id', client.clientId);
+			url.searchParams.set('redirect_uri', client.redirectUris[0]);
+			url.searchParams.set('scope', 'trips:read private-details:read');
+			url.searchParams.set('code_challenge', challenge);
+			url.searchParams.set('code_challenge_method', 'S256');
+
+			const enabled = await load({
+				locals: makeLocals(user),
+				url,
+				getClientAddress: () => '127.0.0.1'
+			} as any) as { scopes: Scope[]; privateDetailsRequested: boolean };
+			expect(enabled.scopes).toEqual(['trips:read']);
+			expect(enabled.privateDetailsRequested).toBe(true);
+
+			const form = new FormData();
+			form.set('client_id', client.clientId);
+			form.set('redirect_uri', client.redirectUris[0]);
+			form.set('code_challenge', challenge);
+			form.set('scopes', 'trips:read');
+			await expect(actions.approve({
+				locals: makeLocals(user),
+				request: { formData: async () => form },
+				getClientAddress: () => '127.0.0.1'
+			} as any)).rejects.toMatchObject({ status: 302 });
+			const firstCode = ctx.kit.selectFrom(oauthCodes)
+				.where(kitEq(oauthCodes.client_id, client.clientId))
+				.executeSync()[0];
+			expect(JSON.parse(firstCode.scopes as string)).toEqual(['trips:read']);
+
+			form.append('scopes', 'private-details:read');
+			await expect(actions.approve({
+				locals: makeLocals(user),
+				request: { formData: async () => form },
+				getClientAddress: () => '127.0.0.2'
+			} as any)).rejects.toMatchObject({ status: 302 });
+			const codeRows = ctx.kit.selectFrom(oauthCodes)
+				.where(kitEq(oauthCodes.client_id, client.clientId))
+				.executeSync();
+			expect(JSON.parse(codeRows.at(-1)!.scopes as string)).toEqual([
+				'trips:read',
+				'private-details:read'
+			]);
+
+			updateSettings({ allowMcpPii: false });
+			const disabled = await load({
+				locals: makeLocals(user),
+				url,
+				getClientAddress: () => '127.0.0.3'
+			} as any) as { scopes: Scope[]; privateDetailsRequested: boolean };
+			expect(disabled.scopes).toEqual(['trips:read']);
+			expect(disabled.privateDetailsRequested).toBe(false);
 		});
 
 		test('load redirects unauthenticated users to login preserving the request URL', () => {

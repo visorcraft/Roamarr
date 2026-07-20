@@ -31,6 +31,7 @@ export type Settings = {
 	allowUserSmtp: boolean;
 	allowUserParsingProviders: boolean;
 	allowUserMcpClients: boolean;
+	allowMcpPii: boolean;
 	globalImapEnabled: boolean;
 	globalImapHost: string | null;
 	globalImapPort: number | null;
@@ -111,7 +112,7 @@ const SETTINGS_INT_FIELDS = new Set([
 ]);
 
 const EMAIL_SETTING_KEYS = [
-	'allowUserImap', 'allowUserSmtp', 'allowUserParsingProviders', 'allowUserMcpClients', 'globalImapEnabled',
+	'allowUserImap', 'allowUserSmtp', 'allowUserParsingProviders', 'allowUserMcpClients', 'allowMcpPii', 'globalImapEnabled',
 	'globalImapHost', 'globalImapPort', 'globalImapSecurity', 'globalImapUsername',
 	'globalImapPassword', 'globalImapMailbox', 'globalImapLastUid', 'globalImapLastPolledAt',
 	'globalImapLastError', 'globalAiEnabled', 'globalAiAuthMode', 'globalAiBaseUrl', 'globalAiModel', 'globalAiToken',
@@ -119,7 +120,7 @@ const EMAIL_SETTING_KEYS = [
 ] as const;
 
 const EMAIL_DEFAULTS = {
-	allowUserImap: true, allowUserSmtp: false, allowUserParsingProviders: false, allowUserMcpClients: false,
+	allowUserImap: true, allowUserSmtp: false, allowUserParsingProviders: false, allowUserMcpClients: false, allowMcpPii: false,
 	globalImapEnabled: true, globalImapHost: null, globalImapPort: null,
 	globalImapSecurity: 'ssl/tls', globalImapUsername: null, globalImapPassword: null,
 	globalImapMailbox: 'INBOX', globalImapLastUid: null, globalImapLastPolledAt: null,

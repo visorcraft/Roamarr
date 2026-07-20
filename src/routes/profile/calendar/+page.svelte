@@ -40,11 +40,13 @@
 					submitting = false;
 				};
 			}}
-			class="mt-4 flex flex-col gap-2"
+			class="mt-4 grid gap-2 sm:grid-cols-2"
 		>
-			<label for="calendarExpiresAt" class="label">New URL expires (optional)</label>
-			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
-			<button class="btn btn-primary self-end" class:btn-loading={submitting} disabled={submitting}>
+			<div class="field">
+				<label for="calendarExpiresAt" class="label">New URL expires (optional)</label>
+				<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input mt-2 text-sm" />
+			</div>
+			<button class="btn btn-primary self-end justify-self-end" class:btn-loading={submitting} disabled={submitting}>
 				Regenerate feed URL
 			</button>
 		</form>
@@ -60,11 +62,13 @@
 					submitting = false;
 				};
 			}}
-			class="mt-4 flex flex-col gap-2"
+			class="mt-4 grid gap-2 sm:grid-cols-2"
 		>
-			<label for="calendarExpiresAt" class="label">Expires (optional)</label>
-			<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input text-sm" />
-			<button class="btn btn-primary self-end" class:btn-loading={submitting} disabled={submitting}>
+			<div class="field">
+				<label for="calendarExpiresAt" class="label">Expires (optional)</label>
+				<input id="calendarExpiresAt" name="calendarExpiresAt" type="datetime-local" class="input mt-2 text-sm" />
+			</div>
+			<button class="btn btn-primary self-end justify-self-end" class:btn-loading={submitting} disabled={submitting}>
 				Generate feed URL
 			</button>
 		</form>

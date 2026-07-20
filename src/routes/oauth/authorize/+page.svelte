@@ -23,13 +23,23 @@
 			</ul>
 		</div>
 
+		{#if data.privateDetailsRequested}
+			<label class="checkbox-label mt-5 items-start rounded-lg border p-3" style="border-color: var(--theme-line)">
+				<input type="checkbox" name="scopes" value="private-details:read" form="approve-connection" class="checkbox mt-0.5" />
+				<span>
+					<span class="block font-medium">Share private travel details</span>
+					<span class="field-help block">This client can view trip notes, confirmation numbers, and itinerary details. Payment card numbers and travel document numbers stay protected.</span>
+				</span>
+			</label>
+		{/if}
+
 		<div class="mt-6 flex gap-3">
 			<form method="POST" action="?/deny" class="flex-1">
 				<input type="hidden" name="redirect_uri" value={data.redirectUri} />
 				<input type="hidden" name="state" value={data.state ?? ''} />
 				<button class="btn btn-ghost w-full">Deny</button>
 			</form>
-			<form method="POST" action="?/approve" class="flex-1">
+			<form id="approve-connection" method="POST" action="?/approve" class="flex-1">
 				<input type="hidden" name="client_id" value={data.client.clientId} />
 				<input type="hidden" name="redirect_uri" value={data.redirectUri} />
 				<input type="hidden" name="code_challenge" value={data.codeChallenge} />

@@ -67,6 +67,7 @@ export type Scope =
 	| 'comments:read'
 	| 'comments:write'
 	| 'search:read'
+	| 'private-details:read'
 	| 'admin:read'
 	| 'admin:write'
 	| 'security:read'
@@ -131,11 +132,20 @@ export const ALL_SCOPES: Scope[] = [
 	'comments:read',
 	'comments:write',
 	'search:read',
+	'private-details:read',
 	'admin:read',
 	'admin:write',
 	'security:read',
 	'security:write'
 ];
+
+export const PRIVATE_DETAILS_SCOPE: Scope = 'private-details:read';
+
+export function getAvailableScopes(): Scope[] {
+	return getSettings().allowMcpPii
+		? ALL_SCOPES
+		: ALL_SCOPES.filter((scope) => scope !== PRIVATE_DETAILS_SCOPE);
+}
 
 export { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
 
@@ -222,7 +232,7 @@ export function createClient(userId: number | null, input: CreateClientInput): {
 	// Reject any scope not in the canonical ALL_SCOPES list. validateScopes
 	// filters silently; here we want the create call to fail loudly so a
 	// tampered form (e.g. future scope name smuggled in) cannot persist.
-	const invalid = input.scopes.filter((s) => !ALL_SCOPES.includes(s));
+	const invalid = input.scopes.filter((s) => !getAvailableScopes().includes(s));
 	if (invalid.length > 0) {
 		throw new Error(`Unknown scope(s): ${invalid.join(', ')}`);
 	}

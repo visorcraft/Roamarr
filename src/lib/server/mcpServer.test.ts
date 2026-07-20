@@ -18,6 +18,7 @@ import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser } from '../../../tests/helpers';
+import { updateSettings } from './settings';
 
 async function connect(userId: number, scopes: Scope[]) {
 	const server = createMcpServer(userId, scopes);
@@ -57,6 +58,7 @@ describe('mcpServer', () => {
 		ctx.kit.deleteFrom(trips).executeSync();
 		ctx.kit.deleteFrom(visitedCountries).executeSync();
 		ctx.kit.deleteFrom(visitedUsStates).executeSync();
+		updateSettings({ allowMcpPii: false });
 		userId = makeUser(ctx.kit).id;
 	});
 
@@ -370,15 +372,17 @@ describe('mcpServer', () => {
 	});
 
 	test('trip_get does not include segment confirmation numbers', async () => {
-		const trip = tripsRepo.createTrip(userId, { name: 'Secret' });
+		const trip = tripsRepo.createTrip(userId, { name: 'Secret', notes: 'Private trip note' });
 		const { createSegment } = await import('./repositories/segmentsRepo');
 		createSegment({
 			trip_id: BigInt(trip.id),
 			type: 'flight',
 			title: 'Flight',
 			start_at: '2026-07-01T10:00:00Z',
+			start_tz: 'America/Chicago',
 			confirmation_number: 'ABC123',
-			details_json: JSON.stringify({ recordLocator: 'XYZ' })
+			details_json: JSON.stringify({ recordLocator: 'XYZ' }),
+			payment_status: 'fully_paid'
 		} as any);
 
 		const { client } = await connect(userId, ['trips:read']);
@@ -387,6 +391,25 @@ describe('mcpServer', () => {
 		expect(text).toContain('Secret');
 		expect(text).not.toContain('ABC123');
 		expect(text).not.toContain('recordLocator');
+		expect(text).not.toContain('Private trip note');
+
+		const scoped = await connect(userId, ['trips:read', 'private-details:read']);
+		const stillPrivate: any = await scoped.client.callTool({
+			name: 'roamarr_trip_get',
+			arguments: { tripId: trip.id }
+		});
+		expect(stillPrivate.content[0].text).not.toContain('ABC123');
+
+		updateSettings({ allowMcpPii: true });
+		const shared: any = await scoped.client.callTool({
+			name: 'roamarr_trip_get',
+			arguments: { tripId: trip.id }
+		});
+		expect(shared.content[0].text).toContain('ABC123');
+		expect(shared.content[0].text).toContain('recordLocator');
+		expect(shared.content[0].text).toContain('Private trip note');
+		expect(shared.content[0].text).toContain('America/Chicago');
+		expect(shared.content[0].text).toContain('fully_paid');
 	});
 
 	test('profile_update with a single field preserves the others (read-then-merge)', async () => {

@@ -56,7 +56,7 @@ Start read-only. Add write scopes only after the read connection works.
 | Travel wallet summary | `cards:read`, `loyalty:read`, `insurance:read`, `travel-docs:read` |
 | Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read` |
 
-Roamarr currently exposes 58 scopes. Always fetch `scopes_supported` from OAuth
+Roamarr currently exposes 59 scopes. Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
 API Clients UI come from `src/lib/oauthScopes.ts`.
 

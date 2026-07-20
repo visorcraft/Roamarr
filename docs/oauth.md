@@ -44,10 +44,10 @@ Clients should fetch this dynamically rather than hard-code endpoint URLs.
 
 ## Scopes
 
-Roamarr currently exposes 58 scopes. Clients should fetch
+Roamarr currently exposes 59 scopes. Clients should fetch
 `scopes_supported` from discovery instead of hard-coding this list.
 Human-readable descriptions come from `src/lib/oauthScopes.ts` and are shown on
-**Profile → Security → API Clients**.
+**Profile → MCP Clients**.
 
 Most feature scopes are read/write pairs: trips, segments, packing, budgets,
 expenses, places, reminders, companions, sharing, calendar, templates, travel
@@ -56,15 +56,17 @@ requirements, home tasks, medications, cards, loyalty, insurance, contacts,
 profile preferences, notifications, user SMTP, and comments. `profile:read`
 covers document-expiry summaries, and `search:read` covers global search.
 
-Roamarr only returns `viewerProjection`-style data through read scopes — no
-confirmation numbers, membership numbers, policy numbers, document numbers, or
-notes are exposed.
+Roamarr returns `viewerProjection`-style data through read scopes. The
+`private-details:read` scope can add trip notes, confirmation numbers, and
+itinerary details only when an administrator enables private MCP details and
+the user selects the optional consent checkbox. Membership numbers, policy
+numbers, payment card numbers, and travel document numbers stay protected.
 
 ## Authorizing a client
 
 ### Step 1 — Create a client
 
-Sign in and visit **Profile → Security → API Clients**. Provide:
+Sign in and visit **Profile → MCP Clients**. Provide:
 
 - **Client name** — a human-readable label (e.g. "Claude Desktop").
 - **Redirect URIs** — one per line. Must match the URI your client opens after

@@ -82,6 +82,7 @@ export function _saveAdminSettings(
 		sessionCookieSameSite?: SessionCookieSameSite;
 		oauthClientAllowList?: string[] | null;
 		allowUserMcpClients?: boolean;
+		allowMcpPii?: boolean;
 	}
 ) {
 	if (
@@ -156,6 +157,7 @@ export function _saveAdminSettings(
 	if (i.sessionCookieSameSite !== undefined) patch.sessionCookieSameSite = i.sessionCookieSameSite ?? 'lax';
 	if (i.oauthClientAllowList !== undefined) patch.oauthClientAllowList = i.oauthClientAllowList ?? null;
 	if (i.allowUserMcpClients !== undefined) patch.allowUserMcpClients = i.allowUserMcpClients;
+	if (i.allowMcpPii !== undefined) patch.allowMcpPii = i.allowMcpPii;
 	if (i.smtpPass !== undefined) patch.smtpPass = i.smtpPass ? encrypt(i.smtpPass) : null;
 	if (i.globalImapPassword !== undefined) patch.globalImapPassword = i.globalImapPassword ? encrypt(i.globalImapPassword) : null;
 	if (i.globalAiToken !== undefined) patch.globalAiToken = i.globalAiToken ? encrypt(i.globalAiToken) : null;
@@ -176,7 +178,7 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const mapSettings = getMapSettings();
 	const allowedTabs = ['general', 'maps', 'email', 'webhook', 'oauth'] as const;
 	const routeTabs: Record<string, string> = {
-		'/general/maps': 'maps', '/general/email': 'email', '/general/webhooks': 'webhook', '/general/oauth': 'oauth'
+		'/general/maps': 'maps', '/general/email': 'email', '/general/webhooks': 'webhook', '/general/mcp-clients': 'oauth'
 	};
 	const tabParam = routeTabs[url.pathname] ?? url.searchParams.get('tab') ?? 'general';
 	const tab: (typeof allowedTabs)[number] = (allowedTabs as readonly string[]).includes(tabParam)
@@ -205,7 +207,7 @@ const TAB_REDIRECTS = {
 	maps: '/general/maps',
 	email: '/general/email',
 	webhook: '/general/webhooks',
-	oauth: '/general/oauth'
+	oauth: '/general/mcp-clients'
 } as const;
 
 export const actions: Actions = {
@@ -336,9 +338,10 @@ export const actions: Actions = {
 		const allowUserMcpClients = f.get('allowUserMcpClients') === 'on';
 		_saveAdminSettings(u.id, {
 			allowUserMcpClients,
+			allowMcpPii: f.get('allowMcpPii') === 'on',
 			...(allowUserMcpClients ? { oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null } : {})
 		});
-		setFlash(cookies, 'OAuth client settings saved.');
+		setFlash(cookies, 'MCP client settings saved.');
 		throw redirect(303, TAB_REDIRECTS.oauth);
 	},
 

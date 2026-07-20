@@ -5,7 +5,8 @@ import {
 	validateScopes,
 	createAuthorizationCode,
 	claimDynamicClient,
-	ALL_SCOPES,
+	getAvailableScopes,
+	PRIVATE_DETAILS_SCOPE,
 	isClientAllowed
 } from '$lib/server/oauth';
 import { checkRateLimit } from '$lib/server/rateLimit';
@@ -43,11 +44,13 @@ export const load: PageServerLoad = ({ locals, url, getClientAddress }) => {
 	// That fallback is gone: a client without explicit scopes can request
 	// nothing, and the consent UI shows the empty list.
 	const allowedScopes = client.scopes;
-	const grantedScopes = validateScopes(requestedScopes, allowedScopes);
+	const grantedScopes = validateScopes(requestedScopes, allowedScopes)
+		.filter((requestedScope) => getAvailableScopes().includes(requestedScope));
 
 	return {
 		client,
-		scopes: grantedScopes,
+		scopes: grantedScopes.filter((grantedScope) => grantedScope !== PRIVATE_DETAILS_SCOPE),
+		privateDetailsRequested: grantedScopes.includes(PRIVATE_DETAILS_SCOPE),
 		state,
 		redirectUri,
 		codeChallenge,
@@ -78,7 +81,8 @@ export const actions: Actions = {
 		if (!client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 
 		const requested = scopeStr.split(/\s+/).filter(Boolean);
-		const scopes = validateScopes(requested, client.scopes);
+		const scopes = validateScopes(requested, client.scopes)
+			.filter((requestedScope) => getAvailableScopes().includes(requestedScope));
 		claimDynamicClient(clientId, u.id);
 		const { code, redirectUri: ru } = createAuthorizationCode({
 			userId: u.id,

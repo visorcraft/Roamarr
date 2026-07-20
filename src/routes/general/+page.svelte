@@ -561,6 +561,13 @@
 						contains one or more client IDs, only those clients may be authorized.
 					</p>
 					<label class="checkbox-label mt-4" for="allowUserMcpClients"><input id="allowUserMcpClients" name="allowUserMcpClients" type="checkbox" class="checkbox" bind:checked={allowUserMcpClients} />Allow users to set up MCP Clients</label>
+					<label class="checkbox-label mt-3 items-start" for="allowMcpPii">
+						<input id="allowMcpPii" name="allowMcpPii" type="checkbox" class="checkbox mt-0.5" checked={s.allowMcpPii} />
+						<span>
+							<span class="block">Allow private travel details through MCP</span>
+							<span class="field-help block">Users must also approve this access for each MCP client. This includes trip notes, confirmation numbers, and itinerary details. Payment card numbers and travel document numbers stay protected.</span>
+						</span>
+					</label>
 					{#if allowUserMcpClients}
 					<div class="settings-rows mt-4">
 						<div class="settings-row items-start">
@@ -580,7 +587,7 @@
 					{/if}
 
 					<div class="mt-6 flex justify-end">
-						<button class="btn btn-primary">Save OAuth settings</button>
+						<button class="btn btn-primary">Save settings</button>
 					</div>
 				</section>
 			</form>

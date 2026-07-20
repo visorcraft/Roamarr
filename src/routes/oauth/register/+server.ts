@@ -1,5 +1,5 @@
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { ALL_SCOPES, createClient, getOAuthClientAllowList, type Scope } from '$lib/server/oauth';
+import { createClient, getAvailableScopes, getOAuthClientAllowList, type Scope } from '$lib/server/oauth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { getSettings } from '$lib/server/settings';
 
@@ -76,8 +76,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	if (!Array.isArray(responseTypes) || responseTypes.length !== 1 || responseTypes[0] !== 'code')
 		return failure('invalid_client_metadata', 'Only response_type code is supported');
 
-	const requestedScopes = typeof body.scope === 'string' ? body.scope.split(/\s+/).filter(Boolean) : [...ALL_SCOPES];
-	if (requestedScopes.length === 0 || requestedScopes.some((scope) => !ALL_SCOPES.includes(scope as Scope)))
+	const availableScopes = getAvailableScopes();
+	const requestedScopes = typeof body.scope === 'string' ? body.scope.split(/\s+/).filter(Boolean) : [...availableScopes];
+	if (requestedScopes.length === 0 || requestedScopes.some((scope) => !availableScopes.includes(scope as Scope)))
 		return failure('invalid_client_metadata', 'scope contains an unsupported value');
 
 	const result = createClient(null, {

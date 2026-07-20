@@ -25,7 +25,7 @@ import {
 	deleteClient,
 	listUserTokens,
 	revokeTokenByIdForUser,
-	ALL_SCOPES,
+	getAvailableScopes,
 	type Scope
 } from '$lib/server/oauth';
 import { SCOPE_DESCRIPTIONS } from '$lib/oauthScopes';
@@ -49,7 +49,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		available: isPasskeyAvailable(),
 		clients: listClients(u.id),
 		tokens: listUserTokens(u.id),
-		allScopes: ALL_SCOPES,
+		allScopes: getAvailableScopes(),
 		scopeDescriptions: SCOPE_DESCRIPTIONS,
 		mcpUrl: `${url.origin}/mcp`
 	};

@@ -292,9 +292,11 @@ test('oauthClientAllowList round-trips and clears when empty', () => {
 		defaultFlightCheckinLeadHours: 24,
 		defaultDocumentExpiryLeadDays: 90,
 		allowUserMcpClients: false,
+		allowMcpPii: true,
 		oauthClientAllowList: ['client-a', 'client-b']
 	});
 	expect(getSettings().allowUserMcpClients).toBe(false);
+	expect(getSettings().allowMcpPii).toBe(true);
 	expect(getSettings().oauthClientAllowList).toEqual(['client-a', 'client-b']);
 
 	saveAdminSettings(Number(u.id), {
@@ -307,6 +309,31 @@ test('oauthClientAllowList round-trips and clears when empty', () => {
 		oauthClientAllowList: null
 	});
 	expect(getSettings().oauthClientAllowList).toBeNull();
+});
+
+test('private MCP details are disabled by default', () => {
+	expect(getSettings().allowMcpPii).toBe(false);
+});
+
+test('saveOauth updates the private MCP details gate', async () => {
+	const u = makeUser('mcp-admin@x.c', 'Admin', 'admin');
+	const save = async (enabled: boolean) => {
+		const form = new FormData();
+		if (enabled) form.set('allowMcpPii', 'on');
+		await expect(actions.saveOauth({
+			request: { formData: async () => form },
+			locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+			cookies: { set: vi.fn() }
+		} as any)).rejects.toMatchObject({
+			status: 303,
+			location: '/general/mcp-clients'
+		});
+	};
+
+	await save(true);
+	expect(getSettings().allowMcpPii).toBe(true);
+	await save(false);
+	expect(getSettings().allowMcpPii).toBe(false);
 });
 
 test('testEmail action returns 429 when rate limited', async () => {

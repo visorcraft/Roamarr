@@ -30,6 +30,7 @@ import {
 	paginateList,
 	requireConfirm
 } from './mcpHelpers';
+import { getSettings } from './settings';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
 	return scopes.includes(required);
@@ -48,12 +49,34 @@ function textResult(obj: unknown) {
 	};
 }
 
-function safeTripProjection(tripId: number, userId: number) {
+function safeTripProjection(tripId: number, userId: number, scopes: Scope[]) {
 	const view = loadTripFor(userId, tripId);
+	const includePrivateDetails =
+		getSettings().allowMcpPii && hasScope(scopes, 'private-details:read');
 	if (view.editor) {
-		return { ...viewerProjection(view.trip, view.segments, false), canEdit: true, owner: view.owner };
+		const projection = viewerProjection(view.trip, view.segments, false);
+		return {
+			...projection,
+			...(includePrivateDetails && {
+				notes: view.trip.notes,
+				segments: view.segments.map(({ tripId: _tripId, cardId: _cardId, ...segment }) => segment)
+			}),
+			canEdit: true,
+			owner: view.owner
+		};
 	}
-	return { ...view.trip, canEdit: false, owner: false };
+	if (includePrivateDetails) return { ...view.trip, canEdit: false, owner: false };
+	return {
+		...view.trip,
+		segments: view.trip.segments.map((segment) => {
+			const safe = { ...segment } as Record<string, unknown>;
+			delete safe.confirmationNumber;
+			delete safe.detailsJson;
+			return safe;
+		}),
+		canEdit: false,
+		owner: false
+	};
 }
 
 function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
@@ -1718,7 +1741,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// UI. The previous impl used listTripsForUser (owner-only),
 				// which silently hid trips shared with the calling user.
 				const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
-				const trips = tripIds.map((id) => safeTripProjection(id, userId));
+				const trips = tripIds.map((id) => safeTripProjection(id, userId, scopes));
 				const page = paginateList(
 					trips,
 					args,
@@ -1737,7 +1760,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_trip_get': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
 				const tripId = Number(args.tripId);
-				const projected = safeTripProjection(tripId, userId);
+				const projected = safeTripProjection(tripId, userId, scopes);
 				return textResult({ trip: projected });
 			}
 			case 'roamarr_trip_create': {
@@ -3225,7 +3248,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		let trip: Record<string, unknown> | null = null;
 		if (entry.requiresTrip && tripId) {
 			try {
-				trip = safeTripProjection(tripId, userId) as Record<string, unknown>;
+				trip = safeTripProjection(tripId, userId, scopes) as Record<string, unknown>;
 			} catch {
 				return errorPrompt('Trip not found or inaccessible.');
 			}
@@ -3344,7 +3367,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		if (tripMatch) {
 			if (!hasScope(scopes, 'trips:read')) throw new Error('Missing scope: trips:read');
 			const tripId = Number(tripMatch[1]);
-			const projected = safeTripProjection(tripId, userId);
+			const projected = safeTripProjection(tripId, userId, scopes);
 			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ trip: projected }) }] };
 		}
 		const companionMatch = COMPANION_URI_RE.exec(uri);

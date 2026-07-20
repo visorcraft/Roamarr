@@ -61,6 +61,7 @@ export const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
 	'comments:read': 'View trip comments',
 	'comments:write': 'Create and delete your trip comments',
 	'search:read': 'Run global search across your account',
+	'private-details:read': 'View private trip notes, confirmation numbers, and itinerary details',
 	'admin:read': 'View users, audit events, and system statistics (admins only)',
 	'admin:write': 'Create, update, delete, and reset users (admins only)',
 	'security:read': 'View your security settings, sessions, passkeys, and OAuth clients',

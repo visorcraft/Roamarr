@@ -272,7 +272,9 @@ export function patchSegment(
 		type?: SegmentType;
 		title?: string;
 		startAt?: string;
+		startTz?: string;
 		endAt?: string | null;
+		endTz?: string;
 		cityName?: string | null;
 		countryCode?: string | null;
 		location?: string | null;
@@ -291,10 +293,14 @@ export function patchSegment(
 	if (patch.type !== undefined) repoPatch.type = patch.type;
 	if (patch.title !== undefined) repoPatch.title = patch.title;
 	if (patch.startAt !== undefined) {
-		repoPatch.start_at = patch.startAt;
-		// Treat incoming ISO as UTC; preserves prior tz column untouched.
+		repoPatch.start_at = patch.startTz ? localToUtc(patch.startAt, patch.startTz) : patch.startAt;
 	}
-	if (patch.endAt !== undefined) repoPatch.end_at = patch.endAt;
+	if (patch.startTz !== undefined) repoPatch.start_tz = patch.startTz;
+	if (patch.endAt !== undefined) {
+		const endTz = patch.endTz ?? patch.startTz;
+		repoPatch.end_at = patch.endAt && endTz ? localToUtc(patch.endAt, endTz) : patch.endAt;
+	}
+	if (patch.endTz !== undefined) repoPatch.end_tz = patch.endTz;
 	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
 	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
 	if (patch.location !== undefined) repoPatch.location = patch.location;

@@ -61,6 +61,10 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 	if (args.status != null) v.enumValue(args.status, TRIP_STATUSES, 'status');
 	if (args.type != null) v.enumValue(args.type, SEGMENT_TYPES, 'type');
 	if (args.category != null) v.enumValue(args.category, EXPENSE_CATEGORIES, 'category');
+	if (args.startAt != null) v.dateTime(args.startAt, 'startAt');
+	if (args.endAt != null) v.dateTime(args.endAt, 'endAt');
+	if (args.startTz != null) v.timezone(args.startTz, 'startTz');
+	if (args.endTz != null) v.timezone(args.endTz, 'endTz');
 	if (v.ok()) return { ok: true };
 	const messages = Object.values(v.errors);
 	return { ok: false, error: messages.join('; ') };
@@ -528,7 +532,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						type: { type: 'string', description: 'Segment type: flight, hotel, event, restaurant, etc.' },
 						title: { type: 'string' },
 						startAt: { type: 'string', description: 'ISO timestamp' },
+						startTz: { type: 'string', description: 'IANA timezone for startAt, default UTC' },
 						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
+						endTz: { type: 'string', description: 'IANA timezone for endAt, defaults to startTz' },
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },
@@ -660,7 +666,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						type: { type: 'string', enum: [...SEGMENT_TYPES] },
 						title: { type: 'string' },
 						startAt: { type: 'string', description: 'ISO timestamp' },
+						startTz: { type: 'string', description: 'IANA timezone for startAt' },
 						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
+						endTz: { type: 'string', description: 'IANA timezone for endAt' },
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },
@@ -1782,8 +1790,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: String(args.type ?? 'event') as Parameters<typeof addSegment>[2]['type'],
 					title: String(args.title ?? ''),
 					localStart: String(args.startAt ?? ''),
-					startTz: 'UTC',
+					startTz: String(args.startTz ?? 'UTC'),
 					endAt: (args.endAt as string) || undefined,
+					endTz: (args.endTz as string) || undefined,
 					cityName: (args.cityName as string) || undefined,
 					countryCode: (args.countryCode as string) || undefined,
 					location: (args.location as string) || undefined,
@@ -1940,6 +1949,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// ---- Round 1: trip planning vertical ----
 			case 'roamarr_segment_update': {
 				if (!hasScope(scopes, 'segments:write')) return scopeError('segments:write');
+				const validation = validateToolInput(args as Record<string, unknown>);
+				if (!validation.ok) return { content: [{ type: 'text' as const, text: validation.error }], isError: true };
 				const { patchSegment } = await import('./segments');
 				const segId = Number(args.segmentId);
 				const existing = segmentsRepo.getSegmentById(segId);
@@ -1947,7 +1958,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: args.type as import('$lib/segmentLabels').SegmentType | undefined,
 					title: args.title as string | undefined,
 					startAt: args.startAt as string | undefined,
+					startTz: args.startTz as string | undefined,
 					endAt: args.endAt as string | undefined,
+					endTz: args.endTz as string | undefined,
 					cityName: args.cityName as string | undefined,
 					countryCode: args.countryCode as string | undefined,
 					location: args.location as string | undefined,

@@ -217,7 +217,10 @@ describe('mcpServer', () => {
 				tripId: trip.id,
 				type: 'hotel',
 				title: 'Hotel',
-				startAt: '2026-08-01T15:00:00Z',
+				startAt: '2026-08-01T15:00:00',
+				startTz: 'Asia/Bangkok',
+				endAt: '2026-08-02T12:00:00',
+				endTz: 'Asia/Bangkok',
 				location: '123 Main St',
 				confirmationNumber: 'ABC123',
 				notes: 'Paid with travel credit',
@@ -228,17 +231,46 @@ describe('mcpServer', () => {
 		const segmentId = JSON.parse(created.content[0].text).id;
 		await client.callTool({
 			name: 'roamarr_segment_update',
-			arguments: { segmentId, details: { guests: '2' }, notes: 'Updated note' }
+			arguments: {
+				segmentId,
+				startAt: '2026-08-01T16:00:00',
+				startTz: 'Asia/Bangkok',
+				endAt: '2026-08-02T11:00:00',
+				endTz: 'Asia/Bangkok',
+				details: { guests: '2' },
+				notes: 'Updated note'
+			}
 		});
 		const { getSegmentById } = await import('./repositories/segmentsRepo');
 		const segment = getSegmentById(segmentId)!;
 		expect(segment).toMatchObject({
 			location: '123 Main St',
 			venue: '123 Main St',
+			startTz: 'Asia/Bangkok',
+			endTz: 'Asia/Bangkok',
+			startAt: '2026-08-01T09:00:00.000Z',
+			endAt: '2026-08-02T04:00:00.000Z',
 			confirmationNumber: 'ABC123',
 			paymentStatus: 'fully_paid'
 		});
 		expect(JSON.parse(segment.detailsJson!)).toEqual({ room: 'Twin', guests: '2', notes: 'Updated note' });
+	});
+
+	test('segment tools reject invalid timezones', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Bad timezone' });
+		const { client } = await connect(userId, ['segments:write']);
+		const response: any = await client.callTool({
+			name: 'roamarr_day_plan',
+			arguments: {
+				tripId: trip.id,
+				type: 'hotel',
+				title: 'Hotel',
+				startAt: '2026-08-01T15:00:00',
+				startTz: 'Mars/Olympus'
+			}
+		});
+		expect(response.isError).toBe(true);
+		expect(response.content[0].text).toContain('valid IANA timezone');
 	});
 
 	test('search finds trips by itinerary content', async () => {

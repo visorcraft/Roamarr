@@ -62,7 +62,7 @@ patterns.
 
 ## Local Development
 
-Roamarr requires Node.js 22.12 or newer.
+Roamarr requires Node.js 24 or newer.
 
 ```sh
 npm ci

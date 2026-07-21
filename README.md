@@ -20,7 +20,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only" /></a>
   <img src="https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 2" />
   <img src="https://img.shields.io/badge/storage-MongrelDB-003b57" alt="MongrelDB storage" />
-  <img src="https://img.shields.io/badge/Node.js-%3E%3D22.12-339933?logo=node.js&amp;logoColor=white" alt="Node.js 22.12 or newer" />
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&amp;logoColor=white" alt="Node.js 24 or newer" />
   <img src="https://img.shields.io/badge/container-Docker%20%2F%20Podman-892ca0?logo=podman&amp;logoColor=white" alt="Docker or Podman container" />
 </p>
 
@@ -189,7 +189,7 @@ integration.
 
 ### Requirements
 
-- Node.js 22.12 or newer.
+- Node.js 24 or newer.
 - npm, using the checked-in `package-lock.json`.
 - MongrelDB (with the MongrelDB Kit toolkit) installed by `npm ci`.
 - A persistent database path for local app data.

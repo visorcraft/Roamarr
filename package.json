@@ -1,11 +1,11 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.35.1",
+	"version": "0.35.2",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
-		"node": ">=22.12"
+		"node": ">=24"
 	},
 	"scripts": {
 		"dev": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js dev",

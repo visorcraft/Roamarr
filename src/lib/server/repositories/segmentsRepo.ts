@@ -109,7 +109,9 @@ export function getSegmentById(id: number) {
 export function createSegment(input: CreateSegmentInput) {
 	const created = kit.insertInto(segments).values(input as Insert<typeof segments>).executeSync();
 	const segment = toSegmentRow(created);
-	void import('$lib/server/embeddings/search').then((m) => m.scheduleIndexTrip(segment.tripId));
+	void import('$lib/server/embeddings/search')
+		.then((m) => m.scheduleIndexTrip(segment.tripId))
+		.catch(() => {});
 	return segment;
 }
 
@@ -137,7 +139,9 @@ export function updateSegment(id: number, patch: UpdateSegmentInput) {
 	const row = updated[0];
 	if (!row) return null;
 	const segment = toSegmentRow(row);
-	void import('$lib/server/embeddings/search').then((m) => m.scheduleIndexTrip(segment.tripId));
+	void import('$lib/server/embeddings/search')
+		.then((m) => m.scheduleIndexTrip(segment.tripId))
+		.catch(() => {});
 	return segment;
 }
 
@@ -161,7 +165,9 @@ function sanitizeSegmentUpdatePatch(patch: UpdateSegmentInput): Record<string, u
 export function deleteSegment(id: number): boolean {
 	const deleted = kit.deleteFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync();
 	if (deleted > 0n) {
-		void import('$lib/server/embeddings/index').then((m) => m.removeSearchDocument('segment', id));
+		void import('$lib/server/embeddings/index')
+			.then((m) => m.removeSearchDocument('segment', id))
+			.catch(() => {});
 	}
 	return deleted > 0n;
 }

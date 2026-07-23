@@ -95,10 +95,11 @@ export function scheduleIndexTrip(tripId: number): void {
 }
 
 export function scheduleRemoveTrip(tripId: number): void {
-	void import('./index').then((m) => {
-		m.removeSearchDocument('trip', tripId);
-		// Segments cascade-deleted from DB; clear any leftover segment docs by trip.
-		// Best-effort: reindex not needed; orphans are harmless and cleaned on reindex.
-		void tripId;
-	});
+	void import('./index')
+		.then((m) => {
+			m.removeSearchDocument('trip', tripId);
+			// Segments cascade-deleted from DB; leftover segment docs are cleaned on reindex.
+			void tripId;
+		})
+		.catch(() => {});
 }

@@ -56,7 +56,7 @@ Start read-only. Add write scopes only after the read connection works.
 | Travel wallet summary | `cards:read`, `loyalty:read`, `insurance:read`, `travel-docs:read` |
 | Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read` |
 
-Roamarr currently exposes 59 scopes. Always fetch `scopes_supported` from OAuth
+Roamarr currently exposes 63 scopes. Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
 MCP Clients UI come from `src/lib/oauthScopes.ts`.
 
@@ -97,7 +97,7 @@ Useful requests to give an AI assistant:
 
 ## Surface
 
-The current server exposes 108 tools, 16 prompts, and 9 resource templates.
+The current server exposes 109 tools, 16 prompts, and 9 resource templates.
 Use live list methods because clients see only prompts and resources allowed by
 their scopes.
 

@@ -30,8 +30,12 @@
 	onMount(async () => {
 		if (!browser || !container) return;
 
-		const maplibregl = (await import('maplibre-gl')).default as typeof import('maplibre-gl');
+		// v6 is ESM-only: named/namespace import (no default export).
+		const maplibregl = await import('maplibre-gl');
 		await import('maplibre-gl/dist/maplibre-gl.css');
+		// Vite must emit a self-contained worker chunk (?worker&url).
+		const workerUrl = (await import('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url')).default;
+		maplibregl.setWorkerUrl(workerUrl);
 
 		const instance = new maplibregl.Map({
 			container,

@@ -29,10 +29,14 @@ describe('license attribution data', () => {
 		expect(credits.packages.some((pkg) => pkg.name === 'svelte')).toBe(true);
 		expect(credits.packages.find((pkg) => pkg.name === '@visorcraft/mongreldb')?.license).toBe('MIT OR Apache-2.0');
 		expect(credits.packages.some((pkg) => pkg.name === '@visorcraft/mongreldb-kit')).toBe(true);
+		expect(credits.packages.some((pkg) => pkg.name === 'maplibre-gl')).toBe(true);
 		expect(credits.runtimeComponents.some((component) => component.name === 'Node.js runtime')).toBe(true);
 		expect(credits.runtimeComponents.find((component) => component.name.startsWith('MongrelDB engine'))?.licenses).toBe(
 			'MIT OR Apache-2.0'
 		);
+		expect(credits.runtimeComponents.some((component) => component.name.includes('Natural Earth'))).toBe(true);
+		expect(credits.runtimeComponents.some((component) => component.name.includes('GeoNames'))).toBe(true);
 		expect(credits.counts.packages).toBe(credits.packages.length);
+		expect(credits.counts.runtimeComponents).toBe(credits.runtimeComponents.length);
 	});
 });

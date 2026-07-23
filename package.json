@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.37.3",
+	"version": "0.37.4",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -49,7 +49,7 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
-		"@huggingface/transformers": "^3.8.1",
+		"@huggingface/transformers": "^4.2.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@node-rs/argon2": "^2.0.2",
 		"@simplewebauthn/browser": "^13.3.0",
@@ -60,7 +60,7 @@
 		"imapflow": "^1.4.7",
 		"luxon": "^3.7.2",
 		"mailparser": "^3.9.14",
-		"maplibre-gl": "^5.24.0",
+		"maplibre-gl": "^6.0.0",
 		"nodemailer": "^9.0.1",
 		"otpauth": "^9.5.1",
 		"qrcode": "^1.5.4",
@@ -72,6 +72,6 @@
 		"cookie": "^0.7.0"
 	},
 	"allowScripts": {
-		"onnxruntime-node@1.21.0": true
+		"onnxruntime-node@1.24.3": true
 	}
 }

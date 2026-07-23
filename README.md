@@ -130,8 +130,8 @@ Roamarr can:
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
-- Connect external clients via OAuth (59 scopes, PKCE, refresh-token
-  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 108 tools, 16
+- Connect external clients via OAuth (63 scopes, PKCE, refresh-token
+  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 109 tools, 16
   prompts, and 9 resource templates — covering trips, segments, expenses, polls,
   companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
   templates, and profile preferences. Destructive operations require an explicit
@@ -282,6 +282,7 @@ source.
 | `DATABASE_USER` | no | none | MongrelDB administrator username. Must be set with `DATABASE_PASS` before first creation. |
 | `DATABASE_PASS` | no | none | MongrelDB administrator password. Must be set with `DATABASE_USER` before first creation. |
 | `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
+| `EMBEDDINGS_CACHE_PATH` | no | `roamarr-models/` beside the database | Cache directory for optional MiniLM ONNX models used by admin-enabled semantic search. |
 | `PORT` | no | `3000` | adapter-node listen port. |
 | `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
 
@@ -505,9 +506,10 @@ also require `confirm: true`.
 
 Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
 `@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB (via MongrelDB Kit), Luxon,
-Nodemailer, MapLibre GL JS, and Vitest. Recent additions include WebAuthn
+Nodemailer, MapLibre GL JS v6, and Vitest. Supporting libraries include WebAuthn
 (`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
-(`@modelcontextprotocol/sdk`), 3D globe rendering (`three`), and tar streaming
+(`@modelcontextprotocol/sdk`), optional MiniLM semantic search
+(`@huggingface/transformers`), 3D globe rendering (`three`), and tar streaming
 (`tar-fs`).
 
 Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies any

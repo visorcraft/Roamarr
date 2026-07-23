@@ -8,8 +8,37 @@ const outputPath = path.join(root, 'src/lib/server/licenseData.generated.json');
 const PROJECT_LICENSE_NAMES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING', 'COPYING.md'];
 const PACKAGE_LICENSE_RE = /^(licen[cs]e|copying|copyright|notice)(\..*)?$/i;
 const KNOWN_PACKAGE_LICENSES = {
-	'@visorcraft/mongreldb': 'MIT OR Apache-2.0'
+	'@visorcraft/mongreldb': 'MIT OR Apache-2.0',
+	'@visorcraft/mongreldb-kit': 'MIT OR Apache-2.0'
 };
+
+/** Bundled map/globe data and other non-npm third-party assets shipped in-tree. */
+const BUNDLED_DATA_COMPONENTS = [
+	{
+		name: 'Natural Earth country boundaries',
+		licenses: 'Public domain',
+		url: 'https://www.naturalearthdata.com/',
+		usage: 'Country borders in static/maps/countries.geojson for the 3D globe.'
+	},
+	{
+		name: 'NASA Blue Marble',
+		licenses: 'Public domain',
+		url: 'https://visibleearth.nasa.gov/collection/1484/blue-marble',
+		usage: 'Optional Earth texture for the 3D globe (imported at runtime by admins).'
+	},
+	{
+		name: 'GeoNames cities data',
+		licenses: 'CC BY 4.0',
+		url: 'https://www.geonames.org/',
+		usage: 'City points and labels imported from cities1000.zip for maps and destination lookup.'
+	},
+	{
+		name: 'OpenStreetMap default tiles',
+		licenses: 'ODbL',
+		url: 'https://www.openstreetmap.org/copyright',
+		usage: 'Default raster tile attribution when no custom tile provider is configured.'
+	}
+];
 
 function runtimeComponentsFor(lock) {
 	const components = [
@@ -34,18 +63,21 @@ function runtimeComponentsFor(lock) {
 				name: `MongrelDB engine ${version}`,
 				licenses: license,
 				url,
-				usage: 'Native database engine (Rust) bundled in the @visorcraft/mongreldb npm package.'
+				usage:
+					'Native database engine (Rust) bundled in the @visorcraft/mongreldb npm package. Individual Rust crate licenses are dual-licensed with the engine (MIT OR Apache-2.0) and are not published as separate npm packages; see the MongrelDB repository for the Cargo dependency tree.'
 			});
 		} else {
 			components.push({
 				name: `MongrelDB Kit ${version}`,
 				licenses: license,
 				url,
-				usage: 'Schema/query-builder layer (TypeScript/Rust/Python) bundled in the @visorcraft/mongreldb-kit npm package.'
+				usage:
+					'Schema/query-builder layer (TypeScript) on top of MongrelDB, bundled as @visorcraft/mongreldb-kit.'
 			});
 		}
 	}
 
+	components.push(...BUNDLED_DATA_COMPONENTS);
 	return components;
 }
 
@@ -54,11 +86,11 @@ function buildRuntimeLicensesText(components) {
 		'Runtime components',
 		'==================',
 		'',
-		'Roamarr is a Node.js application. These runtime components are required for',
-		'common source builds and deployments, but most are provided by the host operating',
-		'system rather than by Roamarr source code. The @visorcraft/mongreldb and',
-		'@visorcraft/mongreldb-kit packages bundle Rust crates that power the database',
-		'engine and persistence layer.',
+		'Roamarr is a Node.js application. These runtime components and bundled data',
+		'sources are required for common source builds and deployments. Host operating',
+		'systems may supply additional libraries. The @visorcraft/mongreldb package',
+		'bundles a Rust native engine; its crate dependency tree is dual-licensed MIT',
+		'OR Apache-2.0 with the engine itself and is not re-listed as separate npm rows.',
 		''
 	];
 	for (const component of components) {
@@ -289,12 +321,14 @@ function buildAcknowledgementsText(packages, components) {
 =======================
 
 Roamarr is built with SvelteKit, Svelte, MongrelDB Kit, Tailwind CSS,
-Vitest, and the wider npm ecosystem. The @visorcraft/mongreldb and
-@visorcraft/mongreldb-kit packages bundle Rust crates that provide the
-MongrelDB database engine and persistence layer.
+Vitest, Playwright, MapLibre GL JS, Three.js, and the wider npm ecosystem.
+The @visorcraft/mongreldb package embeds a Rust native database engine
+(dual-licensed MIT OR Apache-2.0); Rust crate dependencies of that engine
+are not re-published as npm packages and are covered by the engine's license
+expression. Map and globe data sources are listed under runtime components.
 
-This attribution bundle was generated from package-lock.json and the installed
-package metadata in node_modules.
+This attribution bundle was generated from package-lock.json, installed
+package metadata in node_modules, and the known bundled data sources below.
 
 Package summary
 ---------------
@@ -302,7 +336,7 @@ Package summary
 - Total npm packages listed here: ${packages.length}
 - Production/runtime packages: ${production}
 - Development/build/test packages: ${development}
-- Runtime components: ${components.length}
+- Runtime components (including bundled data): ${components.length}
 
 Runtime components
 ------------------

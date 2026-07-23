@@ -41,8 +41,13 @@ const { created, removed, markers, MapMock, MarkerMock } = vi.hoisted(() => {
 // the kit virtual module under the SSR transform, which makes `browser` false;
 // force it true so the client teardown paths under test actually run.
 vi.mock('$app/environment', () => ({ browser: true, dev: false, building: false, version: '0.0.0' }));
-vi.mock('maplibre-gl', () => ({ default: { Map: MapMock, Marker: MarkerMock } }));
+vi.mock('maplibre-gl', () => ({
+	Map: MapMock,
+	Marker: MarkerMock,
+	setWorkerUrl: vi.fn()
+}));
 vi.mock('maplibre-gl/dist/maplibre-gl.css', () => ({}));
+vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: 'blob:worker' }));
 
 const baseProps = {
 	lat: 1,

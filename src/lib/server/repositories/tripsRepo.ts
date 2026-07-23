@@ -229,7 +229,9 @@ export function createTrip(ownerId: number, input: CreateTripInput): Trip {
 		} as Insert<typeof trips>)
 		.executeSync();
 	const trip = toTrip(row);
-	void import('$lib/server/embeddings/search').then((m) => m.scheduleIndexTrip(trip.id));
+	void import('$lib/server/embeddings/search')
+		.then((m) => m.scheduleIndexTrip(trip.id))
+		.catch(() => {});
 	return trip;
 }
 
@@ -262,16 +264,20 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	const row = updated[0];
 	if (!row) return null;
 	const trip = toTrip(row);
-	void import('$lib/server/embeddings/search').then((m) => m.scheduleIndexTrip(trip.id));
+	void import('$lib/server/embeddings/search')
+		.then((m) => m.scheduleIndexTrip(trip.id))
+		.catch(() => {});
 	return trip;
 }
 
 export function deleteTrip(id: number): number {
 	const deleted = kit.deleteFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
 	if (Number(deleted) > 0) {
-		void import('$lib/server/embeddings/index').then((m) => {
-			m.removeSearchDocument('trip', id);
-		});
+		void import('$lib/server/embeddings/index')
+			.then((m) => {
+				m.removeSearchDocument('trip', id);
+			})
+			.catch(() => {});
 	}
 	return Number(deleted);
 }

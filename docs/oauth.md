@@ -44,7 +44,7 @@ Clients should fetch this dynamically rather than hard-code endpoint URLs.
 
 ## Scopes
 
-Roamarr currently exposes 59 scopes. Clients should fetch
+Roamarr currently exposes 63 scopes. Clients should fetch
 `scopes_supported` from discovery instead of hard-coding this list.
 Human-readable descriptions come from `src/lib/oauthScopes.ts` and are shown on
 **Profile → MCP Clients**.

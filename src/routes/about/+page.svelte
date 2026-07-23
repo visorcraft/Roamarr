@@ -114,6 +114,35 @@
 					</div>
 					<span class="code-chip">{data.databasePath}</span>
 				</div>
+				{#if data.mongrel}
+					<div class="settings-row">
+						<div>
+							<p class="label">MongrelDB engine</p>
+							<p class="field-help">Installed package and native engine version for this process.</p>
+						</div>
+						<div class="flex flex-wrap items-center gap-2">
+							<span class="code-chip">{data.mongrel.enginePackageVersion ?? 'unknown'}</span>
+							<span class="code-chip">engine {data.mongrel.engineVersion}</span>
+						</div>
+					</div>
+					<div class="settings-row">
+						<div>
+							<p class="label">MongrelDB Kit</p>
+							<p class="field-help">Installed schema/query-builder package version.</p>
+						</div>
+						<span class="code-chip">{data.mongrel.kitPackageVersion ?? 'unknown'}</span>
+					</div>
+					<div class="settings-row">
+						<div>
+							<p class="label">Engine build</p>
+							<p class="field-help">Native artifact version and source git SHA.</p>
+						</div>
+						<div class="flex flex-wrap items-center gap-2">
+							<span class="code-chip">{data.mongrel.artifactVersion}</span>
+							<span class="code-chip font-mono text-xs">{data.mongrel.gitSha.slice(0, 12)}</span>
+						</div>
+					</div>
+				{/if}
 			</div>
 		</section>
 	{:else}

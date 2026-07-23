@@ -47,6 +47,8 @@ compose.local.yml
 roamarr-db/
 roamarr-test-db/
 /data
+# Local ONNX embedding models (downloaded from Hugging Face Hub on enable)
+roamarr-models/
 
 # Logs and local QA artifacts
 *.log

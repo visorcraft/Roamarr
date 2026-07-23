@@ -187,8 +187,8 @@ test('gc returns fail when kit.compactAll throws', async () => {
 	spy.mockRestore();
 });
 
-test('flush returns fail when kit.flush throws', async () => {
-	const spy = vi.spyOn(ctx.kit, 'flush').mockImplementation(() => {
+test('flush returns fail when kit.flushAsync throws', async () => {
+	const spy = vi.spyOn(ctx.kit, 'flushAsync').mockImplementation(async () => {
 		throw new Error('flush error');
 	});
 	const result = (await actions.flush(makeEvent('flush', true))) as any;
@@ -211,10 +211,10 @@ for (const action of ['check', 'gc', 'flush', 'doctor'] as MaintenanceAction[]) 
 	test(`${action} failure is audit logged`, async () => {
 		const admin = makeAdmin(ctx.kit);
 		const fn = actions[action] as (event: any) => Promise<unknown>;
-		const methodMap: Record<MaintenanceAction, 'check' | 'compactAll' | 'flush' | 'doctor'> = {
+		const methodMap: Record<MaintenanceAction, 'check' | 'compactAll' | 'flushAsync' | 'doctor'> = {
 			check: 'check',
 			gc: 'compactAll',
-			flush: 'flush',
+			flush: 'flushAsync',
 			doctor: 'doctor'
 		};
 		const spy = vi.spyOn(ctx.kit, methodMap[action]).mockImplementation(() => {

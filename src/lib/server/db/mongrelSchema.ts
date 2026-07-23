@@ -7,6 +7,7 @@ import {
 	json,
 	timestamp,
 	date,
+	embedding,
 	index,
 	unique,
 	foreignKey,
@@ -205,9 +206,46 @@ export const settings = table('settings', {
 		json('oauth_client_allow_list', { nullable: true }),
 		text('default_date_format', { nullable: true, default: staticDefault('yyyy-MM-dd') }),
 		text('default_datetime_format', { nullable: true, default: staticDefault('yyyy-MM-dd h:mm a') }),
-		int('email_poll_interval_minutes', { default: staticDefault(5n) })
+		int('email_poll_interval_minutes', { default: staticDefault(5n) }),
+		/** Semantic search / ANN embeddings admin config (JSON). See embeddingsConfig.ts. */
+		json('embeddings_config', { nullable: true })
 	],
 	primaryKey: 'id'
+});
+
+/** Dense vector dimension for sentence-transformers/all-MiniLM-L6-v2. */
+export const SEARCH_EMBEDDING_DIM = 384;
+
+/**
+ * Unified ANN search corpus. Application-supplied vectors (MiniLM via ONNX) are
+ * written when embeddings are enabled; queries use `annSearch` on `vector`.
+ */
+export const searchDocuments = table('search_documents', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('search_documents_id_seq') }),
+		text('entity_type'),
+		int('entity_id'),
+		int('owner_id'),
+		text('title'),
+		text('body'),
+		text('href'),
+		embedding('vector', SEARCH_EMBEDDING_DIM, { nullable: true }),
+		timestamp('updated_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['entity_type', 'entity_id'], { name: 'search_documents_entity_uq' })],
+	indexes: [
+		index(['owner_id'], { name: 'search_documents_owner_idx' }),
+		index(['vector'], {
+			name: 'search_documents_vector_ann',
+			ann: true,
+			annQuantization: 'dense',
+			annAlgorithm: 'hnsw',
+			annM: 16,
+			annEfConstruction: 64,
+			annEfSearch: 64
+		})
+	]
 });
 
 export const userTwoFactor = table('user_two_factor', {
@@ -1392,6 +1430,7 @@ export const schema = new Schema([
 	sessions,
 	passwordResetTokens,
 	settings,
+	searchDocuments,
 	geonamesCities,
 	trips,
 	tripComments,

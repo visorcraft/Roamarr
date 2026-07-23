@@ -234,6 +234,60 @@ export const actions: Actions = {
 		throw redirect(303, TAB_REDIRECTS.general);
 	},
 
+	saveEmbeddings: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const enabled = f.get('embeddingsEnabled') === 'on';
+		const model = String(f.get('embeddingsModel') || 'sentence-transformers/all-MiniLM-L6-v2').trim();
+		const { enableEmbeddings, disableEmbeddings, getEmbeddingsConfig } = await import(
+			'$lib/server/embeddings/index'
+		);
+		try {
+			if (enabled) {
+				const cfg = await enableEmbeddings(model || undefined);
+				if (cfg.status === 'error') {
+					return fail(400, { error: cfg.error ?? 'Failed to load embedding model.' });
+				}
+				logAudit(u.id, 'embeddings_enable', 'settings', 1, {
+					model: cfg.model,
+					status: cfg.status
+				});
+				setFlash(cookies, 'Semantic search enabled. Model ready and index rebuilt.');
+			} else {
+				disableEmbeddings();
+				logAudit(u.id, 'embeddings_disable', 'settings', 1, {
+					model: getEmbeddingsConfig().model
+				});
+				setFlash(cookies, 'Semantic search disabled.');
+			}
+		} catch (e) {
+			return fail(400, { error: userFacingError(e, 'Failed to update semantic search settings.') });
+		}
+		throw redirect(303, TAB_REDIRECTS.general);
+	},
+
+	reindexEmbeddings: async ({ locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const { embeddingsReady, reindexAll, enableEmbeddings, getEmbeddingsConfig } = await import(
+			'$lib/server/embeddings/index'
+		);
+		try {
+			if (!embeddingsReady()) {
+				const cfg = await enableEmbeddings(getEmbeddingsConfig().model);
+				if (cfg.status === 'error') {
+					return fail(400, { error: cfg.error ?? 'Embeddings are not ready.' });
+				}
+			} else {
+				const counts = await reindexAll();
+				logAudit(u.id, 'embeddings_reindex', 'settings', 1, counts);
+			}
+			setFlash(cookies, 'Search index rebuilt.');
+		} catch (e) {
+			return fail(400, { error: userFacingError(e, 'Failed to reindex embeddings.') });
+		}
+		throw redirect(303, TAB_REDIRECTS.general);
+	},
+
 	saveMaps: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();

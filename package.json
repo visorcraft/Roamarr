@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.36.3",
+	"version": "0.36.4",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -48,6 +48,7 @@
 		"vitest": "^4.1.10"
 	},
 	"dependencies": {
+		"@huggingface/transformers": "^3.8.1",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@node-rs/argon2": "^2.0.2",
 		"@simplewebauthn/browser": "^13.3.0",
@@ -68,5 +69,8 @@
 	},
 	"overrides": {
 		"cookie": "^0.7.0"
+	},
+	"allowScripts": {
+		"onnxruntime-node@1.21.0": true
 	}
 }

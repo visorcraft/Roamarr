@@ -44,6 +44,7 @@ test('load returns app info and hides admin-only details for regular users', () 
 		isAdmin: boolean;
 		databasePath: string | null;
 		stats: unknown;
+		mongrel: unknown;
 	};
 
 	expect(result.app.name).toBe('Roamarr');
@@ -51,6 +52,7 @@ test('load returns app info and hides admin-only details for regular users', () 
 	expect(result.isAdmin).toBe(false);
 	expect(result.databasePath).toBeNull();
 	expect(result.stats).toBeNull();
+	expect(result.mongrel).toBeNull();
 });
 
 test('load includes instance stats for admins', () => {
@@ -77,9 +79,22 @@ test('load includes instance stats for admins', () => {
 		isAdmin: boolean;
 		databasePath: string | null;
 		stats: { users: number; trips: number; segments: number };
+		mongrel: {
+			enginePackageVersion: string | null;
+			kitPackageVersion: string | null;
+			engineVersion: string;
+			artifactVersion: string;
+			gitSha: string;
+		} | null;
 	};
 
 	expect(result.isAdmin).toBe(true);
 	expect(result.databasePath).toBe('./roamarr-test-db');
 	expect(result.stats).toMatchObject({ users: 1, trips: 1, segments: 1 });
+	expect(result.mongrel).not.toBeNull();
+	expect(result.mongrel!.enginePackageVersion).toMatch(/^\d+\.\d+\.\d+/);
+	expect(result.mongrel!.kitPackageVersion).toMatch(/^\d+\.\d+\.\d+/);
+	expect(result.mongrel!.engineVersion).toMatch(/^\d+\.\d+\.\d+/);
+	expect(result.mongrel!.artifactVersion).toMatch(/^\d+\.\d+\.\d+/);
+	expect(result.mongrel!.gitSha.length).toBeGreaterThan(7);
 });

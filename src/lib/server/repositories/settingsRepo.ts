@@ -6,6 +6,12 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import type { Row, Update, Insert } from '@visorcraft/mongreldb-kit';
+import {
+	DEFAULT_EMBEDDINGS_CONFIG,
+	type EmbeddingsConfig,
+	parseEmbeddingsConfig,
+	serializeEmbeddingsConfig
+} from '$lib/server/embeddings/config';
 
 export type SessionCookieSameSite = (typeof SESSION_COOKIE_SAME_SITE_VALUES)[number];
 
@@ -60,6 +66,8 @@ export type Settings = {
 	mapsTileApiKey: string | null;
 	sessionCookieSameSite: SessionCookieSameSite;
 	oauthClientAllowList: string[] | null;
+	/** Local MiniLM / ONNX semantic search settings (disabled by default). */
+	embeddings: EmbeddingsConfig;
 };
 
 export type SettingsPatch = Partial<Omit<Settings, 'id'>>;
@@ -166,7 +174,8 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		sessionCookieSameSite: (row.session_cookie_same_site as SessionCookieSameSite) ?? 'lax',
 		oauthClientAllowList: row.oauth_client_allow_list
 			? (JSON.parse(row.oauth_client_allow_list as string) as string[])
-			: null
+			: null,
+		embeddings: parseEmbeddingsConfig(row.embeddings_config)
 	};
 }
 
@@ -174,6 +183,14 @@ function toKitSettingsPatch(patch: SettingsPatch): Update<typeof settings> {
 	const out: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(patch)) {
 		if (value === undefined) continue;
+		if (key === 'embeddings') {
+			out.embeddings_config = serializeEmbeddingsConfig(
+				value == null
+					? DEFAULT_EMBEDDINGS_CONFIG
+					: { ...DEFAULT_EMBEDDINGS_CONFIG, ...(value as EmbeddingsConfig) }
+			);
+			continue;
+		}
 		const kitKey = SETTINGS_KEY_MAP[key] ?? key;
 		if (SETTINGS_INT_FIELDS.has(kitKey) && value !== null) {
 			out[kitKey] = BigInt(value as number);
@@ -302,7 +319,8 @@ function rebuildSettingsRow(existing: Record<string, unknown>): void {
 		maps_tile_url: null,
 		maps_tile_attribution: null,
 		maps_tile_api_key: null,
-		oauth_client_allow_list: null
+		oauth_client_allow_list: null,
+		embeddings_config: serializeEmbeddingsConfig(DEFAULT_EMBEDDINGS_CONFIG)
 	};
 
 	const rebuilt: Record<string, unknown> = {};
@@ -358,7 +376,8 @@ export function getSettings(): Settings {
 				maps_tile_url: null,
 				maps_tile_attribution: null,
 				maps_tile_api_key: null,
-				oauth_client_allow_list: null
+				oauth_client_allow_list: null,
+				embeddings_config: serializeEmbeddingsConfig(DEFAULT_EMBEDDINGS_CONFIG)
 			} as Insert<typeof settings>)
 			.executeSync();
 		return getSettings();

@@ -102,8 +102,11 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 
 	// Flush memtables each tick (cheap; enables the incremental-aggregate fast
 	// path) and compact hourly so query latency stays flat over a long uptime.
+	// flushAsync uses per-table native async so the Node event loop can keep
+	// serving requests while memtables spill; compactAll still blocks (no native
+	// async compact), so it stays on the hourly cadence only.
 	try {
-		kit.flush();
+		await kit.flushAsync();
 	} catch (e) {
 		console.error('[scheduler] flush failed', e);
 	}

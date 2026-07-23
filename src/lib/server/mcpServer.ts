@@ -1717,10 +1717,17 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_search',
-				description: 'Search across your trips by name, destination, or segment title.',
+				description:
+					'Search across your trips and segments. Uses contextual semantic ranking (local MiniLM + MongrelDB ANN) when an admin has enabled embeddings; otherwise substring match on name, destination, and segment titles. Returns trips plus optional hits[] and a semantic flag.',
 				inputSchema: {
 					type: 'object',
-					properties: { query: { type: 'string' } },
+					properties: {
+						query: {
+							type: 'string',
+							description:
+								'Natural-language or keyword query (e.g. "spring cherry blossoms in Japan" or "Tokyo").'
+						}
+					},
 					required: ['query']
 				}
 			}
@@ -3200,9 +3207,22 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_search': {
 				if (!hasScope(scopes, 'search:read')) return scopeError('search:read');
 				const q = String(args.query ?? '').trim();
-				const { listViewableTrips } = await import('./sharing');
-				const trips = q ? listViewableTrips(userId, { q, filter: 'active' }) : [];
-				return textResult({ query: q, trips: trips.map((t) => ({ id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null, destinationCityName: t.destinationCityName, isShared: t.isShared })) });
+				const { globalSearch } = await import('./embeddings/search');
+				const result = q
+					? await globalSearch(userId, q)
+					: { trips: [], hits: [], semantic: false, q: '' };
+				return textResult({
+					query: result.q,
+					semantic: result.semantic,
+					hits: result.hits,
+					trips: result.trips.map((t) => ({
+						id: t.id,
+						name: t.name,
+						destination: 'destination' in t ? (t as { destination?: string | null }).destination : null,
+						destinationCityName: t.destinationCityName,
+						isShared: t.isShared
+					}))
+				});
 			}
 			default:
 				return {

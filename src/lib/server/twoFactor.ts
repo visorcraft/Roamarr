@@ -13,6 +13,7 @@ import {
 	stagePkGuard,
 	deleteUniqueGuards,
 	planDelete,
+	runSyncTxn,
 	type TableSpec,
 	type ConstraintKit
 } from '@visorcraft/mongreldb-kit';
@@ -121,24 +122,15 @@ export function getTwoFactorState(userId: number): TwoFactorState {
 }
 
 // --- Kit transaction helpers -------------------------------------------------
+// Use kit `runSyncTxn` (retrying on snapshot conflicts) rather than a raw
+// begin/commit — matches attachment/expense repos and the kit production path.
 
 function constraintKit(): ConstraintKit {
 	return { db: kit.nativeDb, schema: kit.schema };
 }
 
 function runKitTransaction(fn: (txn: Transaction) => void): void {
-	const txn = kit.begin();
-	try {
-		fn(txn);
-		txn.commit();
-	} catch (err) {
-		try {
-			txn.rollback();
-		} catch {
-			// ignore rollback errors
-		}
-		throw err;
-	}
+	runSyncTxn(kit, fn);
 }
 
 function pkValue(table: TableSpec, row: Record<string, unknown>): string | bigint {

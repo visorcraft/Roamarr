@@ -1,10 +1,19 @@
 import { requireUser } from '$lib/server/auth';
-import { listViewableTrips } from '$lib/server/sharing';
+import { globalSearch } from '$lib/server/embeddings/search';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const u = requireUser(locals);
 	const rawQ = url.searchParams.get('q') ?? undefined;
 	const q = rawQ?.trim() || undefined;
-	return { trips: q ? listViewableTrips(u.id, { q, filter: 'active' }) : [], q };
+	if (!q) {
+		return { trips: [], hits: [], semantic: false, q: undefined };
+	}
+	const result = await globalSearch(u.id, q);
+	return {
+		trips: result.trips,
+		hits: result.hits,
+		semantic: result.semantic,
+		q: result.q
+	};
 };

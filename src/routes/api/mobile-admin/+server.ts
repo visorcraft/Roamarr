@@ -90,7 +90,11 @@ export const POST: RequestHandler = async ({ request, locals, url, getClientAddr
 		if (action === 'run-jobs') result = await runTick(new Date());
 		else if (action === 'db-check') result = kit.check();
 		else if (action === 'db-gc') result = kit.compactAll();
-		else if (action === 'db-flush') { const tableCount = kit.tableNames().length; kit.flush(); result = { tableCount }; }
+		else if (action === 'db-flush') {
+			const tableCount = kit.tableNames().length;
+			await kit.flushAsync();
+			result = { tableCount };
+		}
 		else result = kit.doctor();
 		logAudit(admin.id, action, 'settings', 1);
 		return json({ ok: true, result: safe(result) }, { headers: { 'cache-control': 'no-store' } });

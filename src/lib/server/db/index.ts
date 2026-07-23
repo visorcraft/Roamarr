@@ -23,13 +23,26 @@ export function openOrCreateEncryptedSync(
 	passphrase: string,
 	credentials?: { username: string; password: string }
 ): KitDatabase {
+	// Prefer the unified openSync options form for existing DBs (encryption +
+	// optional credentials). Create still needs the explicit create* helpers so
+	// credentialed first-boot enables require_auth with a bootstrap admin.
 	if (isExistingDatabaseDirectory(path)) {
-		return credentials
-			? KitDatabase.openSync(path, schema, { encryption: { passphrase }, credentials })
-			: KitDatabase.openEncryptedSync(path, schema, passphrase);
+		return KitDatabase.openSync(
+			path,
+			schema,
+			credentials
+				? { encryption: { passphrase }, credentials }
+				: { encryption: { passphrase } }
+		);
 	}
 	return credentials
-		? KitDatabase.createEncryptedWithCredentialsSync(path, schema, passphrase, credentials.username, credentials.password)
+		? KitDatabase.createEncryptedWithCredentialsSync(
+				path,
+				schema,
+				passphrase,
+				credentials.username,
+				credentials.password
+			)
 		: KitDatabase.createEncryptedSync(path, schema, passphrase);
 }
 

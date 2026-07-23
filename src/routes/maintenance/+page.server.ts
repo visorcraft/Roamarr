@@ -123,7 +123,7 @@ export const actions: Actions = {
 		}
 		try {
 			const tableCount = kit.tableNames().length;
-			kit.flush();
+			await kit.flushAsync();
 			const result = { tableCount };
 			logAudit(u.id, 'db_flush', 'settings', 1, result);
 			return { action: 'flush', success: true, result };

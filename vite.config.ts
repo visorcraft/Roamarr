@@ -10,14 +10,24 @@ export default defineConfig({
 		}
 	},
 	ssr: {
-		external: ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit']
+		external: [
+			'@visorcraft/mongreldb',
+			'@visorcraft/mongreldb-kit',
+			'@huggingface/transformers',
+			'onnxruntime-node'
+		]
 	},
 	build: {
 		// License data and map/globe libraries are legitimately large; raise the
 		// warning threshold so the build output stays focused on real problems.
 		chunkSizeWarningLimit: 1500,
 		rollupOptions: {
-			external: ['@visorcraft/mongreldb', '@visorcraft/mongreldb-kit'],
+			external: [
+				'@visorcraft/mongreldb',
+				'@visorcraft/mongreldb-kit',
+				'@huggingface/transformers',
+				'onnxruntime-node'
+			],
 			// Rolldown emits plugin-timing advisories by default; they're not warnings
 			// and don't affect the build, so silence them to keep output focused.
 			checks: { pluginTimings: false }

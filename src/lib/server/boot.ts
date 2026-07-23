@@ -56,6 +56,16 @@ export function bootApp() {
 		cleanupRestoreOldDirectories();
 
 		ensureDefaultBenefitTemplates();
+		// Warm MiniLM/ONNX if admin previously enabled semantic search (non-blocking).
+		void import('./embeddings')
+			.then(async ({ getEmbeddingsConfig }) => {
+				const cfg = getEmbeddingsConfig();
+				if (cfg.enabled && cfg.status === 'ready') {
+					const { ensureEmbeddingModel } = await import('./embeddings/model');
+					await ensureEmbeddingModel(cfg.model);
+				}
+			})
+			.catch((e) => console.error('[embeddings] warm-up failed', e));
 		startScheduler();
 	} catch (e) {
 		bootError = e instanceof Error ? e.message : String(e);

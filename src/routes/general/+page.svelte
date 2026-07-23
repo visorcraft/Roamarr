@@ -253,6 +253,72 @@
 					</div>
 				</section>
 			</form>
+
+			<form method="POST" action="?/saveEmbeddings" class="space-y-6">
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">Semantic search (ANN)</h2>
+					<p class="mt-1 text-sm muted">
+						Optional local MiniLM embeddings via ONNX Runtime. When enabled, Roamarr downloads
+						<code>sentence-transformers/all-MiniLM-L6-v2</code> (ONNX) from Hugging Face Hub and
+						indexes trips and segments for contextual search with MongrelDB ANN. Disabled by default.
+					</p>
+					<div class="settings-rows mt-4">
+						<div class="settings-row">
+							<div>
+								<label class="label" for="embeddingsEnabled">Enable semantic search</label>
+								<p class="field-help">
+									First enable downloads the model (~90&nbsp;MB) and reindexes existing data. Status:
+									<strong>{s.embeddings?.status ?? 'disabled'}</strong>
+									{#if s.embeddings?.error}
+										— {s.embeddings.error}
+									{/if}
+								</p>
+							</div>
+							<label class="checkbox-label">
+								<input
+									id="embeddingsEnabled"
+									type="checkbox"
+									name="embeddingsEnabled"
+									checked={s.embeddings?.enabled}
+									class="checkbox"
+								/>
+								Enabled
+							</label>
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="embeddingsModel">Embedding model</label>
+								<p class="field-help">
+									Default is MiniLM-L6-v2. Runtime uses the ONNX/ORT conversion from Hugging Face Hub.
+								</p>
+							</div>
+							<input
+								id="embeddingsModel"
+								name="embeddingsModel"
+								class="input"
+								value={s.embeddings?.model ?? 'sentence-transformers/all-MiniLM-L6-v2'}
+							/>
+						</div>
+						{#if s.embeddings?.readyAt}
+							<div class="settings-row">
+								<div>
+									<p class="label">Model ready</p>
+									<p class="field-help">Last successful load / reindex time.</p>
+								</div>
+								<span class="code-chip">{s.embeddings.readyAt}</span>
+							</div>
+						{/if}
+					</div>
+					<div class="mt-6 flex justify-end gap-2">
+						<button class="btn btn-primary" name="intent" value="save">Save semantic search</button>
+						{#if s.embeddings?.enabled}
+							<button class="btn btn-secondary" name="intent" value="reindex" formaction="?/reindexEmbeddings">
+								Reindex now
+							</button>
+						{/if}
+					</div>
+				</section>
+			</form>
 		{/if}
 
 		{#if tab === 'maps'}

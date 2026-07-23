@@ -6,6 +6,7 @@ import { countTrips, countGroups } from '$lib/server/repositories/tripsRepo';
 import { getSettings } from '$lib/server/settings';
 import { appInfo } from '$lib/appInfo';
 import { getDatabasePath } from '$lib/server/paths';
+import { getMongrelRuntimeInfo } from '$lib/server/mongrelRuntimeInfo';
 import type { PageServerLoad } from './$types';
 
 const ALLOWED_TABS = ['application', 'instance', 'licenses'] as const;
@@ -26,6 +27,8 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		isAdmin,
 		environment: process.env.NODE_ENV ?? 'development',
 		databasePath: isAdmin ? getDatabasePath() : null,
+		// Admin-only: native build + package versions help confirm a MongrelDB upgrade took effect.
+		mongrel: isAdmin ? getMongrelRuntimeInfo() : null,
 		stats: isAdmin
 			? {
 					users: countUsers(),

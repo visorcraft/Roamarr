@@ -96,6 +96,83 @@ test('updates a segment', () => {
 	expect(getSegmentById(seg.id)?.title).toBe('H1 Updated');
 });
 
+// Regression: full-row set() merges corrupted segments_trip_idx so updated rows
+// remained reachable by primary key but vanished from listSegmentsForTrip.
+test('updateSegment keeps the row listable by trip_id (secondary index)', () => {
+	const u = makeKitUser();
+	const t = makeKitTrip(Number(u.id));
+	const a = createSegment({
+		trip_id: BigInt(t.id),
+		type: 'flight',
+		title: 'Outbound',
+		start_at: '2026-12-02T04:50:00Z',
+		start_tz: 'UTC',
+		details_json: JSON.stringify({ airline: 'EVA' })
+	});
+	const b = createSegment({
+		trip_id: BigInt(t.id),
+		type: 'hotel',
+		title: 'Golden Jade',
+		start_at: '2027-01-30T04:30:00Z',
+		start_tz: 'Asia/Bangkok',
+		end_at: '2027-01-31T06:00:00Z',
+		end_tz: 'Asia/Bangkok'
+	});
+	const c = createSegment({
+		trip_id: BigInt(t.id),
+		type: 'flight',
+		title: 'Return',
+		start_at: '2027-01-31T05:45:00Z',
+		start_tz: 'UTC'
+	});
+	expect(listSegmentsForTrip(t.id).map((s) => s.id).sort((x, y) => x - y)).toEqual(
+		[a.id, b.id, c.id].sort((x, y) => x - y)
+	);
+
+	// Title-only, details, payment, and timestamp patches — the same shapes MCP uses.
+	updateSegment(a.id, { title: 'Outbound updated' });
+	updateSegment(b.id, {
+		title: 'Golden Jade Suvarnabhumi',
+		confirmation_number: 'AXQ043922',
+		payment_status: 'fully_paid',
+		location: '869/2 Soi Ladkrabang 1/12',
+		venue: '869/2 Soi Ladkrabang 1/12',
+		details_json: JSON.stringify({
+			room: 'Family Quadruple Room, Multiple Beds x 2',
+			guests: '2 adults, 3 children',
+			provider: 'Klook',
+			booked: true
+		})
+	});
+	updateSegment(c.id, { title: 'Return updated', details_json: JSON.stringify({ notes: 'probe' }) });
+	// Second write on the same hotel row (re-auth / amend path).
+	updateSegment(b.id, {
+		details_json: JSON.stringify({
+			room: 'Family Quadruple Room, Multiple Beds x 2',
+			guests: '2 adults, 3 children (14, 17, 11)',
+			provider: 'Klook',
+			booked: true,
+			amountPaid: 'USD 166.38'
+		})
+	});
+
+	const listed = listSegmentsForTrip(t.id);
+	expect(listed).toHaveLength(3);
+	expect(listed.map((s) => s.id).sort((x, y) => x - y)).toEqual(
+		[a.id, b.id, c.id].sort((x, y) => x - y)
+	);
+	expect(listed.find((s) => s.id === b.id)).toMatchObject({
+		title: 'Golden Jade Suvarnabhumi',
+		confirmationNumber: 'AXQ043922',
+		paymentStatus: 'fully_paid',
+		tripId: t.id
+	});
+	// Primary-key reads must still agree with the trip list.
+	expect(getSegmentById(a.id)?.title).toBe('Outbound updated');
+	expect(getSegmentById(b.id)?.tripId).toBe(t.id);
+	expect(JSON.parse(getSegmentById(b.id)!.detailsJson!).amountPaid).toBe('USD 166.38');
+});
+
 test('deletes a segment and cascades attendees', () => {
 	const u = makeKitUser();
 	const t = makeKitTrip(Number(u.id));

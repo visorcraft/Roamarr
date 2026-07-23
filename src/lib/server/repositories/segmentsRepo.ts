@@ -1,4 +1,4 @@
-import { eq as kitEq, and as kitAnd, ne as kitNe, lt as kitLt, gt as kitGt, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
+import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
@@ -87,12 +87,17 @@ export function listSegmentsForTrip(tripId: number) {
 
 export function listSegmentsForTrips(tripIds: number[]) {
 	if (tripIds.length === 0) return [];
+	// Full scan + filter (not RangeInt on segments_trip_idx).
+	// Kit/MongrelDB secondary-index queries have been observed to miss rows that
+	// still exist by primary key with a correct trip_id after segment updates —
+	// so itineraries went blank even though the data was present. Roamarr segment
+	// counts are small; prefer complete results over an index shortcut.
+	const wanted = new Set(tripIds);
 	return kit
 		.selectFrom(segments)
-		.where(kitInList(segments.trip_id, tripIds.map(toBigInt)))
 		.orderBy(kitAsc(segments.start_at))
-		
 		.executeSync()
+		.filter((row) => wanted.has(Number(row.trip_id)))
 		.map(toSegmentRow);
 }
 
@@ -111,14 +116,46 @@ export function createSegment(input: CreateSegmentInput) {
 export function updateSegment(id: number, patch: UpdateSegmentInput) {
 	const existing = kit.selectFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync()[0];
 	if (!existing) return null;
-	const merged: Update<typeof segments> = { ...existing, ...patch, id: existing.id };
-	if (merged.card_id === 0n) merged.card_id = null;
-	const updated = kit.updateTable(segments).set(merged).where(kitEq(segments.id, toBigInt(id))).executeSync();
+
+	// Pass only fields the caller intends to change. Kit's applyUpdateInTxn already
+	// merges the patch onto the on-disk row. Spreading the full `existing` row into
+	// set() re-writes every secondary-index key (including segments_trip_idx). That
+	// full-row rewrite has been observed to drop index entries so
+	// listSegmentsForTrip silently omits still-present rows after MCP/UI updates —
+	// getSegmentById (primary key) still finds them, but trip itineraries go blank.
+	const set = sanitizeSegmentUpdatePatch(patch);
+	if (Object.keys(set).length === 0) {
+		// Nothing to write; return the current projection.
+		return toSegmentRow(existing);
+	}
+
+	const updated = kit
+		.updateTable(segments)
+		.set(set as Update<typeof segments>)
+		.where(kitEq(segments.id, toBigInt(id)))
+		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
 	const segment = toSegmentRow(row);
 	void import('$lib/server/embeddings/search').then((m) => m.scheduleIndexTrip(segment.tripId));
 	return segment;
+}
+
+/** Build a kit `set()` payload: defined patch fields only, immutable keys stripped. */
+function sanitizeSegmentUpdatePatch(patch: UpdateSegmentInput): Record<string, unknown> {
+	const set: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
+		// `undefined` must not be spread into set() — kit merges it as SQL NULL.
+		if (value === undefined) continue;
+		if (key === 'id' || key === 'trip_id' || key === 'created_at') continue;
+		set[key] = value;
+	}
+	if (set.card_id === 0n || set.card_id === 0) set.card_id = null;
+	// json columns are stored as text; objects must be serialized before toCells.
+	if (set.details_json != null && typeof set.details_json === 'object') {
+		set.details_json = JSON.stringify(set.details_json);
+	}
+	return set;
 }
 
 export function deleteSegment(id: number): boolean {
@@ -131,10 +168,15 @@ export function deleteSegment(id: number): boolean {
 
 export function deleteSegmentsForTrip(tripId: number, ids?: number[]): bigint {
 	if (ids && ids.length === 0) return 0n;
-	const predicate = ids?.length
-		? kitAnd(kitEq(segments.trip_id, toBigInt(tripId)), kitInList(segments.id, ids.map(toBigInt)))
-		: kitEq(segments.trip_id, toBigInt(tripId));
-	return kit.deleteFrom(segments).where(predicate).executeSync();
+	// Delete by primary key after resolving membership via listSegmentsForTrip so
+	// we do not rely on a possibly-desynced trip_id secondary index for the WHERE.
+	const members = listSegmentsForTrip(tripId);
+	const toDelete = ids?.length ? members.filter((s) => ids.includes(s.id)) : members;
+	let n = 0n;
+	for (const seg of toDelete) {
+		if (deleteSegment(seg.id)) n += 1n;
+	}
+	return n;
 }
 
 export function countOverlappingSegments(
@@ -143,15 +185,16 @@ export function countOverlappingSegments(
 	endAt: string,
 	excludeSegmentId?: number
 ): bigint {
-	const predicates = [
-		kitEq(segments.trip_id, toBigInt(tripId)),
-		kitLt(segments.start_at, endAt),
-		kitGt(segments.end_at, startAt)
-	];
-	if (excludeSegmentId != null) {
-		predicates.push(kitNe(segments.id, toBigInt(excludeSegmentId)));
+	// Use listSegmentsForTrip (full-scan membership) so desynced trip_id indexes
+	// cannot under-count overlaps.
+	const members = listSegmentsForTrip(tripId);
+	let n = 0;
+	for (const s of members) {
+		if (excludeSegmentId != null && s.id === excludeSegmentId) continue;
+		if (!s.endAt) continue;
+		if (s.startAt < endAt && s.endAt > startAt) n += 1;
 	}
-	return BigInt(kit.selectFrom(segments).where(kitAnd(...predicates)).executeSync().length);
+	return BigInt(n);
 }
 
 export function listAttendeesForSegment(segmentId: number): AttendeeWithCompanion[] {
@@ -236,10 +279,17 @@ export function upsertAttendee(segmentId: number, companionId: number, status: s
 export function updateAttendee(id: number, patch: Update<typeof segmentAttendees>) {
 	const existing = kit.selectFrom(segmentAttendees).where(kitEq(segmentAttendees.id, toBigInt(id))).executeSync()[0];
 	if (!existing) return null;
-	const merged: Update<typeof segmentAttendees> = { ...existing, ...patch, id: existing.id };
+	// Same partial-patch rule as updateSegment: do not full-row merge into set().
+	const set: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(patch as Record<string, unknown>)) {
+		if (value === undefined) continue;
+		if (key === 'id' || key === 'segment_id' || key === 'companion_id' || key === 'created_at') continue;
+		set[key] = value;
+	}
+	if (Object.keys(set).length === 0) return toAttendeeRow(existing);
 	const updated = kit
 		.updateTable(segmentAttendees)
-		.set(merged)
+		.set(set as Update<typeof segmentAttendees>)
 		.where(kitEq(segmentAttendees.id, toBigInt(id)))
 		.executeSync();
 	const row = updated[0];

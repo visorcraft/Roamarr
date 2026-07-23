@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.36.4",
+	"version": "0.37.0",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -53,8 +53,8 @@
 		"@node-rs/argon2": "^2.0.2",
 		"@simplewebauthn/browser": "^13.3.0",
 		"@simplewebauthn/server": "^13.3.2",
-		"@visorcraft/mongreldb": "^0.64.3",
-		"@visorcraft/mongreldb-kit": "^0.64.3",
+		"@visorcraft/mongreldb": "^0.64.4",
+		"@visorcraft/mongreldb-kit": "^0.64.4",
 		"gridjs": "^6.2.0",
 		"imapflow": "^1.4.7",
 		"luxon": "^3.7.2",

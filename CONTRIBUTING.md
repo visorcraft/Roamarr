@@ -132,7 +132,10 @@ Match test coverage to the risk of the change:
 - Server logic should have focused Vitest coverage near the source file.
 - Route actions should test validation, authorization, and mutation behavior.
 - Schema changes should update `mongrelSchema.ts` and include tests for affected
-  behavior.
+  behavior. MongrelDB/Kit upgrades are also gated by
+  `src/lib/server/db/mongrelCompat.test.ts` against
+  `tests/fixtures/mongreldb/`; only regenerate that fixture after intentional
+  storage-format breaks (`npm run db:compat-fixture`).
 - Security-sensitive changes should cover negative authorization and validation
   paths.
 - UI changes should at least pass `npm run check`; add browser or component

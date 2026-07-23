@@ -67,10 +67,11 @@ describe('mongrelMigrations', () => {
 		// (0003 used alterColumn, which never calls native add_column for a new field.)
 		const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-embeddings-col-'));
 		const passphrase = process.env.ROAMARR_SECRET!;
+		// filter() widens the column tuple to an array; double-cast for the partial table.
 		const settingsWithoutEmbeddings = {
 			...settings,
 			columns: settings.columns.filter((c) => c.name !== 'embeddings_config')
-		} as typeof settings;
+		} as unknown as typeof settings;
 		const partialSchema = new Schema(
 			schema.tablesList().map((t) => (t.name === 'settings' ? settingsWithoutEmbeddings : t))
 		);

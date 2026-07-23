@@ -1,0 +1,34 @@
+{
+	"generatedAt": "2026-07-23T18:38:13.124Z",
+	"archive": "sample-db.tar.gz",
+	"archiveRootEntry": "db",
+	"passphrase": "dGVzdC1zZWNyZXQtMzJieXRlcy0wMTIzNDU2Nzg5YWI=",
+	"passphraseSource": "vitest.setup.ts ROAMARR_SECRET (test-only)",
+	"enginePackageVersion": "0.64.5",
+	"kitPackageVersion": "0.64.5",
+	"artifactVersion": "0.64.5",
+	"engineVersion": "0.64.5",
+	"queryVersion": "0.64.5",
+	"mongreldbGitSha": "672e9e6e8b97ae042666a2eeb2d96f0d2204c616",
+	"migrationVersions": [
+		1,
+		2,
+		3,
+		4
+	],
+	"expected": {
+		"settingsInstanceName": "Compat Fixture",
+		"userEmail": "compat-fixture@example.com",
+		"userDisplayName": "Compat Canary",
+		"tripName": "Schema regression canary",
+		"tripDestination": "LIS",
+		"segmentTitle": "Canary flight UA1",
+		"segmentType": "flight"
+	},
+	"notes": [
+		"Refresh with `npm run db:compat-fixture` after intentional storage-layout",
+		"or encryption-format changes that intentionally break older on-disk DBs.",
+		"Do not refresh solely because app migrations advanced — the test applies",
+		"current migrations on open and that is part of the gate."
+	]
+}

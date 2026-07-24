@@ -3,7 +3,7 @@
 	let confirmed = $state(false);
 </script>
 
-<h1 class="page-title">Seed demo data</h1>
+<h1 class="page-title">Seed Demo Data</h1>
 <p class="page-subtitle max-w-3xl">
 	This replaces all non-admin sample data with a small demo dataset: trips, segments, cards, insurance, and loyalty programs. It is useful for first-time evaluation and screenshots.
 </p>
@@ -16,6 +16,6 @@
 		<span>I understand this will remove existing trips, segments, cards, insurance, and loyalty data owned by other users.</span>
 	</label>
 	<div class="mt-4">
-		<button type="submit" class="btn btn-danger" disabled={!confirmed}>Seed demo data</button>
+		<button type="submit" class="btn btn-danger" disabled={!confirmed}>Seed Demo Data</button>
 	</div>
 </form>

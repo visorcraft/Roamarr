@@ -27,7 +27,7 @@ function makeLocals(role: 'admin' | 'user') {
 function makeRequest(action: MaintenanceAction, confirm = false) {
 	const form = new FormData();
 	if (confirm) form.set('confirmMaintenance', action);
-	return new Request('http://localhost/maintenance', { method: 'POST', body: form });
+	return new Request('http://localhost/database-maintenance', { method: 'POST', body: form });
 }
 
 function makeEvent(
@@ -140,7 +140,7 @@ for (const action of ['gc', 'flush', 'doctor'] as MaintenanceAction[]) {
 		const fn = actions[action] as (event: any) => Promise<unknown>;
 		const result = (await fn({
 			locals: makeLocals('admin'),
-			request: new Request('http://localhost/maintenance', { method: 'POST', body: form }),
+			request: new Request('http://localhost/database-maintenance', { method: 'POST', body: form }),
 			getClientAddress: () => '127.0.0.1'
 		} as any)) as any;
 		expect(result.status).toBe(400);

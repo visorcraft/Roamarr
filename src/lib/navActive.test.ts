@@ -57,7 +57,11 @@ describe('activeItemHref', () => {
 		{ href: '/profile', label: 'Profile', children: [{ href: '/profile', label: 'Account' }] },
 		{ href: '/profile/loyalty', label: 'Loyalty' },
 		{ href: '/profile/visited', label: 'Visited', children: [{ href: '/profile/visited/countries', label: 'Countries' }] },
-		{ href: '/maintenance', label: 'Maintenance', children: [{ href: '/jobs', label: 'Scheduled Jobs' }] }
+		{
+			href: '/database-maintenance',
+			label: 'Maintenance',
+			children: [{ href: '/job-history', label: 'Job History' }]
+		}
 	];
 
 	it('selects the exact item on /profile', () => {
@@ -78,7 +82,7 @@ describe('activeItemHref', () => {
 	});
 
 	it('selects parent items from child-only route matches', () => {
-		expect(activeItemHref('/jobs', items)).toBe('/maintenance');
+		expect(activeItemHref('/job-history', items)).toBe('/database-maintenance');
 	});
 
 	it('returns null when no item matches', () => {

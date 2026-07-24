@@ -3,7 +3,7 @@
 	let confirmed = $state(false);
 </script>
 
-<h1 class="page-title">Backup & restore</h1>
+<h1 class="page-title">Backup & Restore</h1>
 <p class="page-subtitle">Download a snapshot of the database or restore from a previous backup.</p>
 
 <section class="card mt-6 p-5 sm:p-6">

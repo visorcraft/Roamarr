@@ -47,7 +47,7 @@ test('runNow action triggers a scheduler tick, logs audit, and redirects', async
 		actions.runNow({ locals: admin, getClientAddress: () => clientAddress } as any)
 	).rejects.toMatchObject({
 		status: 303,
-		location: '/jobs'
+		location: '/job-history'
 	});
 	const after = kit.selectFrom(schedulerRuns).selectCount().executeSync();
 	expect(after).toBeGreaterThan(before);

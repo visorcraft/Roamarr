@@ -347,15 +347,15 @@
 				{ href: '/users', label: 'Users', icon: 'users' },
 				{ href: '/fare-providers', label: 'Fare providers', icon: 'card' },
 				{
-					href: '/maintenance',
+					href: '/database-maintenance',
 					label: 'Maintenance',
 					icon: 'medical',
 					children: [
-						{ href: '/maintenance', label: 'Database Ops' },
-						{ href: '/jobs', label: 'Scheduled Jobs' },
+						{ href: '/database-maintenance', label: 'Database Maintenance' },
+						{ href: '/job-history', label: 'Job History' },
 						{ href: '/audit-logs', label: 'Audit Logs' },
-						{ href: '/backup', label: 'Backup' },
-						{ href: '/seed', label: 'Seed' }
+						{ href: '/backup', label: 'Backup & Restore' },
+						{ href: '/seed', label: 'Seed Demo Data' }
 					]
 				}
 			]

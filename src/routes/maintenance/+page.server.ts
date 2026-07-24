@@ -26,13 +26,27 @@ function jsonSafe(value: unknown): unknown {
 	}
 }
 
-function normalizeCheckReport(report: unknown): { ok: boolean; tableCount: number; report: unknown } {
+/**
+ * MongrelDB `check()` returns `{ ok, tables }` where `tables` lists **tables
+ * with integrity issues** (corrupt/missing run footers), not every table in
+ * the database. A healthy DB therefore looks like `{ ok: true, tables: [] }`.
+ * We surface both the engine schema table count and the issue count so the
+ * Database Ops UI is not misread as "0 tables exist".
+ */
+function normalizeCheckReport(report: unknown): {
+	ok: boolean;
+	tableCount: number;
+	issueTableCount: number;
+	report: unknown;
+} {
+	const tableCount = kit.tableNames().length;
 	if (report && typeof report === 'object' && 'ok' in report) {
 		const ok = (report as { ok: unknown }).ok === true;
 		const tables = (report as { tables?: unknown }).tables;
-		return { ok, tableCount: Array.isArray(tables) ? tables.length : 0, report: jsonSafe(report) };
+		const issueTableCount = Array.isArray(tables) ? tables.length : 0;
+		return { ok, tableCount, issueTableCount, report: jsonSafe(report) };
 	}
-	return { ok: false, tableCount: 0, report: jsonSafe(report) };
+	return { ok: false, tableCount, issueTableCount: 0, report: jsonSafe(report) };
 }
 
 function normalizeDoctorReport(report: unknown): { ok: boolean; quarantinedCount: number; report: unknown } {
@@ -66,7 +80,11 @@ export const actions: Actions = {
 		}
 		try {
 			const result = normalizeCheckReport(kit.check());
-			logAudit(u.id, 'db_check', 'settings', 1, { ok: result.ok, tableCount: result.tableCount });
+			logAudit(u.id, 'db_check', 'settings', 1, {
+				ok: result.ok,
+				tableCount: result.tableCount,
+				issueTableCount: result.issueTableCount
+			});
 			return { action: 'check', success: true, result };
 		} catch (e) {
 			const error = e instanceof Error ? e.message : 'Check failed';

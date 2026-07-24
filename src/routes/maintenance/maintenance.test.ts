@@ -266,6 +266,17 @@ test('rate limit buckets do not bleed between actions', async () => {
 	expect(result.success).toBe(true);
 });
 
+test('check reports total table count, not only issue tables', async () => {
+	const result = (await actions.check(makeEvent('check'))) as any;
+	expect(result.success).toBe(true);
+	expect(result.result.ok).toBe(true);
+	// Engine check().tables is "tables with issues" — empty when healthy.
+	expect(result.result.issueTableCount).toBe(0);
+	// Schema/engine still has the full Roamarr table set.
+	expect(result.result.tableCount).toBeGreaterThan(10);
+	expect(result.result.tableCount).toBe(ctx.kit.tableNames().length);
+});
+
 test('audit log entries are created with correct fields', async () => {
 	const admin = makeAdmin(ctx.kit);
 	const result = (await actions.check(
@@ -279,6 +290,7 @@ test('audit log entries are created with correct fields', async () => {
 	const meta = JSON.parse(log.meta_json as string);
 	expect(meta.ok).toBe(true);
 	expect(meta.tableCount).toBe(result.result.tableCount);
+	expect(meta.issueTableCount).toBe(result.result.issueTableCount);
 });
 
 for (const action of ['gc', 'flush', 'doctor'] as MaintenanceAction[]) {

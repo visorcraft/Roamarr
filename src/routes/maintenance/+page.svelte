@@ -39,7 +39,8 @@
 		{
 			action: 'check',
 			title: 'Check integrity',
-			description: 'Read-only scan of run footer checksums.',
+			description:
+				'Read-only scan of run footer checksums. Result includes total table count plus any tables with integrity issues (healthy DBs report zero issue tables).',
 			badge: 'Safe',
 			badgeClass: 'badge-green',
 			buttonClass: 'btn btn-primary',
@@ -116,6 +117,18 @@
 		<h2 class="section-title">Result</h2>
 		{#if form.success}
 			<p class="notice notice-success mt-2">{form.action} completed successfully.</p>
+			{#if form.action === 'check' && form.result && typeof form.result === 'object'}
+				{@const r = form.result as { ok?: boolean; tableCount?: number; issueTableCount?: number }}
+				<p class="field-help mt-2">
+					{#if r.ok && (r.issueTableCount ?? 0) === 0}
+						Integrity OK — scanned database has {r.tableCount ?? '?'} tables and no integrity issues.
+					{:else if r.ok}
+						Integrity reported OK with {r.issueTableCount} table(s) listed under issues (of {r.tableCount ?? '?'} total).
+					{:else}
+						Integrity check failed — {r.issueTableCount ?? 0} table(s) with issues of {r.tableCount ?? '?'} total.
+					{/if}
+				</p>
+			{/if}
 			<code class="code-chip mt-2 block whitespace-pre-wrap">{JSON.stringify(form.result, null, 2)}</code>
 		{:else}
 			<p class="notice notice-error mt-2">{form.error}</p>

@@ -258,6 +258,33 @@ describe('mcpServer', () => {
 		expect(JSON.parse(segment.detailsJson!)).toEqual({ room: 'Twin', guests: '2', notes: 'Updated note' });
 	});
 
+	test('day plan treats startAt digits as wall clock even when client sends trailing Z', async () => {
+		// Regression: agents often emit ISO-with-Z; Z must not force absolute UTC.
+		const trip = tripsRepo.createTrip(userId, { name: 'Wall clock Z' });
+		const { client } = await connect(userId, ['segments:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_day_plan',
+			arguments: {
+				tripId: trip.id,
+				type: 'flight',
+				title: 'DFW evening depart',
+				startAt: '2026-12-01T22:50:00.000Z',
+				startTz: 'America/Chicago',
+				endAt: '2026-12-03T05:25:00.000Z',
+				endTz: 'Asia/Taipei'
+			}
+		});
+		const segmentId = JSON.parse(created.content[0].text).id;
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		const segment = getSegmentById(segmentId)!;
+		// 22:50 America/Chicago in December (CST, UTC-6) → 04:50 UTC next calendar day
+		expect(segment.startAt).toBe('2026-12-02T04:50:00.000Z');
+		expect(segment.startTz).toBe('America/Chicago');
+		// 05:25 Asia/Taipei (UTC+8) → 21:25 UTC previous calendar day
+		expect(segment.endAt).toBe('2026-12-02T21:25:00.000Z');
+		expect(segment.endTz).toBe('Asia/Taipei');
+	});
+
 	test('segment tools reject invalid timezones', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Bad timezone' });
 		const { client } = await connect(userId, ['segments:write']);

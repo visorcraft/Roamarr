@@ -547,17 +547,33 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_day_plan',
-				description: 'Plan a day: create a segment (event, lodging, transport, etc.) for a specific trip on a given date.',
+				description:
+					'Create a segment on a trip. Times are LOCAL WALL CLOCK in startTz/endTz (not UTC instants). Pass IANA zones for every non-UTC place (e.g. America/Chicago, Asia/Bangkok, Asia/Seoul). Stored value is the UTC instant of that local time; the UI shows the wall clock in the zone.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
 						type: { type: 'string', description: 'Segment type: flight, hotel, event, restaurant, etc.' },
 						title: { type: 'string' },
-						startAt: { type: 'string', description: 'ISO timestamp' },
-						startTz: { type: 'string', description: 'IANA timezone for startAt, default UTC' },
-						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
-						endTz: { type: 'string', description: 'IANA timezone for endAt, defaults to startTz' },
+						startAt: {
+							type: 'string',
+							description:
+								'Local wall-clock start in startTz: YYYY-MM-DDTHH:mm[:ss]. Digits are the clock face at the place (e.g. "2026-12-01T22:50:00" for 10:50 PM Dallas). Do not convert to UTC yourself. A trailing Z or ±offset is ignored; digits are still interpreted in startTz.'
+						},
+						startTz: {
+							type: 'string',
+							description:
+								'IANA timezone for startAt wall clock (default UTC). Use airport/hotel local zone: America/Chicago, Asia/Bangkok, Asia/Taipei, Asia/Seoul, etc.'
+						},
+						endAt: {
+							type: 'string',
+							description:
+								'Local wall-clock end in endTz (same rules as startAt). For flights, use the arrival airport local time with endTz set to that airport zone.'
+						},
+						endTz: {
+							type: 'string',
+							description: 'IANA timezone for endAt wall clock (defaults to startTz).'
+						},
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },
@@ -681,17 +697,31 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// Round 1: trip planning vertical — 17 new tools.
 			{
 				name: 'roamarr_segment_update',
-				description: 'Update an existing segment and its user-facing itinerary details.',
+				description:
+					'Update a segment. When changing times, pass LOCAL WALL CLOCK + IANA zone (same contract as roamarr_day_plan). Do not pre-convert to UTC; trailing Z/offset on startAt/endAt is ignored.',
 				inputSchema: {
 					type: 'object',
 					properties: {
 						segmentId: { type: 'number' },
 						type: { type: 'string', enum: [...SEGMENT_TYPES] },
 						title: { type: 'string' },
-						startAt: { type: 'string', description: 'ISO timestamp' },
-						startTz: { type: 'string', description: 'IANA timezone for startAt' },
-						endAt: { type: 'string', description: 'ISO timestamp (optional)' },
-						endTz: { type: 'string', description: 'IANA timezone for endAt' },
+						startAt: {
+							type: 'string',
+							description:
+								'Local wall-clock start in startTz: YYYY-MM-DDTHH:mm[:ss]. Digits are the clock face at the place. Do not convert to UTC. Trailing Z/offset is ignored.'
+						},
+						startTz: {
+							type: 'string',
+							description: 'IANA timezone for startAt wall clock (e.g. America/Chicago, Asia/Bangkok).'
+						},
+						endAt: {
+							type: 'string',
+							description: 'Local wall-clock end in endTz (same rules as startAt).'
+						},
+						endTz: {
+							type: 'string',
+							description: 'IANA timezone for endAt wall clock.'
+						},
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
 						location: { type: 'string' },

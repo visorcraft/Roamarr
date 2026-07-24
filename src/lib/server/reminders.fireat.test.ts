@@ -32,3 +32,15 @@ test('document expiry uses the configured lead days', () => {
 test('localToUtc converts wall-clock + zone to instant', () => {
 	expect(localToUtc('2026-07-01T15:00:00', 'America/New_York')).toBe('2026-07-01T19:00:00.000Z');
 });
+
+test('localToUtc ignores trailing Z — digits are wall clock in the zone (MCP client trap)', () => {
+	// Agents often emit ISO-with-Z; those digits must still mean local time in startTz.
+	expect(localToUtc('2026-12-01T22:50:00.000Z', 'America/Chicago')).toBe('2026-12-02T04:50:00.000Z');
+	expect(localToUtc('2027-01-31T12:45:00Z', 'Asia/Bangkok')).toBe('2027-01-31T05:45:00.000Z');
+	expect(localToUtc('2026-08-15T14:00:00.000Z', 'Asia/Bangkok')).toBe('2026-08-15T07:00:00.000Z');
+});
+
+test('localToUtc ignores numeric offsets the same way', () => {
+	expect(localToUtc('2026-12-01T22:50:00-06:00', 'America/Chicago')).toBe('2026-12-02T04:50:00.000Z');
+	expect(localToUtc('2026-08-01T15:00:00+07:00', 'Asia/Bangkok')).toBe('2026-08-01T08:00:00.000Z');
+});

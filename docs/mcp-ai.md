@@ -77,13 +77,49 @@ After connection:
    fetching and recomputing every row.
 4. Use resources when the client supports them. `trip://{tripId}` and the
    wallet/profile resources provide repeatable, typed reads.
-5. Give write tools explicit ISO dates, timestamps with offsets, ISO country
-   codes, and ISO currency codes. Expense amounts are integer cents where the
-   tool schema says so.
-6. Read back important writes. For example, list the trip after creating a
+5. Give write tools explicit ISO dates, ISO country codes, and ISO currency
+   codes. Expense amounts are integer cents where the tool schema says so.
+6. **Segment times are local wall clock + IANA zone, not pre-converted UTC.**
+   See [Segment times (critical for agents)](#segment-times-critical-for-agents)
+   below. Always set `startTz` / `endTz` to the place’s zone
+   (`America/Chicago`, `Asia/Bangkok`, `Asia/Seoul`, …).
+7. Read back important writes. For example, list the trip after creating a
    segment and show the proposed result before any destructive follow-up.
-7. Destructive tools require `confirm: true`. Roamarr rejects the call without
+8. Destructive tools require `confirm: true`. Roamarr rejects the call without
    that explicit confirmation even when the token has the write scope.
+
+## Segment times (critical for agents)
+
+`roamarr_day_plan` and `roamarr_segment_update` store each segment as:
+
+| Field | Meaning |
+| --- | --- |
+| `startAt` / `endAt` (stored) | Absolute **UTC** instant |
+| `startTz` / `endTz` | IANA zone used to **display** that instant as local time |
+
+When **writing**, pass the **local clock face** in that zone. Roamarr converts
+to UTC. Do **not** convert to UTC yourself.
+
+| Intent | Pass `startAt` | Pass `startTz` | Stored UTC (example) |
+| --- | --- | --- | --- |
+| 10:50 PM Dec 1 in Dallas | `2026-12-01T22:50:00` | `America/Chicago` | `2026-12-02T04:50:00.000Z` (CST) |
+| 12:45 PM Jan 31 in Bangkok | `2027-01-31T12:45:00` | `Asia/Bangkok` | `2027-01-31T05:45:00.000Z` |
+| Hotel check-in 2:00 PM Bangkok | `2026-08-15T14:00:00` | `Asia/Bangkok` | `2026-08-15T07:00:00.000Z` |
+
+**Common agent mistake:** emitting `2026-12-01T22:50:00.000Z` and expecting
+“22:50 UTC.” Roamarr treats the **digits** as wall clock in `startTz`. A
+trailing `Z` or `±offset` is **ignored** so clients that always append `Z`
+still get the correct local interpretation when `startTz` is set correctly.
+
+**Flights:** use departure-airport local time + zone for `startAt`/`startTz`,
+and arrival-airport local time + zone for `endAt`/`endTz` (they often differ).
+
+**Always set the zone.** Leaving `startTz` as `UTC` while passing local Dallas
+or Bangkok digits makes the UI show the wrong zone label and confuses the next
+agent that reads the trip.
+
+After writing, re-read with `roamarr_trip_get` and check that displayed local
+times match the ticket/voucher before bulk-editing further segments.
 
 Useful requests to give an AI assistant:
 

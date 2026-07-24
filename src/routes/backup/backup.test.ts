@@ -112,6 +112,43 @@ test('backup downloads a tar.gz archive of the database directory and attachment
 	expect(existsSync(join(extractedDb, 'attachments', 'sample.txt'))).toBe(true);
 });
 
+test('backup omits GeoNames city bulk data while keeping the table shell', async () => {
+	const dbDir = makeDbDir();
+	process.env.DATABASE_PATH = dbDir;
+
+	// Plant a fake geonames table dir with bulk payload (as on-disk MongrelDB does).
+	const geoDir = join(dbDir, 'tables', '99');
+	mkdirSync(join(geoDir, '_runs'), { recursive: true });
+	mkdirSync(join(geoDir, '_idx'), { recursive: true });
+	writeFileSync(
+		join(geoDir, 'schema.json'),
+		JSON.stringify({
+			schema_id: 99,
+			columns: [
+				{ id: 1, name: 'geoname_id' },
+				{ id: 2, name: 'name' }
+			]
+		})
+	);
+	writeFileSync(join(geoDir, '_mf'), 'manifest');
+	writeFileSync(join(geoDir, '_runs', 'r-1.sr'), 'x'.repeat(1024));
+	writeFileSync(join(geoDir, '_idx', 'global.idx'), 'y'.repeat(1024));
+
+	const res = await GET({ locals: adminLocals(), getClientAddress: () => '127.0.0.2' } as any);
+	expect(res.status).toBe(200);
+	const archivePath = join(testRoot, 'downloaded-no-geo.tar.gz');
+	writeFileSync(archivePath, Buffer.from(await res.arrayBuffer()));
+
+	const extractDir = join(testRoot, 'extracted-no-geo');
+	await extractArchive(archivePath, extractDir);
+	const extractedDb = join(extractDir, dbDir.split('/').pop()!);
+	const extractedGeo = join(extractedDb, 'tables', '99');
+	expect(existsSync(join(extractedGeo, 'schema.json'))).toBe(true);
+	expect(existsSync(join(extractedGeo, '_mf'))).toBe(true);
+	expect(existsSync(join(extractedGeo, '_runs', 'r-1.sr'))).toBe(false);
+	expect(existsSync(join(extractedGeo, '_idx', 'global.idx'))).toBe(false);
+});
+
 test('restore rejects an invalid archive', async () => {
 	const dbDir = makeDbDir();
 	process.env.DATABASE_PATH = dbDir;

@@ -108,10 +108,16 @@ export const actions: Actions = {
 			});
 		}
 		try {
+			// compactAll merges sorted runs only. Vacuum then runs engine GC, which
+			// reaps obsolete runs and rotated WAL segments once all tables are durable
+			// (no memtable / mutable-run rows). That is what shrinks multi‑MB _wal/
+			// directories after GeoNames imports and long-lived write history.
 			const compactResult = kit.compactAll();
+			await kit.vacuum();
 			const result = {
 				compacted: Number(compactResult.compacted ?? 0),
-				skipped: Number(compactResult.skipped ?? 0)
+				skipped: Number(compactResult.skipped ?? 0),
+				vacuumed: true
 			};
 			logAudit(u.id, 'db_gc', 'settings', 1, result);
 			return { action: 'gc', success: true, result };

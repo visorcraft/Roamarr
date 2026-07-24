@@ -49,7 +49,8 @@
 		{
 			action: 'gc',
 			title: 'Garbage collect',
-			description: 'Compact sorted runs and reclaim obsolete run data.',
+			description:
+				'Compact sorted runs, then vacuum (engine GC). After a successful flush, this can delete rotated WAL segments that only exist for crash recovery — the main reason backups look huge relative to trip data.',
 			badge: 'Operational',
 			badgeClass: 'badge-amber',
 			buttonClass: 'btn btn-primary',
@@ -59,7 +60,8 @@
 		{
 			action: 'flush',
 			title: 'Flush memtables',
-			description: 'Force in-memory writes to durable sorted runs.',
+			description:
+				'Force in-memory writes toward durable storage. Run this before garbage collection if you want old WAL segments to become reclaimable.',
 			badge: 'Operational',
 			badgeClass: 'badge-amber',
 			buttonClass: 'btn btn-primary',

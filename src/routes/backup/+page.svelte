@@ -8,7 +8,14 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Download backup</h2>
-	<p class="mt-1 text-sm text-slate-400">This creates a point-in-time archive of the MongrelDB database directory and attachments.</p>
+	<p class="mt-1 text-sm text-slate-400">
+		Point-in-time archive of the MongrelDB database directory and attachments.
+		The GeoNames city catalog is omitted (re-import under Database settings if needed).
+		Maps under <code>/data/maps</code> are not included. Size is dominated by the
+		engine write-ahead log (WAL), not trip row count — run <strong>Flush</strong> then
+		<strong>Garbage collect</strong> on Database Maintenance to reclaim old WAL segments
+		before downloading if the file is large.
+	</p>
 	<div class="mt-4">
 		<a href="/backup" download class="btn btn-primary">Download backup</a>
 	</div>

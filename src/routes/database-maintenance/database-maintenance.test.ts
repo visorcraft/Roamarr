@@ -153,6 +153,7 @@ test('gc succeeds when confirmed', async () => {
 	expect(result.success).toBe(true);
 	expect(result.result).toHaveProperty('compacted');
 	expect(result.result).toHaveProperty('skipped');
+	expect(result.result.vacuumed).toBe(true);
 });
 
 test('flush succeeds when confirmed', async () => {

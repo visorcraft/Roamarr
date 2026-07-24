@@ -8,6 +8,7 @@ import { requireAdmin } from '$lib/server/auth';
 import { getDatabasePath } from '$lib/server/db/paths';
 import { getAttachmentsPath } from '$lib/server/restore';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { findGeonamesTableIds, shouldExcludeFromBackup } from '$lib/server/backupFilter';
 import tar from 'tar-fs';
 
 const BACKUP_DOWNLOAD_RATE_LIMIT = { maxAttempts: 3, windowMs: 60_000 };
@@ -52,9 +53,14 @@ export const GET: RequestHandler = async ({ locals, getClientAddress }) => {
 		entries.push(attachmentsEntryName);
 	}
 
+	// GeoNames city catalog is re-importable reference data (~30 MB). Keep the
+	// table shell so CATALOG opens; omit run/index payloads from the download.
+	const geonamesTableIds = findGeonamesTableIds(resolvedDbPath);
+
 	try {
 		const pack = tar.pack(parentDir, {
 			entries,
+			ignore: (name) => shouldExcludeFromBackup(name, geonamesTableIds),
 			map: (header) => {
 				// Normalize any out-of-tree attachments directory to "attachments/"
 				// so the archive structure is predictable for restore.

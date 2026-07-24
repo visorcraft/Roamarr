@@ -93,9 +93,41 @@ export function formatTime(
 ): string {
 	if (!iso) return '';
 	try {
-		const dt = DateTime.fromISO(iso, { zone: timeZone });
+		// Stored segment times are UTC instants; convert into the display zone.
+		const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(timeZone);
 		if (!dt.isValid) return '';
 		return dt.toFormat(format);
+	} catch {
+		return '';
+	}
+}
+
+/** Short zone label for itinerary sidebars: "CDT", "GMT+9", etc. */
+export function formatZoneLabel(iso: string | null | undefined, timeZone = 'UTC'): string {
+	if (!iso) return '';
+	try {
+		const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(timeZone);
+		if (!dt.isValid) return '';
+		const short = dt.offsetNameShort;
+		// Prefer familiar abbreviations (CDT, EST); fall back to GMT±N.
+		if (short && !/^UTC$/i.test(short)) return short;
+		return dt.toFormat('ZZZZ');
+	} catch {
+		return '';
+	}
+}
+
+/**
+ * Arrival line for flight cards, e.g. "Arrive 9/7/2026 8:10 AM CDT".
+ * Uses arrival-airport local time + short zone so travelers see local arrival.
+ */
+export function formatArrivalLocal(iso: string | null | undefined, timeZone = 'UTC'): string {
+	if (!iso) return '';
+	try {
+		const dt = DateTime.fromISO(iso, { zone: 'utc' }).setZone(timeZone);
+		if (!dt.isValid) return '';
+		const zone = formatZoneLabel(iso, timeZone);
+		return `Arrive ${dt.toFormat('M/d/yyyy h:mm a')}${zone ? ` ${zone}` : ''}`;
 	} catch {
 		return '';
 	}

@@ -12,7 +12,7 @@
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
 	import { renderMarkdown } from '$lib/markdown';
-	import { formatTime } from '$lib/dateFormat';
+	import { formatArrivalLocal, formatTime, formatZoneLabel } from '$lib/dateFormat';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { formatDestination } from '$lib/tripDestination';
 	import { formatCents } from '$lib/money';
@@ -550,14 +550,27 @@
 			const value = details[key];
 			return typeof value === 'string' && value.trim() ? value.trim() : '';
 		};
-		const flight = [detail('airline'), detail('flightNumber')].filter(Boolean).join(' ');
-		if (flight) items.push({ icon: 'flight', value: flight });
-		if (segment.location && segment.venue && segment.location !== segment.venue) items.push({ icon: 'location', value: segment.location });
-		for (const key of ['terminal', 'gate', 'seat', 'room', 'checkIn']) {
-			const value = detail(key);
-			if (value) items.push({ icon: key === 'seat' ? 'user' : 'document', value });
+		const isFlight = segment.type === 'flight';
+		// Airline (+ confirmation on the same line for flights so flight identity stays together).
+		const airlineLine = [detail('airline'), detail('flightNumber')].filter(Boolean).join(' ');
+		if (airlineLine) {
+			const value =
+				isFlight && segment.confirmationNumber
+					? `${airlineLine} · Confirmation ${segment.confirmationNumber}`
+					: airlineLine;
+			items.push({ icon: 'flight', value });
+		} else if (isFlight && segment.confirmationNumber) {
+			items.push({ icon: 'document', value: `Confirmation ${segment.confirmationNumber}` });
 		}
-		for (const key of ['guests', 'tickets']) {
+		if (segment.location && segment.venue && segment.location !== segment.venue) items.push({ icon: 'location', value: segment.location });
+		for (const key of ['terminal', 'gate', 'seat', 'seats', 'room', 'checkIn']) {
+			const value = detail(key);
+			if (value) {
+				const label = key === 'seats' || key === 'seat' ? `Seat(s) ${value}` : value;
+				items.push({ icon: key === 'seat' || key === 'seats' ? 'user' : 'document', value: label });
+			}
+		}
+		for (const key of ['guests', 'tickets', 'passengers']) {
 			const value = detail(key);
 			if (value) items.push({ icon: 'users', value });
 		}
@@ -565,7 +578,16 @@
 			const value = detail(key);
 			if (value) items.push({ icon: key === 'entry' ? 'location' : 'document', value });
 		}
-		if (segment.confirmationNumber && !detail('reservation')) items.push({ icon: 'document', value: `Confirmation ${segment.confirmationNumber}` });
+		// Non-flight confirmations stay as their own meta line; flights already folded into airline.
+		if (!isFlight && segment.confirmationNumber && !detail('reservation')) {
+			items.push({ icon: 'document', value: `Confirmation ${segment.confirmationNumber}` });
+		}
+		// Flights: show arrival local time where the confirmation line used to be.
+		if (isFlight && segment.endAt) {
+			const endTz = segment.endTz ?? segment.startTz ?? 'UTC';
+			const arrival = formatArrivalLocal(segment.endAt, endTz);
+			if (arrival) items.push({ icon: 'reminder', value: arrival });
+		}
 		if (segment.meetingPoint) items.push({ icon: 'location', value: segment.meetingPoint });
 		if (segment.meetingAt) items.push({ icon: 'reminder', value: `Meet ${formatTime(segment.meetingAt, segment.startTz ?? 'UTC')}` });
 		const card = segment.cardId ? cardMap.get(segment.cardId) : null;
@@ -729,7 +751,18 @@
 											<SegmentEditForm segment={s} tripId={trip.id} errors={form?.errors ?? {}} cards={data.cards ?? []} onCancel={() => (editingId = null)} />
 										{:else}
 											<button type="button" class="trip-modern-segment {segmentTypeClass(s.type)} {selectedSegment?.id != null && selectedSegment.id === s.id ? 'trip-modern-segment-active' : ''} {draggingSegmentId === s.id ? 'trip-modern-segment-dragging' : ''}" onclick={(e) => handleSegmentCardClick(s, e)} onkeydown={(e) => handleSegmentKeydown(s, e)} draggable={isEditor && s.id != null} ondragstart={(e) => s.id != null && startSegmentDrag(s.id, group.key, e)} ondragend={endSegmentDrag}>
-												<div class="trip-modern-time">{#if s.startAt}<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>{:else}<div class="trip-modern-time-main">TBD</div>{/if}{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}</div>
+												<div class="trip-modern-time">
+													{#if s.startAt}
+														<div class="trip-modern-time-main">{formatTime(s.startAt, s.startTz ?? 'UTC')}</div>
+														{#if s.type === 'flight'}
+															{@const zoneLabel = formatZoneLabel(s.startAt, s.startTz ?? 'UTC')}
+															{#if zoneLabel}<div class="trip-modern-time-zone">{zoneLabel}</div>{/if}
+														{/if}
+													{:else}
+														<div class="trip-modern-time-main">TBD</div>
+													{/if}
+													{#if duration}<div class="trip-modern-time-duration">{duration}</div>{/if}
+												</div>
 												<span class="trip-modern-type-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg></span>
 												<div class="trip-modern-segment-body"><div class="trip-modern-segment-head"><h3 class="trip-modern-segment-title">{s.title}</h3>{#if s.status}<span class="trip-modern-segment-status {segmentStatusClass(s.status)}">{segmentStatusLabel(s.status)}</span>{/if}</div><p class="trip-modern-segment-subtitle">{segmentSubtitle(s)}</p>{#if metaItems.length}<div class="trip-modern-segment-meta">{#each metaItems as item, metaIndex}<span class="trip-modern-meta-pill"><Icon name={item.icon} class="h-3.5 w-3.5" /><span>{item.value}</span></span>{#if metaIndex < metaItems.length - 1}<span class="trip-modern-meta-separator">•</span>{/if}{/each}</div>{/if}</div>
 												<div class="trip-modern-segment-side">{#if sideLabel}<span class="trip-modern-segment-status {segmentSideClass(s)}">{sideLabel}</span>{/if}<Icon name="chevron-down" class="trip-modern-chevron h-5 w-5 -rotate-90" /></div>

@@ -339,6 +339,15 @@
 	font-weight: 800;
 }
 
+.trip-modern-time-zone {
+	margin-top: 0.15rem;
+	color: var(--trip-modern-faint);
+	font-family: var(--font-mono);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+}
+
 .trip-modern-time-duration {
 	margin-top: 0.4rem;
 	color: var(--trip-modern-faint);

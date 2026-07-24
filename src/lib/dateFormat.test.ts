@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+	formatArrivalLocal,
 	formatDate,
 	formatDateTime,
-	formatTime
+	formatTime,
+	formatZoneLabel
 } from './dateFormat';
 
 describe('formatDate', () => {
@@ -74,5 +76,34 @@ describe('formatTime', () => {
 
 	it('respects explicit format', () => {
 		expect(formatTime('2024-07-08T12:34:00Z', 'UTC', 'HH:mm')).toBe('12:34');
+	});
+
+	it('converts UTC instants into the given local zone', () => {
+		// 00:30 UTC = 09:30 in Seoul (UTC+9)
+		expect(formatTime('2026-09-07T00:30:00.000Z', 'Asia/Seoul')).toBe('9:30 AM');
+	});
+});
+
+describe('formatZoneLabel', () => {
+	it('returns a short zone label for the instant in zone', () => {
+		const label = formatZoneLabel('2026-09-07T00:30:00.000Z', 'Asia/Seoul');
+		expect(label).toMatch(/GMT\+9|KST|UTC\+9/i);
+	});
+
+	it('returns empty string for missing input', () => {
+		expect(formatZoneLabel(null, 'UTC')).toBe('');
+	});
+});
+
+describe('formatArrivalLocal', () => {
+	it('formats arrival in destination local time with zone', () => {
+		// 13:10 UTC = 8:10 AM CDT (America/Chicago, UTC-5 in September)
+		const line = formatArrivalLocal('2026-09-07T13:10:00.000Z', 'America/Chicago');
+		expect(line).toMatch(/^Arrive 9\/7\/2026 8:10 AM /);
+		expect(line).toMatch(/CDT|GMT-5|UTC-5/i);
+	});
+
+	it('returns empty string for missing input', () => {
+		expect(formatArrivalLocal(null, 'UTC')).toBe('');
 	});
 });

@@ -160,17 +160,29 @@ export function toGroupMember(row: KitGroupMember): GroupMember {
 }
 
 export function getTripById(id: number): Trip | null {
+	// Prefer primary-key lookup, but fall back to a full scan when the PK index
+	// is desynced (observed on live MongrelDB: fullscan finds the row while
+	// kitEq(trips.id, id) returns empty — same class of bug as segments_trip_idx).
 	const rows = kit.selectFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
-	return rows[0] ? toTrip(rows[0]) : null;
+	if (rows[0]) return toTrip(rows[0]);
+	const fallback = kit
+		.selectFrom(trips)
+		.executeSync()
+		.find((row) => Number(row.id) === id);
+	return fallback ? toTrip(fallback) : null;
 }
 
 export function listTripsForUser(userId: number): Trip[] {
+	// Full scan + filter (not RangeInt on trips_owner_idx).
+	// Secondary-index queries have been observed to miss owned trips that still
+	// exist by primary key / fullscan — dashboard and Trips page go empty for
+	// those rows even though getTripById can still load them after a PK hit.
+	// Trip counts per user are small; prefer complete results over an index shortcut.
 	const rows = kit
 		.selectFrom(trips)
-		.where(kitEq(trips.owner_id, kitId(userId)))
 		.orderBy(asc(trips.start_date))
-		
-		.executeSync();
+		.executeSync()
+		.filter((row) => Number(row.owner_id) === userId);
 	return rows.map(toTrip);
 }
 

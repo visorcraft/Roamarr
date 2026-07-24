@@ -96,7 +96,12 @@ export function countryVisitSummaries(userId: number): CountryVisitSummary[] {
 		if (tripId != null) s.trips.add(tripId);
 	}
 
-	const ownedTrips = kit.selectFrom(trips).where(kitEq(trips.owner_id, uid(userId))).executeSync();
+	// Fullscan + filter: owner_id secondary/RangeInt can miss owned trips that
+	// still exist after index desync (same class of bug as trip list / segments).
+	const ownedTrips = kit
+		.selectFrom(trips)
+		.executeSync()
+		.filter((t) => Number(t.owner_id) === userId);
 	const tripMap = new Map<number, Row<typeof trips>>();
 	const tripIds: bigint[] = [];
 	for (const t of ownedTrips) {
@@ -389,7 +394,11 @@ export function autoMarkFromTrip(userId: number, tripId: number): AutoMarkResult
 }
 
 export function autoMarkFromAllTrips(userId: number): AutoMarkResult {
-	const owned = kit.selectFrom(trips).where(kitEq(trips.owner_id, uid(userId))).executeSync();
+	// Fullscan + filter (do not trust owner_id index alone).
+	const owned = kit
+		.selectFrom(trips)
+		.executeSync()
+		.filter((t) => Number(t.owner_id) === userId);
 	const countries = new Set<string>();
 	const states = new Set<string>();
 	for (const t of owned) {

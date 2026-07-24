@@ -69,6 +69,29 @@ test('CRUD trips', () => {
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
 });
 
+test('listTripsForUser and getTripById see every owned trip (fullscan-safe)', () => {
+	const owner = makeUser('owner@x.c');
+	const other = makeUser('other@x.c');
+	const a = makeTrip(owner.id, 'August Bangkok');
+	const b = makeTrip(owner.id, 'December Bangkok');
+	makeTrip(other.id, 'Someone else');
+
+	const listed = tripsRepo.listTripsForUser(owner.id);
+	expect(listed.map((t) => t.id).sort((x, y) => x - y)).toEqual([a.id, b.id].sort((x, y) => x - y));
+	expect(tripsRepo.getTripById(a.id)?.name).toBe('August Bangkok');
+	expect(tripsRepo.getTripById(b.id)?.name).toBe('December Bangkok');
+
+	// Title-only updates must not drop either trip from the owner list
+	// (regression: MongrelDB secondary / RangeInt desync after updates).
+	for (const name of ['August v2', 'August v3', 'August final']) {
+		tripsRepo.updateTrip(a.id, { name });
+	}
+	expect(tripsRepo.listTripsForUser(owner.id).map((t) => t.id).sort((x, y) => x - y)).toEqual(
+		[a.id, b.id].sort((x, y) => x - y)
+	);
+	expect(tripsRepo.getTripById(a.id)?.name).toBe('August final');
+});
+
 test('shares and permission helpers', () => {
 	const owner = makeUser('owner@x.c');
 	const friend = makeUser('friend@x.c');

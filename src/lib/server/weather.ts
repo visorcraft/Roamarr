@@ -290,7 +290,13 @@ interface TripLocationRow {
 }
 
 function loadTripRow(tripId: number): TripLocationRow | null {
-	const row = kit.selectFrom(trips).where(kitEq(trips.id, BigInt(tripId))).executeSync()[0];
+	// Prefer indexed PK lookup; fall back to fullscan when the HOT/PK index is desynced.
+	const row =
+		kit.selectFrom(trips).where(kitEq(trips.id, BigInt(tripId))).executeSync()[0] ??
+		kit
+			.selectFrom(trips)
+			.executeSync()
+			.find((t) => Number(t.id) === tripId);
 	if (!row) return null;
 	return {
 		destinationCityLat: row.destination_city_lat == null ? null : Number(row.destination_city_lat),

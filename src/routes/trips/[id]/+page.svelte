@@ -573,9 +573,9 @@
 				items.push({ icon: key === 'seat' || key === 'seats' ? 'user' : 'document', value: label });
 			}
 		}
-		for (const key of ['guests', 'tickets', 'passengers']) {
-			const value = detail(key);
-			if (value) items.push({ icon: 'users', value });
+		// Prefer tickets over passengers when both list the same people (email imports).
+		for (const value of peopleDetailMetaLines(details)) {
+			items.push({ icon: 'users', value });
 		}
 		for (const key of ['reservation', 'entry']) {
 			const value = detail(key);

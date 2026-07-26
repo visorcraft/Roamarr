@@ -329,18 +329,14 @@ describe('weather', () => {
 		expect(w!.advisory).toBeNull();
 	});
 
-	test('tripWeatherOverview is rate limited per user', async () => {
+	test('tripWeatherOverview soft-fails with null when rate limited', async () => {
 		resetRateLimit();
 		const u = makeUser(ctx.kit);
 		for (let i = 0; i < 30; i++) {
 			checkRateLimit(String(u.id), 'weather:overview', { maxAttempts: 30, windowMs: 60_000 });
 		}
-		await expect(tripWeatherOverview(9999, u.id)).rejects.toEqual(
-			expect.objectContaining({
-				status: 429,
-				body: expect.objectContaining({ message: expect.stringContaining('Rate limited') })
-			})
-		);
+		// Must not throw 429 — trip detail load embeds this and should still render.
+		await expect(tripWeatherOverview(9999, u.id)).resolves.toBeNull();
 	});
 
 	test('purgeExpiredWeatherCache deletes past-dated rows and keeps today/future', () => {

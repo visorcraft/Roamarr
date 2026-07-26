@@ -1,4 +1,3 @@
-import { error } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
 import { eq as kitEq, and as kitAnd, gte as kitGte, lte as kitLte } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
@@ -365,9 +364,9 @@ export async function tripWeatherOverview(
 		maxAttempts: 30,
 		windowMs: 60_000
 	});
-	if (!limit.allowed) {
-		throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
-	}
+	// Weather is optional trip chrome. Exhausting the overview budget must not
+	// 429 the entire trip page (segment save redirects, itinerary load, etc.).
+	if (!limit.allowed) return null;
 
 	// Authorize before touching destination coordinates/dates for an arbitrary id.
 	loadTripFor(userId, tripId);

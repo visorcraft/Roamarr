@@ -13,12 +13,14 @@ vi.stubGlobal('fetch', fetchMock);
 
 import { buildTripDetail } from './tripDetail';
 import { weatherCache } from './db/mongrelSchema';
+import { checkRateLimit, resetRateLimit } from './rateLimit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 
 describe('buildTripDetail', () => {
 	beforeEach(() => {
 		ctx.kit.deleteFrom(weatherCache).executeSync();
 		fetchMock.mockReset();
+		resetRateLimit();
 	});
 
 	test('includes weather in the trip detail payload', async () => {
@@ -51,5 +53,26 @@ describe('buildTripDetail', () => {
 		expect(detail.weather?.days.length).toBeGreaterThanOrEqual(1);
 		expect(detail.weather?.days[0].code).not.toBeNull();
 		expect(detail.weather?.headline).toContain('forecast available');
+	});
+
+	test('still loads trip detail when weather overview is rate limited', async () => {
+		const u = makeUser(ctx.kit);
+		const today = new Date().toISOString().slice(0, 10);
+		const t = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			destinationCityName: 'Paris',
+			startDate: today,
+			status: 'booked'
+		});
+		for (let i = 0; i < 30; i++) {
+			checkRateLimit(String(u.id), 'weather:overview', { maxAttempts: 30, windowMs: 60_000 });
+		}
+
+		const detail = await buildTripDetail(u, t.id, new URL(`http://example.com/trips/${t.id}`));
+
+		expect(detail.trip.id).toBe(t.id);
+		expect(detail.weather).toBeNull();
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

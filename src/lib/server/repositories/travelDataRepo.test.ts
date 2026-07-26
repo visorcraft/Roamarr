@@ -17,6 +17,7 @@ import { makeKitUser } from '../../../../tests/kitHelpers';
 import { createTrip } from './tripsRepo';
 import {
 	geonamesCities,
+	geonamesAdmin1,
 	fareProviders,
 	fareWatches,
 	trips
@@ -25,7 +26,8 @@ import {
 function resetKitTables() {
 	ctx.kit.deleteFrom(fareWatches).executeSync();
 	ctx.kit.deleteFrom(fareProviders).executeSync();
-	ctx.kit.deleteFrom(geonamesCities).executeSync();
+	ctx.kit.truncateTable(geonamesCities.name);
+	ctx.kit.truncateTable(geonamesAdmin1.name);
 	ctx.kit.deleteFrom(trips).executeSync();
 }
 
@@ -85,6 +87,32 @@ test('importCitiesBatch clears existing data and inserts rows', () => {
 		.where(eq(geonamesCities.geoname_id, BigInt(LYON.geonameId)))
 		.executeSync()[0];
 	expect(stored?.name).toBe('Lyon');
+});
+
+test('importAdmin1Batch replaces labels via truncate', () => {
+	repo.importAdmin1Batch([
+		{ countryCode: 'US', admin1Code: 'TX', name: 'Texas', asciiName: 'Texas' },
+		{ countryCode: 'US', admin1Code: 'GA', name: 'Georgia', asciiName: 'Georgia' }
+	]);
+	expect(repo.listAdmin1ForCountry('US').map((r) => r.admin1Code).sort()).toEqual(['GA', 'TX']);
+
+	repo.importAdmin1Batch([
+		{ countryCode: 'US', admin1Code: 'CA', name: 'California', asciiName: 'California' }
+	]);
+	expect(repo.listAdmin1ForCountry('US').map((r) => r.admin1Code)).toEqual(['CA']);
+});
+
+test('ensureAdmin1LabelsFromCities fills missing labels from city admin1 codes', () => {
+	repo.importCitiesBatch([
+		{ ...PARIS, admin1Code: '11' },
+		{ ...LYON, admin1Code: '84' }
+	]);
+	const added = repo.ensureAdmin1LabelsFromCities();
+	expect(added).toBe(2);
+	const labels = repo.listAdmin1ForCountry('FR');
+	expect(labels.map((r) => r.admin1Code).sort()).toEqual(['11', '84']);
+	// Code-as-name fallback when official labels were not imported.
+	expect(labels.find((r) => r.admin1Code === '11')?.name).toBe('11');
 });
 
 test('searchCities filters by country and query', () => {

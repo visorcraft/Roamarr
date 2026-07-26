@@ -72,8 +72,18 @@ function toKitGeonamesCityInput(row: GeonamesCityRow): Insert<typeof geonamesCit
 	};
 }
 
+/**
+ * MongrelDB Kit full-table reads page with `queryPage(limit, offset)`. The
+ * native engine rejects `offset > 100000`, so unrestricted `deleteFrom` /
+ * `selectFrom` on cities1000 (~170k rows) fails with
+ * `InvalidArgument("query offset exceeds 100000")`. Prefer `truncateTable`
+ * for full clears.
+ */
+const KIT_FULL_SCAN_OFFSET_CAP = 100_000;
+
 export function importCitiesBatch(cities: GeonamesCityRow[]): number {
-	kit.deleteFrom(geonamesCities).executeSync();
+	// truncateTable is O(table) and does not page with offset (unlike deleteFrom).
+	kit.truncateTable(geonamesCities.name);
 	if (cities.length === 0) return 0;
 	// One transaction for the whole batch — far faster than a row-at-a-time loop.
 	kit
@@ -84,7 +94,7 @@ export function importCitiesBatch(cities: GeonamesCityRow[]): number {
 }
 
 export function importAdmin1Batch(rows: GeonamesAdmin1Row[]): number {
-	kit.deleteFrom(geonamesAdmin1).executeSync();
+	kit.truncateTable(geonamesAdmin1.name);
 	if (rows.length === 0) return 0;
 	kit
 		.insertInto(geonamesAdmin1)
@@ -105,6 +115,12 @@ export function importAdmin1Batch(rows: GeonamesAdmin1Row[]): number {
 
 /** Ensure label rows exist for every admin1 present on cities (code-as-name fallback). */
 export function ensureAdmin1LabelsFromCities(): number {
+	const cityCount = Number(kit.selectFrom(geonamesCities).selectCount().executeSync());
+	// Full select of cities1000 hits the queryPage offset cap. Prefer the
+	// official admin1CodesASCII.txt import (importAdmin1Batch) for large DBs.
+	if (cityCount >= KIT_FULL_SCAN_OFFSET_CAP) {
+		return 0;
+	}
 	const cities = kit.selectFrom(geonamesCities).executeSync();
 	const existing = new Set(
 		kit

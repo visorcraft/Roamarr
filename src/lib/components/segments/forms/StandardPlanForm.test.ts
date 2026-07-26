@@ -25,6 +25,21 @@ test('StandardPlanForm shows field errors', () => {
 	expect(body).toContain('Where?');
 });
 
+test('StandardPlanForm seeds city name and coordinates into the autocomplete', () => {
+	const { body } = render(StandardPlanForm, {
+		props: {
+			countryCode: 'TH',
+			cityName: 'Bangkok',
+			cityLat: 13.75,
+			cityLng: 100.5
+		}
+	});
+	expect(body).toContain('value="Bangkok"');
+	expect(body).toContain('value="13.75"');
+	expect(body).toContain('value="100.5"');
+	expect(body).toMatch(/<option[^>]*value="TH"[^>]*selected/);
+});
+
 test('delegate forms add their extra fields on top of StandardPlanForm', () => {
 	const hotel = render(HotelForm, { props: {} }).body;
 	expect(hotel).toContain('name="detail_phone"');

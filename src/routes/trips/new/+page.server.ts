@@ -2,7 +2,7 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { createTrip } from '../shared';
 import { listTripTemplates, createTripFromTemplate } from '$lib/server/tripTemplates';
-import { citySelectionError } from '$lib/server/cities';
+import { resolveCitySelection } from '$lib/server/cities';
 import { Validator } from '$lib/server/validation';
 import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = ({ locals }) => {
@@ -23,7 +23,12 @@ function parseDestinationCity(v: Validator, f: FormData) {
 	if (destinationCountryCodeRaw && !destinationCountryCode) {
 		v.addError('destinationCountryCode', 'Destination country must be a 2-letter code');
 	}
-	const destinationCityName = v.optionalString(
+	const destinationAdmin1CodeRaw = v.optionalString(
+		f.get('destinationAdmin1Code'),
+		'destinationAdmin1Code',
+		{ max: 20 }
+	);
+	const destinationCityNameRaw = v.optionalString(
 		f.get('destinationCityName'),
 		'destinationCityName',
 		{ max: 200 }
@@ -35,19 +40,37 @@ function parseDestinationCity(v: Validator, f: FormData) {
 		? v.longitude(f.get('destinationCityLng'), 'destinationCityLng')
 		: undefined;
 
-	if (destinationCountryCode && destinationCityName) {
-		const error = citySelectionError(
+	if (destinationCountryCode && destinationCityNameRaw) {
+		const resolved = resolveCitySelection(
 			destinationCountryCode,
-			destinationCityName,
+			destinationCityNameRaw,
 			destinationCityLat,
-			destinationCityLng
+			destinationCityLng,
+			destinationAdmin1CodeRaw
 		);
-		if (error) v.addError('destinationCityName', error);
+		if (!resolved.ok) {
+			v.addError('destinationCityName', resolved.error);
+			return {
+				destinationCountryCode,
+				destinationAdmin1Code: destinationAdmin1CodeRaw ?? null,
+				destinationCityName: destinationCityNameRaw,
+				destinationCityLat,
+				destinationCityLng
+			};
+		}
+		return {
+			destinationCountryCode,
+			destinationAdmin1Code: resolved.city.admin1Code,
+			destinationCityName: resolved.city.name,
+			destinationCityLat: resolved.city.lat ?? undefined,
+			destinationCityLng: resolved.city.lng ?? undefined
+		};
 	}
 
 	return {
 		destinationCountryCode,
-		destinationCityName,
+		destinationAdmin1Code: destinationCountryCode ? (destinationAdmin1CodeRaw ?? null) : null,
+		destinationCityName: destinationCityNameRaw,
 		destinationCityLat,
 		destinationCityLng
 	};

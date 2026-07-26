@@ -111,6 +111,35 @@ test('findCityByCountryAndName returns the matching city', () => {
 	expect(city?.geonameId).toBe(PARIS.geonameId);
 });
 
+test('findCityByCountryAndName prefers highest population among identical names', () => {
+	// Insert smaller "Dallas" first so a naive .find() would pick it.
+	const dallasGa: repo.GeonamesCityRow = {
+		geonameId: 4190645,
+		name: 'Dallas',
+		asciiName: 'Dallas',
+		countryCode: 'US',
+		lat: 33.9237,
+		lng: -84.8408,
+		population: 14000,
+		timezone: 'America/New_York'
+	};
+	const dallasTx: repo.GeonamesCityRow = {
+		geonameId: 4684888,
+		name: 'Dallas',
+		asciiName: 'Dallas',
+		countryCode: 'US',
+		lat: 32.7767,
+		lng: -96.797,
+		population: 1300000,
+		timezone: 'America/Chicago'
+	};
+	repo.importCitiesBatch([dallasGa, dallasTx]);
+	const city = repo.findCityByCountryAndName('US', 'dallas');
+	expect(city?.geonameId).toBe(dallasTx.geonameId);
+	expect(city?.lat).toBe(32.7767);
+	expect(city?.population).toBe(1300000);
+});
+
 test('listCitiesByCountry orders by population descending', () => {
 	repo.importCitiesBatch([PARIS, LYON]);
 	const cities = repo.listCitiesByCountry('FR');

@@ -23,3 +23,12 @@ test('EventForm shows errors on title and venue', () => {
 	expect(body).toContain('Name it.');
 	expect(body).toContain('Where?');
 });
+
+test('EventForm seeds city coordinates from props', () => {
+	const { body } = render(EventForm, {
+		props: { countryCode: 'TH', cityName: 'Bangkok', cityLat: 13.75, cityLng: 100.5 }
+	});
+	expect(body).toContain('value="Bangkok"');
+	expect(body).toContain('value="13.75"');
+	expect(body).toContain('value="100.5"');
+});

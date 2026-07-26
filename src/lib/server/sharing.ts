@@ -21,6 +21,7 @@ type Segment = {
 	location: string | null;
 	cityName: string | null;
 	countryCode: string | null;
+	admin1Code?: string | null;
 	venue: string | null;
 	meetingPoint: string | null;
 	meetingAt: string | null;
@@ -76,6 +77,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 		id: trip.id,
 		name: trip.name,
 		destinationCountryCode: trip.destinationCountryCode,
+		destinationAdmin1Code: trip.destinationAdmin1Code,
 		destinationCityName: trip.destinationCityName,
 		destinationCityLat: trip.destinationCityLat,
 		destinationCityLng: trip.destinationCityLng,
@@ -97,6 +99,7 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 			location: s.location,
 			cityName: s.cityName,
 			countryCode: s.countryCode,
+			admin1Code: s.admin1Code ?? null,
 			venue: s.venue,
 			meetingPoint: s.meetingPoint,
 			meetingAt: s.meetingAt,

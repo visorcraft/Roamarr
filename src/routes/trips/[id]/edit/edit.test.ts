@@ -147,6 +147,52 @@ test('edit action accepts a free-text city when maps are disabled', async () => 
 	expect(updated.destination_city_lng).toBeNull();
 });
 
+test('edit action auto-resolves city coordinates from GeoNames when maps are enabled', async () => {
+	updateSettings({ mapsEnabled: true });
+	const { geonamesCities } = await import('$lib/server/db/mongrelSchema');
+	const { importCitiesBatch } = await import('$lib/server/repositories/travelDataRepo');
+	kit.deleteFrom(geonamesCities).executeSync();
+	importCitiesBatch([
+		{
+			geonameId: 1609350,
+			name: 'Bangkok',
+			asciiName: 'Bangkok',
+			countryCode: 'TH',
+			lat: 13.75,
+			lng: 100.5,
+			population: 5000000,
+			timezone: 'Asia/Bangkok'
+		}
+	]);
+
+	const a = makeUser(kit, { email: 'edit-city-resolve@x.c', passwordHash: 'x', displayName: 'A' });
+	const t = createTrip(a.id, {
+		name: 'Bangkok trip',
+		destinationCountryCode: 'TH',
+		destinationCityName: 'Bangkok',
+		notes: 'old notes'
+	});
+	// Typed exact name, no lat/lng — should resolve and persist notes
+	const form = makeFormData({
+		name: 'Bangkok, Thailand, August 2026',
+		destinationCountryCode: 'TH',
+		destinationCityName: 'bangkok',
+		notes: 'Fun!',
+		status: 'booked',
+		baseCurrency: 'USD'
+	});
+
+	await expect(actions.save(makeEvent(form, { id: String(t.id) }, a.id))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	const updated = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!;
+	expect(updated.destination_city_name).toBe('Bangkok');
+	expect(updated.destination_city_lat).toBe(13.75);
+	expect(updated.destination_city_lng).toBe(100.5);
+	expect(updated.notes).toBe('Fun!');
+});
+
 test('edit action allows shared editors but not read-only viewers', async () => {
 	const owner = makeUser(kit, { email: 'edit-owner3@x.c', passwordHash: 'x', displayName: 'A' });
 	const editor = makeUser(kit, { email: 'edit-editor@x.c', passwordHash: 'x', displayName: 'E' });

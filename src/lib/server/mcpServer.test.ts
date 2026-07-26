@@ -197,6 +197,206 @@ describe('mcpServer', () => {
 		});
 	});
 
+	test('trip_update metadata-only does not wipe destination coords when city DB is empty', async () => {
+		// Pre-seeded trip with coords; empty geonames table so findCity cannot re-resolve.
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Keep coords',
+			destinationCountryCode: 'US',
+			destinationAdmin1Code: 'TX',
+			destinationCityName: 'Dallas',
+			destinationCityLat: 32.78,
+			destinationCityLng: -96.8
+		});
+		const { client } = await connect(userId, ['trips:write']);
+		await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, name: 'Renamed only', notes: 'no destination fields' }
+		});
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({
+			name: 'Renamed only',
+			destinationCountryCode: 'US',
+			destinationAdmin1Code: 'TX',
+			destinationCityName: 'Dallas',
+			destinationCityLat: 32.78,
+			destinationCityLng: -96.8
+		});
+	});
+
+	test('trip_update with unknown city name under admin1 does not null out stored coords', async () => {
+		travelDataRepo.importCitiesBatch([
+			{
+				geonameId: 2,
+				name: 'Dallas',
+				asciiName: 'Dallas',
+				countryCode: 'US',
+				admin1Code: 'TX',
+				lat: 32.78,
+				lng: -96.8,
+				population: 1300000,
+				timezone: 'America/Chicago'
+			}
+		]);
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Existing',
+			destinationCountryCode: 'US',
+			destinationAdmin1Code: 'TX',
+			destinationCityName: 'Dallas',
+			destinationCityLat: 32.78,
+			destinationCityLng: -96.8
+		});
+		const { client } = await connect(userId, ['trips:write']);
+		// Name that does not match under admin1 — must not wipe prior lat/lng
+		await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: {
+				tripId: trip.id,
+				destinationCountryCode: 'US',
+				destinationAdmin1Code: 'TX',
+				destinationCityName: 'NotARealCityXYZ'
+			}
+		});
+		const row = tripsRepo.getTripById(trip.id)!;
+		expect(row.destinationCityName).toBe('NotARealCityXYZ');
+		expect(row.destinationCityLat).toBe(32.78);
+		expect(row.destinationCityLng).toBe(-96.8);
+	});
+
+	test('trip and segment MCP tools accept admin1 and resolve within subdivision', async () => {
+		travelDataRepo.importAdmin1Batch([
+			{ countryCode: 'US', admin1Code: 'TX', name: 'Texas', asciiName: 'Texas' },
+			{ countryCode: 'US', admin1Code: 'GA', name: 'Georgia', asciiName: 'Georgia' }
+		]);
+		travelDataRepo.importCitiesBatch([
+			{
+				geonameId: 1,
+				name: 'Dallas',
+				asciiName: 'Dallas',
+				countryCode: 'US',
+				admin1Code: 'GA',
+				lat: 33.92,
+				lng: -84.84,
+				population: 14000,
+				timezone: 'America/New_York'
+			},
+			{
+				geonameId: 2,
+				name: 'Dallas',
+				asciiName: 'Dallas',
+				countryCode: 'US',
+				admin1Code: 'TX',
+				lat: 32.78,
+				lng: -96.8,
+				population: 1300000,
+				timezone: 'America/Chicago'
+			}
+		]);
+		const { client } = await connect(userId, ['trips:write', 'trips:read', 'segments:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_trip_create',
+			arguments: {
+				name: 'Texas',
+				destinationCountryCode: 'US',
+				destinationAdmin1Code: 'TX',
+				destinationCityName: 'dallas'
+			}
+		});
+		const tripId = JSON.parse(created.content[0].text).id;
+		expect(tripsRepo.getTripById(tripId)).toMatchObject({
+			destinationAdmin1Code: 'TX',
+			destinationCityName: 'Dallas',
+			destinationCityLat: 32.78,
+			destinationCityLng: -96.8
+		});
+
+		const planned: any = await client.callTool({
+			name: 'roamarr_day_plan',
+			arguments: {
+				tripId,
+				type: 'hotel',
+				title: 'Stay',
+				startAt: '2026-08-01T15:00:00',
+				startTz: 'America/Chicago',
+				countryCode: 'US',
+				admin1Code: 'GA',
+				cityName: 'Dallas'
+			}
+		});
+		const segId = JSON.parse(planned.content[0].text).id;
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		expect(getSegmentById(segId)).toMatchObject({
+			admin1Code: 'GA',
+			cityName: 'Dallas',
+			cityLat: 33.92,
+			cityLng: -84.84
+		});
+
+		// Read path: trip_get must return subdivision on trip + segments (criterion 4).
+		const gotAfterPlan: any = await client.callTool({
+			name: 'roamarr_trip_get',
+			arguments: { tripId }
+		});
+		const bodyAfterPlan = JSON.parse(gotAfterPlan.content[0].text);
+		expect(bodyAfterPlan.trip).toMatchObject({
+			destinationAdmin1Code: 'TX',
+			destinationCityName: 'Dallas'
+		});
+		expect(bodyAfterPlan.trip.segments).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: segId,
+					admin1Code: 'GA',
+					cityName: 'Dallas',
+					countryCode: 'US'
+				})
+			])
+		);
+
+		const listed: any = await client.callTool({
+			name: 'roamarr_trip_list',
+			arguments: {}
+		});
+		const listBody = JSON.parse(listed.content[0].text);
+		expect(listBody.items).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: tripId,
+					destinationAdmin1Code: 'TX',
+					destinationCityName: 'Dallas'
+				})
+			])
+		);
+
+		await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: {
+				segmentId: segId,
+				countryCode: 'US',
+				admin1Code: 'TX',
+				cityName: 'Dallas'
+			}
+		});
+		expect(getSegmentById(segId)).toMatchObject({
+			admin1Code: 'TX',
+			cityLat: 32.78,
+			cityLng: -96.8
+		});
+
+		const gotAfterUpdate: any = await client.callTool({
+			name: 'roamarr_trip_get',
+			arguments: { tripId }
+		});
+		const bodyAfterUpdate = JSON.parse(gotAfterUpdate.content[0].text);
+		expect(bodyAfterUpdate.trip.segments).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: segId,
+					admin1Code: 'TX',
+					cityName: 'Dallas'
+				})
+			])
+		);
+	});
+
 	test('trip_get includes itinerary segments for the owner', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Itinerary', notes: 'Owner notes' });
 		const { createSegment } = await import('./repositories/segmentsRepo');

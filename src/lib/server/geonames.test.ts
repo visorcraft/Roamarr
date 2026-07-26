@@ -8,19 +8,21 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { parseCities1000Line, bulkInsertCities } from './geonames';
+import { parseCities1000Line, parseAdmin1Line, bulkInsertCities } from './geonames';
 import { geonamesCities } from './db/mongrelSchema';
 
+// GeoNames fields: id,name,ascii,alt,lat,lng,fclass,fcode,cc,cc2,admin1,admin2,...
 const SAMPLE_LINE =
-	'2988507\tParis\tParis\t\t48.8534\t2.3488\tP\tPPLC\tFR\t\t\t11\t\t\t2161000\t\t\tEurope/Paris\t2024-01-01';
+	'2988507\tParis\tParis\t\t48.8534\t2.3488\tP\tPPLC\tFR\t\t11\t75\t\t\t2161000\t\t\tEurope/Paris\t2024-01-01';
 
-test('parseCities1000Line extracts required fields', () => {
+test('parseCities1000Line extracts required fields including admin1', () => {
 	const row = parseCities1000Line(SAMPLE_LINE);
 	expect(row).not.toBeNull();
 	expect(row!.geonameId).toBe(2988507);
 	expect(row!.name).toBe('Paris');
 	expect(row!.asciiName).toBe('Paris');
 	expect(row!.countryCode).toBe('FR');
+	expect(row!.admin1Code).toBe('11');
 	expect(row!.lat).toBe(48.8534);
 	expect(row!.lng).toBe(2.3488);
 	expect(row!.population).toBe(2161000);
@@ -31,6 +33,18 @@ test('parseCities1000Line returns null for malformed lines', () => {
 	expect(parseCities1000Line('')).toBeNull();
 	expect(parseCities1000Line('# comment')).toBeNull();
 	expect(parseCities1000Line('1\tOnlyName')).toBeNull();
+});
+
+test('parseAdmin1Line extracts country.admin1 labels', () => {
+	const row = parseAdmin1Line('US.TX\tTexas\tTexas\t4736286');
+	expect(row).toEqual({
+		countryCode: 'US',
+		admin1Code: 'TX',
+		name: 'Texas',
+		asciiName: 'Texas'
+	});
+	expect(parseAdmin1Line('# comment')).toBeNull();
+	expect(parseAdmin1Line('badline')).toBeNull();
 });
 
 test('parseCities1000Line rejects invalid numbers', () => {

@@ -7,31 +7,53 @@
 
 	let {
 		countryCode,
+		admin1Code = '',
 		name,
 		value,
+		lat = null as number | null,
+		lng = null as number | null,
 		latName,
 		lngName,
 		errors = {},
 		disabled = false
 	}: {
 		countryCode: string | undefined;
+		/** Optional state/province/territory (GeoNames admin1) to scope suggestions. */
+		admin1Code?: string;
 		name: string;
 		value: string;
+		/** Seeded from an existing trip/segment so Save works without re-picking. */
+		lat?: number | null;
+		lng?: number | null;
 		latName: string;
 		lngName: string;
 		errors?: Record<string, string>;
 		disabled?: boolean;
 	} = $props();
 
-	let inputValue = $state('');
+	// Local overrides after the user types or picks a suggestion. undefined = use props
+	// (correct for SSR and for re-opening an edit form with stored coords).
+	let overrideName = $state<string | undefined>(undefined);
+	let overrideLat = $state<string | undefined>(undefined);
+	let overrideLng = $state<string | undefined>(undefined);
+
+	const inputValue = $derived(overrideName ?? value);
+	const latValue = $derived(overrideLat ?? (lat != null ? String(lat) : ''));
+	const lngValue = $derived(overrideLng ?? (lng != null ? String(lng) : ''));
+
+	// Parent data changed (navigation / reload) — drop local edits.
 	$effect(() => {
-		inputValue = value;
+		value;
+		lat;
+		lng;
+		overrideName = undefined;
+		overrideLat = undefined;
+		overrideLng = undefined;
 	});
+
 	let suggestions: CitySuggestion[] = $state([]);
 	let open = $state(false);
 	let activeIndex = $state(-1);
-	let latValue = $state('');
-	let lngValue = $state('');
 	let timer: ReturnType<typeof setTimeout> | null = null;
 
 	const listboxId = $derived(`${name}-listbox`);
@@ -45,9 +67,9 @@
 	});
 
 	function selectCity(city: CitySuggestion) {
-		inputValue = city.name;
-		latValue = String(city.lat);
-		lngValue = String(city.lng);
+		overrideName = city.name;
+		overrideLat = String(city.lat);
+		overrideLng = String(city.lng);
 		suggestions = [];
 		open = false;
 		activeIndex = -1;
@@ -61,7 +83,12 @@
 			return;
 		}
 		try {
-			const res = await fetch(`/api/cities?country=${encodeURIComponent(countryCode)}&q=${encodeURIComponent(query)}`);
+			const params = new URLSearchParams({
+				country: countryCode,
+				q: query
+			});
+			if (admin1Code?.trim()) params.set('admin1', admin1Code.trim());
+			const res = await fetch(`/api/cities?${params}`);
 			if (!res.ok) return;
 			const data = await res.json();
 			suggestions = (data.cities ?? []) as CitySuggestion[];
@@ -72,12 +99,13 @@
 		}
 	}
 
-	function onInput(value: string) {
-		inputValue = value;
-		latValue = '';
-		lngValue = '';
+	function onInput(next: string) {
+		overrideName = next;
+		// Typing invalidates a prior picker selection; backend can re-resolve exact matches.
+		overrideLat = '';
+		overrideLng = '';
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => fetchSuggestions(value), 150);
+		timer = setTimeout(() => fetchSuggestions(next), 150);
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -160,8 +188,8 @@
 		onkeydown={onKeydown}
 		onblur={onBlur}
 	/>
-	<input type="hidden" name={latName} value={latValue} />
-	<input type="hidden" name={lngName} value={lngValue} />
+	<input type="hidden" id={latName} name={latName} value={latValue} />
+	<input type="hidden" id={lngName} name={lngName} value={lngValue} />
 	{#if errors[name]}<p class="field-error" id={`${name}-error`}>{errors[name]}</p>{/if}
 	{#if open}
 		<ul

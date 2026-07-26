@@ -484,6 +484,7 @@ export const geonamesCities = table('geonames_cities', {
 		text('name'),
 		text('ascii_name'),
 		text('country_code'),
+		text('admin1_code', { nullable: true }),
 		real('lat'),
 		real('lng'),
 		int('population', { nullable: true }),
@@ -492,8 +493,21 @@ export const geonamesCities = table('geonames_cities', {
 	primaryKey: 'geoname_id',
 	indexes: [
 		index(['country_code', 'name'], { name: 'geonames_country_name_idx' }),
-		index(['country_code', 'ascii_name'], { name: 'geonames_country_ascii_idx' })
+		index(['country_code', 'ascii_name'], { name: 'geonames_country_ascii_idx' }),
+		index(['country_code', 'admin1_code'], { name: 'geonames_country_admin1_idx' })
 	]
+});
+
+/** Human labels for GeoNames admin1 codes (US.TX → Texas). */
+export const geonamesAdmin1 = table('geonames_admin1', {
+	columns: [
+		text('country_code'),
+		text('admin1_code'),
+		text('name'),
+		text('ascii_name', { nullable: true })
+	],
+	primaryKey: ['country_code', 'admin1_code'],
+	indexes: [index(['country_code'], { name: 'geonames_admin1_country_idx' })]
 });
 
 export const trips = table('trips', {
@@ -503,6 +517,7 @@ export const trips = table('trips', {
 		text('name'),
 		text('destination', { nullable: true }),
 		text('destination_country_code', { nullable: true }),
+		text('destination_admin1_code', { nullable: true }),
 		text('destination_city_name', { nullable: true }),
 		real('destination_city_lat', { nullable: true }),
 		real('destination_city_lng', { nullable: true }),
@@ -567,6 +582,7 @@ export const segments = table('segments', {
 		text('status', { enumValues: [...SEGMENT_STATUSES], default: staticDefault('planned') }),
 		text('location', { nullable: true }),
 		text('country_code', { nullable: true }),
+		text('admin1_code', { nullable: true }),
 		text('city_name', { nullable: true }),
 		real('city_lat', { nullable: true }),
 		real('city_lng', { nullable: true }),
@@ -1432,6 +1448,7 @@ export const schema = new Schema([
 	settings,
 	searchDocuments,
 	geonamesCities,
+	geonamesAdmin1,
 	trips,
 	tripComments,
 	segments,

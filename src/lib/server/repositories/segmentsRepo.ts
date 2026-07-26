@@ -51,6 +51,7 @@ export function toSegmentRow(row: KitSegment) {
 		status: row.status as SegmentStatus,
 		location: row.location,
 		countryCode: row.country_code,
+		admin1Code: row.admin1_code ?? null,
 		cityName: row.city_name,
 		cityLat: row.city_lat,
 		cityLng: row.city_lng,

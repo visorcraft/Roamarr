@@ -5,7 +5,7 @@ import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { deleteSegment, deleteSegments, updateSegment } from '$lib/server/segments';
 import { SEGMENT_PAYMENT_STATUSES } from '$lib/server/db/mongrelSchema';
-import { citySelectionError } from '$lib/server/cities';
+import { resolveCitySelection } from '$lib/server/cities';
 
 export const load: PageServerLoad = ({ params }) => {
 	throw redirect(308, `/trips/${params.id}`);
@@ -56,14 +56,32 @@ export const actions: Actions = {
 			f.get('countryCode') && String(f.get('countryCode')).trim()
 				? v.countryCode(f.get('countryCode'), 'countryCode')
 				: undefined;
-		const cityName = v.optionalString(f.get('cityName'), 'cityName', { max: 200 });
-		const cityLat = f.get('cityLat') ? v.latitude(f.get('cityLat'), 'cityLat') : undefined;
-		const cityLng = f.get('cityLng') ? v.longitude(f.get('cityLng'), 'cityLng') : undefined;
+		const admin1CodeRaw = v.optionalString(f.get('admin1Code'), 'admin1Code', { max: 20 });
+		const cityNameRaw = v.optionalString(f.get('cityName'), 'cityName', { max: 200 });
+		const cityLatRaw = f.get('cityLat') ? v.latitude(f.get('cityLat'), 'cityLat') : undefined;
+		const cityLngRaw = f.get('cityLng') ? v.longitude(f.get('cityLng'), 'cityLng') : undefined;
 		const venue = v.optionalString(f.get('venue'), 'venue', { max: 200 });
 
-		if (countryCode && cityName) {
-			const error = citySelectionError(countryCode, cityName, cityLat, cityLng);
-			if (error) v.addError('cityName', error);
+		let cityName = cityNameRaw;
+		let cityLat = cityLatRaw;
+		let cityLng = cityLngRaw;
+		let admin1Code = admin1CodeRaw ?? null;
+		if (countryCode && cityNameRaw) {
+			const resolved = resolveCitySelection(
+				countryCode,
+				cityNameRaw,
+				cityLatRaw,
+				cityLngRaw,
+				admin1CodeRaw
+			);
+			if (!resolved.ok) {
+				v.addError('cityName', resolved.error);
+			} else {
+				cityName = resolved.city.name;
+				cityLat = resolved.city.lat ?? undefined;
+				cityLng = resolved.city.lng ?? undefined;
+				admin1Code = resolved.city.admin1Code;
+			}
 		}
 
 		const confirmationNumber = v.optionalString(
@@ -95,6 +113,7 @@ export const actions: Actions = {
 			endTz: endTz ?? undefined,
 			location,
 			countryCode,
+			admin1Code: admin1Code ?? undefined,
 			cityName,
 			cityLat,
 			cityLng,

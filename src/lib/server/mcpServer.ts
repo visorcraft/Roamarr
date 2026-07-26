@@ -20,7 +20,7 @@ import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
-import { findCity } from './cities';
+import { findCity, resolveCitySelection } from './cities';
 import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, type CompanionCategory } from './db/mongrelSchema';
 import {
 	projectCard,
@@ -99,15 +99,67 @@ function destinationCityPatch(
 ) {
 	const destinationCityName = args.destinationCityName as string | undefined;
 	const destinationCountryCode = args.destinationCountryCode as string | undefined;
-	const name = destinationCityName ?? current?.destinationCityName;
-	const countryCode = destinationCountryCode ?? current?.destinationCountryCode;
-	const city = name && countryCode ? findCity(countryCode, name) : null;
-	return {
-		destinationCountryCode,
-		destinationCityName: city?.name ?? destinationCityName,
-		destinationCityLat: (args.destinationCityLat as number | undefined) ?? city?.lat,
-		destinationCityLng: (args.destinationCityLng as number | undefined) ?? city?.lng
-	};
+	const destinationAdmin1Code =
+		(args.destinationAdmin1Code as string | undefined) ??
+		(args.admin1Code as string | undefined);
+	const latArg = args.destinationCityLat as number | undefined;
+	const lngArg = args.destinationCityLng as number | undefined;
+
+	// Metadata-only updates (name/notes/status/…) must not touch destination
+	// fields — otherwise a missed findCity would write null lat/lng and wipe
+	// stored coordinates (updateTrip treats null as an intentional clear).
+	const touchingDestination =
+		destinationCityName !== undefined ||
+		destinationCountryCode !== undefined ||
+		destinationAdmin1Code !== undefined ||
+		latArg !== undefined ||
+		lngArg !== undefined;
+	if (!touchingDestination) return {};
+
+	const name = destinationCityName ?? current?.destinationCityName ?? null;
+	const countryCode = destinationCountryCode ?? current?.destinationCountryCode ?? null;
+	const admin1 =
+		destinationAdmin1Code !== undefined
+			? destinationAdmin1Code
+			: (current?.destinationAdmin1Code ?? null);
+	const hasCoords = latArg != null && lngArg != null;
+	// Prefer explicit coords; otherwise look up highest-pop exact name in
+	// country (+ admin1 when set). findCity works even when maps UI is off
+	// as long as the city table has rows (MCP/import enrichment path).
+	const city = name && countryCode ? findCity(countryCode, name, admin1) : null;
+
+	// Only include keys that should be written. Omitting lat/lng on a miss
+	// leaves updateTrip as a no-op for those columns (undefined ≠ null wipe).
+	const patch: {
+		destinationCountryCode?: string | null;
+		destinationAdmin1Code?: string | null;
+		destinationCityName?: string | null;
+		destinationCityLat?: number | null;
+		destinationCityLng?: number | null;
+	} = {};
+
+	if (destinationCountryCode !== undefined) {
+		patch.destinationCountryCode = destinationCountryCode || null;
+	}
+	if (destinationAdmin1Code !== undefined) {
+		patch.destinationAdmin1Code = destinationAdmin1Code || null;
+	} else if (city?.admin1Code != null) {
+		patch.destinationAdmin1Code = city.admin1Code;
+	}
+	if (destinationCityName !== undefined) {
+		patch.destinationCityName = (city?.name ?? destinationCityName) || null;
+	} else if (city?.name) {
+		patch.destinationCityName = city.name;
+	}
+	if (hasCoords) {
+		patch.destinationCityLat = latArg!;
+		patch.destinationCityLng = lngArg!;
+	} else if (city) {
+		patch.destinationCityLat = city.lat;
+		patch.destinationCityLng = city.lng;
+	}
+
+	return patch;
 }
 
 // ---------------------------------------------------------------------------
@@ -517,6 +569,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						name: { type: 'string' },
 						destination: { type: 'string' },
 						destinationCountryCode: { type: 'string' },
+						destinationAdmin1Code: {
+							type: 'string',
+							description: 'State/province/territory (GeoNames admin1 code, e.g. TX, ON)'
+						},
 						destinationCityName: { type: 'string' }, destinationCityLat: { type: 'number' }, destinationCityLng: { type: 'number' },
 						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
 						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' }, notes: { type: 'string' },
@@ -535,7 +591,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						tripId: { type: 'number' },
 						name: { type: 'string' },
 						destination: { type: 'string' },
-						destinationCountryCode: { type: 'string' }, destinationCityName: { type: 'string' },
+						destinationCountryCode: { type: 'string' },
+						destinationAdmin1Code: {
+							type: 'string',
+							description: 'State/province/territory (GeoNames admin1 code, e.g. TX, ON)'
+						},
+						destinationCityName: { type: 'string' },
 						destinationCityLat: { type: 'number' }, destinationCityLng: { type: 'number' },
 						startDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
 						endDate: { type: 'string', description: 'ISO date YYYY-MM-DD' },
@@ -576,6 +637,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						},
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
+						admin1Code: {
+							type: 'string',
+							description: 'State/province/territory (GeoNames admin1 code) when applicable'
+						},
+						cityLat: { type: 'number' },
+						cityLng: { type: 'number' },
 						location: { type: 'string' },
 						venue: { type: 'string', description: 'Venue or street address shown in the itinerary editor' },
 						confirmationNumber: { type: 'string' },
@@ -724,6 +791,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						},
 						cityName: { type: 'string' },
 						countryCode: { type: 'string' },
+						admin1Code: {
+							type: 'string',
+							description: 'State/province/territory (GeoNames admin1 code) when applicable'
+						},
+						cityLat: { type: 'number' },
+						cityLng: { type: 'number' },
 						location: { type: 'string' },
 						venue: { type: 'string', description: 'Venue or street address shown in the itinerary editor' },
 						confirmationNumber: { type: 'string' },
@@ -1788,6 +1861,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					items: page.items.map((t) => ({
 						id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
 						destinationCountryCode: t.destinationCountryCode,
+						destinationAdmin1Code: 'destinationAdmin1Code' in t ? t.destinationAdmin1Code : null,
 						destinationCityName: t.destinationCityName,
 						startDate: t.startDate, endDate: t.endDate, status: t.status
 					})),
@@ -1846,6 +1920,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const validation = validateToolInput(args as Record<string, unknown>);
 				if (!validation.ok) return { content: [{ type: 'text' as const, text: validation.error }], isError: true };
 				const { addSegment } = await import('./segments');
+				const countryCode = (args.countryCode as string) || undefined;
+				const cityNameArg = (args.cityName as string) || undefined;
+				const admin1Code = (args.admin1Code as string) || undefined;
+				const latArg = args.cityLat as number | undefined;
+				const lngArg = args.cityLng as number | undefined;
+				const hasCoords = latArg != null && lngArg != null;
+				const city =
+					countryCode && cityNameArg
+						? findCity(countryCode, cityNameArg, admin1Code)
+						: null;
 				const seg = addSegment(userId, Number(args.tripId), {
 					type: String(args.type ?? 'event') as Parameters<typeof addSegment>[2]['type'],
 					title: String(args.title ?? ''),
@@ -1853,8 +1937,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					startTz: String(args.startTz ?? 'UTC'),
 					endAt: (args.endAt as string) || undefined,
 					endTz: (args.endTz as string) || undefined,
-					cityName: (args.cityName as string) || undefined,
-					countryCode: (args.countryCode as string) || undefined,
+					cityName: city?.name ?? cityNameArg,
+					countryCode,
+					admin1Code: admin1Code ?? city?.admin1Code ?? undefined,
+					cityLat: hasCoords ? latArg : (city?.lat ?? undefined),
+					cityLng: hasCoords ? lngArg : (city?.lng ?? undefined),
 					location: (args.location as string) || undefined,
 					venue:
 						(args.venue as string) ||
@@ -2023,6 +2110,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					endTz: args.endTz as string | undefined,
 					cityName: args.cityName as string | undefined,
 					countryCode: args.countryCode as string | undefined,
+					admin1Code: args.admin1Code as string | undefined,
+					cityLat: args.cityLat as number | undefined,
+					cityLng: args.cityLng as number | undefined,
 					location: args.location as string | undefined,
 					venue:
 						(args.venue as string | undefined) ??

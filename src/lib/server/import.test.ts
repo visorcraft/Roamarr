@@ -123,6 +123,69 @@ test('importTrips creates trips and segments', () => {
 	expect(kit.selectFrom(auditLogs).executeSync()).toHaveLength(1);
 });
 
+test('importTrips accepts city name without lat/lng when maps are disabled', async () => {
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
+	const { updateSettings } = await import('./settings');
+	updateSettings({ mapsEnabled: false });
+	const u = makeUser('import-free-city@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Paris free text',
+				destinationCountryCode: 'FR',
+				destinationCityName: 'Paris',
+				startDate: '2026-08-01',
+				endDate: '2026-08-10'
+			}
+		]
+	});
+	expect(result.errors).toHaveLength(0);
+	expect(result.imported).toBe(1);
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0]!;
+	expect(t.destination_city_name).toBe('Paris');
+	expect(t.destination_city_lat).toBeNull();
+	expect(t.destination_city_lng).toBeNull();
+});
+
+test('importTrips auto-resolves city coordinates from GeoNames when maps are enabled', async () => {
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
+	const { updateSettings } = await import('./settings');
+	const { importCitiesBatch } = await import('./repositories/travelDataRepo');
+	const { geonamesCities } = await import('./db/mongrelSchema');
+	updateSettings({ mapsEnabled: true });
+	kit.deleteFrom(geonamesCities).executeSync();
+	importCitiesBatch([
+		{
+			geonameId: 1609350,
+			name: 'Bangkok',
+			asciiName: 'Bangkok',
+			countryCode: 'TH',
+			lat: 13.75,
+			lng: 100.5,
+			population: 5000000,
+			timezone: 'Asia/Bangkok'
+		}
+	]);
+	const u = makeUser('import-resolve-city@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Bangkok import',
+				destinationCountryCode: 'TH',
+				destinationCityName: 'bangkok',
+				startDate: '2026-08-14',
+				endDate: '2026-09-07'
+			}
+		]
+	});
+	expect(result.errors).toHaveLength(0);
+	expect(result.imported).toBe(1);
+	const t = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()[0]!;
+	expect(t.destination_city_name).toBe('Bangkok');
+	expect(t.destination_city_lat).toBe(13.75);
+	expect(t.destination_city_lng).toBe(100.5);
+});
+
 test('importTrips mints public token for public visibility', () => {
 	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser();

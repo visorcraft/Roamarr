@@ -1,11 +1,18 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
 	import DateTimeRangeFields from '../DateTimeRangeFields.svelte';
 	import BookedRow from '../BookedRow.svelte';
 	import CityAutocomplete from '../CityAutocomplete.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
-	import SelectField from '$lib/components/SelectField.svelte';
 	import { COUNTRIES } from '$lib/countries';
+	import {
+		SEGMENT_CITY_DEFAULTS_KEY,
+		type SegmentCityDefaults
+	} from '../segmentCityDefaults';
+	import Admin1Select from '$lib/components/Admin1Select.svelte';
+
+	const tripDefaults = getContext<SegmentCityDefaults | undefined>(SEGMENT_CITY_DEFAULTS_KEY);
 
 	let {
 		errors = {},
@@ -13,8 +20,11 @@
 		titlePlaceholder = 'Enter title',
 		locationLabel = 'Venue',
 		locationPlaceholder = 'Enter venue',
-		countryCode = '',
-		cityName = '',
+		countryCode: countryCodeProp = tripDefaults?.countryCode ?? '',
+		admin1Code: admin1CodeProp = tripDefaults?.admin1Code ?? '',
+		cityName = tripDefaults?.cityName ?? '',
+		cityLat = tripDefaults?.cityLat ?? null,
+		cityLng = tripDefaults?.cityLng ?? null,
 		venue = '',
 		requireEnd = false,
 		startDateLabel = 'Start date',
@@ -29,7 +39,10 @@
 		locationLabel?: string;
 		locationPlaceholder?: string;
 		countryCode?: string;
+		admin1Code?: string;
 		cityName?: string;
+		cityLat?: number | null;
+		cityLng?: number | null;
 		venue?: string;
 		requireEnd?: boolean;
 		startDateLabel?: string;
@@ -38,20 +51,44 @@
 		endTimeLabel?: string;
 		endTimezoneLabel?: string;
 	} = $props();
+
+	let countryCode = $state(countryCodeProp);
+	let admin1Code = $state(admin1CodeProp);
 </script>
 
 <TextField name="title" label={titleLabel} placeholder={titlePlaceholder} required class="sm:col-span-2" {errors} />
 
 <DateTimeRangeFields {errors} {requireEnd} {startDateLabel} {startTimeLabel} {endDateLabel} {endTimeLabel} {endTimezoneLabel} />
 
-<SelectField name="countryCode" label="Country" {errors}>
-	<option value="" selected={!countryCode}>Select country</option>
-	{#each COUNTRIES as c (c.code)}
-		<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
-	{/each}
-</SelectField>
+<div class="field">
+	<label class="label" for="countryCode">Country</label>
+	<select
+		id="countryCode"
+		name="countryCode"
+		class="input {errors.countryCode ? 'input-error' : ''}"
+		bind:value={countryCode}
+	>
+		<option value="">Select country</option>
+		{#each COUNTRIES as c (c.code)}
+			<option value={c.code}>{c.name}</option>
+		{/each}
+	</select>
+	{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
+</div>
 
-<CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
+<Admin1Select {countryCode} name="admin1Code" bind:value={admin1Code} {errors} />
+
+<CityAutocomplete
+	{countryCode}
+	{admin1Code}
+	name="cityName"
+	value={cityName}
+	lat={cityLat}
+	lng={cityLng}
+	latName="cityLat"
+	lngName="cityLng"
+	{errors}
+/>
 
 <TextField name="venue" label={locationLabel} placeholder={locationPlaceholder} value={venue} class="sm:col-span-2" {errors} />
 

@@ -13,6 +13,7 @@ import {
 	countOverlappingSegments
 } from '$lib/server/repositories/segmentsRepo';
 import { SEGMENT_STATUSES, SEGMENT_PAYMENT_STATUSES, type SegmentType, type SegmentStatus } from '$lib/server/db/mongrelSchema';
+import { findCity } from '$lib/server/cities';
 
 function normalizeMeetingAt(i: {
 	meetingAt?: string;
@@ -45,6 +46,7 @@ export function addSegment(
 		endTz?: string;
 		location?: string;
 		countryCode?: string;
+		admin1Code?: string;
 		cityName?: string;
 		cityLat?: number;
 		cityLng?: number;
@@ -73,6 +75,7 @@ export function addSegment(
 		end_tz: endTz,
 		location: i.location ?? null,
 		country_code: i.countryCode ?? null,
+		admin1_code: i.admin1Code ?? null,
 		city_name: i.cityName ?? null,
 		city_lat: i.cityLat ?? null,
 		city_lng: i.cityLng ?? null,
@@ -139,6 +142,7 @@ export function updateSegment(
 		endTz?: string;
 		location?: string;
 		countryCode?: string;
+		admin1Code?: string;
 		cityName?: string;
 		cityLat?: number;
 		cityLng?: number;
@@ -165,6 +169,7 @@ export function updateSegment(
 		end_tz: endTz,
 		location: i.location ?? null,
 		country_code: i.countryCode ?? null,
+		admin1_code: i.admin1Code ?? null,
 		city_name: i.cityName ?? null,
 		city_lat: i.cityLat ?? null,
 		city_lng: i.cityLng ?? null,
@@ -236,6 +241,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		end_tz: existing.endTz ?? existing.startTz,
 		location: existing.location,
 		country_code: existing.countryCode,
+		admin1_code: existing.admin1Code,
 		city_name: existing.cityName,
 		city_lat: existing.cityLat,
 		city_lng: existing.cityLng,
@@ -277,6 +283,9 @@ export function patchSegment(
 		endTz?: string;
 		cityName?: string | null;
 		countryCode?: string | null;
+		admin1Code?: string | null;
+		cityLat?: number | null;
+		cityLng?: number | null;
 		location?: string | null;
 		venue?: string | null;
 		confirmationNumber?: string | null;
@@ -301,8 +310,51 @@ export function patchSegment(
 		repoPatch.end_at = patch.endAt && endTz ? localToUtc(patch.endAt, endTz) : patch.endAt;
 	}
 	if (patch.endTz !== undefined) repoPatch.end_tz = patch.endTz;
-	if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
-	if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
+	// Resolve city name → coords when location fields change. Explicit cityLat/lng
+	// (dropdown) win; otherwise re-look up highest-pop match in country/admin1.
+	if (
+		patch.cityName !== undefined ||
+		patch.countryCode !== undefined ||
+		patch.admin1Code !== undefined ||
+		patch.cityLat !== undefined ||
+		patch.cityLng !== undefined
+	) {
+		const country = patch.countryCode !== undefined ? patch.countryCode : verified.countryCode;
+		const cityName = patch.cityName !== undefined ? patch.cityName : verified.cityName;
+		const admin1 = patch.admin1Code !== undefined ? patch.admin1Code : verified.admin1Code;
+		const locationChanged =
+			patch.cityName !== undefined ||
+			patch.countryCode !== undefined ||
+			patch.admin1Code !== undefined;
+		// Drop prior coords when re-targeting country/admin1/name without new lat/lng
+		const lat =
+			patch.cityLat !== undefined
+				? patch.cityLat
+				: locationChanged
+					? null
+					: verified.cityLat;
+		const lng =
+			patch.cityLng !== undefined
+				? patch.cityLng
+				: locationChanged
+					? null
+					: verified.cityLng;
+		if (country && cityName) {
+			const city = findCity(country, cityName, admin1);
+			const hasCoords = lat != null && lng != null;
+			repoPatch.country_code = country;
+			repoPatch.admin1_code = admin1 ?? city?.admin1Code ?? null;
+			repoPatch.city_name = city?.name ?? cityName;
+			repoPatch.city_lat = hasCoords ? lat : (city?.lat ?? null);
+			repoPatch.city_lng = hasCoords ? lng : (city?.lng ?? null);
+		} else {
+			if (patch.cityName !== undefined) repoPatch.city_name = patch.cityName;
+			if (patch.countryCode !== undefined) repoPatch.country_code = patch.countryCode;
+			if (patch.admin1Code !== undefined) repoPatch.admin1_code = patch.admin1Code;
+			if (patch.cityLat !== undefined) repoPatch.city_lat = patch.cityLat;
+			if (patch.cityLng !== undefined) repoPatch.city_lng = patch.cityLng;
+		}
+	}
 	if (patch.location !== undefined) repoPatch.location = patch.location;
 	if (patch.venue !== undefined) repoPatch.venue = patch.venue;
 	if (patch.confirmationNumber !== undefined) repoPatch.confirmation_number = patch.confirmationNumber;

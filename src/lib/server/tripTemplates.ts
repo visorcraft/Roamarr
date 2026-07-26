@@ -10,6 +10,7 @@ import { serializeTags, parseTags } from '$lib/tags';
 interface TripTemplateSnapshot {
 	name: string;
 	destinationCountryCode: string | null;
+	destinationAdmin1Code: string | null;
 	destinationCityName: string | null;
 	destinationCityLat: number | null;
 	destinationCityLng: number | null;
@@ -32,6 +33,7 @@ export function saveTripTemplate(userId: number, sourceTripId: number, name: str
 	const snapshot: TripTemplateSnapshot = {
 		name: trip.name,
 		destinationCountryCode: trip.destinationCountryCode ?? null,
+		destinationAdmin1Code: trip.destinationAdmin1Code ?? null,
 		destinationCityName: trip.destinationCityName ?? null,
 		destinationCityLat: trip.destinationCityLat ?? null,
 		destinationCityLng: trip.destinationCityLng ?? null,
@@ -55,6 +57,7 @@ export function createTripFromTemplate(
 	overrides: {
 		name?: string;
 		destinationCountryCode?: string | null;
+		destinationAdmin1Code?: string | null;
 		destinationCityName?: string | null;
 		destinationCityLat?: number | null;
 		destinationCityLng?: number | null;
@@ -68,6 +71,7 @@ export function createTripFromTemplate(
 	const snapshot: TripTemplateSnapshot = {
 		name: template.name,
 		destinationCountryCode: null,
+		destinationAdmin1Code: null,
 		destinationCityName: null,
 		destinationCityLat: null,
 		destinationCityLng: null,
@@ -82,6 +86,10 @@ export function createTripFromTemplate(
 		overrides.destinationCountryCode !== undefined
 			? overrides.destinationCountryCode
 			: snapshot.destinationCountryCode;
+	const destinationAdmin1Code =
+		overrides.destinationAdmin1Code !== undefined
+			? overrides.destinationAdmin1Code
+			: snapshot.destinationAdmin1Code;
 	const destinationCityName =
 		overrides.destinationCityName !== undefined
 			? overrides.destinationCityName
@@ -100,6 +108,7 @@ export function createTripFromTemplate(
 	const trip = tripsRepo.createTrip(userId, {
 		name,
 		destinationCountryCode,
+		destinationAdmin1Code,
 		destinationCityName,
 		destinationCityLat,
 		destinationCityLng,

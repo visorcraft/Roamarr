@@ -6,6 +6,7 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { createSegment } from '$lib/server/repositories/segmentsRepo';
+import { resolveCitySelection } from '$lib/server/cities';
 
 interface ImportSegment {
 	type: SegmentType;
@@ -21,6 +22,7 @@ interface ImportSegment {
 interface ImportTrip {
 	name: string;
 	destinationCountryCode?: string;
+	destinationAdmin1Code?: string;
 	destinationCityName?: string;
 	destinationCityLat?: number;
 	destinationCityLng?: number;
@@ -40,6 +42,7 @@ interface ImportError {
 interface ImportPreviewTrip {
 	name: string;
 	destinationCountryCode?: string;
+	destinationAdmin1Code?: string;
 	destinationCityName?: string;
 	destinationCityLat?: number;
 	destinationCityLng?: number;
@@ -112,6 +115,7 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 			trip = {
 				name: obj.name || '',
 				destinationCountryCode: obj.destinationCountryCode || undefined,
+				destinationAdmin1Code: obj.destinationAdmin1Code || undefined,
 				destinationCityName: obj.destinationCityName || undefined,
 				destinationCityLat: obj.destinationCityLat ? Number(obj.destinationCityLat) : undefined,
 				destinationCityLng: obj.destinationCityLng ? Number(obj.destinationCityLng) : undefined,
@@ -138,29 +142,75 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 	return { trips: Array.from(groups.values()) };
 }
 
-function validateTrip(input: ImportTrip): ImportError[] {
+interface ResolvedImportDestination {
+	destinationCountryCode?: string;
+	destinationAdmin1Code?: string | null;
+	destinationCityName?: string;
+	destinationCityLat?: number | null;
+	destinationCityLng?: number | null;
+}
+
+function validateTrip(
+	input: ImportTrip
+): { errors: ImportError[]; destination: ResolvedImportDestination } {
 	const v = new Validator();
 	v.requiredString(input.name, 'name', { max: 200 });
 	const countryCode = input.destinationCountryCode
 		? v.countryCode(input.destinationCountryCode, 'destinationCountryCode')
 		: undefined;
-	const cityName = v.optionalString(input.destinationCityName, 'destinationCityName', { max: 200 });
+	const admin1CodeRaw = v.optionalString(
+		input.destinationAdmin1Code,
+		'destinationAdmin1Code',
+		{ max: 20 }
+	);
+	const cityNameRaw = v.optionalString(input.destinationCityName, 'destinationCityName', { max: 200 });
 	const cityLat =
 		input.destinationCityLat != null ? v.latitude(input.destinationCityLat, 'destinationCityLat') : undefined;
 	const cityLng =
 		input.destinationCityLng != null ? v.longitude(input.destinationCityLng, 'destinationCityLng') : undefined;
-	if (cityName && (cityLat == null || cityLng == null)) {
-		v.addError('destinationCityLat', 'City latitude and longitude are required when a city is provided');
-	}
-	if (countryCode && !cityName) {
+
+	let destinationCityName = cityNameRaw;
+	let destinationCityLat = cityLat ?? null;
+	let destinationCityLng = cityLng ?? null;
+	let destinationAdmin1Code = admin1CodeRaw ?? null;
+
+	if (countryCode && cityNameRaw) {
+		// Same contract as trip create/edit: exact GeoNames matches fill missing coords
+		// when maps are enabled; free-text cities are allowed when maps are off.
+		const resolved = resolveCitySelection(
+			countryCode,
+			cityNameRaw,
+			cityLat,
+			cityLng,
+			admin1CodeRaw
+		);
+		if (!resolved.ok) {
+			v.addError('destinationCityName', resolved.error);
+		} else {
+			destinationCityName = resolved.city.name;
+			destinationCityLat = resolved.city.lat;
+			destinationCityLng = resolved.city.lng;
+			destinationAdmin1Code = resolved.city.admin1Code;
+		}
+	} else if (countryCode && !cityNameRaw) {
 		v.addError('destinationCityName', 'City name is required when a country is provided');
 	}
+
 	const startDate = v.date(input.startDate, 'startDate');
 	const endDate = v.date(input.endDate, 'endDate');
 	v.optionalString(input.notes, 'notes', { max: 5000 });
 	v.enumValue(input.defaultVisibility || 'private', ['private', 'groups', 'public'] as const, 'defaultVisibility');
 	v.dateRange(startDate, endDate);
-	return Object.entries(v.errors).map(([field, message]) => ({ row: 0, field, message }));
+	return {
+		errors: Object.entries(v.errors).map(([field, message]) => ({ row: 0, field, message })),
+		destination: {
+			destinationCountryCode: countryCode,
+			destinationAdmin1Code,
+			destinationCityName,
+			destinationCityLat,
+			destinationCityLng
+		}
+	};
 }
 
 function validateSegment(input: ImportSegment, index: number): ImportError[] {
@@ -186,7 +236,8 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 	for (let i = 0; i < input.trips.length; i++) {
 		const tripInput = input.trips[i]!;
 		const row = i + 1;
-		const tripErrors = validateTrip(tripInput).map((e) => ({ ...e, row }));
+		const { errors: tripErrorsRaw, destination } = validateTrip(tripInput);
+		const tripErrors = tripErrorsRaw.map((e) => ({ ...e, row }));
 		if (tripErrors.length) {
 			result.errors.push(...tripErrors);
 			continue;
@@ -209,10 +260,11 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 		if (dryRun) {
 			result.preview!.push({
 				name: tripInput.name.trim(),
-				destinationCountryCode: tripInput.destinationCountryCode,
-				destinationCityName: tripInput.destinationCityName,
-				destinationCityLat: tripInput.destinationCityLat,
-				destinationCityLng: tripInput.destinationCityLng,
+				destinationCountryCode: destination.destinationCountryCode,
+				destinationAdmin1Code: destination.destinationAdmin1Code ?? undefined,
+				destinationCityName: destination.destinationCityName,
+				destinationCityLat: destination.destinationCityLat ?? undefined,
+				destinationCityLng: destination.destinationCityLng ?? undefined,
 				startDate: tripInput.startDate,
 				endDate: tripInput.endDate,
 				segments: validSegments.map((s) => ({
@@ -233,10 +285,11 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 				: null;
 		const trip = tripsRepo.createTrip(userId, {
 			name: tripInput.name.trim(),
-			destinationCountryCode: tripInput.destinationCountryCode ?? null,
-			destinationCityName: tripInput.destinationCityName ?? null,
-			destinationCityLat: tripInput.destinationCityLat ?? null,
-			destinationCityLng: tripInput.destinationCityLng ?? null,
+			destinationCountryCode: destination.destinationCountryCode ?? null,
+			destinationAdmin1Code: destination.destinationAdmin1Code ?? null,
+			destinationCityName: destination.destinationCityName ?? null,
+			destinationCityLat: destination.destinationCityLat ?? null,
+			destinationCityLng: destination.destinationCityLng ?? null,
 			startDate: tripInput.startDate,
 			endDate: tripInput.endDate,
 			notes: tripInput.notes,

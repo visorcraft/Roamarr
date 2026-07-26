@@ -25,10 +25,25 @@ a live external API. Seed it once:
 1. Go to **Settings → Maps → City data**.
 2. Download `cities1000.zip` from
    [download.geonames.org/export/dump/cities1000.zip](https://download.geonames.org/export/dump/cities1000.zip).
-3. Upload the `.zip`. Roamarr unpacks and imports it into the local database.
+3. Upload the `.zip`, or use **Re-import city database** (which also pulls
+   admin1 labels for states/provinces/territories).
 
 Until this is done, autocomplete returns nothing and segments get no city pins.
 The import is idempotent — re-uploading refreshes the data.
+
+### State / province / territory (admin1)
+
+For countries with first-level admin divisions in the city database (e.g. US
+states, Canadian provinces), trip and segment forms show an optional
+**State / province / territory** control after you pick a country. City
+autocomplete and typed-name resolution are then scoped to that subdivision.
+When no subdivision is chosen, resolution is country-wide and prefers the
+highest-population exact name match. A manual pick from the city list still
+keeps the selected coordinates.
+
+**Operators:** after upgrading to a build with admin1 support, re-import the
+city database so existing installs get `admin1_code` on city rows and human
+labels. Until re-import, the subdivision control stays hidden (no admin1 data).
 
 ## Tile provider
 

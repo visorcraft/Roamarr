@@ -10,7 +10,7 @@ import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
 import { serializeTags } from '$lib/tags';
-import { citySelectionError } from '$lib/server/cities';
+import { resolveCitySelection } from '$lib/server/cities';
 import { setFlash } from '$lib/server/flash';
 import type { PageServerLoad } from './$types';
 
@@ -52,7 +52,12 @@ export const actions: Actions = {
 		if (destinationCountryCodeRaw && !destinationCountryCode) {
 			v.addError('destinationCountryCode', 'Destination country must be a 2-letter code');
 		}
-		const destinationCityName = v.optionalString(
+		const destinationAdmin1CodeRaw = v.optionalString(
+			f.get('destinationAdmin1Code'),
+			'destinationAdmin1Code',
+			{ max: 20 }
+		);
+		const destinationCityNameRaw = v.optionalString(
 			f.get('destinationCityName'),
 			'destinationCityName',
 			{ max: 200 }
@@ -64,14 +69,28 @@ export const actions: Actions = {
 			? v.longitude(f.get('destinationCityLng'), 'destinationCityLng')
 			: undefined;
 
-		if (destinationCountryCode && destinationCityName) {
-			const error = citySelectionError(
+		let destinationCityName = destinationCityNameRaw;
+		let destinationAdmin1Code = destinationAdmin1CodeRaw ?? null;
+		let resolvedLat = destinationCityLat ?? null;
+		let resolvedLng = destinationCityLng ?? null;
+		if (destinationCountryCode && destinationCityNameRaw) {
+			const resolved = resolveCitySelection(
 				destinationCountryCode,
-				destinationCityName,
+				destinationCityNameRaw,
 				destinationCityLat,
-				destinationCityLng
+				destinationCityLng,
+				destinationAdmin1CodeRaw
 			);
-			if (error) v.addError('destinationCityName', error);
+			if (!resolved.ok) {
+				v.addError('destinationCityName', resolved.error);
+			} else {
+				destinationCityName = resolved.city.name;
+				destinationAdmin1Code = resolved.city.admin1Code;
+				resolvedLat = resolved.city.lat;
+				resolvedLng = resolved.city.lng;
+			}
+		} else if (!destinationCountryCode) {
+			destinationAdmin1Code = null;
 		}
 
 		const startDate = v.date(f.get('startDate'), 'startDate');
@@ -100,9 +119,10 @@ export const actions: Actions = {
 			name: name!,
 			destination: null,
 			destinationCountryCode,
+			destinationAdmin1Code,
 			destinationCityName,
-			destinationCityLat: destinationCityLat ?? null,
-			destinationCityLng: destinationCityLng ?? null,
+			destinationCityLat: resolvedLat,
+			destinationCityLng: resolvedLng,
 			startDate,
 			endDate,
 			notes,

@@ -27,6 +27,7 @@ export interface Trip {
 	name: string;
 	destination: string | null;
 	destinationCountryCode: string | null;
+	destinationAdmin1Code: string | null;
 	destinationCityName: string | null;
 	destinationCityLat: number | null;
 	destinationCityLng: number | null;
@@ -94,6 +95,7 @@ export function toTrip(row: KitTrip): Trip {
 		name: row.name,
 		destination: row.destination,
 		destinationCountryCode: row.destination_country_code,
+		destinationAdmin1Code: row.destination_admin1_code ?? null,
 		destinationCityName: row.destination_city_name,
 		destinationCityLat: row.destination_city_lat,
 		destinationCityLng: row.destination_city_lng,
@@ -190,6 +192,7 @@ export interface CreateTripInput {
 	name: string;
 	destination?: string | null;
 	destinationCountryCode?: string | null;
+	destinationAdmin1Code?: string | null;
 	destinationCityName?: string | null;
 	destinationCityLat?: number | null;
 	destinationCityLng?: number | null;
@@ -220,6 +223,7 @@ export function createTrip(ownerId: number, input: CreateTripInput): Trip {
 			name: input.name,
 			destination: input.destination ?? null,
 			destination_country_code: input.destinationCountryCode ?? null,
+			destination_admin1_code: input.destinationAdmin1Code ?? null,
 			destination_city_name: input.destinationCityName ?? null,
 			destination_city_lat: input.destinationCityLat ?? null,
 			destination_city_lng: input.destinationCityLng ?? null,
@@ -252,6 +256,7 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	if (patch.name !== undefined) set.name = patch.name;
 	if (patch.destination !== undefined) set.destination = patch.destination;
 	if (patch.destinationCountryCode !== undefined) set.destination_country_code = patch.destinationCountryCode;
+	if (patch.destinationAdmin1Code !== undefined) set.destination_admin1_code = patch.destinationAdmin1Code;
 	if (patch.destinationCityName !== undefined) set.destination_city_name = patch.destinationCityName;
 	if (patch.destinationCityLat !== undefined) set.destination_city_lat = patch.destinationCityLat;
 	if (patch.destinationCityLng !== undefined) set.destination_city_lng = patch.destinationCityLng;

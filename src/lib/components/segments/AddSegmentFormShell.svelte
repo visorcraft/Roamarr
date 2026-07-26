@@ -1,7 +1,9 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { setContext, type Snippet } from 'svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import type { SegmentFormTrip } from '$lib/server/segmentNewPage';
+	import { SEGMENT_CITY_DEFAULTS_KEY, type SegmentCityDefaults } from './segmentCityDefaults';
 
 	let {
 		trip,
@@ -10,12 +12,33 @@
 		cards,
 		children
 	}: {
-		trip: { id: number; name: string };
+		trip: SegmentFormTrip | { id: number; name: string };
 		label: string;
 		form?: { error?: string; errors?: Record<string, string> } | null;
 		cards?: { id: number; nickname: string; network: string; last4: string | null }[];
 		children: Snippet;
 	} = $props();
+
+	// Prefill country/city/coords on child forms from the trip destination when set.
+	// Getters so we always read current trip props (avoids state_referenced_locally).
+	const cityDefaults: SegmentCityDefaults = {
+		get countryCode() {
+			return (trip as SegmentFormTrip).destinationCountryCode ?? '';
+		},
+		get admin1Code() {
+			return (trip as SegmentFormTrip).destinationAdmin1Code ?? '';
+		},
+		get cityName() {
+			return (trip as SegmentFormTrip).destinationCityName ?? '';
+		},
+		get cityLat() {
+			return (trip as SegmentFormTrip).destinationCityLat ?? null;
+		},
+		get cityLng() {
+			return (trip as SegmentFormTrip).destinationCityLng ?? null;
+		}
+	};
+	setContext(SEGMENT_CITY_DEFAULTS_KEY, cityDefaults);
 </script>
 
 <header class="page-header">

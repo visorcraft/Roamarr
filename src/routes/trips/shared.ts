@@ -20,6 +20,7 @@ export function createTrip(
 	i: {
 		name: string;
 		destinationCountryCode?: string;
+		destinationAdmin1Code?: string | null;
 		destinationCityName?: string;
 		destinationCityLat?: number;
 		destinationCityLng?: number;
@@ -34,6 +35,7 @@ export function createTrip(
 	return tripsRepo.createTrip(userId, {
 		name: i.name,
 		destinationCountryCode: i.destinationCountryCode,
+		destinationAdmin1Code: i.destinationAdmin1Code,
 		destinationCityName: i.destinationCityName,
 		destinationCityLat: i.destinationCityLat,
 		destinationCityLng: i.destinationCityLng,
@@ -65,6 +67,7 @@ export function duplicateTrip(ownerId: number, tripId: number) {
 	const copy = tripsRepo.createTrip(ownerId, {
 		name: `Copy of ${t.name}`,
 		destinationCountryCode: t.destinationCountryCode,
+		destinationAdmin1Code: t.destinationAdmin1Code,
 		destinationCityName: t.destinationCityName,
 		destinationCityLat: t.destinationCityLat,
 		destinationCityLng: t.destinationCityLng,
@@ -83,6 +86,11 @@ export function duplicateTrip(ownerId: number, tripId: number) {
 			start_tz: s.startTz,
 			end_at: s.endAt,
 			location: s.location,
+			country_code: s.countryCode,
+			admin1_code: s.admin1Code,
+			city_name: s.cityName,
+			city_lat: s.cityLat,
+			city_lng: s.cityLng,
 			confirmation_number: s.confirmationNumber,
 			details_json: s.detailsJson,
 			card_id: s.cardId != null ? BigInt(s.cardId) : null

@@ -23,3 +23,17 @@ test('FlightForm surfaces errors', () => {
 	expect(body).toContain('Number?');
 	expect(body).toContain('Where?');
 });
+
+test('FlightForm seeds city coordinates from lat/lng props', () => {
+	const { body } = render(FlightForm, {
+		props: {
+			cityLat: 37.57,
+			cityLng: 126.98
+		}
+	});
+	// Without trip context, city name starts empty; coords still seed for re-save.
+	expect(body).toContain('value="37.57"');
+	expect(body).toContain('value="126.98"');
+	expect(body).toContain('name="cityLat"');
+	expect(body).toContain('name="cityLng"');
+});

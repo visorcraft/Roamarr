@@ -39,3 +39,13 @@ test('wires field error via id and keeps hidden lat/lng inputs', () => {
 	expect(body).toContain('name="lat"');
 	expect(body).toContain('name="lng"');
 });
+
+test('seeds hidden lat/lng from props so edit forms can re-save without re-picking', () => {
+	const { body } = render(CityAutocomplete, {
+		props: { ...props, value: 'Bangkok', lat: 13.75, lng: 100.5 }
+	});
+	expect(body).toContain('value="13.75"');
+	expect(body).toContain('value="100.5"');
+	expect(body).toContain('id="lat"');
+	expect(body).toContain('id="lng"');
+});

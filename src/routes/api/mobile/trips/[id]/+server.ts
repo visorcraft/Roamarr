@@ -11,6 +11,7 @@ export const GET: RequestHandler = ({ locals, params }) => {
 	const trip = view.trip;
 	return json({ trip: {
 		id: trip.id, name: trip.name, destination: trip.destination, destinationCountryCode: trip.destinationCountryCode,
+		destinationAdmin1Code: trip.destinationAdmin1Code ?? null,
 		destinationCityName: trip.destinationCityName, destinationCityLat: trip.destinationCityLat, destinationCityLng: trip.destinationCityLng,
 		startDate: trip.startDate, endDate: trip.endDate, status: trip.status, notes: trip.notes,
 		tags: (() => { try { return JSON.parse(trip.tags); } catch { return []; } })(), baseCurrency: trip.baseCurrency,

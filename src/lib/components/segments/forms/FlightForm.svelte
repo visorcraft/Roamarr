@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { getContext } from 'svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import CollapseSection from '../CollapseSection.svelte';
@@ -8,16 +9,33 @@
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import { COUNTRIES } from '$lib/countries';
+	import {
+		SEGMENT_CITY_DEFAULTS_KEY,
+		type SegmentCityDefaults
+	} from '../segmentCityDefaults';
+	import Admin1Select from '$lib/components/Admin1Select.svelte';
 
-	let { errors = {} }: { errors?: Record<string, string> } = $props();
+	const tripDefaults = getContext<SegmentCityDefaults | undefined>(SEGMENT_CITY_DEFAULTS_KEY);
+
+	let {
+		errors = {},
+		cityLat = tripDefaults?.cityLat ?? null,
+		cityLng = tripDefaults?.cityLng ?? null
+	}: {
+		errors?: Record<string, string>;
+		cityLat?: number | null;
+		cityLng?: number | null;
+	} = $props();
 
 	let flightCount = $state(1);
 	let manualOpen = $state(false);
 	let aircraftOpen = $state(false);
 	let passengersOpen = $state(false);
 	let bookingOpen = $state(true);
-	let countryCode = $state('');
-	let cityName = $state('');
+	// Seed from trip destination (context); user can change via the form controls.
+	let countryCode = $state(tripDefaults?.countryCode ?? '');
+	let admin1Code = $state(tripDefaults?.admin1Code ?? '');
+	let cityName = $state(tripDefaults?.cityName ?? '');
 
 	function expandAll() {
 		manualOpen = true;
@@ -76,15 +94,27 @@
 			<div class="field">
 				<label class="label" for="countryCode">Country</label>
 				<select id="countryCode" name="countryCode" bind:value={countryCode} class="input {errors.countryCode ? 'input-error' : ''}">
-					<option value="" selected={!countryCode}>Select country</option>
+					<option value="">Select country</option>
 					{#each COUNTRIES as c (c.code)}
-						<option value={c.code} selected={c.code === countryCode}>{c.name}</option>
+						<option value={c.code}>{c.name}</option>
 					{/each}
 				</select>
 				{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
 			</div>
 
-			<CityAutocomplete {countryCode} name="cityName" value={cityName} latName="cityLat" lngName="cityLng" {errors} />
+			<Admin1Select {countryCode} name="admin1Code" bind:value={admin1Code} {errors} />
+
+			<CityAutocomplete
+				{countryCode}
+				{admin1Code}
+				name="cityName"
+				value={cityName}
+				lat={cityLat}
+				lng={cityLng}
+				latName="cityLat"
+				lngName="cityLng"
+				{errors}
+			/>
 
 			<TextField name="venue" label="Venue" placeholder="Airport or terminal" class="sm:col-span-2" {errors} />
 

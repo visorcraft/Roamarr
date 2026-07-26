@@ -18,6 +18,7 @@ interface ExportedSegment {
 interface ExportedTrip {
 	name: string;
 	destinationCountryCode?: string;
+	destinationAdmin1Code?: string;
 	destinationCityName?: string;
 	destinationCityLat?: number;
 	destinationCityLng?: number;
@@ -36,6 +37,7 @@ export function exportTrips(userId: number): ExportedTrip[] {
 		return {
 			name: t.name,
 			destinationCountryCode: t.destinationCountryCode ?? undefined,
+			destinationAdmin1Code: t.destinationAdmin1Code ?? undefined,
 			destinationCityName: t.destinationCityName ?? undefined,
 			destinationCityLat: t.destinationCityLat ?? undefined,
 			destinationCityLng: t.destinationCityLng ?? undefined,
@@ -76,6 +78,7 @@ export function exportTripsCsv(userId: number): string {
 	const headers = [
 		'name',
 		'destinationCountryCode',
+		'destinationAdmin1Code',
 		'destinationCityName',
 		'startDate',
 		'endDate',
@@ -97,6 +100,7 @@ export function exportTripsCsv(userId: number): string {
 			lines.push([
 				csvEscape(t.name),
 				csvEscape(t.destinationCountryCode),
+				csvEscape(t.destinationAdmin1Code),
 				csvEscape(t.destinationCityName),
 				csvEscape(t.startDate),
 				csvEscape(t.endDate),

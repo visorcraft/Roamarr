@@ -3,6 +3,7 @@
 	import { enhance } from '$app/forms';
 	import { COUNTRIES } from '$lib/countries';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
+	import Admin1Select from '$lib/components/Admin1Select.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import CancelButton from '$lib/components/CancelButton.svelte';
@@ -12,6 +13,12 @@
 	let submitting = $state(false);
 	let selectedTemplateId = $state('');
 	let destinationCountryCode = $state('');
+	let destinationAdmin1Code = $state('');
+	// Controlled city fields so template apply updates Svelte state (not only the DOM).
+	// Direct getElementById().value writes are ignored by CityAutocomplete's derived values.
+	let destinationCityName = $state('');
+	let destinationCityLat = $state<number | null>(null);
+	let destinationCityLng = $state<number | null>(null);
 	let isDirty = $state(false);
 
 	function applyTemplate() {
@@ -21,6 +28,7 @@
 			const snapshot = template.snapshot as {
 				name?: string;
 				destinationCountryCode?: string | null;
+				destinationAdmin1Code?: string | null;
 				destinationCityName?: string | null;
 				destinationCityLat?: number | null;
 				destinationCityLng?: number | null;
@@ -28,25 +36,19 @@
 				tags?: string[];
 			};
 			const nameInput = document.getElementById('name') as HTMLInputElement | null;
-			const countryInput = document.getElementById('destinationCountryCode') as HTMLSelectElement | null;
-			const cityInput = document.getElementById('destinationCityName') as HTMLInputElement | null;
-			const cityLatInput = document.getElementById('destinationCityLat') as HTMLInputElement | null;
-			const cityLngInput = document.getElementById('destinationCityLng') as HTMLInputElement | null;
 			const notesInput = document.getElementById('notes') as HTMLTextAreaElement | null;
 			const tagsInput = document.getElementById('tags') as HTMLInputElement | null;
 			if (nameInput && !nameInput.value.trim()) nameInput.value = snapshot.name ?? '';
-			if (countryInput && snapshot.destinationCountryCode) {
-				countryInput.value = snapshot.destinationCountryCode;
+			if (snapshot.destinationCountryCode) {
 				destinationCountryCode = snapshot.destinationCountryCode;
 			}
-			if (cityInput && snapshot.destinationCityName) {
-				cityInput.value = snapshot.destinationCityName;
-			}
-			if (cityLatInput && snapshot.destinationCityLat != null) {
-				cityLatInput.value = String(snapshot.destinationCityLat);
-			}
-			if (cityLngInput && snapshot.destinationCityLng != null) {
-				cityLngInput.value = String(snapshot.destinationCityLng);
+			destinationAdmin1Code = snapshot.destinationAdmin1Code ?? '';
+			if (snapshot.destinationCityName) {
+				destinationCityName = snapshot.destinationCityName;
+				destinationCityLat =
+					snapshot.destinationCityLat != null ? Number(snapshot.destinationCityLat) : null;
+				destinationCityLng =
+					snapshot.destinationCityLng != null ? Number(snapshot.destinationCityLng) : null;
 			}
 			if (notesInput && !notesInput.value.trim()) notesInput.value = snapshot.notes ?? '';
 			if (tagsInput && !tagsInput.value.trim()) tagsInput.value = (snapshot.tags ?? []).join(', ');
@@ -105,11 +107,21 @@
 			</select>
 			{#if form?.errors?.destinationCountryCode}<p class="field-error">{form.errors.destinationCountryCode}</p>{/if}
 		</div>
+		<Admin1Select
+			countryCode={destinationCountryCode}
+			name="destinationAdmin1Code"
+			bind:value={destinationAdmin1Code}
+			errors={form?.errors ?? {}}
+			disabled={submitting}
+		/>
 		<div class="field">
 			<CityAutocomplete
 				countryCode={destinationCountryCode}
+				admin1Code={destinationAdmin1Code}
 				name="destinationCityName"
-				value=""
+				value={destinationCityName}
+				lat={destinationCityLat}
+				lng={destinationCityLng}
 				latName="destinationCityLat"
 				lngName="destinationCityLng"
 				errors={form?.errors ?? {}}

@@ -4,6 +4,7 @@
 	import SelectField from '$lib/components/SelectField.svelte';
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
 	import CityAutocomplete from './CityAutocomplete.svelte';
+	import Admin1Select from '$lib/components/Admin1Select.svelte';
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import { toDatetimeLocal } from '$lib/segments/datetimeLocal';
 	import { COUNTRIES } from '$lib/countries';
@@ -20,7 +21,10 @@
 		meetingAt?: string | null;
 		meetingPoint?: string | null;
 		countryCode?: string | null;
+		admin1Code?: string | null;
 		cityName?: string | null;
+		cityLat?: number | null;
+		cityLng?: number | null;
 		venue?: string | null;
 		confirmationNumber?: string | null;
 		paymentStatus?: string | null;
@@ -48,6 +52,8 @@
 	const flight = $derived(s.type === 'flight');
 	const pickupDropoff = $derived(usesPickupDropoff(s.type));
 
+	let countryCode = $state(s.countryCode ?? '');
+	let admin1Code = $state(s.admin1Code ?? '');
 	let isDirty = $state(false);
 </script>
 
@@ -66,13 +72,39 @@
 		<TimezoneSelect id={fid('endTz')} name="endTz" value={s.endTz ?? s.startTz} class="input {errors.endTz ? 'input-error' : ''}" />
 		{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
 	</div>
-	<SelectField name="countryCode" id={fid('countryCode')} label="Country" {errors}>
-		<option value="" selected={!s.countryCode}>Select country</option>
-		{#each COUNTRIES as c (c.code)}
-			<option value={c.code} selected={c.code === s.countryCode}>{c.name}</option>
-		{/each}
-	</SelectField>
-	<CityAutocomplete countryCode={s.countryCode ?? ''} name="cityName" value={s.cityName ?? ''} latName="cityLat" lngName="cityLng" {errors} />
+	<div class="field">
+		<label class="label" for={fid('countryCode')}>Country</label>
+		<select
+			id={fid('countryCode')}
+			name="countryCode"
+			class="input {errors.countryCode ? 'input-error' : ''}"
+			bind:value={countryCode}
+		>
+			<option value="">Select country</option>
+			{#each COUNTRIES as c (c.code)}
+				<option value={c.code}>{c.name}</option>
+			{/each}
+		</select>
+		{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
+	</div>
+	<Admin1Select
+		{countryCode}
+		name="admin1Code"
+		id={fid('admin1Code')}
+		bind:value={admin1Code}
+		{errors}
+	/>
+	<CityAutocomplete
+		{countryCode}
+		{admin1Code}
+		name="cityName"
+		value={s.cityName ?? ''}
+		lat={s.cityLat ?? null}
+		lng={s.cityLng ?? null}
+		latName="cityLat"
+		lngName="cityLng"
+		{errors}
+	/>
 	<TextField name="venue" id={fid('venue')} label={hotel ? 'Address' : 'Venue'} value={s.venue ?? ''} class="sm:col-span-2" {errors} />
 	<TextField name="confirmationNumber" id={fid('confirmationNumber')} label="Confirmation #" value={s.confirmationNumber ?? ''} {errors} />
 	<TextField name="meetingPoint" id={fid('meetingPoint')} label="Meeting / rally point" value={s.meetingPoint ?? ''} maxlength="200" class="sm:col-span-2" {errors} />

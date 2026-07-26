@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { citiesForGlobe, citySelectionError, findCity, searchCities } from './cities';
+import { citiesForGlobe, citySelectionError, findCity, resolveCitySelection, searchCities } from './cities';
 import * as repo from './repositories/travelDataRepo';
 import { geonamesCities } from './db/mongrelSchema';
 import { updateSettings } from './settings';
@@ -31,8 +31,34 @@ test('city selection validation follows map availability', () => {
 	expect(citySelectionError('FR', 'London', 51.5, -0.1)).toBe(
 		'Selected city was not found in the GeoNames database'
 	);
-	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBe('City coordinates are missing');
+	// Exact GeoNames match auto-resolves coordinates (typed name without picking from list)
+	expect(citySelectionError('FR', 'Paris', undefined, undefined)).toBeNull();
 	expect(citySelectionError('FR', 'Paris', 48.85, 2.35)).toBeNull();
+});
+
+test('resolveCitySelection fills lat/lng from GeoNames when maps are enabled', () => {
+	updateSettings({ mapsEnabled: true });
+	repo.importCitiesBatch([
+		{ geonameId: 1, name: 'Bangkok', asciiName: 'Bangkok', countryCode: 'TH', lat: 13.75, lng: 100.5, population: 5000, timezone: null }
+	]);
+	const resolved = resolveCitySelection('TH', 'bangkok', undefined, undefined);
+	expect(resolved).toEqual({
+		ok: true,
+		city: { name: 'Bangkok', admin1Code: null, lat: 13.75, lng: 100.5 }
+	});
+	const withCoords = resolveCitySelection('TH', 'Bangkok', 13.7525, 100.4942);
+	expect(withCoords).toEqual({
+		ok: true,
+		city: { name: 'Bangkok', admin1Code: null, lat: 13.7525, lng: 100.4942 }
+	});
+});
+
+test('resolveCitySelection leaves free-text cities alone when maps are disabled', () => {
+	const resolved = resolveCitySelection('TH', 'Somewhere', undefined, undefined);
+	expect(resolved).toEqual({
+		ok: true,
+		city: { name: 'Somewhere', admin1Code: null, lat: null, lng: null }
+	});
 });
 
 test('findCity returns matching city', () => {
@@ -42,6 +68,72 @@ test('findCity returns matching city', () => {
 	const result = findCity('FR', 'Paris');
 	expect(result?.lat).toBe(48.85);
 	expect(findCity('fr', 'paris')?.lat).toBe(48.85);
+});
+
+test('findCity picks highest population when multiple cities share a name', () => {
+	repo.importCitiesBatch([
+		{
+			geonameId: 1,
+			name: 'Dallas',
+			asciiName: 'Dallas',
+			countryCode: 'US',
+			lat: 33.92,
+			lng: -84.84,
+			population: 14000,
+			timezone: null
+		},
+		{
+			geonameId: 2,
+			name: 'Dallas',
+			asciiName: 'Dallas',
+			countryCode: 'US',
+			lat: 32.78,
+			lng: -96.8,
+			population: 1300000,
+			timezone: null
+		}
+	]);
+	const city = findCity('US', 'Dallas');
+	expect(city?.geonameId).toBe(2);
+	expect(city?.lat).toBe(32.78);
+});
+
+test('resolveCitySelection keeps dropdown lat/lng even when a larger namesake exists', () => {
+	updateSettings({ mapsEnabled: true });
+	repo.importCitiesBatch([
+		{
+			geonameId: 1,
+			name: 'Dallas',
+			asciiName: 'Dallas',
+			countryCode: 'US',
+			lat: 33.92,
+			lng: -84.84,
+			population: 14000,
+			timezone: null
+		},
+		{
+			geonameId: 2,
+			name: 'Dallas',
+			asciiName: 'Dallas',
+			countryCode: 'US',
+			lat: 32.78,
+			lng: -96.8,
+			population: 1300000,
+			timezone: null
+		}
+	]);
+	// User picked the smaller Dallas from the autocomplete list
+	const picked = resolveCitySelection('US', 'Dallas', 33.92, -84.84);
+	expect(picked).toEqual({
+		ok: true,
+		city: { name: 'Dallas', admin1Code: null, lat: 33.92, lng: -84.84 }
+	});
+	// Typed name only → largest
+	const typed = resolveCitySelection('US', 'Dallas', undefined, undefined);
+	expect(typed).toEqual({
+		ok: true,
+		city: { name: 'Dallas', admin1Code: null, lat: 32.78, lng: -96.8 }
+	});
 });
 
 test('searchCities filters by country and prefix', () => {

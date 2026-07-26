@@ -6,16 +6,19 @@
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 	import { COUNTRIES } from '$lib/countries';
 	import CityAutocomplete from '$lib/components/segments/CityAutocomplete.svelte';
+	import Admin1Select from '$lib/components/Admin1Select.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import type { Visibility } from '$lib/server/repositories/tripsRepo';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string; defaultVisibility: Visibility }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationAdmin1Code?: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string; defaultVisibility: Visibility }; owner: boolean }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 	let destinationCountryCode = $state('');
+	let destinationAdmin1Code = $state('');
 	let isDirty = $state(false);
 	$effect(() => {
 		destinationCountryCode = data.trip.destinationCountryCode ?? '';
+		destinationAdmin1Code = data.trip.destinationAdmin1Code ?? '';
 	});
 
 	const statusLabel: Record<TripStatus, string> = {
@@ -73,11 +76,21 @@
 			</select>
 			{#if form?.errors?.destinationCountryCode}<p class="field-error">{form.errors.destinationCountryCode}</p>{/if}
 		</div>
+		<Admin1Select
+			countryCode={destinationCountryCode}
+			name="destinationAdmin1Code"
+			bind:value={destinationAdmin1Code}
+			errors={form?.errors ?? {}}
+			disabled={submitting}
+		/>
 		<div class="field">
 			<CityAutocomplete
 				countryCode={destinationCountryCode}
+				admin1Code={destinationAdmin1Code}
 				name="destinationCityName"
 				value={data.trip.destinationCityName ?? ''}
+				lat={data.trip.destinationCityLat}
+				lng={data.trip.destinationCityLng}
 				latName="destinationCityLat"
 				lngName="destinationCityLng"
 				errors={form?.errors ?? {}}
@@ -95,7 +108,7 @@
 			</select>
 			{#if form?.errors?.status}<p class="field-error">{form.errors.status}</p>{/if}
 		</div>
-		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}}>{data.trip.notes ?? ''}</TextAreaField>
+		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" value={data.trip.notes ?? ''} disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="tags" label="Tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="baseCurrency" label="Base currency" value={data.trip.baseCurrency ?? 'USD'} placeholder="USD" maxlength="3" disabled={submitting} errors={form?.errors ?? {}} />
 		<div class="flex flex-wrap justify-end gap-2 sm:col-span-2">

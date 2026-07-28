@@ -3,37 +3,34 @@
 
 # Medications
 
-Track prescription and over-the-counter medications for a trip on the trip page's
-**Prep** tab. Medications help you remember what to pack, when to take it, and
-who it is for.
+Medication records are private trip planning data.
 
-## Adding a medication
+## Fields
 
-On a trip's **Prep** tab, choose **Add medication**:
+- required name;
+- optional companion;
+- dosage;
+- schedule;
+- start/end timestamps;
+- notes.
 
-| Field | Notes |
-| --- | --- |
-| Name | Required (e.g. "Allegra", "EpiPen"). |
-| Companion | Optional link to the traveler who needs it. |
-| Dosage | e.g. "10 mg". |
-| Schedule | e.g. "Once daily with breakfast". |
-| Starts at / Ends at | Optional datetime range for the medication window. |
-| Notes | Free text (e.g. prescribing doctor, pharmacy contact). |
+The companion, when supplied, must belong to the same trip. Roamarr does not
+provide clinical advice, interaction checking, dose calculation, or pharmacy
+fulfillment.
 
-## Managing medications
+## Current access
 
-- **Edit** or **Delete** from the medication row on the Prep tab.
-- Medications are visible on the Prep tab alongside checklists, important items,
-  home tasks, and entry requirements.
+The current **Prep** panel does not render medication controls. Use an
+OAuth/MCP client:
 
-## Privacy
+- `roamarr_medication_list`;
+- `roamarr_medication_create`;
+- `roamarr_medication_delete`.
 
-Medication names, dosages, schedules, and notes are private to the trip owner and
-shared editors. They are never exposed through public share links or calendar
-feeds.
+Create/delete requires edit access. The list tool accepts a viewable trip when
+the client has `medications:read`. This can expose health information to a
+read-shared user's authorized client, so grant trip access and OAuth scopes
+carefully. Deletion requires `confirm: true`.
 
-## Related
-
-- [Companions](./companions.md) — travelers who may need medications.
-- [Home tasks](./home-tasks.md) — other pre-departure work.
-- [Important items](./important-items.md) — for tracking medical devices or other valuables.
+Medication data is excluded from public links, calendar feeds, notifications,
+and printable itineraries.

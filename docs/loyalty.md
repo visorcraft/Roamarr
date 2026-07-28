@@ -3,41 +3,30 @@
 
 # Loyalty programs
 
-Keep all your frequent-flyer, hotel, and rewards numbers in one place. Loyalty
-programs are **profile-level** — they belong to you, not to any single trip —
-so you can reference them wherever you travel.
+Loyalty records are user-owned and live under **Me → Loyalty**.
 
-## Managing programs
+## Fields
 
-From **Profile → Loyalty** (the loyalty page), add a program with:
+- required program name;
+- optional membership number;
+- optional whole-number balance;
+- balance-updated timestamp;
+- notes.
 
-| Field | Notes |
-| --- | --- |
-| Program name | Required (e.g. "United MileagePlus", "Marriott Bonvoy"). |
-| Membership number | Free text; sensitive, never shown publicly. |
-| Balance | Optional points/miles balance (whole number). |
-| Notes | Free text (e.g. elite status, expiry rules). |
+Roamarr does not connect to airline, hotel, or rewards providers. Update
+balances manually or with an authorized client.
 
-Edit or delete a program from its row. There is no per-trip ownership — the
-same program is available everywhere once added.
+## Privacy and storage
 
-## Using program numbers
+Membership numbers and notes are private, but they are not separately
+field-encrypted. They are protected by the encrypted MongrelDB database,
+filesystem controls, backups, and user ownership.
 
-Because membership numbers are sensitive, they are **not** exposed in public
-share links or calendar feeds. Reference them when booking or checking in by
-opening your profile. For per-segment payment tracking, link a [card](./cards.md)
-instead — segments have a `card_id` field for the card used to pay.
+Trip sharing never grants access to another user's loyalty records. Public
+links, calendars, notifications, and printable itineraries omit them.
 
-## Privacy
+OAuth/MCP loyalty reads use a privacy-safe projector that strips membership
+numbers and notes. `private-details:read` does not override that wallet
+redaction.
 
-- Program name, membership number, balance, and notes are private to you.
-- Shared users and groups on a trip do not see your loyalty programs.
-- Public links and the iCal/calendar feed never include them.
-
-## Notes
-
-- Loyalty programs are distinct from [insurance](./insurances.md) policies
-  (which can be attached to a trip) and from [travel documents](./travel-documents.md)
-  (passports/visas, which drive expiry reminders).
-- Keep balances current by editing the number after each redemption; Roamarr
-  does not sync with provider APIs.
+Avoid storing passwords, PINs, security answers, or redemption codes.

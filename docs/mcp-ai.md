@@ -17,29 +17,66 @@ budgets, reminders, travel records, and other Roamarr data through OAuth 2.1.
   `https://your-roamarr-origin/.well-known/mcp.json`.
 - **Authentication:** OAuth authorization code with mandatory PKCE (`S256`).
 
-Roamarr does not dynamically register OAuth clients. Create the client in
-Roamarr first, then give its client ID to the AI client. If an AI client asks
-for a server URL, enter `/mcp`; if it asks for an OAuth discovery or issuer URL,
-use `/.well-known/oauth-authorization-server`.
+Roamarr supports both manual clients and RFC 7591 Dynamic Client Registration.
+An administrator must enable **Allow users to set up MCP Clients**. Dynamic
+registration is unavailable while the administrator client-ID allow-list is
+nonempty.
+
+If an AI client asks for a server URL, enter `/mcp`. If it asks for an OAuth
+discovery or issuer URL, use
+`/.well-known/oauth-authorization-server`.
 
 When Roamarr is behind a reverse proxy, set `ORIGIN` to its public HTTPS origin.
 The discovery document builds its endpoint URLs from that origin.
 
-## Quick setup
+## Automatic setup
 
-1. Sign in to Roamarr and open **Profile → MCP Clients**.
-2. Under **Create a client**, enter a recognizable name and the exact redirect
+Use this when the MCP host supports OAuth Dynamic Client Registration:
+
+1. An administrator enables **Configuration → MCP Clients → Allow users to set
+   up MCP Clients** and leaves **Allowed client IDs** empty.
+2. In the MCP host, add a **Streamable HTTP** server.
+3. Enter Roamarr's `/mcp` URL and select OAuth.
+4. Ask the host to register with an explicit narrow scope set.
+5. Complete the browser consent flow.
+6. The first approving user claims the dynamic client and can manage it under
+   **Profile → MCP Clients**.
+
+Open WebUI supports this flow from **Admin Settings → External Tools**. Select
+**MCP (Streamable HTTP)**, enter the `/mcp` URL, select OAuth 2.1, register, and
+approve.
+
+If a client omits registration `scope`, Roamarr registers every currently
+available scope. Review the consent page and prefer a client that requests
+explicit scopes.
+
+## Manual setup
+
+1. An administrator enables user MCP setup.
+2. Sign in to Roamarr and open **Profile → MCP Clients**.
+3. Under **Create a client**, enter a recognizable name and the exact redirect
    URI supplied by your AI client.
-3. Select only the scopes the client needs.
-4. Enable **Public client** for desktop, mobile, browser, or other clients that
+4. Select only the scopes the client needs.
+5. Enable **Public client** for desktop, mobile, browser, or other clients that
    cannot safely keep a secret. Leave it disabled for a trusted server-side
    client.
-5. Create the client. Save the client ID and, for a confidential client, the
+6. Create the client. Save the client ID and, for a confidential client, the
    one-time client secret.
-6. Configure the AI client with Roamarr's `/mcp` URL, OAuth discovery URL,
+7. Configure the AI client with Roamarr's `/mcp` URL, OAuth discovery URL,
    client ID, and client secret when applicable.
-7. Start the connection. Roamarr opens a consent page showing every requested
+8. Start the connection. Roamarr opens a consent page showing every requested
    scope. Review it, then authorize.
+
+Common redirect examples:
+
+- desktop loopback: `http://127.0.0.1:33389/mcp-oauth-callback`;
+- local web host: `http://localhost:3000/callback`;
+- hosted service: `https://assistant.example.com/oauth/callback`;
+- public native app: reverse-DNS custom scheme, when dynamically registered.
+
+LM Studio can use the `/mcp` URL and a manually registered client when static
+credentials are required. Ollama is a model server, not an OAuth MCP host;
+register the surrounding application that connects Ollama to MCP.
 
 The full OAuth flow, token exchange, refresh, and revocation rules are in
 [OAuth 2.1 integration](./oauth.md).
@@ -134,8 +171,9 @@ Useful requests to give an AI assistant:
 ## Surface
 
 The current server exposes 109 tools, 16 prompts, and 9 resource templates.
-Use live list methods because clients see only prompts and resources allowed by
-their scopes.
+`tools/list` is the complete current tool catalog and includes every JSON input
+schema. Use live list methods because the surface can change between releases,
+and clients see only prompts/resources allowed by their scopes.
 
 ### Common tools
 
@@ -259,27 +297,42 @@ restart or stale session returns `404 Session not found`; initialize again.
 
 ## Privacy and safety
 
-- Tools enforce the authenticated user and the same owner/view/edit rules as
-  the web application.
-- Public/share projections and AI-facing projectors remove confirmation,
-  membership, policy, and document numbers plus private notes.
-- Tokens are stored hashed. Deleting an API client invalidates all its tokens.
+- Each tool enforces its own owner, edit, or view rule after OAuth scope
+  checks. A scope never creates trip access.
+- Base trip reads use the reduced share projection for read-shared users.
+  `private-details:read` can add trip notes, confirmations, and itinerary
+  details only when both administrator policy and user consent allow it.
+- Card projectors never contain a full PAN because Roamarr never stores one.
+  AI-facing card, loyalty, insurance, and travel-document projectors continue
+  to strip protected numbers and sensitive notes.
+- Feature-specific tools such as medication, important-item, journal, home-task,
+  requirement, and poll lists have their own read scopes and can accept a
+  viewable shared trip. Their returned feature data is not controlled by
+  `private-details:read`. Do not grant those scopes or trip shares casually.
+- Search can return indexed note/confirmation text when semantic search is
+  enabled. See [Search](./search.md).
+- Access and refresh tokens are long-lived bearer secrets. Plaintext tokens are
+  returned only to the client; stored values are SHA-256 hashes.
+- Deleting an MCP client invalidates its grants. Password changes do not
+  automatically revoke OAuth grants.
 - Security-sensitive mutations are audit logged.
-- Write scopes permit real data changes. Prefer read-only scopes for analysis,
-  and require the assistant to preview changes before execution.
+- Write scopes permit real data changes. Destructive tools additionally require
+  `confirm: true`. Prefer read-only scopes and have the assistant preview
+  proposed changes.
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
 | Client cannot discover endpoints | Set public `ORIGIN`, use HTTPS, and verify both well-known URLs return the public origin. |
-| Client asks for dynamic registration | Roamarr uses manual registration. Create an API Client in Roamarr and enter its client ID manually. |
+| Dynamic registration returns `403` | Enable user MCP client setup. |
+| Dynamic registration says the allow-list is configured | Clear the administrator client-ID allow-list or register/manage a permitted manual client. |
 | `401 Bearer token required` | The client omitted the access token. Complete OAuth and send `Authorization: Bearer ...`. |
-| `401 Invalid or expired token` | Refresh the token or authorize again. Refresh rotation invalidates the old token immediately. |
+| `401 Invalid or expired token` | The grant was revoked, the user is disabled/deleted, or the client needs reauthorization. Authorize again. Refresh rotation invalidates the old pair immediately. |
 | `400 initialize request required` | Start a new MCP connection with `initialize`. |
 | `400 mcp-session-id header required` | Send the session ID returned by initialize on later requests. |
 | `404 Session not found` | The session expired or Roamarr restarted. Initialize again. |
-| Tool reports missing scope | Create a replacement API Client with the required narrow scope, then authorize it. Existing clients and tokens do not gain scopes. |
+| Tool reports missing scope | Create a replacement MCP client with the required narrow scope, then authorize it. Existing clients and tokens do not gain scopes. |
 | Prompt/resource is missing | Its read scope was not granted. Check the live lists after reconnecting. |
 | OAuth redirect fails | The redirect URI must exactly match one registered on the API Client. |
 

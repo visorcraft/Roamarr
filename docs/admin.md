@@ -1,77 +1,118 @@
 <!-- SPDX-FileCopyrightText: 2026 Visorcraft LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# Admin
+# Administration
 
-The first user created during [setup](./getting-started.md) is an admin. Admins
-reach these pages under **Settings** in the sidebar.
+The first setup account is an administrator. Administrative navigation is
+split between **Configuration**, **Users**, **Fare providers**, and
+**Maintenance**.
 
-## Settings overview
+## Configuration → General
 
-The main **Settings** page holds instance-wide configuration:
+General settings include:
 
-- **General** — instance name, default currency/timezone, **Allow registration**,
-  default flight-check-in lead hours, default document-expiry lead days.
-- **Maps** — GeoNames `cities1000.zip` import and tile-provider configuration.
-  See [Maps](./maps.md).
-- **Email (SMTP)** — host, port, transport security, credentials, from address,
-  and **Send test email**. Password is encrypted at rest. See
-  [Notifications](./notifications.md).
-- **Webhook** — outbound URL with **Send test notification** (fans out to all
-  enabled channels).
-- **Notification channels / recent activity** — per-account toggles and log.
-- **OAuth clients** — server-side allow-list of permitted client IDs. Empty
-  allows any client; populated restricts authorization to listed IDs. See
-  [OAuth 2.1 integration](./oauth.md) (section "Admin: client allow-list")
-  for the rotation procedure and interaction with the per-user API
-  connections page.
+- instance name;
+- default currency and timezone for new users/data;
+- default date and date/time display formats;
+- public self-registration;
+- session-cookie `SameSite` policy (`lax` or `strict`);
+- default flight check-in and document-expiry reminder leads;
+- email polling interval, 1 through 1440 minutes;
+- optional local semantic search.
 
-## User management — Settings → Users
+`SameSite=Strict` forces reauthentication when arriving from some external
+email or OAuth flows. The setting applies to newly issued session cookies.
 
-Admins can **create** users (role `admin`/`user`), **disable** (blocks login,
-invalidates sessions, keeps data), **force password reset**, **delete**
-(cascades to trips/groups), and change a role or email. Each action is recorded
-in the audit log — prefer it over editing the database directly.
+Semantic search is off by default. Enabling downloads a local MiniLM ONNX model
+and indexes broader trip text. Read [Search](./search.md), including its
+privacy boundary, before enabling it.
 
-## Audit logs — Settings → Audit logs
+## Configuration → Maps
 
-Every security-relevant mutation (`logAudit()`) is recorded: logins, share
-changes, user create/disable/delete, settings changes, backups, etc. Filter by
-action or user; entries include the actor, entity type/id, and metadata JSON.
+Enable/disable Maps, import GeoNames, download the globe texture, and configure
+the raster provider. API keys are encrypted. See [Maps](./maps.md).
 
-## Backups — Settings → Backup
+## Configuration → Email
 
-Snapshot the MongrelDB database via the kit backup API; download or restore
-a previous snapshot. Capture `ROAMARR_SECRET` alongside any backup — encrypted
-fields are unreadable without it.
+Tabs control:
 
-## Jobs — Settings → Jobs
+- whether users may configure personal IMAP, SMTP, and AI parsing;
+- the global inbound IMAP mailbox;
+- an optional global OpenAI-compatible parsing provider;
+- global outbound SMTP.
 
-Inspect recent **scheduler runs** (start, finish, success, error) to confirm
-reminders, fare checks, and session cleanup are firing on the 60-second tick.
+Saved passwords, keys, and client secrets are encrypted. A remote AI parser
+receives email content. See [Email processing](./email-processing.md) and
+[Notifications](./notifications.md).
 
-## Demo data — Settings → Seed
+## Configuration → Webhooks
 
-Seed a starter dataset (sample trips, segments, expenses) for evaluation or a
-fresh install — handy for trying features without manual data entry.
+Set one instance-wide outbound notification URL and test it. Users separately
+enable webhook delivery in Profile. Roamarr signs every exact JSON body with
+`ROAMARR_SECRET`.
 
-## Fare providers — Settings → Fare providers
+Only `http`/`https` URLs without credentials are accepted. Literal local and
+private IP ranges are rejected. Redirects are not followed. See
+[Notifications](./notifications.md#signed-webhook).
 
-Register fare-watch providers and their (encrypted) API keys. See
+## Configuration → MCP Clients
+
+Administrators control:
+
+- whether users can set up MCP clients;
+- whether AI clients may request private trip details;
+- an optional allowed client-ID list.
+
+User MCP setup is disabled by default. A nonempty allowed-ID list disables
+Dynamic Client Registration and limits authorization. Existing grants remain
+independently revocable.
+
+See [OAuth 2.1](./oauth.md) and [MCP and AI](./mcp-ai.md).
+
+## Users
+
+Administrators can:
+
+- create user or administrator accounts;
+- change role or email;
+- disable/enable an account;
+- require a password reset;
+- delete an account.
+
+Disabling blocks authentication and invalidates usable access while preserving
+data. Deletion cascades according to database ownership relationships and can
+remove owned trips/groups. Take a backup and verify the target before deleting.
+
+Public registration requires completed setup and **Allow self-registration**.
+Disabled users cannot sign in or use OAuth tokens.
+
+## Fare providers
+
+The current registry ships only **Stub (demo)**, which returns no live fare
+data. Provider account keys are encrypted. See
 [Fare providers](./fare-providers.md).
 
-## Maintenance — Settings → Maintenance
+## Maintenance
 
-Run low-level MongrelDB operations against the live database:
+- **Database Maintenance**: integrity, Flush, Garbage collect, Doctor.
+- **Job History**: scheduler results and manual guarded run.
+- **Audit Logs**: filter, inspect, and export security activity.
+- **Backup & Restore**: full database/default-attachment archive and staged
+  restore.
+- **Seed Demo Data**: repeatable in-process demonstration dataset.
 
-- **Integrity check** — verifies database file structure.
-- **Garbage collect** — reclaims unused space.
-- **Flush** — forces pending writes to disk.
-- **Doctor** — runs diagnostics and reports anomalies.
+Doctor and restore can destroy data. Read [Operations](./operations.md) and
+[Backup and restore](./backup-restore.md) first.
 
-Each action returns its raw output for inspection. Prefer the **Backup** page
-before running maintenance against a production database.
+## Audit and secrets
 
-## GeoNames import — Settings → Maps
+Administrative changes are logged with actor and entity metadata. Prefer the UI
+or supported API over direct database edits.
 
-Upload `cities1000.zip` to populate city autocomplete. See [Maps](./maps.md).
+Secret fields generally show only whether a value exists. Leaving a masked
+secret input blank preserves it unless the page explicitly says it clears or
+removes the credential.
+
+Administrators can read operational metadata and control integrations. Limit
+the role to trusted accounts, require strong authentication, and review active
+sessions and audit logs.

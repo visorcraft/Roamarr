@@ -3,36 +3,52 @@
 
 # Printable itinerary
 
-Generate a clean, print-friendly version of any trip from the trip page menu.
-The printable view is optimized for paper, PDF export, or saving to a travel app.
+Choose **Print** from a viewable trip's menu. The authenticated page is
+formatted for paper or the browser's Save as PDF feature.
 
-## What's included
+## Contents
 
-The printable itinerary shows:
+The view includes:
 
-- Trip name, destination, dates, and duration.
-- A traveler list from the trip's [companions](./companions.md).
-- The full segment timeline grouped by day.
-- Start times, locations, confirmation numbers, and meeting points.
+- trip name, destination, and date range;
+- traveler roster;
+- segment timeline grouped by local day;
+- type, title, start/end, and location;
+- meeting fields;
+- confirmation and type-specific details when the signed-in view permits them.
 
-## How to print
+Owners and edit shares receive editor detail. A read share receives
+confirmation/detail fields only when that share has **Show details**.
 
-1. Open a trip page.
-2. Choose **Print** from the trip header menu.
-3. Click **Print** in the top-right corner.
-4. Use your browser's print dialog to send to a printer or save as PDF.
+Public-link visitors cannot use the authenticated print route. Calendar feeds
+are separate and always reduced.
 
-The print stylesheet removes the navigation shell and uses high-contrast black
-ink on white paper.
+## Print
+
+1. Open the trip while signed in.
+2. Choose **Print**.
+3. Review every page.
+4. Use the browser print dialog.
+5. Select a printer or Save as PDF.
+
+Browser headers, margins, paper size, and background printing are controlled by
+the browser.
 
 ## Privacy
 
-Printable itineraries include the same details you see on the trip page.
-Confirmation numbers and notes are included because the printed copy is in your
-hands; do not share printed copies more widely than you are comfortable.
+The printable page can contain companion names, locations, travel times,
+meeting points, confirmations, and booking details. A printed page or saved PDF
+is outside Roamarr's revocation controls.
 
-## Related
+Before sharing:
 
-- [Trips](./trips.md) — trip page organization.
-- [Segments](./segments.md) — the itinerary timeline.
-- [Sharing](./sharing.md) — digital sharing options with access controls.
+- confirm the viewer's **Show details** setting;
+- remove unnecessary sensitive segment detail;
+- review the traveler roster;
+- avoid public/shared printers;
+- protect or delete saved PDFs;
+- verify the recipient before emailing an emergency itinerary.
+
+Expenses, budgets, receipts, document numbers, card data, loyalty numbers,
+policy numbers, and emergency-contact records are not printable itinerary
+fields.

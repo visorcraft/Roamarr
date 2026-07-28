@@ -1,69 +1,116 @@
 <!-- SPDX-FileCopyrightText: 2026 Visorcraft LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# Roamarr Documentation
+# Roamarr documentation
 
-Welcome to the Roamarr documentation. Roamarr is a self-hosted,
-single-container travel organizer — a Trip Tracker-style tool for managing trips,
-segments, sharing, reminders, documents, and more.
+Roamarr is a private, self-hosted travel organizer. This manual covers using,
+operating, securing, integrating, and contributing to the application.
 
-## Getting started
+## Start here
 
-- [Getting started](./getting-started.md) — installation, env vars, first
-  trip, and map setup.
+- [Getting started](./getting-started.md): install from source, create the
+  first administrator, and build a first trip.
+- [Deployment and upgrades](./deployment.md): production environment,
+  persistent data, reverse proxies, health checks, upgrades, and rollback.
+- [Troubleshooting](./troubleshooting.md): startup, database, upload, map,
+  email, search, OAuth, and MCP failures.
 
-## Core features
+## Trips and itineraries
 
-- [Trips](./trips.md) — creating, editing, duplicating, archiving, statuses.
-- [Segments](./segments.md) — flights, hotels, events, and every segment type.
-- [Companions](./companions.md) — travel companions, dietary, assignments.
-- [Sharing](./sharing.md) — user/group sharing, public links, calendar feeds.
-- [Expenses](./expenses.md) — multi-currency expenses with receipt attachments.
-- [Budgets](./budgets.md) — budget categories with spent tracking.
-- [Reminders](./reminders.md) — flight check-in, custom, and segment reminders.
-- [Maps](./maps.md) — MapLibre GL integration and tile provider configuration.
-- [Packing templates](./packing-templates.md) — reusable checklist templates.
-- [Polls](./polls.md) — group decision-making on trips.
-- [Insurances](./insurances.md) — insurance policies and benefit templates.
-- [Loyalty](./loyalty.md) — loyalty program tracking.
-- [Import/Export](./import-export.md) — trip backup and restore.
-- [Printable itinerary](./printable-itinerary.md) — print-friendly trip view.
-- [Fare providers](./fare-providers.md) — price watches on flight segments.
-- [Groups](./groups.md) — reusable sharing groups.
+- [Trips](./trips.md): fields, statuses, tabs, duplication, merge, archive,
+  deletion, and dashboard behavior.
+- [Segments](./segments.md): every itinerary type, times, statuses, attendees,
+  details, and privacy.
+- [Trip checklists](./checklists.md): preparation items, assignments, packed
+  state, tools, and visibility.
+- [Companions](./companions.md): travelers, linked users, invitations,
+  preferences, assignments, and sensitive details.
+- [Sharing](./sharing.md): direct and group access, public links, exact data
+  visibility, expiry, and revocation.
+- [Calendars](./calendars.md): downloads, per-trip subscription feeds, the
+  account feed, token rotation, and event contents.
+- [Printable itinerary](./printable-itinerary.md): print/PDF output and its
+  privacy boundary.
+- [Import and export](./import-export.md): JSON/CSV schemas, preview behavior,
+  limitations, and why export is not a backup.
+- [Trip document links](./document-links.md): external voucher/file URLs,
+  management, security, and privacy.
+- [Templates and trip merge](./templates-and-merge.md): trip templates,
+  packing templates, duplication, and donor-to-recipient merge behavior.
+- [Maps](./maps.md): map enablement, GeoNames, the globe, tile providers,
+  network access, and attribution.
+- [Weather](./weather.md): Open-Meteo forecasts, cache behavior, advisories,
+  privacy, and limitations.
+- [Search](./search.md): lexical search, optional local semantic search,
+  indexing, model storage, access controls, and privacy.
+- [Visited places](./visited-places.md): countries and U.S. states.
 
-## Traveler details
+## Planning and collaboration
 
-- [Travel documents](./travel-documents.md) — passports, visas, and expiry reminders.
-- [Cards](./cards.md) — payment cards and travel benefits.
-- [Medications](./medications.md) — trip medications on the Prep tab.
-- [Entry requirements](./entry-requirements.md) — visa and vaccination tracking.
-- [Important items](./important-items.md) — valuables, serial numbers, and trackers.
-- [Home tasks](./home-tasks.md) — pre-departure to-dos.
-- [Journal](./journal.md) — daily trip notes.
+- [Expenses](./expenses.md): currencies, exchange rates, categories, splits,
+  receipts, and visibility.
+- [Budgets](./budgets.md): category targets and same-currency comparisons.
+- [Packing templates](./packing-templates.md): reusable checklist snapshots.
+- [Polls](./polls.md): options, votes, deadlines, and deletion.
+- [Reminders](./reminders.md): automatic and custom reminders, delivery, and
+  scheduler behavior.
+- [Fare providers](./fare-providers.md): provider accounts and price watches.
+- [Groups](./groups.md): reusable dynamic sharing groups.
+- [Journal](./journal.md): dated trip entries.
+- [Home tasks](./home-tasks.md): pre-departure tasks.
+- [Medications](./medications.md): trip medication lists.
+- [Entry requirements](./entry-requirements.md): visa, vaccination, and other
+  destination requirements.
+- [Important items](./important-items.md): valuables and trackers.
 
-## Identity & security
+## Personal data and account
 
-- [Account security](./account-security.md) — passwords, 2FA (TOTP + backup
-  codes), passkeys (WebAuthn), sessions, and forced password resets.
-- [Notifications](./notifications.md) — admin SMTP, webhooks, and per-user SMTP.
-- [Admin](./admin.md) — user management, jobs, backups, audit logs, map tiles.
+- [Account and profile](./accounts-and-profile.md): profile preferences,
+  emergency contacts, sessions, themes, notification preferences, and the
+  account calendar.
+- [Account security](./account-security.md): passwords, reset flow, TOTP,
+  backup codes, passkeys, and session revocation.
+- [Travel documents](./travel-documents.md): passports, visas, licenses,
+  encryption, ownership, and expiry reminders.
+- [Cards](./cards.md): safe card metadata and travel benefits.
+- [Loyalty](./loyalty.md): memberships, balances, and privacy.
+- [Insurance](./insurances.md): policies, benefits, trip links, and privacy.
+- [Notifications](./notifications.md): in-app, SMTP, and signed webhook
+  delivery.
+- [Personal SMTP](./per-user-smtp.md): user-owned outgoing mail settings and
+  fallback behavior.
+- [Email processing](./email-processing.md): global and personal IMAP,
+  parsing, matching, deduplication, security, and replies.
 
-## Integrations and advanced features
+## Administration and operations
 
-- [Visited places](./visited-places.md) — track countries and U.S. states.
-- [Weather](./weather.md) — trip-level and per-day forecasting via Open-Meteo.
-- [OAuth 2.1 integration](./oauth.md) — generic OAuth 2.1 + PKCE reference:
-  scopes, endpoints, discovery, token lifecycle, allow-list.
-- [MCP / AI integration](./mcp-ai.md) — setup, least-privilege scope recipes,
-  tools, prompts, resources, protocol testing, and troubleshooting.
-- [Per-user SMTP](./per-user-smtp.md) — send notifications from your own mailbox.
+- [Administration](./admin.md): instance settings, users, registration, email,
+  maps, webhooks, MCP policy, and maintenance navigation.
+- [Operations](./operations.md): scheduler jobs, health endpoints, audit logs,
+  database maintenance, demo data, and operational checks.
+- [Backup and restore](./backup-restore.md): archive contents, exclusions,
+  validation, restart workflow, recovery, and secret handling.
+- [Deployment and upgrades](./deployment.md): runtime variables, storage,
+  single-process requirement, uploads, monitoring, and upgrades.
+- [Security and privacy](./SECURITY.md): protection boundaries, outbound data,
+  deployment controls, and private vulnerability reporting.
 
-## Conventions
+## Integrations
 
-- Markdown only; link from the main `README.md` Documentation section.
-- Keep examples runnable against the current UI.
-- Each feature PR includes/updates its own doc page.
+- [OAuth 2.1](./oauth.md): discovery, client registration, PKCE, consent,
+  scopes, tokens, revocation, and administrator controls.
+- [MCP and AI](./mcp-ai.md): Streamable HTTP setup, tools, prompts, resources,
+  privacy gates, client examples, and protocol troubleshooting.
+- [HTTP JSON API](./http-api.md): supported bearer-authenticated route
+  families, methods, scopes, errors, and compatibility expectations.
 
-## Policies
+## Development
 
-- [Security](./SECURITY.md) — security policy, scope, and disclosure process.
+- [Repository README](../README.md): product overview, source setup,
+  architecture, commands, and license.
+- [Contributing](../CONTRIBUTING.md): code layout, standards, tests,
+  documentation, dependencies, and pull requests.
+
+All paths and menu labels describe the current release. For settings that hold
+credentials, leaving the displayed secret field blank preserves the saved
+value unless the page explicitly says it will clear it.

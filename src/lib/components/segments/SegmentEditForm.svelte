@@ -52,8 +52,8 @@
 	const flight = $derived(s.type === 'flight');
 	const pickupDropoff = $derived(usesPickupDropoff(s.type));
 
-	let countryCode = $state(s.countryCode ?? '');
-	let admin1Code = $state(s.admin1Code ?? '');
+	let countryCode = $derived(s.countryCode ?? '');
+	let admin1Code = $derived(s.admin1Code ?? '');
 	let isDirty = $state(false);
 </script>
 

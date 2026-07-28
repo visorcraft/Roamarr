@@ -3,51 +3,85 @@
 
 # Expenses
 
-Track what a trip costs on the **Money** tab. Each expense is an amount in any
-currency, normalized into the trip's base currency for totals.
+Trip expenses live on the **Budget** tab and are available only to the owner
+and edit shares.
 
-## Adding an expense
+## Fields
 
-| Field | Notes |
+| Field | Behavior |
 | --- | --- |
-| Description | Required (e.g. "Hotel — 2 nights"). |
-| Amount + currency | The original amount and its currency (e.g. `120 EUR`). |
-| Category | `lodging`, `transport`, `food`, `activities`, `other`. |
-| Paid by | Optional [companion](./companions.md) who fronted the money. |
-| Split among | Optional companions sharing the cost. |
-| Receipt | Optional image/PDF attachment. |
+| Description | Required label. |
+| Amount | Positive amount stored as integer minor units. |
+| Currency | Uppercase currency code accepted by the current endpoint. |
+| Category | `lodging`, `transport`, `food`, `activities`, or `other`. |
+| Exchange rate | Optional stored rate, scaled to four decimal places by supported APIs. |
+| Payer | Optional trip companion. |
+| Splits | Optional companion IDs sharing the expense. |
+| Receipt | Optional encrypted JPEG, PNG, WebP, or PDF. |
 
-When the expense currency differs from the trip's base currency, Roamarr
-converts it using a stored exchange rate and records both the original
-`amount` and a normalized `base_amount`. Totals in the Money tab and in
-[budgets](./budgets.md) are always shown in the trip's base currency.
+The current trip-page quick form collects description, amount, currency, and
+category. Scoped API/MCP operations can manage payer, splits, and stored
+exchange-rate fields.
 
-## Categories
+## Currency
 
-The five fixed categories match the budget categories so spending rolls up
-cleanly:
+Roamarr does not fetch foreign-exchange rates. An expense keeps:
 
-- **lodging** — hotels, rentals.
-- **transport** — flights, trains, rentals, rides.
-- **food** — restaurants, groceries.
-- **activities** — tickets, tours.
-- **other** — anything else.
+- original amount and currency;
+- stored exchange rate;
+- computed base amount.
 
-## Receipt attachments
+The default rate is `1.0`. Entering a different rate is the caller's
+responsibility. Historical values do not update when market rates change.
 
-Attach a photo or PDF receipt to each expense. Attachments are stored on disk
-(under `ATTACHMENTS_PATH`) and are private — they are never exposed through
-public share links or calendar feeds. Delete the attachment from the expense
-row at any time.
+Category budgets compare only expenses whose currency matches that budget
+line. See [Budgets](./budgets.md).
 
-## Splitting costs
+## Receipts
 
-Set **Paid by** to one companion and **Split among** to the people sharing that
-cost, to keep a running sense of who owes what. Splits are informational; they
-do not move money.
+Supported content:
 
-## Privacy
+- JPEG;
+- PNG;
+- WebP;
+- PDF;
+- maximum 10 MB per attachment.
 
-Expenses, amounts, and receipts are personal data. They are visible only to the
-trip owner and any shared users/groups — never through public links or the
-calendar feed.
+Roamarr validates content signatures, encrypts attachment chunks with
+AES-256-GCM, and stores them under `ATTACHMENTS_PATH`. A renamed unsupported
+file is rejected.
+
+The adapter-node and proxy request limits must allow the upload. See
+[Deployment and upgrades](./deployment.md#adapter-node-variables).
+
+Receipts under the default attachment directory are part of the full
+administrator backup. A custom attachment path outside the database parent
+needs its own backup. Receipts are not included in trip JSON/CSV export.
+
+## Splits and settlements
+
+Payer and split assignments provide an informational view of who covered an
+expense and who shares it. Roamarr does not transfer funds, charge cards, or
+settle balances.
+
+Deleting a companion can affect these references. Review trip money after
+companion changes.
+
+## Export
+
+The Budget tab can export expense rows as CSV for local analysis. Treat this
+file as private financial and travel data.
+
+Trip JSON/CSV export is a separate itinerary portability feature and does not
+carry receipts or the whole money graph.
+
+## Visibility
+
+Expenses, rates, payer/split data, and receipts are never included in:
+
+- read-only direct/group trip projections;
+- public links;
+- calendar feeds;
+- printable itineraries.
+
+An edit share can view and modify money data. Grant edit access accordingly.

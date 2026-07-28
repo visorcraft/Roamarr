@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const docsDir = join(repoRoot, 'docs');
 const readmePath = join(repoRoot, 'README.md');
+const contributingPath = join(repoRoot, 'CONTRIBUTING.md');
 const docsIndexPath = join(docsDir, 'README.md');
 
 function readDoc(path: string): string {
@@ -26,14 +27,10 @@ function listDocFiles(): string[] {
 	return readdirSync(docsDir).filter((name) => name.endsWith('.md'));
 }
 
-function resolveRelativeDocLink(sourceDir: string, href: string): string | null {
-	if (href.startsWith('./')) {
-		return join(sourceDir, href);
-	}
-	if (href.startsWith('../')) {
-		return resolve(sourceDir, href);
-	}
-	return null;
+function resolveLocalLink(sourceDir: string, href: string): string | null {
+	const path = href.split(/[?#]/, 1)[0]!;
+	if (!path || path.startsWith('/') || /^[a-z][a-z\d+.-]*:/i.test(path)) return null;
+	return resolve(sourceDir, path);
 }
 
 describe('documentation index', () => {
@@ -46,6 +43,16 @@ describe('documentation index', () => {
 		for (const link of links) {
 			const target = join(docsDir, link.href);
 			expect(existsSync(target), `missing doc link target: ${link.href}`).toBe(true);
+		}
+	});
+
+	test('docs/README.md indexes every public markdown guide', () => {
+		const indexed = new Set(
+			extractMarkdownLinks(readDoc(docsIndexPath)).map((link) => link.href)
+		);
+		for (const name of listDocFiles()) {
+			if (name === 'README.md') continue;
+			expect(indexed.has(`./${name}`), `docs/README.md does not index ${name}`).toBe(true);
 		}
 	});
 
@@ -64,9 +71,19 @@ describe('documentation index', () => {
 			const body = readDoc(sourcePath);
 			const links = extractMarkdownLinks(body);
 			for (const link of links) {
-				const target = resolveRelativeDocLink(docsDir, link.href);
+				const target = resolveLocalLink(docsDir, link.href);
 				if (!target) continue;
 				expect(existsSync(target), `${name}: missing link target ${link.href}`).toBe(true);
+			}
+		}
+	});
+
+	test('root public docs link only to existing local files', () => {
+		for (const sourcePath of [readmePath, contributingPath]) {
+			for (const link of extractMarkdownLinks(readDoc(sourcePath))) {
+				const target = resolveLocalLink(repoRoot, link.href);
+				if (!target) continue;
+				expect(existsSync(target), `${sourcePath}: missing link target ${link.href}`).toBe(true);
 			}
 		}
 	});

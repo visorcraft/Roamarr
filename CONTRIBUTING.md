@@ -50,8 +50,9 @@ when the change affects the UI.
 - `src/lib/server/` contains auth, settings, scheduler, sharing, ownership,
   travel-domain logic, import/export, notifications, expenses, and admin
   operations.
-- `src/lib/server/db/` contains MongrelDB Kit schema, connection setup, and
-  repository helpers.
+- `src/lib/server/db/` contains the MongrelDB Kit schema, database singleton,
+  migrations, and compatibility gate. Repositories live under
+  `src/lib/server/repositories/`.
 - `src/lib/components/`, `src/lib/icons.ts`, and `src/app.css` contain shared UI
   components, icon names, Tailwind v4 tokens, and reusable app classes.
 - `tests/helpers.ts` and `tests/eventHelpers.ts` contain shared database and
@@ -79,9 +80,16 @@ Useful commands:
 npm run dev              # Vite dev server
 npm run check            # Svelte + TypeScript check
 npm test                 # Vitest suite once
+npm run test:e2e:install # install Playwright Chromium
+npm run test:e2e         # reset the port-3002 container and run Playwright
 npm run build            # production build to ./build
 npm run credits:generate # regenerate bundled license and credits data
+npm run db:compat-fixture # intentionally refresh the sample database fixture
 ```
+
+The end-to-end wrapper requires Podman and the maintainer-local, gitignored
+`compose.local.yml`. Public clones do not include that file. Use the Vitest and
+build gates unless you provide an equivalent local compose configuration.
 
 Do not commit real `.env` files, local databases, logs, generated build output,
 Playwright output, screenshots, dependencies, or machine-local state.
@@ -154,9 +162,10 @@ Update documentation in the same pull request when behavior, setup, deployment,
 environment variables, or user-facing workflows change.
 
 - Setup and usage belong in [README.md](README.md).
+- The complete public manual is indexed at [docs/README.md](docs/README.md).
 - Security disclosure and threat model details belong in
   [docs/SECURITY.md](docs/SECURITY.md).
-- Dependency changes should run `npm run credits:generate` so the Settings/About
+- Dependency changes should run `npm run credits:generate` so the About
   license and credits pages stay current.
 
 ## Dependency Policy
@@ -169,7 +178,7 @@ When changing dependencies:
 
 1. Update `package.json` and `package-lock.json`.
 2. Run `npm run credits:generate`.
-3. Verify the Settings/About license and credits pages still render.
+3. Verify the About license and credits pages still render.
 
 ## Pull Request Expectations
 

@@ -3,32 +3,30 @@
 
 # Home tasks
 
-Home tasks are things to do before you leave home: hold mail, adjust the
-thermostat, water plants, or notify a neighbor. They live on the trip page's
-**Prep** tab.
+Home tasks track work before departure, such as holding mail or watering
+plants.
 
-## Adding a home task
+## Fields and behavior
 
-On a trip's **Prep** tab, choose **Add home task**:
+- required task text;
+- optional due date;
+- done flag;
+- trip ownership link.
 
-| Field | Notes |
-| --- | --- |
-| Task | Required (e.g. "Hold mail delivery"). |
-| Due date | Optional date by which it should be done. |
+Tasks are trip-specific and do not recur or copy automatically.
 
-## Managing tasks
+## Current access
 
-- **Toggle** a task to mark it done; the Prep tab shows progress.
-- **Edit** or **Delete** a task from its row.
-- Tasks are reset per trip; they do not roll over automatically.
+The server has trip-page actions, but the current **Prep** panel does not
+render home-task controls. Use an OAuth/MCP client:
 
-## Privacy
+- `roamarr_home_task_list`;
+- `roamarr_home_task_create`;
+- `roamarr_home_task_toggle_done`;
+- `roamarr_home_task_delete`.
 
-Home task text is visible only to the trip owner and shared editors. Public share
-links and calendar feeds never include it.
+Write operations require edit access. The list tool accepts a viewable trip
+when the client has `home-tasks:read`. Deletion requires `confirm: true`.
 
-## Related
-
-- [Entry requirements](./entry-requirements.md) — visa and vaccination prep.
-- [Important items](./important-items.md) — valuables and gear.
-- [Medications](./medications.md) — trip medications.
+Home tasks are excluded from public links and calendar feeds. Task text may
+reveal home absence or security information, so share and scope it carefully.

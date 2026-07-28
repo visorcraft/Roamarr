@@ -3,55 +3,80 @@
 
 # Reminders
 
-Reminders nudge you before something happens. They are created on trips and
-segments, then delivered on schedule by Roamarr's background scheduler.
+Reminders are user-owned alerts tied to a trip, segment, document, or explicit
+time.
 
-## Reminder kinds
+## Kinds
 
-| Kind | Source | Fires when |
+| Kind | Source | Schedule |
 | --- | --- | --- |
-| **Flight check-in** | Auto-created for flight segments | `flight_checkin_lead_hours` before departure (default 24h). |
-| **Document expiry** | Travel documents | `document_expiry_lead_days` before a passport/visa expires (default 90 days). |
-| **Custom** | You, on a trip or segment | A chosen offset before the trip/segment start. |
+| Flight check-in | Flight segment | User's lead hours before start. |
+| Document expiry | Travel document | User's lead days before expiry, at 09:00 in the user's timezone. |
+| Custom | Trip, segment, or integration | Offset before a reference start, or explicit ISO time. |
 
-Both flight-check-in and document-expiry lead times are per-user settings,
-settable from your **Profile** page (an admin can also set instance defaults
-under **Settings → General**).
+Profile defaults are configured under **Profile → Profile**. Administrators
+set defaults for newly created users under **Configuration → General**.
 
-## Creating a custom reminder
+## Trip and segment reminder
 
-From a trip or segment, choose **Add reminder** and pick an offset (in minutes)
-relative to the start time — negative to be warned *before*, positive for a
-follow-up *after*. Examples:
+The trip/segment UI asks for a non-negative number of minutes **before** the
+start:
 
-- `-1440` minutes → 1 day before the segment starts.
-- `-60` → 1 hour before.
-- `10080` → 1 week after (a follow-up).
+- `60`: one hour before;
+- `1440`: one day before;
+- `10080`: one week before.
 
-You can have one custom reminder per trip/segment. Editing the offset re-arms
-it; cancelling removes it.
+A trip reminder uses 09:00 UTC on its start date as the reference. A segment
+uses its stored start instant. Saving again upserts the reminder for that
+source.
 
-## How reminders are delivered
+Authorized MCP clients can instead create a named custom reminder at an exact
+ISO timestamp. This avoids the trip-date 09:00 convention.
 
-When its `fire_at` time arrives, the scheduler marks the reminder `sending`
-then `sent` and fans the notification out across your enabled channels:
+## Automatic reminders
 
-1. **In-app** — always on; creates a row in the **Notifications** page.
-2. **Email (SMTP)** — if SMTP is configured and email is enabled in your
-   profile.
-3. **Webhook** — if a webhook URL is configured and webhook delivery enabled.
+Creating or updating a flight schedules the owning user's check-in reminder.
+Changing the user's lead setting affects subsequent generation.
 
-See [Notifications](./notifications.md) for SMTP/webhook setup and per-user
-toggles.
+A travel document with an expiry date schedules its owner's expiry reminder.
+Removing the date or source record removes its generated reminder.
 
-## The scheduler
+## Delivery
 
-A single guarded scheduler tick runs every 60 seconds and handles due
-reminders, fare-watch checks, and expired-session cleanup. It will not start
-twice or overlap itself. Reminders fire only while Roamarr is running; a
-reminder whose time passed while the server was down fires on the next tick.
+When due, Roamarr creates an in-app notification and attempts optional enabled
+channels:
 
-## Managing reminders
+1. in-app, always;
+2. email through personal or global SMTP;
+3. signed webhook.
 
-List and cancel your reminders from the **Profile → Reminders** page or inline
-on the trip/segment. Cancelling deletes the reminder; it will not fire.
+An optional channel failure does not make the underlying trip disappear. Check
+the in-app notification and Job History. Webhook and email delivery can be
+retried according to scheduler state.
+
+See [Notifications](./notifications.md).
+
+## Scheduler
+
+The guarded scheduler checks every 60 seconds and processes at most 100 due
+reminders per tick, oldest first. It does not overlap itself. A backlog drains
+over later ticks.
+
+A reminder that became due while Roamarr was stopped is picked up after the
+next start. Delivery is at least once around a crash, so a rare duplicate is
+possible.
+
+## Manage
+
+Open **Reminders** under **Me** to filter and inspect user reminders. Custom
+reminders support safe name, description, time, and reference updates through
+the available UI/API/MCP surface. Delete a reminder to cancel it.
+
+A reminder whose new time is already past is not silently rearmed as a future
+event. Review status after editing.
+
+## Privacy
+
+Notification payloads intentionally avoid private confirmation, membership,
+policy, document, and note fields. The reminder name/description itself can
+still contain sensitive user-entered text. Keep it minimal.

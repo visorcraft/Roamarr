@@ -3,34 +3,32 @@
 
 # Entry requirements
 
-Track visa, vaccination, and other entry requirements for the countries on a
-trip. Entry requirements live on the trip page's **Prep** tab.
+Entry requirements track user-entered visa, vaccination, and other destination
+tasks. Roamarr does not fetch or verify government rules.
 
-## Adding a requirement
+## Fields
 
-On a trip's **Prep** tab, choose **Add entry requirement**:
+- country;
+- requirement type;
+- status: `needed`, `in_progress`, `complete`, or `not_needed`;
+- optional due date;
+- notes.
 
-| Field | Notes |
-| --- | --- |
-| Country | The country the requirement applies to. |
-| Requirement type | Visa, vaccination, or other. |
-| Status | Needed, in progress, complete, or not needed. |
-| Due date | Optional deadline (e.g. visa appointment or dose date). |
-| Notes | Free text (e.g. application reference, clinic). |
+Always confirm official requirements with the destination government and
+carrier. Rules can change after a record is saved.
 
-## Managing requirements
+## Current access
 
-- Update status as you make progress; the Prep tab shows the current state at a glance.
-- Delete a requirement when it no longer applies.
-- Requirements are grouped with other prep work such as medications, important items, and home tasks.
+The current **Prep** panel does not render requirement controls. Use an
+OAuth/MCP client:
 
-## Privacy
+- `roamarr_entry_requirement_list`;
+- `roamarr_entry_requirement_create`;
+- `roamarr_entry_requirement_update`;
+- `roamarr_entry_requirement_delete`.
 
-Entry requirement notes and statuses are visible only to the trip owner and
-shared editors. Public share links and calendar feeds never include them.
+Writes require edit access. The list tool accepts a viewable trip with
+`requirements:read`. Deletion requires `confirm: true`.
 
-## Related
-
-- [Travel documents](./travel-documents.md) — passports and visas with expiry reminders.
-- [Home tasks](./home-tasks.md) — other pre-departure tasks.
-- [Important items](./important-items.md) — valuables and gear for the trip.
+Requirements are excluded from public links, calendars, printable itineraries,
+and notifications. Notes can still contain health or application details.

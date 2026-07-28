@@ -3,38 +3,56 @@
 
 # Travel documents
 
-Keep passports, visas, and other travel documents in one place, with expiry
-reminders so nothing sneaks up on you.
+Travel documents are user-owned records under **Me → Documents**.
 
-## Managing documents
+## Types and fields
 
-From **Profile → Documents**, add a document with:
+Supported types:
 
-| Field | Notes |
-| --- | --- |
-| Type | Passport, driver's license, Global Entry, or visa. |
-| Number | Document number; sensitive and private. |
-| Issuing authority | Country or agency that issued it. |
-| Expires on | Date the document expires. Drives reminders. |
-| Notes | Free text (e.g. renewal conditions, lost-card numbers). |
-| Companion | Optional link to a [companion](./companions.md) so family documents are grouped with the traveler. |
+- passport;
+- driver's license;
+- Global Entry;
+- visa.
 
-Edit or delete a document from its row.
+Fields:
 
-## Expiry reminders
+- type;
+- document number;
+- issuing authority;
+- expiry date;
+- optional companion owner;
+- notes.
 
-Roamarr creates a reminder before a document expires. The lead time defaults to
-90 days and can be customized per user. Dashboard stats and the
-[Notifications](./notifications.md) page surface expiring documents.
+The companion must be accessible to the document owner. Leaving Companion
+blank means the document belongs to the user.
 
-## Privacy
+## Encryption
 
-- Document numbers are sensitive; they are never shown in public share links or
-calendar feeds.
-- Documents are visible only to you, even when a companion is linked.
+Document numbers are encrypted at rest with AES-256-GCM. Notes and other
+metadata are private but not separately field-encrypted. The entire MongrelDB
+database is also encrypted.
 
-## Related
+Do not put passwords, PINs, or unnecessary identity data in Notes.
 
-- [Companions](./companions.md) — travelers whose documents you may want to track.
-- [Important items](./important-items.md) — for tracking valuables you carry on a trip.
-- [Notifications](./notifications.md) — how reminders are delivered.
+## Expiry reminder
+
+Saving an expiry date schedules a document-expiry reminder at 09:00 in the
+user's timezone, the configured number of days beforehand. The default user
+lead is 90 days. Editing/removing the date re-arms/removes the generated
+reminder.
+
+See [Reminders](./reminders.md).
+
+## Companion deletion
+
+A document linked directly to a companion is deleted when that companion is
+deleted. Review document ownership before removing a trip companion.
+
+## Visibility
+
+Document rows remain user-owned even when linked to a companion on a shared
+trip. Public links, calendars, notifications, and printable itineraries never
+include document numbers.
+
+OAuth/MCP travel-document safe projectors redact numbers and notes. The
+`private-details:read` trip scope does not remove that redaction.

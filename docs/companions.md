@@ -3,48 +3,78 @@
 
 # Companions
 
-Companions are the people traveling with you on a trip — family, friends,
-colleagues. Add them on the trip page under the **People** tab.
+Companions are trip-scoped people. Add and manage them under a trip's
+**People** tab.
 
-## Adding a companion
+## Categories and fields
 
-Each companion records:
+Categories are `adult`, `child`, `other`, `guide`, and `driver`.
 
-| Field | Notes |
-| --- | --- |
-| Name | Required. |
-| Category | `adult`, `child`, or `other`. |
-| Dietary | Dietary requirements (e.g. vegetarian, halal). |
-| Allergies | Allergy info. |
-| Medical notes | Conditions a host or medic might need. |
-| Needs car seat / stroller / crib / kids meal | Toggles for family travel. |
-| Child ticket discount | Free text (e.g. "under-12 half fare"). |
-| Seat preference | `aisle`, `window`, `middle`, `none`. |
-| Bed preference | `king`, `queen`, `twin`, `two_doubles`, `other`. |
-| Accessibility needs | Free text. |
-| Room notes | Free text. |
-| Notes | Anything else. |
+A companion can record:
 
-Dietary, allergy, medical, and notes are private: they never appear in public
-share links or calendar feeds.
+- name;
+- category;
+- dietary requirements, allergies, and medical notes;
+- child car-seat, stroller, crib, meal, and ticket needs;
+- seat and bed preferences;
+- accessibility needs;
+- room notes and general notes.
 
-## Assigning companions
+Most of this is highly sensitive. Enter only information needed for the trip
+and delete it when retention is no longer justified.
 
-Once a companion exists you can assign them in two places:
+## Link an existing user
 
-- **Segment attendees** — on each segment, mark who is `going`, `maybe`, or
-  `not_going`. Useful when the group splits up for an activity.
-- **Checklist items** — assign a packing or prep task to a specific companion,
-  so each person knows what they are responsible for.
+An editor can select an active Roamarr user as a companion. Roamarr maintains a
+single self-companion link for that account on the trip. Linked identity
+enables consistent invitations and access checks.
+
+## Invite a traveler
+
+An ordinary adult/child/other companion can be associated with an email and
+optionally invited. A known user can receive immediate trip access. An unknown
+address receives a seven-day invitation and must claim it with the exact email.
+
+Guide and driver categories cannot be invited as users.
+
+A mail-delivery failure does not remove the created companion, share, or
+pending invitation.
+
+## Assignments
+
+Companions can be used for:
+
+- segment attendance (`going`, `maybe`, `not_going`);
+- checklist responsibility;
+- expense payer and split information;
+- a linked travel document.
+
+Free-text traveler names imported inside booking detail JSON are not companion
+records until explicitly linked.
 
 ## Travel documents
 
-A companion can be linked to a travel document (passport, visa, etc.) on your
-profile's **Documents** page. The document's expiry feeds the
-document-expiry reminder and the **Important items** / entry-requirements prep.
+A user-owned travel document may link to a companion on that user's trip.
+Document numbers remain encrypted and ownership-checked. Deleting the
+companion deletes a directly linked companion document, so review links first.
 
-## Removing a companion
+See [Travel documents](./travel-documents.md).
 
-Deleting a companion from the People tab removes their attendee assignments and
-unassigns their checklist items. Linked travel documents are deleted with the
-companion; expense splits that referenced them are cleared (not deleted).
+## Visibility
+
+- Owners and edit shares receive the full companion data needed by the trip.
+- Read shares receive a sanitized roster containing names/categories, not
+  dietary, allergy, medical, accessibility, room, or note fields.
+- Public links and calendar feeds receive no companion roster.
+- Wallet/document projectors never expose protected numbers merely because a
+  trip is shared.
+
+The authenticated printable itinerary includes a traveler roster. Review it
+before printing, saving a PDF, or emailing it.
+
+## Delete
+
+Deletion removes the trip companion and dependent attendance/link rows.
+Because companions can be referenced by money, checklist, and document data,
+review those modules after deletion. Deletion does not delete the linked
+Roamarr user account.

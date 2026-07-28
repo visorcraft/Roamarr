@@ -3,57 +3,57 @@
 
 # Budgets
 
-Set spending targets per trip and watch actuals roll up against them. Budgets
-live on the trip page's **Money** tab, next to [expenses](./expenses.md).
+Budgets are optional category caps on a trip's **Budget** tab.
 
-## Budget categories
+## Categories
 
-Budgets use the same five fixed categories as expenses:
+- `lodging`
+- `transport`
+- `food`
+- `activities`
+- `other`
 
-- **lodging**
-- **transport**
-- **food**
-- **activities**
-- **other**
+There is at most one stored cap per category and trip.
 
-Setting a budget per category is optional — leave one blank to budget only the
-categories you care about.
+## Set a cap
 
-## Setting a budget
+Enter a positive amount with at most two decimal places. The web action creates
+the line in the current editor's profile default currency. Updating an existing
+line changes its amount but keeps its stored currency.
 
-For each category you want to cap:
+To change that currency, remove the cap, set the desired profile default
+currency, and create it again, or use an authorized integration that supports
+the required field.
 
-1. Open the trip's **Money** tab and choose **Set budget**.
-2. Enter an **amount** and **currency** for each category.
-3. Save.
+## Spending calculation
 
-Amounts must be positive values with up to two decimal places (e.g.
-`1234.56`). Each category can use a different currency; Roamarr normalizes them
-into the trip's base currency for comparison against spending.
+Roamarr groups expenses by category and normalized currency. A budget line
+counts only expenses in the same category and same currency.
 
-## Spent vs budgeted
+For example, a `500 USD` lodging cap does not include a `200 EUR` lodging
+expense. Roamarr performs no live conversion for this comparison.
 
-The Money tab shows, per category:
+The line reports:
 
-- **Budgeted** — the amount you set (converted to base currency).
-- **Spent** — the sum of expenses in that category (converted to base currency
-  using each expense's stored exchange rate).
-- **Remaining / over** — the difference, highlighted when you exceed the cap.
+- cap;
+- matching spent amount;
+- remaining or overage;
+- alert state: normal, near at 80 percent, or over at 100 percent.
 
-A top-level total shows overall budget vs spending across all categories.
+Trip-level money summary cards can use base-amount fields, but that does not
+turn budget category comparisons into live FX conversion.
 
-## Multi-currency notes
+## Currency fields
 
-- Each **budget** line stores its own currency.
-- Each **expense** stores its original currency, an exchange rate, and a
-  normalized base amount.
-- Totals are always presented in the trip's **base currency** (set when
-  creating or editing the trip).
-- Editing the base currency does not retroactively change stored amounts; it
-  only changes the unit used to sum them.
+- Trip base currency defaults to `USD` and is editable on the trip.
+- A user's default currency drives new web budget lines.
+- Each expense has its own original currency and optional stored rate.
+- Each budget category stores its own currency.
 
-## Privacy
+Changing a profile or trip currency does not rewrite existing budget or
+expense amounts.
 
-Budgets are part of the trip's money data and follow the same visibility rules
-as expenses: visible to the owner and shared users/groups, never exposed
-through public links or the calendar feed.
+## Access
+
+Owners and edit shares can set or remove caps. Read shares, public links, and
+calendar feeds cannot see trip money. See [Sharing](./sharing.md).

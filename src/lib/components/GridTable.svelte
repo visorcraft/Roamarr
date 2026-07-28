@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { html } from 'gridjs';
+	import { Grid, html } from 'gridjs';
 	import ConfirmModal from './ConfirmModal.svelte';
 
 	export interface GridColumn {
@@ -297,8 +297,7 @@
 		container.addEventListener('click', handleClick);
 		container.addEventListener('change', handleChange);
 
-		(async () => {
-			const { Grid } = await import('gridjs');
+		queueMicrotask(() => {
 			if (cancelled) return;
 
 			gridInstance = new Grid({
@@ -360,7 +359,7 @@
 			} as any).render(container);
 			grid = gridInstance;
 			schedulePageSizeControlInstall();
-		})();
+		});
 
 		return () => {
 			cancelled = true;

@@ -3,71 +3,95 @@
 
 # Maps
 
-Each trip page renders an interactive map of its segments using MapLibre GL JS.
-This doc covers what powers it and how to configure it.
+Maps are an administrator-controlled optional feature. They provide local city
+lookup, itinerary maps, and a 3D globe.
 
-## What you see
+## Enable
 
-On the trip page's **Itinerary** tab, the map plots a pin for:
+Open **Configuration → Maps** and enable Maps. Roamarr imports:
 
-- the trip's **destination city**, and
-- every segment that has a **city** or **venue** resolved.
+- GeoNames `cities1000.zip` plus first-level administrative labels;
+- NASA Blue Marble Earth texture.
 
-Hovering or selecting a pin highlights that segment on the timeline. The map is
-part of the trip view — there is nothing to enable per trip beyond giving
-segments a city.
+The operation is idempotent. The page also offers re-import/re-download and
+manual upload controls when automatic network access is unavailable.
 
-## City autocomplete
+Disabling Maps stops map/city features but keeps downloaded data. It does not
+block ordinary free-text trip or segment saves.
 
-City fields in the trip and segment forms use a **local** GeoNames lookup, not
-a live external API. Seed it once:
+## City data
 
-1. Go to **Settings → Maps → City data**.
-2. Download `cities1000.zip` from
-   [download.geonames.org/export/dump/cities1000.zip](https://download.geonames.org/export/dump/cities1000.zip).
-3. Upload the `.zip`, or use **Re-import city database** (which also pulls
-   admin1 labels for states/provinces/territories).
+City autocomplete uses the local GeoNames table, not a browser API call. A city
+record supplies:
 
-Until this is done, autocomplete returns nothing and segments get no city pins.
-The import is idempotent — re-uploading refreshes the data.
+- canonical name;
+- two-letter country code;
+- optional state/province/territory code and label;
+- latitude and longitude;
+- population used to choose among exact-name matches.
 
-### State / province / territory (admin1)
+When a country has administrative data, select the state/province before the
+city to narrow lookup. Re-import GeoNames after an upgrade that adds new city
+fields.
 
-For countries with first-level admin divisions in the city database (e.g. US
-states, Canadian provinces), trip and segment forms show an optional
-**State / province / territory** control after you pick a country. City
-autocomplete and typed-name resolution are then scoped to that subdivision.
-When no subdivision is chosen, resolution is country-wide and prefers the
-highest-population exact name match. A manual pick from the city list still
-keeps the selected coordinates.
+## Itinerary map and globe
 
-**Operators:** after upgrading to a build with admin1 support, re-import the
-city database so existing installs get `admin1_code` on city rows and human
-labels. Until re-import, the subdivision control stays hidden (no admin1 data).
+The **Itinerary** tab can plot the trip destination and segments with
+coordinates. The map uses MapLibre GL JS and raster tiles. The globe uses
+Three.js, bundled Natural Earth borders, the downloaded NASA texture, and
+GeoNames city points.
 
-## Tile provider
+The selected upcoming city controls map focus. Items without coordinates
+remain usable in the itinerary but cannot be positioned.
 
-The base map is drawn from a configurable **tile provider**, set under
-**Settings → Maps → Map tiles**:
+## Tile providers
 
-| Provider | API key | Provider | API key |
-| --- | --- | --- | --- |
-| OpenStreetMap | No (default) | Thunderforest | Yes |
-| CARTO | No | Jawg | Yes |
-| MapTiler | Yes | Protomaps | Yes |
-| Stadia | Yes | Custom | Optional |
+Supported choices:
 
-For commercial providers, paste an API key (AES-256-GCM encrypted at rest).
-**Custom** lets you enter your own tile URL pattern and attribution for a
-self-hosted or specialty tile server. Changing the provider updates the map for
-every user immediately; Roamarr adjusts its CSP to allow the new tile origins.
+| Provider | Key normally required |
+| --- | --- |
+| OpenStreetMap | No |
+| CARTO | No |
+| MapTiler | Yes |
+| Stadia | Yes |
+| Thunderforest | Yes |
+| Jawg | Yes |
+| Protomaps | Provider-dependent |
+| Custom | Provider-dependent |
 
-## Enabling maps as admin
+Commercial terms, rate limits, and attribution belong to the provider.
+Roamarr encrypts saved API keys at rest.
 
-Maps render automatically once city data is seeded. Minimal setup:
+A custom raster URL must use `{z}`, `{x}`, and `{y}` placeholders and include
+correct attribution. Changing provider updates the content security policy to
+permit its tile origin.
 
-1. Seed GeoNames `cities1000.zip` (above).
-2. Leave the tile provider on OpenStreetMap, or switch and add a key.
+## Network and privacy
 
-No per-user or per-trip toggle exists; the map simply renders segments that
-have a resolved city.
+- GeoNames and NASA downloads originate from the Roamarr server.
+- City search reads the local database.
+- Raster tiles are requested by the user's browser from the configured tile
+  host, which sees normal request metadata and requested tile coordinates.
+- The globe texture is served locally after download.
+
+Choose a self-hosted custom tile service if browser contact with a third-party
+tile provider is unacceptable.
+
+## Storage and backup
+
+GeoNames rows live in MongrelDB but are excluded from backup archives because
+they are rebuildable. The texture is stored as `maps/earth-day.jpg` beside the
+resolved database path and is also excluded.
+
+After restore, re-import/re-download map data.
+
+## Attribution
+
+- Cities: [GeoNames](https://www.geonames.org/), CC BY 4.0.
+- Country borders: [Natural Earth](https://www.naturalearthdata.com/), public
+  domain.
+- Earth texture: [NASA Blue Marble](https://visibleearth.nasa.gov/collection/1484/blue-marble),
+  public domain.
+- Default tiles: [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+
+Keep the active tile provider's required attribution visible.

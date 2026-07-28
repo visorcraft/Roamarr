@@ -3,34 +3,32 @@
 
 # Important items
 
-Track valuables and gear you are bringing on a trip: electronics, jewelry,
-medical devices, luggage trackers, and anything else you do not want to lose.
-Important items live on the trip page's **Prep** tab.
+Important items track valuables, devices, and luggage trackers on a trip.
 
-## Adding an important item
+## Fields
 
-On a trip's **Prep** tab, choose **Add important item**:
+- required name;
+- optional companion carrying it;
+- serial number;
+- tracker ID;
+- notes.
 
-| Field | Notes |
-| --- | --- |
-| Name | Required (e.g. "MacBook Pro", "Engagement ring"). |
-| Companion | Optional link to the traveler carrying it. |
-| Serial number | For insurance or police reports. |
-| Tracker ID | AirTag, Tile, or other tracker identifier. |
-| Notes | Free text (e.g. "in checked bag", "insurance rider #12345"). |
+Serial numbers, tracker IDs, and notes are stored as private application data
+but are not among Roamarr's encrypted-at-rest field list. Protect the database,
+backups, edit shares, and integration scopes accordingly.
 
-## Managing important items
+## Current access
 
-- Edit or delete items from the Prep tab.
-- Use items alongside the checklist to make sure nothing is forgotten.
+The current **Prep** panel does not render important-item controls. Use an
+OAuth/MCP client:
 
-## Privacy
+- `roamarr_important_item_list`;
+- `roamarr_important_item_create`;
+- `roamarr_important_item_delete`.
 
-Serial numbers, tracker IDs, and notes are private to the trip owner and shared
-editors. Public share links and calendar feeds never include them.
+Writes require edit access. The list tool accepts a viewable trip with
+`items:read`, so a read-shared user's authorized client can receive these
+fields. Deletion requires `confirm: true`.
 
-## Related
-
-- [Travel documents](./travel-documents.md) — passports and visas.
-- [Medications](./medications.md) — prescription and OTC meds.
-- [Home tasks](./home-tasks.md) — pre-departure to-dos.
+Important items are excluded from public links, calendar feeds, notifications,
+and printable itineraries.

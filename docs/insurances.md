@@ -3,52 +3,46 @@
 
 # Insurance
 
-Track travel insurance policies and attach them to trips. Manage policies from
-the **Insurance** page (profile-level) or from a trip's **Documents** tab.
+Insurance policies are user-owned records under **Organizer → Insurance**.
 
-## Policy fields
+## Fields
 
-| Field | Notes |
+| Field | Behavior |
 | --- | --- |
-| Provider | Required (e.g. "World Nomads"). |
-| Policy number | Free text; sensitive, never shown publicly. |
-| Coverage summary | Short description of what's covered. |
-| Coverage amount + currency | The insured sum (e.g. `100000 USD`). |
-| Start / end date | When the policy is in force. |
-| Trip | Optional trip to attach the policy to. |
-| Notes | Free text. |
+| Provider | Required. |
+| Policy number | Optional private plaintext. |
+| Coverage summary | Optional plaintext. |
+| Coverage amount | Optional integer minor units. |
+| Currency | Three-letter code. |
+| Start/end date | Optional coverage window. |
+| Trip | Optional owned-trip link. |
+| Notes | Optional private plaintext. |
 
-## Attaching a policy to a trip
+Roamarr does not validate policy coverage, submit claims, or warn when a policy
+expires. Confirm terms and dates with the insurer.
 
-A policy can optionally be linked to one trip. When attached, it appears on
-that trip's **Documents** tab alongside travel documents and document links,
-giving you one view of everything relevant to the trip.
+## Trip link
 
-- Attach from the policy editor by choosing a trip, or
-- Add a policy from the trip's **Documents** tab.
+A policy can link to one owned trip. The trip's Documents count reflects
+linked policy data, but the current Documents panel renders document links
+rather than a full policy manager. Manage the policy from Insurance or through
+the scoped JSON API/MCP tools.
 
-Detaching (clearing the trip) keeps the policy on your profile but removes it
-from the trip view.
+Removing the trip link keeps the policy. Deleting the policy removes it.
 
-## Benefit templates
+## Benefits
 
-Some credit cards and policies bundle named benefits (e.g. "Primary CDW",
-"Trip cancellation $10k"). To standardize these across cards and policies,
-Roamarr keeps **benefit templates** (managed on the **Cards** page):
-
-- Each template has a **benefit type**, **name**, optional **coverage amount**
-  and **currency**, and a **description**.
-- Templates are seeded with sensible defaults at boot and can be edited by
-  admins; card and policy benefits reference these types for consistency.
+Reusable benefit templates and per-record benefit rows currently belong to
+payment cards, not insurance policies. Put policy coverage in Coverage summary
+and amount fields.
 
 ## Privacy
 
-Policy numbers, coverage amounts, and notes are personal. They are visible
-only to you (and trip editors where attached) — never through public share
-links or the calendar feed.
+Policy numbers, summaries, amounts, and notes are not separately
+field-encrypted. They rely on encrypted database/storage and ownership
+controls.
 
-## Reminders
-
-A policy's end date doesn't currently drive a dedicated reminder, but travel
-**document** expiry (passport/visa) does — see [Reminders](./reminders.md).
-Keep policy end dates current so coverage doesn't lapse unnoticed.
+Read-only/public trip projections, calendars, notifications, and printable
+itineraries omit policy data. OAuth/MCP insurance projectors strip policy
+numbers and notes; `private-details:read` does not override that wallet
+redaction.

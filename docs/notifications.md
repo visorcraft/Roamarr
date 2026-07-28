@@ -3,44 +3,101 @@
 
 # Notifications
 
-Roamarr delivers notifications through three channels:
+Roamarr delivers in-app notifications and can attempt SMTP email and one signed
+webhook.
 
-1. **In-app** — always on; creates a notification row visible in the
-   Notifications page.
-2. **Email (SMTP)** — sends an email to the user's registered address.
-3. **Webhook** — POSTs a signed JSON payload to a configured URL.
+## Channels
 
-Each user can independently toggle email and webhook delivery in their profile.
+| Channel | Enablement | Failure behavior |
+| --- | --- | --- |
+| In-app | Always | Stored in Notifications. |
+| Email | User profile toggle plus usable personal/global SMTP | Failure is logged; other channels continue. |
+| Webhook | User profile toggle plus configured global URL | Failure is logged; other channels continue. |
 
-## Admin SMTP
+External channels run independently. A slow or failed SMTP service does not
+prevent the webhook attempt or erase the in-app row.
 
-The admin configures a single SMTP server under **Settings → Email (SMTP)**:
+Notification content is deliberately concise and avoids confirmation,
+membership, policy, document-number, and private-note fields. User-written
+reminder names can still contain sensitive text.
 
-| Field | Description |
+## Global SMTP
+
+Open **Configuration → Email → Outbound Emails**. Configure:
+
+| Field | Purpose |
 | --- | --- |
-| Host | SMTP server hostname. |
-| Port | Typically 587 (STARTTLS) or 465 (TLS). |
-| Transport security | `STARTTLS` (recommended), `SSL/TLS` (implicit, port 465), or `None` (plaintext). |
-| Username / Password | SMTP credentials. Password is AES-256-GCM encrypted at rest. |
-| From address | The sender address for outgoing email. |
+| Host/port | SMTP endpoint, commonly 587 or 465. |
+| Security | `STARTTLS`, `SSL/TLS`, or `None`. |
+| Username/password | Optional authentication. |
+| From address | Required sender for a usable global transport. |
 
-Use **Send test email** to verify SMTP delivery specifically (distinct from
-**Send test notification**, which fans out to all enabled channels).
+`STARTTLS` requires an upgrade. `SSL/TLS` uses implicit TLS. `None` disables
+TLS and should be confined to a trusted relay network.
 
-## Webhook
+The password is encrypted. Use the page's connection/test action. Roamarr uses
+bounded socket/send timeouts and a small connection pool.
 
-When a webhook URL is set, Roamarr POSTs:
+## Personal SMTP
 
-```json
-{ "title": "...", "body": "...", "link": null }
+When administrator policy permits it, **Profile → Email Settings → Outbound
+Emails** can override global SMTP for that user. See
+[Personal SMTP](./per-user-smtp.md).
+
+## Signed webhook
+
+Open **Configuration → Webhooks**. The request is:
+
+```http
+POST <configured URL>
+Content-Type: application/json
+X-Roamarr-Timestamp: <Unix seconds>
+X-Roamarr-Signature: <lowercase hexadecimal HMAC-SHA256>
 ```
 
-with two headers:
-- `X-Roamarr-Signature` — HMAC-SHA256 of `{timestamp}.{body}` using
-  `ROAMARR_SECRET`.
-- `X-Roamarr-Timestamp` — Unix seconds.
+Body:
 
-## Per-user SMTP override
+```json
+{"title":"...","body":"...","link":null}
+```
 
-See [Per-user SMTP](./per-user-smtp.md) for sending notifications from your
-own mailbox instead of the admin server.
+Verify the exact raw body:
+
+```text
+payload = X-Roamarr-Timestamp + "." + exact_raw_json_body
+signature = lowercase_hex(HMAC-SHA256(ROAMARR_SECRET, payload))
+```
+
+Use the environment variable string as the HMAC key, compare signatures in
+constant time, reject stale timestamps, and deduplicate repeated events.
+
+Webhook restrictions:
+
+- only `http` and `https`;
+- no username/password inside the URL;
+- literal loopback, link-local, and private IPv4/IPv6 targets are rejected;
+- redirects are not followed;
+- request timeout is 10 seconds.
+
+The hostname check does not resolve DNS before validation. Put additional
+egress/DNS restrictions around Roamarr when webhook SSRF resistance is part of
+the threat model.
+
+## Sources
+
+Notifications can be created by:
+
+- due reminders;
+- changed fare-watch summaries;
+- sharing/security/account workflows;
+- operational tests and other application actions.
+
+Not every data mutation sends a notification.
+
+## User controls
+
+Open **Profile → Profile** to enable/disable email and webhook delivery. In-app
+delivery remains on. Open **Notifications** to review rows and mark them read.
+
+Disabling a channel does not delete prior notifications or saved administrator
+configuration.

@@ -1,45 +1,59 @@
 <!-- SPDX-FileCopyrightText: 2026 Visorcraft LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# Weather forecasting
+# Weather
 
-Roamarr fetches weather forecasts from [Open-Meteo](https://open-meteo.com)
-(free, keyless) and caches them server-side for 6 hours.
+Roamarr retrieves keyless forecasts from
+[Open-Meteo](https://open-meteo.com/) and caches them in MongrelDB.
 
-## Where it appears
+## When it appears
 
-A **Weather forecast** card appears on each trip page (Itinerary tab) when the
-trip has a destination with coordinates and at least one date within the
-14-day forecast horizon. The card shows a compact per-day strip with:
+The itinerary can show weather when:
 
-- High/low temperature
-- Weather summary (Clear sky, Partly cloudy, Rain, etc.)
-- Precipitation probability
-- Location label (when a segment provides the day's location)
+- the trip has dates within the next 14 days;
+- the trip destination or relevant segment has coordinates;
+- the server can fetch or reuse a forecast.
 
-## How it works
+For a day covered by a segment with coordinates, Roamarr can use that segment
+location instead of the overall destination.
 
-- **Server-side only** — all requests to Open-Meteo are made from the Roamarr
-  server, never from the browser. Only rounded lat/lng (two decimal places)
-  is sent to the API.
-- **Per-location, per-date cache** — a `weather_cache` table stores one row
-  per `location_key × date`. Cache hits skip the API call entirely.
-- **Segment locations** — when a day falls within a segment's start/end and
-  the segment has city coordinates, the forecast uses the segment's location
-  instead of the trip destination.
-- **Graceful degradation** — if the API is unreachable or the date is beyond
-  the horizon, the day shows "Forecast unavailable" without throwing the trip
-  page.
+## Data
 
-## Severe-weather advisories
+The daily display includes:
 
-An amber advisory chip appears at the top of the card when any forecasted day
-has:
-- Wind speed ≥ 50 km/h
-- Heavy precipitation (≥ 80% probability + a heavy-rain weather code)
-- Freezing temperatures (low ≤ 0 °C)
+- high and low temperature in Celsius;
+- weather summary;
+- precipitation probability;
+- wind speed in kilometers per hour;
+- location context.
 
-## Limitations
+Units are currently metric and are not derived from server locale.
 
-- Open-Meteo supports up to ~16 days; Roamarr caps at **14 days**.
-- Units follow the server's locale for now (configurable later).
+## Advisory thresholds
+
+Roamarr highlights:
+
+- wind at least 50 km/h;
+- precipitation probability at least 80 percent with a heavy-rain code;
+- low temperature at or below 0 °C.
+
+These are planning hints, not official warnings. Follow local authorities and
+the provider for safety decisions.
+
+## Cache and privacy
+
+Server requests send latitude/longitude rounded to two decimal places to
+Open-Meteo. Browsers do not contact Open-Meteo directly.
+
+Forecast rows are cached per rounded location and date for six hours. The
+scheduler refreshes relevant cache entries. A provider outage leaves the trip
+usable and shows forecast unavailable.
+
+## Limits
+
+- Roamarr uses a 14-day horizon.
+- A text-only location cannot be forecast without coordinates.
+- Forecasts can change and are not guaranteed.
+- Cached data can be up to six hours old.
+- Roamarr does not provide radar, alerts from authorities, air quality, or
+  historical climate data.

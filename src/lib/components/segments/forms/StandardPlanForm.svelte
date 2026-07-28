@@ -52,8 +52,8 @@
 		endTimezoneLabel?: string;
 	} = $props();
 
-	let countryCode = $state(countryCodeProp);
-	let admin1Code = $state(admin1CodeProp);
+	let countryCode = $derived(countryCodeProp);
+	let admin1Code = $derived(admin1CodeProp);
 </script>
 
 <TextField name="title" label={titleLabel} placeholder={titlePlaceholder} required class="sm:col-span-2" {errors} />

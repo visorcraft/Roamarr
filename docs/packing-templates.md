@@ -3,49 +3,32 @@
 
 # Packing templates
 
-Turn a trip's checklist into a reusable template, then apply it to future trips
-so you don't re-type the same packing list every time.
+A packing template is a private user-owned snapshot of checklist labels and
+categories.
 
-## What a template holds
+## Behavior
 
-A packing template belongs to you (profile-level) and contains:
+- Creating from a trip copies its current checklist.
+- Packed/done state is not copied.
+- Applying appends items to the destination trip.
+- Existing checklist rows remain.
+- Applying the same template twice can create repeated items.
+- Templates are not shared with trip collaborators.
 
-- a **name** (e.g. "Carry-on only", "Winter trip", "Diving gear"), and
-- a list of **items**, each with a **label** and a **category**.
+## Current access
 
-Templates do not store "packed" state — that lives on each trip's checklist.
+The trip **Prep** tab renders and edits the checklist. The current page does not
+render separate save/apply template controls, although the server actions
+exist.
 
-## Saving a template
+Use an OAuth/MCP client with the narrow required scopes:
 
-Templates are created from a trip's **Prep** tab once you have checklist items:
+- `roamarr_packing_template_list`;
+- `roamarr_packing_template_create`;
+- `roamarr_packing_template_delete`;
+- `roamarr_packing_list_build`;
 
-1. Open the checklist actions and choose **Save as template**.
-2. Give the template a name.
-3. Choose which existing checklist items to include (or take all of them).
-4. Save. The template now appears on your templates list and is available to
-   apply on any future trip.
+Template deletion is destructive and requires `confirm: true` over MCP.
+Applying a template requires edit access to the destination trip.
 
-There is currently no standalone template-management page — templates are
-created inline from the checklist that inspired them.
-
-## Applying a template
-
-On a new (or existing) trip's **Prep** tab:
-
-1. Choose **Apply template**.
-2. Pick a template from your list.
-3. Its items are appended to the trip's checklist (existing items are kept).
-
-Applying is additive: re-applying the same template adds the items again, so
-you typically apply a template once per trip.
-
-## Per-user
-
-Templates are private to each user; shared users and editors on a trip do not
-see your templates. This keeps personal packing preferences out of shared
-views.
-
-## Related
-
-- [Home tasks](./home-tasks.md) — pre-departure to-dos on the Prep tab.
-- [Trips](./trips.md) — the Prep tab and other trip-page sections.
+See [Templates and trip merge](./templates-and-merge.md).

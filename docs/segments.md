@@ -3,54 +3,117 @@
 
 # Segments
 
-Segments are the individual events on a trip's itinerary: a flight, a hotel
-night, a dinner, a train ride. They live on the trip page's **Itinerary** tab.
+Segments are dated or contextual itinerary items inside a trip.
 
-## Segment types
+## Types
 
-| Type | Use for | Type | Use for |
-| --- | --- | --- | --- |
-| Flight | Air travel | Boat | Ferries, cruises |
-| Hotel | Accommodation | Shuttle | Airport/hotel transfers |
-| Event | Tickets, shows, tours | Rideshare | Taxi/rideshare |
-| Rental car | Car hire | Directions | Point-to-point routing |
-| Train | Rail segments | Parking | Parking reservations |
-| Food | Restaurants, meals | Point of interest | A sight or stop |
-| Meet up | Meeting someone | Note | Untimed timeline note |
-| Todo item | A task on the timeline | | |
+| Type | Typical use |
+| --- | --- |
+| `flight` | Airline leg |
+| `hotel` | Lodging |
+| `train` | Rail leg |
+| `rental_car` | Vehicle reservation |
+| `rideshare` | Taxi or app ride |
+| `shuttle` | Airport or hotel transfer |
+| `boat` | Ferry or cruise movement |
+| `event` | Ticket, tour, show, or appointment |
+| `food` | Restaurant or meal |
+| `parking` | Parking reservation |
+| `directions` | Route between places |
+| `poi` | Point of interest |
+| `meetup` | Meeting a person or group |
+| `todo` | Itinerary task |
+| `note` | Free-form itinerary note |
 
-## Creating a segment
+## Create and edit
 
-1. On the trip page, click **Add segment** and pick a type.
-2. Fill in the form. Common fields:
+Open a trip's **Itinerary** and choose **Add segment**. Common fields include:
 
-   - **Title** (required), **Start** (date/time + timezone), optional **End**.
-   - **Location**/**Venue** (free text); **City** uses GeoNames autocomplete and
-     adds a map pin.
-   - **Confirmation number** — sensitive; hidden from public/calendar views.
-   - **Status** — `planned`, `checked_in`, `boarded`, `arrived`, `completed`.
-   - **Payment status** — `quoted`, `deposit_paid`, `fully_paid`, `refunded`.
-   - **Meeting point/time**, and **Notes** (free text).
+- required type and title;
+- local start date/time and IANA timezone;
+- optional end;
+- status;
+- location, country, state/province, city, and coordinates;
+- venue and meeting point/time;
+- confirmation number;
+- payment status;
+- type-specific details.
 
-   Some types add type-specific fields (airline/flight number, room
-   preferences, pickup location).
+Type-specific fields are stored in structured detail JSON. Forms validate
+known enum, date, timezone, coordinate, and ownership values. A resolved
+GeoNames city supplies map coordinates, but Maps being disabled does not block
+ordinary free-text saves.
 
-3. Save. The segment appears on the timeline and, if it has a city, on the map.
+## Status
 
-## Managing segments
+Segment statuses are:
 
-- **Edit**, **Duplicate** (reuse details for the next leg), **Move to date**
-  (reschedule without retyping), **Set status** (checked-in, arrived, …).
-- **Reorder** by adjusting start times; the timeline sorts by start.
-- **Delete** one segment, or **bulk delete** several at once.
+- `planned`;
+- `checked_in`;
+- `boarded`;
+- `arrived`;
+- `completed`.
 
-## Segment attendees
+Payment statuses are:
 
-Each segment can list which [companions](./companions.md) are included, with an
-RSVP of `going`, `maybe`, or `not_going` — handy when the group splits up.
+- `quoted`;
+- `deposit_paid`;
+- `fully_paid`;
+- `refunded`.
+
+Status changes are explicit. Payment status is separate from an expense.
+
+## Itinerary views
+
+- **Timeline** groups and orders travel chronologically.
+- **List** provides a dense itinerary list.
+- **Board** groups segments for operational status work.
+
+Filters and sorting change the presentation, not stored start times.
+
+Selecting a segment opens:
+
+- **Details** for time, location, status, and booking fields;
+- **Travelers** for companion attendance;
+- **Notes** for structured type-specific data;
+- **Reminders** for scheduled alerts.
+
+Editors can edit, duplicate, delete, move to another date, change status, and
+add a reminder. Moving a segment preserves its time-of-day relationship while
+changing the target date.
+
+## Travelers
+
+Link trip companions to a segment with:
+
+- `going`;
+- `maybe`;
+- `not_going`.
+
+Some imported booking details can also contain free-text traveler names. Those
+names are not linked companion records.
+
+## Cards and payment
+
+A segment can reference one user-owned card when the operation validates
+ownership. Roamarr stores card network and last four digits, never a full
+payment-card number.
+
+Payment status and booking confirmation are informational. They do not create
+or settle an expense automatically.
 
 ## Privacy
 
-Confirmation numbers, payment details, and notes are sensitive. They show only
-to the owner and to viewers with **Show details** enabled; public links and
-calendar feeds never include them. See [Sharing](./sharing.md).
+| Audience | Ordinary fields | Confirmation and detail JSON | Payment status |
+| --- | --- | --- | --- |
+| Owner or edit share | Yes | Yes | Yes |
+| Read share | Yes | Only with that share's **Show details** | No |
+| Public link | Yes | Only when owner enables public **Show details** | No |
+| Calendar feed | Reduced event fields | No | No |
+
+Trip notes, money, companion-sensitive fields, wallet records, and private
+planning modules are not segment projection fields.
+
+Confirmation numbers and type-specific details can be sensitive. Keep public
+**Show details** off unless every exposed field is safe for anyone holding the
+link.

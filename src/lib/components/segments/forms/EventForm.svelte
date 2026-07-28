@@ -34,8 +34,8 @@
 		venue?: string;
 		venueLabel?: string;
 	} = $props();
-	let countryCode = $state(countryCodeProp);
-	let admin1Code = $state(admin1CodeProp);
+	let countryCode = $derived(countryCodeProp);
+	let admin1Code = $derived(admin1CodeProp);
 	let moreOpen = $state(false);
 	let attendeesOpen = $state(false);
 	let bookingOpen = $state(true);

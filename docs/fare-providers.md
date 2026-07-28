@@ -3,38 +3,58 @@
 
 # Fare providers and watches
 
-Fare providers let Roamarr poll external services for price changes on flight
-segments. Configure providers globally, then add per-trip watches.
+Fare watches are implemented, but the current release ships no live commercial
+fare integration. The only registered provider is **Stub (demo)**, whose result
+states that no live data was checked.
 
-## Configuring providers
+Do not rely on it for purchasing decisions or price alerts.
 
-Admin users configure providers under **Settings → Fare providers**:
+## Provider account
 
-| Field | Notes |
-| --- | --- |
-| Provider key | The identifier the watcher expects (e.g. `stub`, `dohop`). |
-| Label | Friendly name shown in the UI. |
-| API key | Encrypted at rest; required for providers that need credentials. |
-| Enabled | Toggle off to pause all watches using this provider. |
+Administrators open **Fare providers** to create, edit, test, enable, or delete
+an account. Fields are:
 
-Per-user providers can also be created so each traveler uses their own
-credentials.
+- registered provider key;
+- display label;
+- optional API key;
+- enabled flag.
 
-## Adding a fare watch
+API keys are encrypted. Provider rows are user-owned internally. The current
+web/API creation route requires an administrator, so a provider can watch only
+trips owned by that same administrator account.
 
-On a flight segment in a trip, choose **Watch fare** and pick a provider:
+## Watch
 
-- The watch polls the provider on the scheduler tick.
-- The last checked time and result are shown on the segment.
-- You can pause, resume, delete, or manually recheck a watch.
+The scoped fare-watch JSON API can:
 
-## Privacy
+- list owned watches and eligible provider accounts;
+- create a trip-level or segment-level watch;
+- pause/resume;
+- run a manual check;
+- delete.
 
-- Provider API keys are encrypted at rest with AES-256-GCM.
-- Fare watch results are visible only to the trip owner and shared editors.
+A watch is owner-only. Its provider must belong to the same user, and an
+optional segment must belong to the selected trip. Creating the same
+trip/provider/segment watch again returns the existing row.
 
-## Related
+The current trip page counts fare watches in the Budget tab but does not expose
+the complete watch controls. Use the OAuth-protected `/api/fare-watches`
+surface until a dedicated web control is present.
 
-- [Import/Export](./import-export.md) — backup and restore trips with fare provider references.
-- [Reminders](./reminders.md) — scheduler-driven reminders.
-- [Segments](./segments.md) — flight segments and other itinerary items.
+## Scheduler
+
+Every scheduler tick selects up to 50 active watches, oldest checked first.
+Each provider call has a 10-second timeout.
+
+The first result establishes a baseline. Later checks send a generic
+notification only when the summary string changes. Notifications do not expose
+the fare result body.
+
+## Add a real provider
+
+A code contribution must implement the `FareProvider` interface and register
+it under `src/lib/server/fareproviders/`, including focused lifecycle and
+timeout tests. Do not enter a provider key that is not in the running
+registry.
+
+See [Contributing](../CONTRIBUTING.md).

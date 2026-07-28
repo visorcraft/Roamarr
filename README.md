@@ -12,7 +12,7 @@
   <br />
   Keep flights, stays, documents, companions, reminders, expenses, and sharing in one itinerary hub.
   <br />
-  SvelteKit app shell · single-container deploy · encrypted sensitive fields · no hosted travel account required.
+  SvelteKit app shell · single-process deploy · encrypted sensitive fields · no hosted travel account required.
 </p>
 
 <p align="center">
@@ -95,7 +95,7 @@
 
 ## What is Roamarr?
 
-Roamarr is a Trip Tracker-style travel organizer you run yourself. It is built as a
+Roamarr is a TripIt-style travel organizer you run yourself. It is built as a
 single Node.js application with a MongrelDB database, server-rendered SvelteKit
 pages, and a practical app shell designed for repeated use rather than a
 marketing dashboard.
@@ -183,9 +183,10 @@ itinerary, and what should happen if plans change.
 
 ### Documentation
 
-Comprehensive user docs live in [`docs/`](./docs/README.md) — covering trips,
-sharing, expenses, 2FA, passkeys, weather, per-user SMTP, and MCP/AI
-integration.
+The complete manual lives in [`docs/`](./docs/README.md). It covers users,
+administrators, production deployment, upgrades, backup/restore, security,
+every trip feature, email ingestion, OAuth, MCP, the JSON API, and
+troubleshooting.
 
 ### Requirements
 
@@ -243,8 +244,9 @@ Open `http://localhost:5173/setup` on first boot.
 
 #### Local dev container
 
-For a containerized dev environment that hot-reloads source edits without an
-image rebuild, use `compose.local.yml`:
+Maintainer worktrees may include a machine-local, gitignored
+`compose.local.yml` for hot-reload development. It is not distributed in the
+public repository. When that file is present:
 
 ```bash
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
@@ -253,7 +255,9 @@ podman compose -f compose.local.yml up -d
 
 This bind-mounts the working tree and serves the Vite dev server on
 `http://127.0.0.1:3002`. It uses a separate `roamarr-dev-data` volume, so it will
-show the first-run setup page until you create the admin account.
+show the first-run setup page until you create the admin account. Public clones
+should use the npm development flow above unless they provide an equivalent
+local compose file.
 
 ### Production build
 
@@ -295,7 +299,7 @@ setup.
 | Data | Default path |
 | ---- | ------------ |
 | MongrelDB database | `./roamarr-db` |
-| Receipt attachments | `./attachments/` |
+| Receipt attachments | `./roamarr-db/attachments/` |
 | Production build output | `./build/` |
 | SvelteKit build cache | `./.svelte-kit/` |
 
@@ -345,9 +349,10 @@ scheduler starts.
 
 Roamarr uses Playwright for browser-level tests that exercise the real UI. The
 `test:e2e` script resets the local dev container (`compose.local.yml` on port
-3002), creates an admin account, and runs the specs in `tests/e2e/`. Install
-Chromium first with `npm run test:e2e:install`, then run the suite with
-`npm run test:e2e`.
+3002), creates an admin account, and runs the specs in `tests/e2e/`. That
+compose file is gitignored maintainer configuration, so the wrapper requires
+an equivalent local file and Podman. Install Chromium first with
+`npm run test:e2e:install`, then run the suite with `npm run test:e2e`.
 
 ### Application settings
 
@@ -516,9 +521,9 @@ Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies any
 pending restore, runs migrations, ensures default settings and benefit templates
 exist, then starts a guarded in-process scheduler. The scheduler tick runs
 reminders, fare checks, weather-cache refresh, per-user IMAP ingestion, expiry
-purges (sessions, passkey challenges, OAuth tokens, rate-limit buckets, share
-windows), memtable flush, hourly compaction, and run pruning — without duplicate
-starts or overlapping ticks.
+purges (sessions, passkey challenges, OAuth authorization codes, rate-limit
+buckets, share windows), memtable flush, hourly compaction, and run pruning
+without duplicate starts or overlapping ticks.
 
 Routes stay thin. Server-side business logic lives under `src/lib/server/`.
 Trip access is centralized in three ownership helpers — `requireOwnedTrip`
@@ -577,11 +582,18 @@ changes so Credits/Acknowledgements and Third-party Licenses match
 
 ## Documentation
 
-- [docs/README.md](docs/README.md) - user documentation index
-- [CONTRIBUTING.md](CONTRIBUTING.md) - contribution guidelines
-- [docs/SECURITY.md](docs/SECURITY.md) - security policy and disclosure process
-- [LICENSE](LICENSE) - GPL-3.0-only license text
-- [static/manifest.json](static/manifest.json) - PWA manifest
+- [Complete manual](docs/README.md)
+- [Getting started](docs/getting-started.md)
+- [Deployment and upgrades](docs/deployment.md)
+- [Operations](docs/operations.md)
+- [Backup and restore](docs/backup-restore.md)
+- [Security and privacy](docs/SECURITY.md)
+- [OAuth 2.1](docs/oauth.md)
+- [MCP and AI](docs/mcp-ai.md)
+- [HTTP JSON API](docs/http-api.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Contribution guidelines](CONTRIBUTING.md)
+- [GPL-3.0-only license](LICENSE)
 
 ## License
 

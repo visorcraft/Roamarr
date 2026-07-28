@@ -3,55 +3,128 @@
 
 # Getting started
 
-Roamarr is a self-hosted, single-container travel organizer. This guide takes
-you from a fresh instance to your first trip with segments on a map.
+This guide runs Roamarr from source, creates the first administrator, and
+builds a first itinerary. For a durable internet-facing installation, continue
+with [Deployment and upgrades](./deployment.md).
 
-## 1. Required environment
+## 1. Install
 
-`ROAMARR_SECRET` must be set before boot. It is a base64-encoded 32-byte key
-used to encrypt sensitive fields at rest.
+Requirements:
+
+- Node.js 24 or newer;
+- npm;
+- OpenSSL for secret generation;
+- a writable persistent data directory.
+
+```sh
+git clone https://github.com/visorcraft/Roamarr.git
+cd Roamarr
+npm ci
+cp .env.example .env
+openssl rand -base64 32
+```
+
+Put the generated value in `.env`:
+
+```env
+ROAMARR_SECRET=replace-with-the-generated-value
+DATABASE_PATH=./roamarr-db
+PORT=3000
+ORIGIN=http://localhost:5173
+```
+
+`ROAMARR_SECRET` is mandatory and must decode to exactly 32 bytes. Reuse it
+across upgrades, rebuilds, and restores. A different value cannot open the
+existing encrypted database.
+
+`DATABASE_USER` and `DATABASE_PASS` are optional. Set both before the database
+is first created if MongrelDB credential authentication is required. Keep both
+unchanged afterward.
+
+## 2. Start development
+
+```sh
+npm run dev
+```
+
+Open `http://localhost:5173/setup`.
+
+Maintainer worktrees may include a gitignored `compose.local.yml`. It is not
+distributed in the public repository. When that file is present:
 
 ```sh
 export ROAMARR_SECRET="$(openssl rand -base64 32)"
-export DATABASE_PATH="./roamarr-db"   # data location
-export ORIGIN="https://roamarr.example.com"       # public URL behind a proxy
+podman compose -f compose.local.yml up -d
 ```
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `ROAMARR_SECRET` | yes | Encryption key. **Reuse across rebuilds** or data is lost. |
-| `DATABASE_PATH` | no | MongrelDB data directory or file path (default `./roamarr-db`). |
-| `ORIGIN` | no | Public origin for cookies/redirects behind a proxy. |
-| `PORT` / `ATTACHMENTS_PATH` | no | Listen port (3000) / receipt attachment dir. |
 
-## 2. First-user setup
+It serves `http://127.0.0.1:3002` and uses a separate
+`roamarr-dev-data` volume. This compose file is for development only. Public
+clones should use `npm run dev` unless they provide an equivalent local file.
 
-With no users present, Roamarr redirects to `/setup`. Enter an **instance
-name**, your **display name**, **email**, **password**, and **timezone**. This
-creates the first **admin** user and signs you in. Setup is unreachable after
-the first user exists; further registration is gated by **Allow registration**.
+## 3. Create the first account
 
-## 3. Create your first trip
+The setup page asks for:
 
-1. Click **New trip** in the sidebar.
-2. Enter a **Trip name** (e.g. "Summer in Lisbon"), pick a **Destination
-   country**, and use the city autocomplete for a **Destination city**.
-3. Set **Start/End date** and **Base currency**.
-4. Optionally start from a template, add tags, and choose a default visibility.
-5. Save — the trip opens on the **Itinerary** tab.
+- instance name;
+- administrator display name;
+- email;
+- password;
+- timezone.
 
-## 4. Add segments
+The first account is an administrator and is signed in. Setup becomes
+unreachable after that user exists. Additional public registration works only
+when an administrator enables it under **Configuration → General**.
 
-Click **Add segment**, pick a type (flight, hotel, event, train, etc.), then
-fill in title, start/end time, location, confirmation number, and notes.
-Segments appear on the itinerary timeline and, when they have a city or venue,
-on the trip map.
+## 4. Create a trip
 
-## 5. Enable maps
+1. Open **Trips** and choose **New trip**.
+2. Enter the required trip name.
+3. Optionally choose country, state/province, city, dates, notes, tags, a trip
+   template, and the visibility label.
+4. Save.
 
-The trip page renders a MapLibre GL map of your segments. For city autocomplete
-and city pins, seed city data once under **Settings → Maps**: download
-`cities1000.zip` from GeoNames and upload it. Confirm the **Tile provider**
-(OpenStreetMap by default; commercial providers need an API key).
+New trips start with status `booked`. The visibility label does not itself
+grant another person access. Direct/group shares and public links are managed
+from the trip's **Share** page.
 
-See [Maps](./maps.md) and [Admin](./admin.md). Next: [Trips](./trips.md),
-[Segments](./segments.md), [Sharing](./sharing.md), [Reminders](./reminders.md).
+If Maps are disabled, free-text trip and segment saves remain available.
+Resolved GeoNames cities and coordinates need Maps.
+
+## 5. Add itinerary segments
+
+Open the trip's **Itinerary** tab and choose **Add segment**. Select a type,
+then enter title, local start/timezone, optional end, location, booking detail,
+and status. A resolved city supplies map coordinates.
+
+The itinerary supports Timeline, List, and Board views. Select a segment to
+open details, travelers, notes, and reminders. See
+[Segments](./segments.md).
+
+## 6. Configure useful services
+
+Administrators can then open:
+
+- **Configuration → Maps** for GeoNames, the globe texture, and raster tiles;
+- **Configuration → Email** for SMTP, global IMAP, and optional AI parsing;
+- **Configuration → Webhooks** for signed notification delivery;
+- **Configuration → MCP Clients** for OAuth/MCP policy;
+- **Maintenance** for health, jobs, audits, backup, and database tools.
+
+Users can open **Profile** for timezone, notification preferences, reminder
+lead times, default currency, sessions, account calendar, theme, and email
+settings.
+
+## 7. Protect the installation
+
+Before entering real travel data:
+
+- move the database and attachments to persistent storage;
+- set the exact public HTTPS `ORIGIN`;
+- protect the secret and optional database credentials;
+- configure a reverse proxy and upload limits;
+- create and test a full backup;
+- enable TOTP or a passkey for administrator accounts.
+
+Next read [Trips](./trips.md), [Sharing](./sharing.md),
+[Backup and restore](./backup-restore.md), and
+[Account security](./account-security.md).

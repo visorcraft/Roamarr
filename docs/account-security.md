@@ -3,83 +3,107 @@
 
 # Account security
 
-Roamarr supports passwords, two-factor authentication (TOTP), and passwordless
-passkeys (WebAuthn). All three can coexist on a single account.
-
-Visit **Security** in the sidebar (under Profile) to manage these settings.
+Open **Security** under **Me** to manage password, TOTP, backup codes, and
+passkeys. Open **Profile → Sessions** for browser sessions and
+**Profile → MCP Clients** for OAuth grants when enabled.
 
 ## Passwords
 
-- Passwords are hashed with argon2id.
-- Passwords must be 8–1024 bytes.
-- Changing your password invalidates all other sessions.
-- An admin can force a password reset, which redirects the user to the
-  change-password page on next access.
+- Password length is 8 through 1024 bytes.
+- Password hashes use argon2id.
+- Changing a password requires the current password.
+- A successful change invalidates every other browser session.
+- An administrator can require a new password before normal access continues.
 
-## Two-factor authentication (TOTP + backup codes)
+Password change does not automatically revoke OAuth/MCP grants. Review and
+revoke those separately after suspected compromise.
 
-TOTP is an extra layer that requires a 6-digit code from an authenticator app
-(Google Authenticator, Authy, 1Password, etc.) in addition to your password.
+## Forgot-password flow
 
-### Enabling 2FA
+The public forgot-password form gives a generic response so it does not reveal
+whether an email exists. If the active account exists and SMTP is usable,
+Roamarr sends a random one-time reset URL.
 
-1. Go to **Security → Set up 2FA**.
-2. Scan the QR code with your authenticator app, or enter the secret manually.
-3. Enter the 6-digit code shown by your app to confirm.
-4. **Save your backup codes** — you receive 10 single-use codes. Each is
-   formatted as five groups of four hex digits (for example,
-   `abcd-ef12-3456-7890-abcd`). Store them securely; they are shown only once.
+Reset tokens:
 
-### Logging in with 2FA
+- are stored only as SHA-256 hashes;
+- expire after 60 minutes;
+- are single-use;
+- are all removed after a successful reset.
 
-After entering your email and password, you are redirected to a verification
-page. Enter either:
-- Your current 6-digit TOTP code, or
-- A backup code (single-use).
+A reset invalidates all browser sessions. Without configured SMTP, users need
+administrator help.
 
-### Regenerating backup codes
+## TOTP
 
-At **Security → Regenerate backup codes**, enter your current 6-digit code to
-generate a fresh set. All previous backup codes are invalidated.
+Enable TOTP from the Security page:
 
-### Disabling 2FA
+1. scan the QR code or enter the secret in an authenticator;
+2. enter the current six-digit code;
+3. save the 10 generated backup codes;
+4. acknowledge that the codes were saved.
 
-At **Security → Disable 2FA**, you must provide:
+The TOTP secret is encrypted at rest. Backup codes are shown once and stored as
+hashes. Each code is single-use.
 
-1. Your account password.
-2. A valid 6-digit TOTP code **or** a single-use backup code.
+Regenerating backup codes requires a current TOTP code and invalidates every
+old backup code. Disabling TOTP requires the account password plus a valid TOTP
+or backup code.
 
-This prevents someone who knows only your password from removing your second
-factor.
+Password login with TOTP enabled requires the second factor. Time drift on the
+server or authenticator can cause failures.
 
-## Passkeys (WebAuthn)
+## Passkeys
 
-Passkeys let you sign in without a password using Face ID, Touch ID, or a
-hardware security key.
+Passkeys use WebAuthn. Requirements:
 
-### Requirements
+- stable `ORIGIN`;
+- HTTPS outside loopback development;
+- a browser/platform that supports WebAuthn.
 
-- The `ORIGIN` environment variable must be set (passkeys require a stable
-  origin for the Relying Party).
-- HTTPS in production (or `localhost` in development).
+Choose **Security → Passkeys → Add passkey**, enter an optional device name,
+and complete the browser prompt. Roamarr stores the public credential and
+counter, never a private passkey.
 
-### Registering a passkey
+A passkey is a primary sign-in credential and satisfies login without a
+separate TOTP step. TOTP remains active for password login.
 
-1. Go to **Security → Manage passkeys → Add passkey**.
-2. Give it a name (e.g. "iPhone", "YubiKey").
-3. Complete the platform authenticator prompt.
+Passkeys can be renamed and deleted. Roamarr prevents deletion of the last
+usable sign-in method when that would lock out the account.
 
-### Signing in with a passkey
+## Sessions
 
-On the login page, click **Sign in with a passkey**. Complete the authenticator
-prompt — no password required.
+Session cookies contain a random 32-byte token. The database stores its
+SHA-256 hash. Sessions normally last 30 days and record best-effort IP and
+user-agent metadata.
 
-### Lockout protection
+Cookies are HTTP-only, secure in production HTTPS deployments, and use the
+administrator-selected `SameSite` policy. Revoke unknown sessions from
+**Profile → Sessions**.
 
-You cannot delete your last passkey if the account has no password set.
+## OAuth/MCP grants
 
-### Relationship to 2FA
+Access and refresh tokens are long-lived and stored only as hashes. Disable or
+delete a client/grant when no longer needed. A disabled account cannot use its
+tokens, but password change alone does not revoke them.
 
-A passkey login is a primary credential and **satisfies** authentication — no
-additional TOTP step-up is required. 2FA remains an independently enabled
-layer that users may combine with a password.
+See [OAuth 2.1](./oauth.md).
+
+## Administrator actions
+
+An administrator can create, disable, re-enable, force-reset, change, or delete
+users. The last administrator cannot be deleted. Security-sensitive actions
+are audit-logged.
+
+Disabling blocks login and token use while preserving data. Deleting is
+destructive and can cascade owned records.
+
+## Recovery checklist
+
+- Keep TOTP backup codes offline.
+- Register more than one passkey on separate devices where practical.
+- Keep SMTP working for password reset.
+- Review Sessions and MCP Clients periodically.
+- Use a unique password.
+- Protect `ORIGIN`, TLS, the server clock, database, backups, and
+  `ROAMARR_SECRET`.

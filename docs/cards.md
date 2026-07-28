@@ -3,49 +3,49 @@
 
 # Payment cards
 
-Track the credit and debit cards you travel with, including their travel
-benefits. Cards are **profile-level** — they belong to you, not to a single trip
-— so you can attach them to any segment payment.
+Cards are user-owned reference records under **Organizer → Cards**. Roamarr
+does not process payments or connect to banks.
 
-## Managing cards
+## Stored card fields
 
-From the **Cards** page in the sidebar (under Organizer), add a card with:
-
-| Field | Notes |
+| Field | Values |
 | --- | --- |
-| Nickname | Required (e.g. "Chase Sapphire", "Corporate Amex"). |
-| Network | e.g. Visa, Mastercard, Amex. |
-| Last 4 | Optional; only the last four digits are stored. Never enter a full card number. |
-| Notes | Free text (e.g. PIN, customer-service number). |
+| Nickname | Required user label. |
+| Network | `visa`, `mc`, `amex`, `disc`, or `other`. |
+| Last 4 | Optional four digits. |
+| Notes | Optional private plaintext note. |
 
-Edit or delete a card from its row.
+Roamarr intentionally does not store a full primary account number. Never put
+a full card number, CVV/CVC, PIN, magnetic-stripe data, online-banking
+credential, or one-time code in **any** field, including Notes.
 
-## Card benefits
+## Benefits
 
-Each card can have one or more benefits, such as:
+A card can have benefit rows with:
 
-- **Trip-delay reimbursement**
-- **Rental-car coverage**
-- **Purchase protection**
-- **Lounge access**
-- **Custom benefit** (free text)
+- `trip_delay`;
+- `baggage_delay`;
+- `trip_cancellation`;
+- `other`;
+- optional coverage amount in minor units;
+- three-letter currency;
+- notes.
 
-Benefits can be created from a system template or entered manually. Each benefit
-records the benefit type, optional coverage amount/currency, and notes.
+Boot creates reusable benefit templates. Selecting a template pre-fills a new
+card-benefit row; the resulting benefit belongs to the card and can be edited
+or removed independently.
 
-## Using cards on trips
+## Segment link
 
-On flight, hotel, and other payment segments, pick a card from your list to
-record which card was used to pay. This is for your reference only; Roamarr does
-not charge cards or sync with banks.
+An editor can record which user-owned card was used for a segment. Ownership is
+validated. This is an informational reference and does not charge the card or
+create an expense.
 
 ## Privacy
 
-- Only the card **network** and **last 4** are stored. Full PANs are rejected by
-  the UI and should never be entered.
-- Card data is visible only to you; shared users and public links never see it.
+Card rows belong only to their user. Trip sharing does not grant another user
+access to the card record. Public links, calendars, notifications, and
+printable itineraries omit it.
 
-## Related
-
-- [Loyalty programs](./loyalty.md) — for frequent-flyer and hotel rewards numbers.
-- [Expenses](./expenses.md) — for tracking what a trip actually cost.
+OAuth/MCP card projectors expose safe metadata and benefits. They never contain
+a full PAN. Notes are stripped from AI-facing safe projections where required.

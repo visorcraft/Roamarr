@@ -1,33 +1,56 @@
 <!-- SPDX-FileCopyrightText: 2026 Visorcraft LLC -->
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 
-# Journal
+# Notes, journal, and comments
 
-The trip journal is a free-form daily log for notes, stories, and memories. It
-lives on the trip page's **Notes** tab.
+A trip has three text surfaces with different structure.
 
-## Adding an entry
+## Trip notes
 
-On a trip's **Notes** tab, choose **Add journal entry**:
+Trip notes are one free-form field edited with the trip. They are visible to
+the owner and edit shares. They are excluded from read-share, public-link,
+calendar, and printable projections.
 
-| Field | Notes |
-| --- | --- |
-| Date | The day the entry is for. |
-| Title | Short headline for the entry. |
-| Body | Free-form text (up to 10,000 characters). |
+An MCP client can receive them only through a supported read with
+`private-details:read`, after both administrator policy and user consent.
+Semantic search has a separate privacy boundary and can index notes.
 
-## Managing entries
+## Journal
 
-- Entries are listed by date on the Notes tab.
-- Edit or delete an entry from its row.
-- Use the journal alongside segment notes for day-to-day details.
+Journal entries appear under the trip's **Notes** tab. Each contains:
+
+- required date;
+- required title, up to 200 characters;
+- required body, up to 10,000 characters.
+
+Owners and edit shares can create and delete entries in the current trip UI.
+MCP adds list, create, update, and delete:
+
+- `roamarr_journal_list`;
+- `roamarr_journal_create`;
+- `roamarr_journal_update`;
+- `roamarr_journal_delete`.
+
+The MCP list accepts a viewable trip with `journal:read`; writes require edit
+access and `journal:write`. Deletion requires `confirm: true`.
+
+## Comments
+
+Comments are short collaborative messages on the Notes tab. Owners and edit
+shares can add a nonblank comment. A user can delete their own comment.
+
+MCP tools are:
+
+- `roamarr_comment_list`;
+- `roamarr_comment_create`;
+- `roamarr_comment_delete`.
 
 ## Privacy
 
-Journal entries are visible to the trip owner and shared users/groups, but they
-are never exposed through public share links or calendar feeds.
+Journal and comment data is excluded from public links, calendars, printable
+itineraries, and notification payloads. A scoped MCP read can expose it to a
+user who can view the trip, so combine share permissions and OAuth scopes
+carefully.
 
-## Related
-
-- [Trips](./trips.md) — trip tabs and organization.
-- [Sharing](./sharing.md) — who can see trip content.
+These fields are stored in the encrypted database but are not separately
+field-encrypted. Avoid passwords, document numbers, or other secrets in them.

@@ -4,7 +4,8 @@
 # Trip document links
 
 Document links are trip-scoped URLs for vouchers, reservations, shared files,
-or other external material. They are different from user-owned
+or other external material. They are different from **uploaded** trip/segment
+[file documents](./trip-documents.md) and from user-owned
 [travel documents](./travel-documents.md).
 
 ## Fields

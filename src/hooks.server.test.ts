@@ -119,6 +119,9 @@ test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/fare-providers', 'PATCH')).toBe('fares:write');
 	expect(requiredApiScope('/api/mobile-admin', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/mobile/trips/1/poster', 'POST')).toBe('trips:write');
+	expect(requiredApiScope('/api/mobile/trips/1/documents', 'GET')).toBe('trips:read');
+	expect(requiredApiScope('/api/mobile/trips/1/documents', 'POST')).toBe('trips:write');
+	expect(requiredApiScope('/api/mobile/trips/1/documents/3', 'DELETE')).toBe('trips:write');
 	expect(requiredApiScope('/api/mobile/trips/1/sharing', 'GET')).toBe('sharing:read');
 	expect(requiredApiScope('/api/mobile/trips/1/sharing', 'POST')).toBe('sharing:write');
 	expect(requiredApiScope('/api/mobile/segments/1', 'PATCH')).toBe('segments:write');

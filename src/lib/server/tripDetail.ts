@@ -26,6 +26,7 @@ import {
 	listEntryRequirementsForTrip,
 	listImportantItemsForTrip
 } from './repositories/tripMiscRepo';
+import { listTripDocuments, listDocumentsBySegment } from './tripDocuments';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -100,6 +101,10 @@ export async function buildTripDetail(
 		: [];
 	const journalEntries = view.editor ? listJournalEntriesForTrip(view.trip.id) : [];
 	const documentLinks = view.editor ? listDocumentLinksForTrip(view.trip.id) : [];
+	const tripDocuments = view.editor ? listTripDocuments(view.trip.id) : [];
+	const documentsBySegment = view.editor
+		? listDocumentsBySegment(view.segments.map((s) => s.id).filter((id): id is number => id != null))
+		: new Map<number, ReturnType<typeof listTripDocuments>>();
 	const polls = view.editor ? listPollsWithVotes(view.trip.id) : [];
 	const homeTasks = view.editor ? listHomeTasksForTrip(view.trip.id) : [];
 	const medications = view.editor ? listMedicationsForTrip(view.trip.id) : [];
@@ -172,6 +177,8 @@ export async function buildTripDetail(
 			budgets,
 			journalEntries,
 			documentLinks,
+			tripDocuments,
+			documentsBySegment,
 			polls,
 			attendeesBySegment,
 			providers,
@@ -206,6 +213,8 @@ export async function buildTripDetail(
 		budgets,
 		journalEntries,
 		documentLinks,
+		tripDocuments,
+		documentsBySegment,
 		polls,
 		attendeesBySegment,
 		comments: view.editor ? listComments(view.trip.id) : [],

@@ -12,6 +12,10 @@ import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
 import { setAttendee } from '$lib/server/segmentAttendees';
 import { addJournalEntry, deleteJournalEntry } from '$lib/server/tripJournal';
 import { addDocumentLink, deleteDocumentLink } from '$lib/server/tripDocumentLinks';
+import {
+	uploadTripDocumentAction,
+	deleteTripDocumentAction
+} from '$lib/server/tripDocuments';
 import { createPoll, votePoll, deletePoll } from '$lib/server/tripPolls';
 import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
 import { saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
@@ -87,6 +91,8 @@ export const actions: Actions = {
 	deleteJournalEntry,
 	addDocumentLink,
 	deleteDocumentLink,
+	uploadTripDocument: uploadTripDocumentAction,
+	deleteTripDocument: deleteTripDocumentAction,
 	createPoll,
 	votePoll,
 	deletePoll,

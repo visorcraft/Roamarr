@@ -1254,6 +1254,42 @@ export const tripExpenseAttachments = table('trip_expense_attachments', {
 	]
 });
 
+/** Uploaded files (PDF/images) scoped to a trip, optionally to one segment. */
+export const tripDocuments = table('trip_documents', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('trip_documents_id_seq') }),
+		int('trip_id'),
+		int('segment_id', { nullable: true }),
+		int('attachment_id'),
+		text('label', { nullable: true }),
+		text('notes', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['attachment_id'], { name: 'trip_documents_attachment_id_uq' })],
+	indexes: [
+		index(['trip_id'], { name: 'trip_documents_trip_idx' }),
+		index(['segment_id'], { name: 'trip_documents_segment_idx' })
+	],
+	foreignKeys: [
+		foreignKey(
+			['trip_id'],
+			{ table: 'trips', columns: ['id'] },
+			{ name: 'fk_trip_documents_trip_id_trips', onDelete: 'cascade' }
+		),
+		foreignKey(
+			['segment_id'],
+			{ table: 'segments', columns: ['id'] },
+			{ name: 'fk_trip_documents_segment_id_segments', onDelete: 'cascade' }
+		),
+		foreignKey(
+			['attachment_id'],
+			{ table: 'attachments', columns: ['id'] },
+			{ name: 'fk_trip_documents_attachment_id_attachments', onDelete: 'cascade' }
+		)
+	]
+});
+
 export const tripTemplates = table('trip_templates', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_templates_id_seq') }),
@@ -1483,6 +1519,7 @@ export const schema = new Schema([
 	tripBudgetCategories,
 	attachments,
 	tripExpenseAttachments,
+	tripDocuments,
 	tripTemplates,
 	tripHomeTasks,
 	tripMedications,

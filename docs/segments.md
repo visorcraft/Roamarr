@@ -76,7 +76,11 @@ Selecting a segment opens:
 - **Details** for time, location, status, and booking fields;
 - **Travelers** for companion attendance;
 - **Notes** for structured type-specific data;
+- **Files** for uploaded PDFs and images (QR codes, vouchers, confirmations);
 - **Reminders** for scheduled alerts.
+
+Editors can also attach files when adding or editing a segment. See
+[trip and segment file documents](./trip-documents.md).
 
 Editors can edit, duplicate, delete, move to another date, change status, and
 add a reminder. Moving a segment preserves its time-of-day relationship while

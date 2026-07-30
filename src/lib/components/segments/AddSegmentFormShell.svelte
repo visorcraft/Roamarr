@@ -54,7 +54,7 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="POST" class="grid gap-4 sm:grid-cols-2">
+	<form method="POST" enctype="multipart/form-data" class="grid gap-4 sm:grid-cols-2">
 		{#if form?.error}<p class="notice notice-error sm:col-span-2">{form.error}</p>{/if}
 
 		{@render children()}
@@ -62,6 +62,21 @@
 		{#if cards?.length}
 			<CardSelect {cards} name="cardId" errors={form?.errors} />
 		{/if}
+
+		<div class="field sm:col-span-2">
+			<label class="label" for="segment-documents">Documents (optional)</label>
+			<p class="mb-2 text-sm text-muted">
+				Attach PDFs or images such as QR codes, vouchers, or booking confirmations (JPEG, PNG, WebP, or PDF, max 10&nbsp;MB each).
+			</p>
+			<input
+				id="segment-documents"
+				name="documents"
+				type="file"
+				multiple
+				accept="image/jpeg,image/png,image/webp,application/pdf"
+				class="input"
+			/>
+		</div>
 
 		<div class="form-actions sm:col-span-2">
 			<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>

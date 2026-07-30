@@ -7,8 +7,8 @@ import { openKitDatabase } from './mongrel';
 import { nowIso, utcIsoAfter } from '../tz';
 
 describe('mongrelSchema', () => {
-	test('has 60 tables', () => {
-		expect(schema.tablesList()).toHaveLength(60);
+	test('has 61 tables', () => {
+		expect(schema.tablesList()).toHaveLength(61);
 	});
 
 	test.each([
@@ -44,6 +44,7 @@ describe('mongrelSchema', () => {
 		['emergency_contacts', ['id']],
 		['trip_journal_entries', ['id']],
 		['trip_document_links', ['id']],
+		['trip_documents', ['id']],
 		['packing_templates', ['id']],
 		['packing_template_items', ['id']],
 		['trip_polls', ['id']],

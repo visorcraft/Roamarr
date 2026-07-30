@@ -7,6 +7,7 @@ import { addSegment, hasOverlappingSegment } from '$lib/server/segments';
 import { resolveCitySelection } from '$lib/server/cities';
 import { localToUtc } from '$lib/server/tz';
 import { setFlash } from '$lib/server/flash';
+import { addTripDocument, collectDocumentFiles } from '$lib/server/tripDocuments';
 
 function readLocalStart(v: Validator, f: FormData, optional = false): string | undefined {
 	const direct = f.get('localStart');
@@ -107,7 +108,8 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		localToUtc(localStart!, startTz!),
 		endAt ? localToUtc(endAt, effectiveEndTz) : null
 	);
-	addSegment(u.id, tripId, {
+	const documentFiles = collectDocumentFiles(f);
+	const seg = addSegment(u.id, tripId, {
 		type,
 		title: title!,
 		localStart: localStart!,
@@ -129,6 +131,30 @@ export async function submitAddSegment(event: RequestEvent, type: SegmentType) {
 		paymentDueDate: paymentDueDate ?? undefined,
 		details
 	});
+	for (const file of documentFiles) {
+		try {
+			await addTripDocument(u.id, tripId, { file, segmentId: Number(seg.id) });
+		} catch (e) {
+			// Segment is already saved; surface a soft warning rather than rolling back.
+			const body =
+				e && typeof e === 'object' && 'body' in e
+					? (e as { body?: unknown }).body
+					: undefined;
+			const message =
+				body && typeof body === 'object' && body !== null && 'message' in body
+					? String((body as { message: unknown }).message)
+					: e instanceof Error
+						? e.message
+						: '';
+			setFlash(
+				event.cookies,
+				message
+					? `Segment saved, but a document failed to upload: ${message}`
+					: 'Segment saved, but one or more documents failed to upload.'
+			);
+			break;
+		}
+	}
 	if (overlap) {
 		setFlash(event.cookies, 'Warning: this segment overlaps an existing one.');
 	}

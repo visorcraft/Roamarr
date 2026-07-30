@@ -35,6 +35,8 @@ operating, securing, integrating, and contributing to the application.
   limitations, and why export is not a backup.
 - [Trip document links](./document-links.md): external voucher/file URLs,
   management, security, and privacy.
+- [Trip and segment file documents](./trip-documents.md): uploaded PDFs and
+  images scoped to a trip or segment (QR codes, vouchers, confirmations).
 - [Templates and trip merge](./templates-and-merge.md): trip templates,
   packing templates, duplication, and donor-to-recipient merge behavior.
 - [Maps](./maps.md): map enablement, GeoNames, the globe, tile providers,

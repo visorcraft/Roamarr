@@ -42,6 +42,24 @@ test('SegmentEditForm shows validation errors', () => {
 	expect(body).toContain('Bad end.');
 });
 
+test('SegmentEditForm shows Attached files accordion above Additional details', () => {
+	const { body } = render(SegmentEditForm, {
+		props: {
+			segment,
+			tripId: 7,
+			documents: [{ id: 9, label: 'Voucher QR', filename: 'qr.png', sizeBytes: 1200 }],
+			onCancel: () => {}
+		}
+	});
+	expect(body).toContain('Attached files');
+	expect(body).toContain('Upload file');
+	expect(body).toContain('trip-documents-table');
+	const attachedAt = body.indexOf('Attached files');
+	const additionalAt = body.indexOf('Additional details');
+	expect(attachedAt).toBeGreaterThan(-1);
+	expect(additionalAt).toBeGreaterThan(attachedAt);
+});
+
 test('SegmentEditForm uses hotel check-in and check-out labels', () => {
 	const { body } = render(SegmentEditForm, { props: { segment: { ...segment, type: 'hotel' }, tripId: 7, onCancel: () => {} } });
 	expect(body).toContain('Check-in');

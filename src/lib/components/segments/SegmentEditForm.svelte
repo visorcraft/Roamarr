@@ -9,6 +9,7 @@
 	import { toDatetimeLocal } from '$lib/segments/datetimeLocal';
 	import { COUNTRIES } from '$lib/countries';
 	import { usesPickupDropoff } from '$lib/segmentLabels';
+	import TripDocumentsTable from '$lib/components/TripDocumentsTable.svelte';
 
 	interface SegmentEdit {
 		id?: number;
@@ -33,17 +34,27 @@
 		cardId?: number | null;
 	}
 
+	interface SegmentDocument {
+		id: number;
+		label?: string | null;
+		filename: string;
+		contentType?: string | null;
+		sizeBytes: number;
+	}
+
 	let {
 		segment: s,
 		tripId,
 		errors = {},
 		cards = [],
+		documents = [],
 		onCancel
 	}: {
 		segment: SegmentEdit;
 		tripId: number;
 		errors?: Record<string, string>;
 		cards?: { id: number; nickname: string; network: string; last4: string | null }[];
+		documents?: SegmentDocument[];
 		onCancel: () => void;
 	} = $props();
 
@@ -116,6 +127,45 @@
 		<option value="refunded" selected={s.paymentStatus === 'refunded'}>Refunded</option>
 	</SelectField>
 	<TextField name="paymentDueDate" id={fid('paymentDueDate')} label="Payment due" type="date" value={s.paymentDueDate ?? ''} {errors} />
+	{#if s.id != null}
+		<details class="panel-subtle sm:col-span-2" open={documents.length > 0}>
+			<summary class="cursor-pointer font-semibold">Attached files</summary>
+			<div class="mt-3 space-y-3">
+				<p class="text-sm text-muted">
+					PDFs or images (JPEG, PNG, WebP) such as QR codes and vouchers, max 10&nbsp;MB each.
+				</p>
+				<TripDocumentsTable
+					{tripId}
+					{documents}
+					canEdit={true}
+					pageSize={5}
+					showScope={false}
+					emptyMessage="No files yet."
+				/>
+				<!-- Inputs associate to a sibling form via the form= attribute (no nested forms). -->
+				<div class="grid gap-2 sm:grid-cols-2">
+					<input
+						id={fid('attach-file')}
+						form="segment-file-upload-{s.id}"
+						type="file"
+						name="file"
+						accept="image/jpeg,image/png,image/webp,application/pdf"
+						class="input text-sm sm:col-span-2"
+						required
+					/>
+					<input
+						form="segment-file-upload-{s.id}"
+						name="label"
+						class="input text-sm"
+						placeholder="Label (optional)"
+					/>
+					<button form="segment-file-upload-{s.id}" type="submit" class="btn btn-secondary btn-sm">
+						Upload file
+					</button>
+				</div>
+			</div>
+		</details>
+	{/if}
 	<details class="panel-subtle sm:col-span-2" open={Boolean(errors.detailsJson)}>
 		<summary class="cursor-pointer font-semibold">Additional details</summary>
 		<div class="field mt-3">
@@ -133,3 +183,15 @@
 		<button class="btn btn-primary">Save</button>
 	</div>
 </form>
+{#if s.id != null}
+	<form
+		id="segment-file-upload-{s.id}"
+		method="POST"
+		action={`/trips/${tripId}?/uploadTripDocument`}
+		enctype="multipart/form-data"
+		class="hidden"
+		aria-hidden="true"
+	>
+		<input type="hidden" name="segmentId" value={s.id} />
+	</form>
+{/if}

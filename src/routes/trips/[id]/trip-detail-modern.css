@@ -487,14 +487,17 @@
 .trip-modern-selected-summary {
 	display: flex;
 	gap: 1rem;
-	align-items: center;
+	align-items: flex-start;
 	padding: 1.05rem 0 1rem;
 }
 
 .trip-modern-selected-node {
 	display: grid;
+	flex: 0 0 4.25rem;
 	height: 4.25rem;
 	width: 4.25rem;
+	min-width: 4.25rem;
+	min-height: 4.25rem;
 	place-items: center;
 	border-radius: 9999px;
 	background: color-mix(in oklab, var(--theme-brand) 14%, var(--trip-modern-surface-raised));
@@ -502,11 +505,33 @@
 	color: var(--theme-brand-readable);
 }
 
+.trip-modern-selected-node svg {
+	display: block;
+	width: 1.75rem;
+	height: 1.75rem;
+	flex-shrink: 0;
+}
+
 .trip-modern-selected-name {
 	color: var(--trip-modern-strong);
 	font-size: 1.15rem;
 	font-weight: 850;
-	line-height: 1.15;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.trip-modern-selected-place {
+	margin-top: 0.45rem;
+	color: var(--trip-modern-muted);
+	font-size: 0.9rem;
+	line-height: 1.35;
+}
+
+.trip-modern-selected-address {
+	margin-top: 0.2rem;
+	color: var(--trip-modern-muted);
+	font-size: 0.85rem;
+	line-height: 1.4;
 	overflow-wrap: anywhere;
 }
 
@@ -614,10 +639,12 @@
 }
 
 .trip-modern-kv-label {
-	flex: 0 1 auto;
+	flex: 0 0 auto;
 	max-width: 42%;
 	color: var(--trip-modern-muted);
-	overflow-wrap: anywhere;
+	/* Do not break labels letter-by-letter (avoids vertical "N o t e s"). */
+	overflow-wrap: normal;
+	white-space: nowrap;
 }
 
 .trip-modern-kv-value {
@@ -628,6 +655,24 @@
 	overflow-wrap: anywhere;
 	word-break: break-word;
 	white-space: pre-wrap;
+}
+
+/* Long text (Notes, multi-line fields): label on top, full-width body below. */
+.trip-modern-kv-row-stacked {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.4rem;
+}
+
+.trip-modern-kv-row-stacked .trip-modern-kv-label {
+	max-width: none;
+	white-space: normal;
+	font-weight: 600;
+}
+
+.trip-modern-kv-row-stacked .trip-modern-kv-value {
+	text-align: left;
+	width: 100%;
 }
 
 .trip-modern-empty {

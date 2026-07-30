@@ -82,13 +82,14 @@
 
 	let wrapper: HTMLDivElement | undefined = $state();
 	let pendingAction: { action: string; row: Record<string, unknown> } | null = $state(null);
+	// Seed from prop; $effect below keeps it in sync when pageSize changes.
 	let selectedPageSize = $state(10);
 	let searchInput = $state('');
 	let searchTerm = '';
 	let filterValues = $state<Record<string, string>>({});
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	const rowById = new Map<string, Record<string, unknown>>();
-	const pageSizeOptions = $derived([...new Set([10, 25, 50, 100, pageSize])].sort((a, b) => a - b));
+	const pageSizeOptions = $derived([...new Set([5, 10, 25, 50, 100, pageSize])].sort((a, b) => a - b));
 
 	const actionColumn = $derived(
 		actions.length

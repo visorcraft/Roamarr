@@ -23,6 +23,8 @@
 		canEdit = false,
 		pageSize = 5,
 		showScope = true,
+		/** Name + Size only (e.g. selected-segment sidebar). */
+		compact = false,
 		segmentTitles = {},
 		emptyMessage = 'No files uploaded yet.'
 	}: {
@@ -32,6 +34,7 @@
 		pageSize?: number;
 		/** Show Whole trip / segment title column. */
 		showScope?: boolean;
+		compact?: boolean;
 		segmentTitles?: Record<number, string>;
 		emptyMessage?: string;
 	} = $props();
@@ -63,7 +66,7 @@
 				);
 			}
 		},
-		...(showScope
+		...(!compact && showScope
 			? [
 					{
 						id: 'scope',
@@ -76,15 +79,19 @@
 					}
 				]
 			: []),
-		{
-			id: 'contentType',
-			name: 'Type',
-			sort: true,
-			formatter: (_cell: unknown, row: Record<string, unknown>) =>
-				html(
-					`<span style="color: var(--theme-readable-muted)">${escapeHtml(String(row.contentType ?? '—'))}</span>`
-				)
-		},
+		...(!compact
+			? [
+					{
+						id: 'contentType',
+						name: 'Type',
+						sort: true,
+						formatter: (_cell: unknown, row: Record<string, unknown>) =>
+							html(
+								`<span style="color: var(--theme-readable-muted)">${escapeHtml(String(row.contentType ?? '—'))}</span>`
+							)
+					}
+				]
+			: []),
 		{
 			id: 'sizeBytes',
 			name: 'Size',
@@ -96,30 +103,33 @@
 		}
 	]);
 
+	// Compact sidebar: open via the name link; manage/delete on Documents tab or Edit.
 	const actions = $derived(
-		canEdit
-			? [
-					{
-						id: 'open',
-						label: 'Open'
-					},
-					{
-						id: 'delete',
-						label: 'Delete',
-						variant: 'danger' as const,
-						confirm: true,
-						confirmTitle: 'Delete file',
-						confirmMessage: (row: Record<string, unknown>) =>
-							`Delete “${String(row.label || row.filename || 'this file')}”? This cannot be undone.`,
-						confirmLabel: 'Delete'
-					}
-				]
-			: [
-					{
-						id: 'open',
-						label: 'Open'
-					}
-				]
+		compact
+			? []
+			: canEdit
+				? [
+						{
+							id: 'open',
+							label: 'Open'
+						},
+						{
+							id: 'delete',
+							label: 'Delete',
+							variant: 'danger' as const,
+							confirm: true,
+							confirmTitle: 'Delete file',
+							confirmMessage: (row: Record<string, unknown>) =>
+								`Delete “${String(row.label || row.filename || 'this file')}”? This cannot be undone.`,
+							confirmLabel: 'Delete'
+						}
+					]
+				: [
+						{
+							id: 'open',
+							label: 'Open'
+						}
+					]
 	);
 
 	async function fetchData(opts: FetchOpts) {

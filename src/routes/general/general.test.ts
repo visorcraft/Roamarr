@@ -221,6 +221,41 @@ test('map tile API key is encrypted at rest and decrypts for tile config', () =>
 	expect(getMapSettings().mapsTileApiKey).toBe('********');
 });
 
+test('place search provider config: encryption round-trip, masking, provider switch', () => {
+	// Defaults: Nominatim, no key.
+	expect(getSettings().placeSearchProvider).toBe('nominatim');
+	expect(getSettings().placeSearchGoogleApiKey).toBeNull();
+	expect(getMapSettings().placeSearchGoogleApiKey).toBe('');
+
+	const u = makeUser('placesearch@x.c');
+	saveAdminSettings(Number(u.id), {
+		placeSearchProvider: 'google',
+		placeSearchGoogleApiKey: 'google-secret-key'
+	});
+
+	const raw = getSettings().placeSearchGoogleApiKey;
+	expect(raw).not.toBe('google-secret-key');
+	expect(decrypt(raw!)).toBe('google-secret-key');
+	expect(getSettings().placeSearchProvider).toBe('google');
+	expect(getMapSettings().placeSearchProvider).toBe('google');
+	expect(getMapSettings().placeSearchGoogleApiKey).toBe('********');
+
+	// Switching provider without touching the key keeps the stored secret.
+	saveAdminSettings(Number(u.id), { placeSearchProvider: 'nominatim' });
+	expect(getSettings().placeSearchProvider).toBe('nominatim');
+	expect(decrypt(getSettings().placeSearchGoogleApiKey!)).toBe('google-secret-key');
+
+	// Explicit clear removes the key and unmasks the UI value.
+	saveAdminSettings(Number(u.id), { placeSearchGoogleApiKey: null });
+	expect(getSettings().placeSearchGoogleApiKey).toBeNull();
+	expect(getMapSettings().placeSearchGoogleApiKey).toBe('');
+
+	// Unknown providers are rejected.
+	expect(() => saveAdminSettings(Number(u.id), { placeSearchProvider: 'bogus' as never })).toThrow(
+		'Invalid place search provider'
+	);
+});
+
 test('smtpSecurity round-trips', () => {
 	const u = makeUser('smtpsec@x.c');
 	saveAdminSettings(Number(u.id), {
@@ -334,6 +369,78 @@ test('saveOauth updates the private MCP details gate', async () => {
 	expect(getSettings().allowMcpPii).toBe(true);
 	await save(false);
 	expect(getSettings().allowMcpPii).toBe(false);
+});
+
+test('saveOidc stores provider config and encrypts the client secret', async () => {
+	const u = makeUser('oidc-admin@x.c', 'Admin', 'admin');
+	const form = new FormData();
+	form.set('oidcEnabled', 'on');
+	form.set('oidcDiscoveryUrl', 'https://idp.example.com');
+	form.set('oidcClientId', 'roamarr');
+	form.set('oidcClientSecret', 'shh-secret');
+	form.set('oidcDisplayName', 'Authentik');
+	await expect(actions.saveOidc({
+		request: { formData: async () => form },
+		locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+		cookies: { set: vi.fn() }
+	} as any)).rejects.toMatchObject({
+		status: 303,
+		location: '/general/mcp-clients'
+	});
+	const s = getSettings();
+	expect(s.oidcEnabled).toBe(true);
+	expect(s.oidcDiscoveryUrl).toBe('https://idp.example.com');
+	expect(s.oidcClientId).toBe('roamarr');
+	expect(s.oidcClientSecret).not.toBe('shh-secret');
+	expect(decrypt(s.oidcClientSecret!)).toBe('shh-secret');
+	expect(s.oidcDisplayName).toBe('Authentik');
+});
+
+test('saveOidc keeps the stored secret on the masked value and clears on request', async () => {
+	const u = makeUser('oidc-admin2@x.c', 'Admin', 'admin');
+	const run = (form: FormData) =>
+		actions.saveOidc({
+			request: { formData: async () => form },
+			locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+			cookies: { set: vi.fn() }
+		} as any);
+	const base = () => {
+		const form = new FormData();
+		form.set('oidcEnabled', 'on');
+		form.set('oidcDiscoveryUrl', 'https://idp.example.com');
+		form.set('oidcClientId', 'roamarr');
+		return form;
+	};
+	const withSecret = base();
+	withSecret.set('oidcClientSecret', 'shh-secret');
+	await expect(run(withSecret)).rejects.toMatchObject({ status: 303 });
+	const stored = getSettings().oidcClientSecret;
+	expect(stored).toBeTruthy();
+
+	// Masked placeholder: keep the stored secret.
+	const masked = base();
+	masked.set('oidcClientSecret', '********');
+	await expect(run(masked)).rejects.toMatchObject({ status: 303 });
+	expect(getSettings().oidcClientSecret).toBe(stored);
+
+	// Explicit clear: drop it.
+	const clearing = base();
+	clearing.set('clearOidcClientSecret', 'on');
+	await expect(run(clearing)).rejects.toMatchObject({ status: 303 });
+	expect(getSettings().oidcClientSecret).toBeNull();
+});
+
+test('saveOidc requires discovery URL and client ID when enabling', async () => {
+	const u = makeUser('oidc-admin3@x.c', 'Admin', 'admin');
+	const form = new FormData();
+	form.set('oidcEnabled', 'on');
+	const result = (await actions.saveOidc({
+		request: { formData: async () => form },
+		locals: { user: { id: Number(u.id), role: 'admin' } } as App.Locals,
+		cookies: { set: vi.fn() }
+	} as any)) as { status: number; data: { error: string } };
+	expect(result.status).toBe(400);
+	expect(result.data.error).toMatch(/discovery url and client id/i);
 });
 
 test('testEmail action returns 429 when rate limited', async () => {

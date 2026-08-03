@@ -8,7 +8,7 @@
 
 <TextField name="title" label="Note title" placeholder="Enter note title" required class="sm:col-span-2" {errors} />
 
-<TextAreaField name="detail_notes" label="Note" rows={5} placeholder="Enter note" required class="sm:col-span-2" />
+<TextAreaField name="detail_notes" label="Note" rows={5} placeholder="Enter note" hint="Markdown supported" required class="sm:col-span-2" />
 
 <section class="segment-form-section sm:col-span-2">
 	<div class="grid gap-4 sm:grid-cols-3">

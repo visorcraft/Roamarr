@@ -33,6 +33,7 @@ export function auditEntityUrl(entry: AuditLogEntry): string | null {
 		case 'document':
 			return `/profile/documents/${entityId}/edit`;
 		case 'trip_document_link':
+		case 'trip_day_note':
 		case 'journal_entry':
 		case 'trip_journal_entry':
 		case 'trip_poll':
@@ -51,6 +52,9 @@ export function auditEntityUrl(entry: AuditLogEntry): string | null {
 		case 'trip_template':
 			// Reusable templates are not trips and have no detail route.
 			return null;
+		case 'gallery_image':
+			// Trip galleries live on the trip page; place galleries on /places.
+			return tripUrl(meta) ?? '/places';
 		case 'attachment':
 		case 'packing_template':
 		case 'emergency_contact':

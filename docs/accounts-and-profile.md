@@ -17,8 +17,11 @@ Open **Profile → Profile** to set:
 | Flight check-in lead | Hours before a flight when an automatic reminder is due. |
 | Document expiry lead | Days before expiry when a travel-document reminder is due. |
 | Default currency | Currency selected by money forms and budget controls. |
+| Temperature unit | °C or °F display for itinerary weather (data stays metric). |
+| Time format | 12-hour or 24-hour times on itinerary day/segment times. |
 | Email notifications | Allows optional SMTP delivery of notifications. |
 | Webhook notifications | Allows optional signed-webhook delivery. |
+| ntfy notifications | Allows optional ntfy delivery. |
 
 Lead values are non-negative whole numbers. Changing them affects reminder
 generation and future behavior; it does not rewrite every historical
@@ -26,6 +29,12 @@ notification.
 
 The default currency is a form default and display context. Roamarr does not
 perform a live foreign-exchange lookup.
+
+The temperature unit only changes how weather is displayed; forecasts are
+fetched and cached in Celsius either way. The time format applies to the
+shared time-format helper used by itinerary day and segment times; screens
+that render full dates follow the instance date/time formats from
+**Configuration → General**.
 
 ## Email address and password
 

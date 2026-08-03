@@ -55,11 +55,17 @@ test('login action returns 429 when rate limited', async () => {
 	expect(result.data.retryAfter).toBeGreaterThan(0);
 });
 
-test('load exposes passkey availability', () => {
+test('load exposes passkey availability and public SSO info', () => {
 	process.env.ORIGIN = 'https://roamarr.example.com';
-	expect(load({} as any)).toEqual({ passkeyAvailable: true });
+	expect(load({} as any)).toEqual({
+		passkeyAvailable: true,
+		oidc: { enabled: false, displayName: 'SSO' }
+	});
 	delete process.env.ORIGIN;
-	expect(load({} as any)).toEqual({ passkeyAvailable: false });
+	expect(load({} as any)).toEqual({
+		passkeyAvailable: false,
+		oidc: { enabled: false, displayName: 'SSO' }
+	});
 	process.env.ORIGIN = ORIGINAL_ORIGIN;
 });
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-	let { form } = $props();
+	let { data, form } = $props();
 	let confirmed = $state(false);
 </script>
 
@@ -19,6 +19,66 @@
 	<div class="mt-4">
 		<a href="/backup" download class="btn btn-primary">Download backup</a>
 	</div>
+</section>
+
+<section class="card mt-6 p-5 sm:p-6">
+	<h2 class="section-title">Automatic backups</h2>
+	<p class="mt-1 text-sm text-slate-400">
+		When enabled, the scheduler writes <code>auto-*.mongreldb.tar.gz</code> archives to
+		<code>{data.autoBackup.directory}</code> on the configured interval and keeps the newest
+		archives up to the retention count. Files without the <code>auto-</code> prefix are never
+		pruned.
+	</p>
+	<p class="mt-2 text-sm text-slate-400">
+		Status:
+		{#if data.autoBackup.enabled}
+			enabled — {data.autoBackup.storedCount} stored,
+			last run {data.autoBackup.lastRunAt ?? 'never'},
+			next due {data.autoBackup.nextDueAt ?? 'on the next scheduler tick'}.
+		{:else}
+			disabled.
+		{/if}
+	</p>
+
+	<form method="POST" action="?/saveAutoBackup" class="mt-4 grid gap-4 sm:grid-cols-2">
+		<div class="field">
+			<label class="label" for="backupIntervalHours">Interval (hours)</label>
+			<input
+				id="backupIntervalHours"
+				name="backupIntervalHours"
+				type="number"
+				min="1"
+				max="720"
+				step="1"
+				value={data.autoBackup.intervalHours}
+				class="input"
+				required
+			/>
+		</div>
+		<div class="field">
+			<label class="label" for="backupRetentionCount">Retention (keep newest)</label>
+			<input
+				id="backupRetentionCount"
+				name="backupRetentionCount"
+				type="number"
+				min="1"
+				max="100"
+				step="1"
+				value={data.autoBackup.retentionCount}
+				class="input"
+				required
+			/>
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="checkbox-label">
+				<input type="checkbox" name="backupAutoEnabled" checked={data.autoBackup.enabled} class="checkbox" />
+				Enable automatic backups
+			</label>
+		</div>
+		<div class="flex justify-end sm:col-span-2">
+			<button class="btn btn-primary">Save auto-backup settings</button>
+		</div>
+	</form>
 </section>
 
 <section class="card mt-6 p-5 sm:p-6">

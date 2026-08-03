@@ -13,7 +13,7 @@ export type GlobalSearchResult = {
 		| (Trip & { isShared: false })
 		| (ReturnType<typeof listViewableTrips>[number] & { isShared?: boolean })
 	>;
-	/** Flattened ANN hits (trips + segments) when embeddings are ready. */
+	/** Flattened ANN hits (trips + segments + places) when embeddings are ready. */
 	hits: SearchHit[];
 	/** Whether ANN semantic ranking was used. */
 	semantic: boolean;
@@ -101,5 +101,19 @@ export function scheduleRemoveTrip(tripId: number): void {
 			// Segments cascade-deleted from DB; leftover segment docs are cleaned on reindex.
 			void tripId;
 		})
+		.catch(() => {});
+}
+
+/** Fire-and-forget saved-place index helpers; no-ops when embeddings are off. */
+export function scheduleIndexPlace(placeId: number): void {
+	if (!embeddingsReady()) return;
+	void import('./index')
+		.then((m) => m.indexPlace(placeId))
+		.catch((e) => console.error('[embeddings] indexPlace failed', placeId, e));
+}
+
+export function scheduleRemovePlace(placeId: number): void {
+	void import('./index')
+		.then((m) => m.removeSearchDocument('place', placeId))
 		.catch(() => {});
 }

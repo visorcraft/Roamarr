@@ -21,6 +21,10 @@ export type Scope =
 	| 'expenses:write'
 	| 'places:read'
 	| 'places:write'
+	| 'saved-places:read'
+	| 'saved-places:write'
+	| 'day-notes:read'
+	| 'day-notes:write'
 	| 'reminders:read'
 	| 'reminders:write'
 	| 'profile:read'
@@ -66,6 +70,8 @@ export type Scope =
 	| 'user-smtp:write'
 	| 'comments:read'
 	| 'comments:write'
+	| 'gallery:read'
+	| 'gallery:write'
 	| 'search:read'
 	| 'private-details:read'
 	| 'admin:read'
@@ -86,6 +92,10 @@ export const ALL_SCOPES: Scope[] = [
 	'expenses:write',
 	'places:read',
 	'places:write',
+	'saved-places:read',
+	'saved-places:write',
+	'day-notes:read',
+	'day-notes:write',
 	'reminders:read',
 	'reminders:write',
 	'profile:read',
@@ -131,6 +141,8 @@ export const ALL_SCOPES: Scope[] = [
 	'user-smtp:write',
 	'comments:read',
 	'comments:write',
+	'gallery:read',
+	'gallery:write',
 	'search:read',
 	'private-details:read',
 	'admin:read',

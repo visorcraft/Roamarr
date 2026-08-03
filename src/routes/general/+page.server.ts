@@ -8,9 +8,12 @@ import { logAudit, getAdminStats } from '$lib/server/audit';
 import { setFlash } from '$lib/server/flash';
 import { deliver } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { isValidNtfyServerUrl, isValidNtfyTopic } from '$lib/server/notify';
 import { currency as parseCurrency, nonNegativeInteger } from '$lib/server/validation';
 import { importCitiesFromReadable, importCitiesFromUrl } from '$lib/server/geonames';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
+import { PLACE_SEARCH_PROVIDERS, type PlaceSearchProvider } from '$lib/server/placeSearch';
+import { oidcRedirectUri, resolveOrigin } from '$lib/server/oidc';
 import { SESSION_COOKIE_SAME_SITE_VALUES } from '$lib/server/db/mongrelSchema';
 import type { SessionCookieSameSite } from '$lib/server/db/mongrelSchema';
 import {
@@ -75,14 +78,24 @@ export function _saveAdminSettings(
 		globalAiClientSecret?: string | null;
 		globalAiScope?: string | null;
 		webhookUrl?: string;
+		ntfyServerUrl?: string;
+		ntfyTopic?: string;
+		ntfyToken?: string | null;
 		mapsTileProvider?: MapTileProvider;
 		mapsTileUrl?: string | null;
 		mapsTileAttribution?: string | null;
 		mapsTileApiKey?: string;
+		placeSearchProvider?: PlaceSearchProvider;
+		placeSearchGoogleApiKey?: string | null;
 		sessionCookieSameSite?: SessionCookieSameSite;
 		oauthClientAllowList?: string[] | null;
 		allowUserMcpClients?: boolean;
 		allowMcpPii?: boolean;
+		oidcEnabled?: boolean;
+		oidcDiscoveryUrl?: string | null;
+		oidcClientId?: string | null;
+		oidcClientSecret?: string | null;
+		oidcDisplayName?: string;
 	}
 ) {
 	if (
@@ -116,6 +129,12 @@ export function _saveAdminSettings(
 		!SESSION_COOKIE_SAME_SITE_VALUES.includes(i.sessionCookieSameSite)
 	) {
 		throw new Error('Session cookie SameSite must be lax or strict');
+	}
+	if (i.ntfyServerUrl && !isValidNtfyServerUrl(i.ntfyServerUrl)) {
+		throw new Error('ntfy server URL must be a valid https URL without credentials');
+	}
+	if (i.ntfyTopic && !isValidNtfyTopic(i.ntfyTopic)) {
+		throw new Error('ntfy topic may only contain letters, digits, dashes and underscores (max 64)');
 	}
 	const patch: Record<string, unknown> = {};
 	if (i.instanceName !== undefined) patch.instanceName = i.instanceName;
@@ -151,6 +170,9 @@ export function _saveAdminSettings(
 	if (i.globalAiClientId !== undefined) patch.globalAiClientId = i.globalAiClientId;
 	if (i.globalAiScope !== undefined) patch.globalAiScope = i.globalAiScope;
 	if (i.webhookUrl !== undefined) patch.webhookUrl = i.webhookUrl || null;
+	if (i.ntfyServerUrl !== undefined) patch.ntfyServerUrl = i.ntfyServerUrl || null;
+	if (i.ntfyTopic !== undefined) patch.ntfyTopic = i.ntfyTopic || null;
+	if (i.ntfyToken !== undefined) patch.ntfyToken = i.ntfyToken ? encrypt(i.ntfyToken) : null;
 	if (i.mapsTileProvider !== undefined) patch.mapsTileProvider = i.mapsTileProvider ?? 'openstreetmap';
 	if (i.mapsTileUrl !== undefined) patch.mapsTileUrl = i.mapsTileUrl ?? null;
 	if (i.mapsTileAttribution !== undefined) patch.mapsTileAttribution = i.mapsTileAttribution ?? null;
@@ -164,10 +186,25 @@ export function _saveAdminSettings(
 	if (i.globalAiClientSecret !== undefined) patch.globalAiClientSecret = i.globalAiClientSecret ? encrypt(i.globalAiClientSecret) : null;
 	if (i.mapsTileApiKey !== undefined)
 		patch.mapsTileApiKey = i.mapsTileApiKey ? encrypt(i.mapsTileApiKey) : null;
+	if (i.placeSearchProvider !== undefined) {
+		if (!PLACE_SEARCH_PROVIDERS.includes(i.placeSearchProvider)) throw new Error('Invalid place search provider');
+		patch.placeSearchProvider = i.placeSearchProvider;
+	}
+	if (i.placeSearchGoogleApiKey !== undefined)
+		patch.placeSearchGoogleApiKey = i.placeSearchGoogleApiKey ? encrypt(i.placeSearchGoogleApiKey) : null;
+	if (i.oidcEnabled !== undefined) patch.oidcEnabled = i.oidcEnabled;
+	if (i.oidcDiscoveryUrl !== undefined) patch.oidcDiscoveryUrl = i.oidcDiscoveryUrl || null;
+	if (i.oidcClientId !== undefined) patch.oidcClientId = i.oidcClientId || null;
+	if (i.oidcClientSecret !== undefined)
+		patch.oidcClientSecret = i.oidcClientSecret ? encrypt(i.oidcClientSecret) : null;
+	if (i.oidcDisplayName !== undefined) patch.oidcDisplayName = i.oidcDisplayName.trim() || 'SSO';
 	updateSettings(patch);
 	logAudit(userId, 'settings_update', 'settings', 1, {
-		changed: Object.keys(patch).filter((k) => k !== 'smtpPass'),
-		smtpPassSet: patch.smtpPass !== undefined
+		changed: Object.keys(patch).filter((k) => k !== 'smtpPass' && k !== 'oidcClientSecret' && k !== 'ntfyToken' && k !== 'placeSearchGoogleApiKey'),
+		smtpPassSet: patch.smtpPass !== undefined,
+		oidcClientSecretSet: patch.oidcClientSecret !== undefined,
+		ntfyTokenSet: patch.ntfyToken !== undefined,
+		placeSearchGoogleApiKeySet: patch.placeSearchGoogleApiKey !== undefined
 	});
 }
 
@@ -185,10 +222,11 @@ export const load: PageServerLoad = ({ locals, url }) => {
 		? (tabParam as (typeof allowedTabs)[number])
 		: 'general';
 	return {
-		settings: { ...s, smtpPass: s.smtpPass ? '********' : '', globalImapPassword: s.globalImapPassword ? '********' : '', globalAiToken: s.globalAiToken ? '********' : '', globalAiClientSecret: s.globalAiClientSecret ? '********' : '' },
+		settings: { ...s, smtpPass: s.smtpPass ? '********' : '', globalImapPassword: s.globalImapPassword ? '********' : '', globalAiToken: s.globalAiToken ? '********' : '', globalAiClientSecret: s.globalAiClientSecret ? '********' : '', oidcClientSecret: s.oidcClientSecret ? '********' : '', ntfyToken: s.ntfyToken ? '********' : '' },
 		stats,
 		mapSettings,
 		tab,
+		oidcRedirectUri: oidcRedirectUri(resolveOrigin(url.origin)),
 		emailTab: ['access', 'inbound', 'parsing', 'outbound'].includes(url.searchParams.get('section') ?? '')
 			? url.searchParams.get('section')!
 			: 'access'
@@ -295,12 +333,26 @@ export const actions: Actions = {
 		if (!(MAP_TILE_PROVIDERS as readonly string[]).includes(mapsTileProvider)) {
 			return fail(400, { error: 'Invalid tile provider' });
 		}
+		const placeSearchProvider = String(f.get('placeSearchProvider') || 'nominatim');
+		if (!(PLACE_SEARCH_PROVIDERS as readonly string[]).includes(placeSearchProvider)) {
+			return fail(400, { error: 'Invalid place search provider' });
+		}
 		const tileApiKey = String(f.get('mapsTileApiKey') || '');
+		// Masked key field: keep the stored secret unless a new value or an
+		// explicit clear is submitted (same pattern as smtpPass).
+		const googleApiKey = String(f.get('placeSearchGoogleApiKey') || '');
 		_saveAdminSettings(u.id, {
 			mapsTileProvider: mapsTileProvider as MapTileProvider,
 			mapsTileUrl: String(f.get('mapsTileUrl') || '') || null,
 			mapsTileAttribution: String(f.get('mapsTileAttribution') || '') || null,
-			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined
+			mapsTileApiKey: tileApiKey && tileApiKey !== '********' ? tileApiKey : undefined,
+			placeSearchProvider: placeSearchProvider as PlaceSearchProvider,
+			placeSearchGoogleApiKey:
+				f.get('clearPlaceSearchGoogleApiKey') === 'on'
+					? null
+					: googleApiKey && googleApiKey !== '********'
+						? googleApiKey
+						: undefined
 		});
 		setFlash(cookies, 'Map settings saved.');
 		throw redirect(303, TAB_REDIRECTS.maps);
@@ -375,8 +427,15 @@ export const actions: Actions = {
 	saveWebhook: async ({ request, locals, cookies }) => {
 		const u = requireAdmin(locals);
 		const f = await request.formData();
+		// Masked token field: keep the stored secret unless a new value or an
+		// explicit clear is submitted (same pattern as smtpPass).
+		const ntfyToken = String(f.get('ntfyToken') || '');
 		_saveAdminSettings(u.id, {
-			webhookUrl: String(f.get('webhookUrl') || '') || undefined
+			webhookUrl: String(f.get('webhookUrl') || '') || undefined,
+			ntfyServerUrl: String(f.get('ntfyServerUrl') || '').trim(),
+			ntfyTopic: String(f.get('ntfyTopic') || '').trim(),
+			ntfyToken:
+				f.get('clearNtfyToken') === 'on' ? null : ntfyToken && ntfyToken !== '********' ? ntfyToken : undefined
 		});
 		setFlash(cookies, 'Webhook settings saved.');
 		throw redirect(303, TAB_REDIRECTS.webhook);
@@ -396,6 +455,32 @@ export const actions: Actions = {
 			...(allowUserMcpClients ? { oauthClientAllowList: allowListRaw.length > 0 ? allowListRaw : null } : {})
 		});
 		setFlash(cookies, 'MCP client settings saved.');
+		throw redirect(303, TAB_REDIRECTS.oauth);
+	},
+
+	saveOidc: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const oidcEnabled = f.get('oidcEnabled') === 'on';
+		const discoveryUrl = String(f.get('oidcDiscoveryUrl') || '').trim();
+		const clientId = String(f.get('oidcClientId') || '').trim();
+		if (discoveryUrl && !/^https?:\/\//.test(discoveryUrl)) {
+			return fail(400, { error: 'Discovery URL must be an http(s) URL.' });
+		}
+		if (oidcEnabled && (!discoveryUrl || !clientId)) {
+			return fail(400, { error: 'Discovery URL and client ID are required to enable SSO.' });
+		}
+		const secret = String(f.get('oidcClientSecret') || '');
+		const clearSecret = f.get('clearOidcClientSecret') === 'on';
+		_saveAdminSettings(u.id, {
+			oidcEnabled,
+			oidcDiscoveryUrl: discoveryUrl || null,
+			oidcClientId: clientId || null,
+			// Empty field or the masked placeholder keeps the stored secret.
+			oidcClientSecret: clearSecret ? null : secret && secret !== '********' ? secret : undefined,
+			oidcDisplayName: String(f.get('oidcDisplayName') || '')
+		});
+		setFlash(cookies, 'SSO settings saved.');
 		throw redirect(303, TAB_REDIRECTS.oauth);
 	},
 

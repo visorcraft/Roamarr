@@ -11,6 +11,7 @@ import { logAudit } from '$lib/server/audit';
 import { getSettings } from '$lib/server/settings';
 import { _saveAdminSettings } from '../../general/+page.server';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
+import { PLACE_SEARCH_PROVIDERS, type PlaceSearchProvider } from '$lib/server/placeSearch';
 
 const publicUser = (user: ReturnType<typeof listUsers>[number]) => ({
 	id: Number(user.id), email: user.email, displayName: user.display_name ?? '', role: user.role,
@@ -28,6 +29,7 @@ export const GET: RequestHandler = ({ locals }) => {
 		emailPollIntervalMinutes: settings.emailPollIntervalMinutes, sessionCookieSameSite: settings.sessionCookieSameSite,
 		webhookUrl: settings.webhookUrl, mapsTileProvider: settings.mapsTileProvider, mapsTileUrl: settings.mapsTileUrl,
 		mapsTileAttribution: settings.mapsTileAttribution, mapsTileApiKeySet: !!settings.mapsTileApiKey,
+		placeSearchProvider: settings.placeSearchProvider, placeSearchGoogleApiKeySet: !!settings.placeSearchGoogleApiKey,
 		allowUserImap: settings.allowUserImap, allowUserSmtp: settings.allowUserSmtp,
 		allowUserParsingProviders: settings.allowUserParsingProviders, allowUserMcpClients: settings.allowUserMcpClients,
 		oauthClientAllowList: settings.oauthClientAllowList,
@@ -49,6 +51,8 @@ export const POST: RequestHandler = async ({ request, locals, url, getClientAddr
 	if (action === 'settings') {
 		const provider = String(body.mapsTileProvider ?? 'openstreetmap');
 		if (!(MAP_TILE_PROVIDERS as readonly string[]).includes(provider)) throw error(400, 'Invalid tile provider');
+		const placeSearchProvider = String(body.placeSearchProvider ?? 'nominatim');
+		if (!PLACE_SEARCH_PROVIDERS.includes(placeSearchProvider as PlaceSearchProvider)) throw error(400, 'Invalid place search provider');
 		const aiEnabled = body.globalAiEnabled === true, aiMode = String(body.globalAiAuthMode ?? 'token');
 		if (aiMode !== 'token' && aiMode !== 'oauth') throw error(400, 'Invalid global parsing authentication method');
 		const current = getSettings(), aiToken = typeof body.globalAiToken === 'string' && body.globalAiToken ? body.globalAiToken : body.clearGlobalAiToken === true ? null : undefined;
@@ -65,6 +69,8 @@ export const POST: RequestHandler = async ({ request, locals, url, getClientAddr
 			webhookUrl: String(body.webhookUrl ?? ''), mapsTileProvider: provider as MapTileProvider, mapsTileUrl: String(body.mapsTileUrl ?? '') || null,
 			mapsTileAttribution: String(body.mapsTileAttribution ?? '') || null,
 			mapsTileApiKey: typeof body.mapsTileApiKey === 'string' && body.mapsTileApiKey ? body.mapsTileApiKey : undefined,
+			placeSearchProvider: placeSearchProvider as PlaceSearchProvider,
+			placeSearchGoogleApiKey: typeof body.placeSearchGoogleApiKey === 'string' && body.placeSearchGoogleApiKey ? body.placeSearchGoogleApiKey : body.clearPlaceSearchGoogleApiKey === true ? null : undefined,
 			allowUserImap: body.allowUserImap === true, allowUserSmtp: body.allowUserSmtp === true,
 			allowUserParsingProviders: body.allowUserParsingProviders === true, allowUserMcpClients: body.allowUserMcpClients === true,
 			oauthClientAllowList: Array.isArray(body.oauthClientAllowList) ? body.oauthClientAllowList.map(String).filter(Boolean) : null,

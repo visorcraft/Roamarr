@@ -32,7 +32,7 @@ The first enable:
 
 1. downloads the model from Hugging Face;
 2. loads it into the Node process;
-3. builds search documents and embeddings for existing trips.
+3. builds search documents and embeddings for existing trips and saved places.
 
 The model is roughly 90 MB before runtime overhead. Files are cached at
 `EMBEDDINGS_CACHE_PATH`, or in `roamarr-models/` beside the database by
@@ -49,11 +49,13 @@ Semantic documents can include:
 - trip name and destination;
 - city, state/province, country, status, and tags;
 - trip notes;
-- segment type, title, location, city, country, venue, and confirmation.
+- segment type, title, location, city, country, venue, and confirmation;
+- saved place name, address, city, category, description, and status.
 
-Results are filtered to trips the signed-in user can view and archived trips
-are excluded. If semantic search cannot return a viewable result, Roamarr falls
-back to lexical search.
+Trip and segment results are filtered to trips the signed-in user can view and
+archived trips are excluded. Saved places are owner-only: a place result is
+returned only to the user who saved it. If semantic search cannot return a
+viewable result, Roamarr falls back to lexical search.
 
 ## Privacy boundary
 

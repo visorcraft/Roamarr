@@ -24,6 +24,9 @@
 		},
 		get datetimeFormat() {
 			return data.datetimeFormat;
+		},
+		get timeFormat() {
+			return data.timeFormat;
 		}
 	});
 	let open = $state(false);
@@ -288,6 +291,7 @@
 			items: [
 				{ href: '/', label: 'Dashboard', icon: 'home' },
 				{ href: '/trips', label: 'Trips', icon: 'trips' },
+				{ href: '/places', label: 'Places', icon: 'location' },
 				{ href: '/notifications', label: 'Notifications', icon: 'notification' }
 			]
 		},
@@ -303,6 +307,7 @@
 						{ href: '/profile/contacts', label: 'Emergency Contacts' },
 						{ href: '/profile/email_processing', label: 'Email Settings', activePaths: ['/profile/email_parsing', '/profile/email_sender'] },
 						...(data.allowUserMcpClients ? [{ href: '/profile/mcp-clients', label: 'MCP Clients' }] : []),
+						{ href: '/profile/api-keys', label: 'API Keys' },
 						{ href: '/profile/security', label: 'Security' }
 					]
 				},

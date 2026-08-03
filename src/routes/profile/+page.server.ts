@@ -21,7 +21,10 @@ export function _updateProfile(
 		documentExpiryLeadDays: number;
 		emailNotifications: boolean;
 		webhookNotifications: boolean;
+		ntfyNotifications: boolean;
 		defaultCurrency: string;
+		temperatureUnit: string;
+		timeFormat: string;
 	}
 ) {
 	requireOwnedUser(userId);
@@ -31,6 +34,10 @@ export function _updateProfile(
 		throw new Error('Flight check-in lead must be a non-negative integer');
 	if (!nonNegativeInteger(i.documentExpiryLeadDays))
 		throw new Error('Document expiry lead must be a non-negative integer');
+	if (i.temperatureUnit !== 'c' && i.temperatureUnit !== 'f')
+		throw new Error('Temperature unit must be °C or °F');
+	if (i.timeFormat !== '12h' && i.timeFormat !== '24h')
+		throw new Error('Time format must be 12h or 24h');
 	const defaultCurrency = parseCurrency(i.defaultCurrency, 'Default currency');
 	if (!defaultCurrency.ok) throw new Error(defaultCurrency.error);
 	usersRepo.updateUser(userId, {
@@ -40,7 +47,10 @@ export function _updateProfile(
 		document_expiry_lead_days: BigInt(i.documentExpiryLeadDays),
 		email_notifications: i.emailNotifications,
 		webhook_notifications: i.webhookNotifications,
-		default_currency: defaultCurrency.value
+		ntfy_notifications: i.ntfyNotifications,
+		default_currency: defaultCurrency.value,
+		temperature_unit: i.temperatureUnit,
+		time_format: i.timeFormat
 	});
 }
 
@@ -56,8 +66,11 @@ export const load: PageServerLoad = ({ locals }) => {
 			documentExpiryLeadDays: u.documentExpiryLeadDays,
 			emailNotifications: u.emailNotifications,
 			webhookNotifications: u.webhookNotifications,
+			ntfyNotifications: u.ntfyNotifications,
 			themeId: u.themeId,
-			defaultCurrency: u.defaultCurrency
+			defaultCurrency: u.defaultCurrency,
+			temperatureUnit: u.temperatureUnit,
+			timeFormat: u.timeFormat
 		}
 	};
 };
@@ -72,7 +85,10 @@ export const actions: Actions = {
 		const documentExpiryLeadDays = Number(f.get('documentExpiryLeadDays') ?? 90);
 		const emailNotifications = f.get('emailNotifications') === 'on';
 		const webhookNotifications = f.get('webhookNotifications') === 'on';
+		const ntfyNotifications = f.get('ntfyNotifications') === 'on';
 		const defaultCurrency = String(f.get('defaultCurrency') ?? u.defaultCurrency);
+		const temperatureUnit = String(f.get('temperatureUnit') ?? u.temperatureUnit ?? 'c');
+		const timeFormat = String(f.get('timeFormat') ?? u.timeFormat ?? '24h');
 		try {
 			_updateProfile(u.id, {
 				displayName,
@@ -81,7 +97,10 @@ export const actions: Actions = {
 				documentExpiryLeadDays,
 				emailNotifications,
 				webhookNotifications,
-				defaultCurrency
+				ntfyNotifications,
+				defaultCurrency,
+				temperatureUnit,
+				timeFormat
 			});
 		} catch (e) {
 			return fail(400, { error: e instanceof Error ? e.message : 'Update failed' });

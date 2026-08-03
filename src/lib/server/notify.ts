@@ -5,6 +5,7 @@ import { users } from './db/mongrelSchema';
 import { createNotification } from './repositories/remindersRepo';
 import { getSettings } from './settings';
 import { resolveSmtpTransport, SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
+import { decrypt } from './crypto';
 
 function isPrivateOrLocalHostname(hostname: string): boolean {
 	const lower = hostname.toLowerCase();
@@ -34,6 +35,27 @@ export function isAllowedWebhookUrl(urlString: string): boolean {
 	if (isPrivateOrLocalHostname(url.hostname)) return false;
 	return true;
 }
+
+/** ntfy server base URL: https only, no embedded credentials. Self-hosted
+ * servers on private addresses are allowed (admin-configured, like SMTP). */
+export function isValidNtfyServerUrl(urlString: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(urlString);
+	} catch {
+		return false;
+	}
+	if (url.protocol !== 'https:') return false;
+	if (url.username || url.password) return false;
+	return true;
+}
+
+/** ntfy topics are letters, digits, dashes and underscores, up to 64 chars. */
+export function isValidNtfyTopic(topic: string): boolean {
+	return /^[a-zA-Z0-9_-]{1,64}$/.test(topic);
+}
+
+export const DEFAULT_NTFY_SERVER_URL = 'https://ntfy.sh';
 
 /**
  * Upper bound for a single SMTP send, kept just above the socket timeout so a
@@ -83,7 +105,8 @@ function getUserPreferences(userId: number) {
 	const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
 	return {
 		email: u?.email_notifications ?? true,
-		webhook: u?.webhook_notifications ?? true
+		webhook: u?.webhook_notifications ?? true,
+		ntfy: u?.ntfy_notifications ?? true
 	};
 }
 
@@ -139,7 +162,31 @@ const webhookChannel: Channel = {
 	}
 };
 
-const externalChannels: Channel[] = [smtpChannel, webhookChannel];
+const ntfyChannel: Channel = {
+	async send(userId, msg) {
+		const prefs = getUserPreferences(userId);
+		if (!prefs.ntfy) return;
+		const s = getSettings();
+		if (!s.ntfyTopic || !isValidNtfyTopic(s.ntfyTopic)) return;
+		const server = (s.ntfyServerUrl || DEFAULT_NTFY_SERVER_URL).replace(/\/+$/, '');
+		if (!isValidNtfyServerUrl(server)) return;
+		const headers: Record<string, string> = {
+			Title: msg.title,
+			Tags: 'airplane'
+		};
+		if (msg.link) headers.Click = msg.link;
+		if (s.ntfyToken) headers.Authorization = `Bearer ${decrypt(s.ntfyToken)}`;
+		await fetch(`${server}/${s.ntfyTopic}`, {
+			method: 'POST',
+			redirect: 'manual',
+			headers,
+			body: msg.body,
+			signal: AbortSignal.timeout(10_000)
+		});
+	}
+};
+
+const externalChannels: Channel[] = [smtpChannel, webhookChannel, ntfyChannel];
 
 export async function deliver(userId: number, msg: NotificationMessage) {
 	await inAppChannel.send(userId, msg);

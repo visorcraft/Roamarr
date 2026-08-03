@@ -8,6 +8,7 @@ import { purgeExpiredTripInvitations } from './tripSharing';
 import { pruneExpiredRateLimit } from './rateLimit';
 import { pruneExpiredShareWindow } from './emergencyContacts';
 import { pollDueInboxes } from './emailProcessing';
+import { runAutoBackupIfDue } from './autoBackup';
 import { kit } from './db';
 import {
 	startSchedulerRun,
@@ -98,6 +99,16 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 		purgeExpiredWeatherCache(now);
 	} catch (e) {
 		console.error('[scheduler] weather prune failed', e);
+	}
+	// Scheduled admin auto-backup: no-op unless enabled and due. Runs in the
+	// post-jobs maintenance section (outside the tick deadline) because packing
+	// a large database can legitimately take a while; a failure is logged and
+	// never fails the tick.
+	try {
+		const autoBackup = await runAutoBackupIfDue(now);
+		if (autoBackup.ran) console.info('[scheduler] auto-backup written:', autoBackup.file);
+	} catch (e) {
+		console.error('[scheduler] auto-backup failed', e);
 	}
 
 	// Flush memtables each tick (cheap; enables the incremental-aggregate fast

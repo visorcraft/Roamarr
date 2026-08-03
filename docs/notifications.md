@@ -3,8 +3,8 @@
 
 # Notifications
 
-Roamarr delivers in-app notifications and can attempt SMTP email and one signed
-webhook.
+Roamarr delivers in-app notifications and can attempt SMTP email, one signed
+webhook, and one ntfy topic.
 
 ## Channels
 
@@ -13,6 +13,7 @@ webhook.
 | In-app | Always | Stored in Notifications. |
 | Email | User profile toggle plus usable personal/global SMTP | Failure is logged; other channels continue. |
 | Webhook | User profile toggle plus configured global URL | Failure is logged; other channels continue. |
+| ntfy | User profile toggle plus configured global topic | Failure is logged; other channels continue. |
 
 External channels run independently. A slow or failed SMTP service does not
 prevent the webhook attempt or erase the in-app row.
@@ -83,6 +84,23 @@ The hostname check does not resolve DNS before validation. Put additional
 egress/DNS restrictions around Roamarr when webhook SSRF resistance is part of
 the threat model.
 
+## ntfy
+
+Open **Configuration → Webhooks** to publish notifications to an
+[ntfy](https://ntfy.sh) topic. Configure:
+
+| Field | Purpose |
+| --- | --- |
+| Server URL | Defaults to `https://ntfy.sh`. Self-hosted servers must use `https`. |
+| Topic | Letters, digits, dashes and underscores, up to 64 characters. Empty disables the channel. |
+| Access token | Optional Bearer token for protected topics; encrypted at rest. |
+
+Roamarr sends a plain `POST` to `<server>/<topic>` with the notification title
+in the `Title` header, the body as the request body, and the trip link in the
+`Click` header. Redirects are not followed and the request times out after
+10 seconds. Treat the topic name as a secret: anyone who knows it can
+subscribe to the stream.
+
 ## Sources
 
 Notifications can be created by:
@@ -96,8 +114,9 @@ Not every data mutation sends a notification.
 
 ## User controls
 
-Open **Profile → Profile** to enable/disable email and webhook delivery. In-app
-delivery remains on. Open **Notifications** to review rows and mark them read.
+Open **Profile → Profile** to enable/disable email, webhook, and ntfy delivery.
+In-app delivery remains on. Open **Notifications** to review rows and mark them
+read.
 
 Disabling a channel does not delete prior notifications or saved administrator
 configuration.

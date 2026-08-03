@@ -3,6 +3,7 @@ import { kit } from '$lib/server/db';
 import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import type { SegmentType, SegmentStatus, SegmentAttendeeStatus, CompanionCategory } from '$lib/server/db/mongrelSchema';
+import { publishTripChanged } from '$lib/server/eventBus';
 
 export type KitSegment = Row<typeof segments>;
 export type KitSegmentAttendee = Row<typeof segmentAttendees>;
@@ -63,6 +64,7 @@ export function toSegmentRow(row: KitSegment) {
 		paymentStatus: row.payment_status,
 		paymentDueDate: row.payment_due_date,
 		cardId: nullableIntToNumber(row.card_id),
+		daySortOrder: nullableIntToNumber(row.day_sort_order),
 		createdAt: row.created_at,
 		updatedAt: row.updated_at
 	};
@@ -113,6 +115,7 @@ export function createSegment(input: CreateSegmentInput) {
 	void import('$lib/server/embeddings/search')
 		.then((m) => m.scheduleIndexTrip(segment.tripId))
 		.catch(() => {});
+	publishTripChanged(segment.tripId);
 	return segment;
 }
 
@@ -143,6 +146,7 @@ export function updateSegment(id: number, patch: UpdateSegmentInput) {
 	void import('$lib/server/embeddings/search')
 		.then((m) => m.scheduleIndexTrip(segment.tripId))
 		.catch(() => {});
+	publishTripChanged(segment.tripId);
 	return segment;
 }
 
@@ -164,8 +168,10 @@ function sanitizeSegmentUpdatePatch(patch: UpdateSegmentInput): Record<string, u
 }
 
 export function deleteSegment(id: number): boolean {
+	const tripId = getSegmentById(id)?.tripId ?? null;
 	const deleted = kit.deleteFrom(segments).where(kitEq(segments.id, toBigInt(id))).executeSync();
 	if (deleted > 0n) {
+		if (tripId != null) publishTripChanged(tripId);
 		void import('$lib/server/embeddings/index')
 			.then((m) => m.removeSearchDocument('segment', id))
 			.catch(() => {});

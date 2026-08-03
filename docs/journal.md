@@ -5,6 +5,15 @@
 
 A trip has three text surfaces with different structure.
 
+## Markdown
+
+Trip notes, journal bodies, and comment bodies render a small, safe subset of
+Markdown on the trip page: headings, bold/italic, strikethrough, links,
+lists, and inline/fenced code. Raw HTML is always escaped, and only `http` /
+`https` links become clickable. Everywhere else — exports, calendar feeds,
+share projections, notifications, and email — the original Markdown source is
+shown as plain text.
+
 ## Trip notes
 
 Trip notes are one free-form field edited with the trip. They are visible to

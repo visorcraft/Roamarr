@@ -40,6 +40,7 @@ const MAPS_TILE_PROVIDERS = [
 	'protomaps',
 	'custom'
 ] as const;
+const PLACE_SEARCH_PROVIDERS = ['nominatim', 'google'] as const;
 const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
 const TRAVEL_DOCUMENT_TYPES = ['passport', 'drivers_license', 'global_entry', 'visa'] as const;
@@ -53,6 +54,10 @@ const SMTP_SECURITY_MODES = ['none', 'starttls', 'ssl/tls'] as const;
 const SESSION_COOKIE_SAME_SITE_VALUES = ['lax', 'strict'] as const;
 const WEBAUTHN_CHALLENGE_PURPOSES = ['register', 'auth'] as const;
 const OAUTH_CODE_CHALLENGE_METHODS = ['S256'] as const;
+const PLACE_STATUSES = ['planned', 'visited'] as const;
+const GALLERY_OWNER_TYPES = ['place', 'trip'] as const;
+const TEMPERATURE_UNITS = ['c', 'f'] as const;
+const TIME_FORMATS = ['12h', '24h'] as const;
 
 export {
 	ROLES,
@@ -67,6 +72,7 @@ export {
 	EXPENSE_CATEGORIES,
 	WATCH_STATUSES,
 	MAPS_TILE_PROVIDERS,
+	PLACE_SEARCH_PROVIDERS,
 	SESSION_COOKIE_SAME_SITE_VALUES,
 	SEGMENT_TYPES,
 	SEGMENT_STATUSES,
@@ -77,10 +83,19 @@ export {
 	BED_PREFERENCES,
 	SEGMENT_ATTENDEE_STATUSES,
 	ENTRY_REQUIREMENT_TYPES,
-	ENTRY_REQUIREMENT_STATUSES
+	ENTRY_REQUIREMENT_STATUSES,
+	PLACE_STATUSES,
+	GALLERY_OWNER_TYPES,
+	TEMPERATURE_UNITS,
+	TIME_FORMATS
 };
 
+export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
+export type TimeFormat = (typeof TIME_FORMATS)[number];
+
 export type SegmentStatus = (typeof SEGMENT_STATUSES)[number];
+export type PlaceStatus = (typeof PLACE_STATUSES)[number];
+export type GalleryOwnerType = (typeof GALLERY_OWNER_TYPES)[number];
 export type SegmentAttendeeStatus = (typeof SEGMENT_ATTENDEE_STATUSES)[number];
 export type TravelDocumentType = (typeof TRAVEL_DOCUMENT_TYPES)[number];
 export type CompanionCategory = (typeof COMPANION_CATEGORIES)[number];
@@ -119,7 +134,26 @@ export const users = table('users', {
 		text('default_currency', { default: staticDefault('USD') }),
 		text('calendar_token', { nullable: true }),
 		timestamp('calendar_token_expires_at', { nullable: true }),
-		timestamp('created_at', { default: nowDefault() })
+		timestamp('created_at', { default: nowDefault() }),
+		// OIDC SSO subject identifier, recorded when an account is first linked
+		// via a verified email claim. Used as the fallback identity when the
+		// provider later stops returning a verified email. Appended last so
+		// existing column ids stay stable (ids are positional).
+		text('oidc_sub', { nullable: true }),
+		// Per-user display preferences and ntfy channel toggle (migration 0014).
+		// Nullable with defaults: old rows read null and the app coalesces to the
+		// default, avoiding a NOT NULL backfill rewrite (see 0013's note).
+		text('temperature_unit', {
+			enumValues: [...TEMPERATURE_UNITS],
+			nullable: true,
+			default: staticDefault('c')
+		}),
+		text('time_format', {
+			enumValues: [...TIME_FORMATS],
+			nullable: true,
+			default: staticDefault('24h')
+		}),
+		bool('ntfy_notifications', { nullable: true, default: staticDefault(true) })
 	],
 	primaryKey: 'id',
 	unique: [
@@ -208,7 +242,42 @@ export const settings = table('settings', {
 		text('default_datetime_format', { nullable: true, default: staticDefault('yyyy-MM-dd h:mm a') }),
 		int('email_poll_interval_minutes', { default: staticDefault(5n) }),
 		/** Semantic search / ANN embeddings admin config (JSON). See embeddingsConfig.ts. */
-		json('embeddings_config', { nullable: true })
+		json('embeddings_config', { nullable: true }),
+		// OIDC single sign-on (admin-configured, one provider). The client
+		// secret is encrypted at rest like SMTP passwords and tile API keys.
+		// Appended last so existing column ids stay stable (ids are positional).
+		// Nullable with a default: a NOT NULL addColumn backfill rewrites every
+		// row with cells for ALL schema columns, which breaks the upgrade path
+		// for older databases as soon as any later migration appends more
+		// columns to this table (kit backfill writes cells for not-yet-added
+		// columns). Readers coalesce null to false.
+		bool('oidc_enabled', { nullable: true, default: staticDefault(false) }),
+		text('oidc_discovery_url', { nullable: true }),
+		text('oidc_client_id', { nullable: true }),
+		text('oidc_client_secret', { nullable: true }),
+		text('oidc_display_name', { nullable: true }),
+		// ntfy notification channel (admin-configured, instance-wide). The token
+		// is encrypted at rest like SMTP passwords. Null server URL means the
+		// default https://ntfy.sh. Appended after OIDC (ids are positional).
+		text('ntfy_server_url', { nullable: true }),
+		text('ntfy_topic', { nullable: true }),
+		text('ntfy_token', { nullable: true }),
+		// Scheduled automatic backups (admin). Nullable with defaults; old rows
+		// read null and settingsRepo coalesces (no NOT NULL backfill rewrite).
+		bool('backup_auto_enabled', { nullable: true, default: staticDefault(false) }),
+		int('backup_interval_hours', { nullable: true, default: staticDefault(24n) }),
+		int('backup_retention_count', { nullable: true, default: staticDefault(7n) }),
+		timestamp('backup_last_auto_at', { nullable: true }),
+		// Place-search provider for the saved-places prefill (admin-configured,
+		// instance-wide). The Google Places API key is encrypted at rest like map
+		// tile API keys. Appended last (ids are positional); nullable with static
+		// defaults, readers coalesce null (see the oidc_enabled note above).
+		text('place_search_provider', {
+			enumValues: [...PLACE_SEARCH_PROVIDERS],
+			nullable: true,
+			default: staticDefault('nominatim')
+		}),
+		text('place_search_google_api_key', { nullable: true })
 	],
 	primaryKey: 'id'
 });
@@ -465,6 +534,23 @@ export const oauthTokens = table('oauth_tokens', {
 	]
 });
 
+export const apiKeys = table('api_keys', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('api_keys_id_seq') }),
+		int('user_id'),
+		text('name'),
+		text('key_hash'),
+		text('scopes'),
+		timestamp('expires_at', { nullable: true }),
+		timestamp('last_used_at', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('revoked_at', { nullable: true })
+	],
+	primaryKey: 'id',
+	unique: [unique(['key_hash'], { name: 'api_keys_key_hash_uq' })],
+	indexes: [index(['user_id'], { name: 'api_keys_user_idx' })]
+});
+
 export const weatherCache = table('weather_cache', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('weather_cache_id_seq') }),
@@ -597,6 +683,7 @@ export const segments = table('segments', {
 		}),
 		date('payment_due_date', { nullable: true }),
 		int('card_id', { nullable: true }),
+		int('day_sort_order', { nullable: true }),
 		timestamp('created_at', { default: nowDefault() }),
 		timestamp('updated_at', { generated: 'now' })
 	],
@@ -780,6 +867,77 @@ export const benefitTemplates = table('benefit_templates', {
 		text('description', { nullable: true })
 	],
 	primaryKey: 'id'
+});
+
+export const placeCategories = table('place_categories', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('place_categories_id_seq') }),
+		int('user_id'),
+		text('name'),
+		text('color', { default: staticDefault('#64748b') }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	indexes: [index(['user_id'], { name: 'place_categories_user_idx' })],
+	foreignKeys: [
+		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_place_categories_user_id_users', onDelete: 'cascade' })
+	]
+});
+
+export const places = table('places', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('places_id_seq') }),
+		int('user_id'),
+		int('category_id', { nullable: true }),
+		text('name'),
+		text('address', { nullable: true }),
+		// GeoNames city link (geonames_cities.geoname_id); no FK — city rows are
+		// re-importable reference data, matching how segments/trips link cities.
+		int('city_id', { nullable: true }),
+		real('lat', { nullable: true }),
+		real('lng', { nullable: true }),
+		int('duration_min', { nullable: true }),
+		// Minor currency units (cents), matching expenses/budgets.
+		int('price', { nullable: true }),
+		text('description', { nullable: true }),
+		text('status', { enumValues: [...PLACE_STATUSES], default: staticDefault('planned') }),
+		timestamp('visited_at', { nullable: true }),
+		bool('favorite', { default: staticDefault(false) }),
+		// Cover image: attachment id of the place's first gallery image (Phase 5).
+		int('image_attachment_id', { nullable: true }),
+		int('gpx_attachment_id', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('updated_at', { generated: 'now' })
+	],
+	primaryKey: 'id',
+	indexes: [
+		index(['user_id'], { name: 'places_user_idx' }),
+		index(['category_id'], { name: 'places_category_idx' })
+	],
+	foreignKeys: [
+		foreignKey(['user_id'], { table: 'users', columns: ['id'] }, { name: 'fk_places_user_id_users', onDelete: 'cascade' }),
+		foreignKey(
+			['category_id'],
+			{ table: 'place_categories', columns: ['id'] },
+			{ name: 'fk_places_category_id_place_categories', onDelete: 'set null' }
+		)
+	]
+});
+
+export const placeLinks = table('place_links', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('place_links_id_seq') }),
+		int('place_id'),
+		text('label'),
+		text('url'),
+		text('notes', { nullable: true }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	indexes: [index(['place_id'], { name: 'place_links_place_idx' })],
+	foreignKeys: [
+		foreignKey(['place_id'], { table: 'places', columns: ['id'] }, { name: 'fk_place_links_place_id_places', onDelete: 'cascade' })
+	]
 });
 
 export const insurancePolicies = table('insurance_policies', {
@@ -1077,6 +1235,27 @@ export const tripJournalEntries = table('trip_journal_entries', {
 	]
 });
 
+export const tripDayNotes = table('trip_day_notes', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('trip_day_notes_id_seq') }),
+		int('trip_id'),
+		// Local trip day as YYYY-MM-DD text (not a timestamp), matching how the
+		// itinerary groups segments by local date.
+		text('date'),
+		// Optional IconName from src/lib/icons.ts.
+		text('icon', { nullable: true }),
+		text('body'),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('updated_at', { generated: 'now' })
+	],
+	primaryKey: 'id',
+	unique: [unique(['trip_id', 'date'], { name: 'trip_day_notes_trip_date_uq' })],
+	indexes: [index(['trip_id'], { name: 'day_notes_trip_idx' })],
+	foreignKeys: [
+		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_trip_day_notes_trip_id_trips', onDelete: 'cascade' })
+	]
+});
+
 export const tripDocumentLinks = table('trip_document_links', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_document_links_id_seq') }),
@@ -1290,6 +1469,34 @@ export const tripDocuments = table('trip_documents', {
 	]
 });
 
+/**
+ * Multi-image galleries for saved places and trips. owner_id is polymorphic
+ * (no FK); owner deletion cleans rows up in application code (deletePlace,
+ * _deleteTrip). The attachment row is shared with the encrypted attachment
+ * store and is removed together with its gallery row.
+ */
+export const galleryImages = table('gallery_images', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('gallery_images_id_seq') }),
+		text('owner_type', { enumValues: [...GALLERY_OWNER_TYPES] }),
+		int('owner_id'),
+		int('attachment_id'),
+		text('caption', { nullable: true }),
+		int('sort_order', { default: staticDefault(0n) }),
+		timestamp('created_at', { default: nowDefault() })
+	],
+	primaryKey: 'id',
+	unique: [unique(['attachment_id'], { name: 'gallery_images_attachment_id_uq' })],
+	indexes: [index(['owner_type', 'owner_id'], { name: 'gallery_images_owner_idx' })],
+	foreignKeys: [
+		foreignKey(
+			['attachment_id'],
+			{ table: 'attachments', columns: ['id'] },
+			{ name: 'fk_gallery_images_attachment_id_attachments', onDelete: 'cascade' }
+		)
+	]
+});
+
 export const tripTemplates = table('trip_templates', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_templates_id_seq') }),
@@ -1497,6 +1704,9 @@ export const schema = new Schema([
 	cards,
 	cardBenefits,
 	benefitTemplates,
+	placeCategories,
+	places,
+	placeLinks,
 	insurancePolicies,
 	fareProviders,
 	fareWatches,
@@ -1510,6 +1720,7 @@ export const schema = new Schema([
 	segmentAttendees,
 	emergencyContacts,
 	tripJournalEntries,
+	tripDayNotes,
 	tripDocumentLinks,
 	packingTemplates,
 	packingTemplateItems,
@@ -1520,6 +1731,7 @@ export const schema = new Schema([
 	attachments,
 	tripExpenseAttachments,
 	tripDocuments,
+	galleryImages,
 	tripTemplates,
 	tripHomeTasks,
 	tripMedications,
@@ -1537,5 +1749,6 @@ export const schema = new Schema([
 	webauthnChallenges,
 	oauthClients,
 	oauthCodes,
-	oauthTokens
+	oauthTokens,
+	apiKeys
 ]);

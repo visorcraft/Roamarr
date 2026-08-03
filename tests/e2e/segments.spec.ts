@@ -15,15 +15,18 @@ test('add a note segment to a trip', async ({ page }) => {
 	await page.getByLabel('Timezone').selectOption('UTC');
 
 	await page.click('button:has-text("Save")');
-	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'networkidle' });
+	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'load' });
 
 	const segment = page.locator('.trip-modern-segment', { hasText: title });
 	await expect(segment).toBeVisible();
 
 	await page.setViewportSize({ width: 390, height: 844 });
-	await segment.click();
+	// The card click needs client-side hydration; retry until the dialog opens.
 	const details = page.getByRole('dialog', { name: 'Selected segment details' });
-	await expect(details).toBeVisible();
+	await expect(async () => {
+		if (!(await details.isVisible().catch(() => false))) await segment.click();
+		await expect(details).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 15_000 });
 	expect(await details.boundingBox()).toMatchObject({ x: 0, y: 0, width: 390, height: 844 });
 	await details.getByRole('button', { name: 'Close selected segment' }).click();
 	await expect(details).toBeHidden();

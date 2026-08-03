@@ -10,6 +10,7 @@ import {
 	tripShares
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { publishSharesChanged, publishTripChanged } from '$lib/server/eventBus';
 
 export type KitTrip = Row<typeof trips>;
 export type KitTripComment = Row<typeof tripComments>;
@@ -284,12 +285,14 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 	void import('$lib/server/embeddings/search')
 		.then((m) => m.scheduleIndexTrip(trip.id))
 		.catch(() => {});
+	publishTripChanged(trip.id);
 	return trip;
 }
 
 export function deleteTrip(id: number): number {
 	const deleted = kit.deleteFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
 	if (Number(deleted) > 0) {
+		publishTripChanged(id);
 		void import('$lib/server/embeddings/index')
 			.then((m) => {
 				m.removeSearchDocument('trip', id);
@@ -425,14 +428,20 @@ export function createComment(userId: number, tripId: number, body: string): Tri
 			body: text
 		} as Insert<typeof tripComments>)
 		.executeSync();
+	publishTripChanged(tripId);
 	return toTripComment(row);
 }
 
 export function deleteComment(userId: number, commentId: number): number {
+	const existing = kit
+		.selectFrom(tripComments)
+		.where(and(kitEq(tripComments.id, kitId(commentId)), kitEq(tripComments.user_id, kitId(userId))))
+		.executeSync()[0];
 	const deleted = kit
 		.deleteFrom(tripComments)
 		.where(and(kitEq(tripComments.id, kitId(commentId)), kitEq(tripComments.user_id, kitId(userId))))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(num(existing.trip_id));
 	return Number(deleted);
 }
 
@@ -534,7 +543,9 @@ export function createShare(input: CreateTripShareInput): TripShare {
 			show_details: input.showDetails ?? false
 		} as Insert<typeof tripShares>)
 		.executeSync();
-	return toTripShare(row);
+	const share = toTripShare(row);
+	notifyShareGraphChange(share);
+	return share;
 }
 
 export function updateShare(id: number, patch: UpdateTripShareInput): TripShare | null {
@@ -553,7 +564,29 @@ export function updateShare(id: number, patch: UpdateTripShareInput): TripShare 
 }
 
 export function deleteShare(id: number): number {
-	return Number(kit.deleteFrom(tripShares).where(kitEq(tripShares.id, kitId(id))).executeSync());
+	const existing = getShareById(id);
+	const deleted = Number(kit.deleteFrom(tripShares).where(kitEq(tripShares.id, kitId(id))).executeSync());
+	if (deleted > 0 && existing) notifyShareGraphChange(existing);
+	return deleted;
+}
+
+/**
+ * Live-sync: tell affected users their trip-share graph changed so open
+ * `/api/events` streams recompute their viewable-trip set. Group shares fan
+ * out to the group's current members.
+ */
+function notifyShareGraphChange(share: TripShare) {
+	if (share.sharedWithUserId != null) {
+		publishSharesChanged([share.sharedWithUserId]);
+	} else if (share.sharedWithGroupId != null) {
+		publishSharesChanged(
+			kit
+				.selectFrom(groupMembers)
+				.where(kitEq(groupMembers.group_id, kitId(share.sharedWithGroupId)))
+				.executeSync()
+				.map((m) => num(m.user_id))
+		);
+	}
 }
 
 // Groups
@@ -754,11 +787,13 @@ export function addGroupMember(groupId: number, userId: number): { member: Group
 			user_id: kitId(userId)
 		} as Insert<typeof groupMembers>)
 		.executeSync();
+	// Group membership can grant trip access via group shares.
+	publishSharesChanged([userId]);
 	return { member: toGroupMember(row), created: true };
 }
 
 export function removeGroupMember(groupId: number, userId: number): number {
-	return Number(
+	const deleted = Number(
 		kit
 			.deleteFrom(groupMembers)
 			.where(
@@ -769,4 +804,6 @@ export function removeGroupMember(groupId: number, userId: number): number {
 			)
 			.executeSync()
 	);
+	if (deleted > 0) publishSharesChanged([userId]);
+	return deleted;
 }

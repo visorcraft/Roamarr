@@ -30,6 +30,8 @@ export function getMapSettings() {
 		mapsTileUrl: s.mapsTileUrl,
 		mapsTileAttribution: s.mapsTileAttribution,
 		mapsTileApiKey: s.mapsTileApiKey ? '********' : '',
+		placeSearchProvider: s.placeSearchProvider,
+		placeSearchGoogleApiKey: s.placeSearchGoogleApiKey ? '********' : '',
 		cityCount,
 		textureReady: hasMapTexture(),
 		textureImportedAt: mapTextureImportedAt()

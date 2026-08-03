@@ -18,6 +18,7 @@
 		errors = {},
 		titleLabel = 'Title',
 		titlePlaceholder = 'Enter title',
+		title = '',
 		locationLabel = 'Venue',
 		locationPlaceholder = 'Enter venue',
 		countryCode: countryCodeProp = tripDefaults?.countryCode ?? '',
@@ -36,6 +37,7 @@
 		errors?: Record<string, string>;
 		titleLabel?: string;
 		titlePlaceholder?: string;
+		title?: string;
 		locationLabel?: string;
 		locationPlaceholder?: string;
 		countryCode?: string;
@@ -56,7 +58,7 @@
 	let admin1Code = $derived(admin1CodeProp);
 </script>
 
-<TextField name="title" label={titleLabel} placeholder={titlePlaceholder} required class="sm:col-span-2" {errors} />
+<TextField name="title" label={titleLabel} placeholder={titlePlaceholder} value={title} required class="sm:col-span-2" {errors} />
 
 <DateTimeRangeFields {errors} {requireEnd} {startDateLabel} {startTimeLabel} {endDateLabel} {endTimeLabel} {endTimezoneLabel} />
 
@@ -98,4 +100,4 @@
 
 <BookedRow {errors} />
 
-<TextAreaField name="detail_notes" label="Notes" rows={3} placeholder="Optional notes" class="sm:col-span-2" />
+<TextAreaField name="detail_notes" label="Notes" rows={3} placeholder="Optional notes" hint="Markdown supported" class="sm:col-span-2" />

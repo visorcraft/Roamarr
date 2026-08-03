@@ -9,6 +9,7 @@
 		placeholder = '',
 		required = false,
 		disabled = false,
+		hint = '',
 		id = name,
 		class: wrapClass = '',
 		...rest
@@ -22,6 +23,7 @@
 		placeholder?: string;
 		required?: boolean;
 		disabled?: boolean;
+		hint?: string;
 		id?: string;
 		class?: string;
 		[key: string]: unknown;
@@ -50,6 +52,7 @@
 		aria-describedby={invalid ? describedBy : undefined}
 		{...rest}
 	>{value as string | undefined}</textarea>
+	{#if hint}<p class="field-help">{hint}</p>{/if}
 	{#each errorPairs as p (p.id)}
 		<p class="field-error" id={p.id}>{p.msg}</p>
 	{/each}

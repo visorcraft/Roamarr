@@ -48,13 +48,20 @@
 		{ value: 'custom', label: 'Custom' }
 	];
 
+	const placeSearchProviders = [
+		{ value: 'nominatim', label: 'OpenStreetMap Nominatim' },
+		{ value: 'google', label: 'Google Places' }
+	];
+
 	function getInitialTiles() {
 		const ms = data.mapSettings;
 		return {
 			provider: ms.mapsTileProvider,
 			url: ms.mapsTileUrl ?? '',
 			attribution: ms.mapsTileAttribution ?? '',
-			apiKey: ms.mapsTileApiKey ?? ''
+			apiKey: ms.mapsTileApiKey ?? '',
+			placeSearchProvider: ms.placeSearchProvider,
+			placeSearchGoogleApiKey: ms.placeSearchGoogleApiKey ?? ''
 		};
 	}
 	const initialTiles = getInitialTiles();
@@ -62,6 +69,8 @@
 	let tileUrl = $state(initialTiles.url);
 	let tileAttribution = $state(initialTiles.attribution);
 	let tileApiKey = $state(initialTiles.apiKey);
+	let selectedPlaceSearchProvider = $state(initialTiles.placeSearchProvider);
+	let placeSearchGoogleApiKey = $state(initialTiles.placeSearchGoogleApiKey);
 	let mapAction = $state('');
 
 	const enhanceMaps: SubmitFunction = ({ submitter }) => {
@@ -76,6 +85,7 @@
 		['maptiler', 'stadia', 'thunderforest', 'jawg', 'protomaps'].includes(selectedProvider)
 	);
 	const customVisible = $derived(selectedProvider === 'custom');
+	const googleKeyVisible = $derived(selectedPlaceSearchProvider === 'google');
 
 </script>
 
@@ -449,6 +459,50 @@
 						</div>
 					</div>
 
+					<div class="mt-6 border-t border-white/10 pt-6" style="border-color: var(--theme-line)">
+						<h3 class="subsection-title mb-4">Place search</h3>
+						<div class="settings-rows">
+							<div class="settings-row">
+								<div>
+									<label class="label" for="placeSearchProvider">Provider</label>
+									<p class="field-help">Search backend used to prefill the saved-place form.</p>
+								</div>
+								<select id="placeSearchProvider" name="placeSearchProvider" bind:value={selectedPlaceSearchProvider} class="input" required>
+									{#each placeSearchProviders as provider}
+										<option value={provider.value}>{provider.label}</option>
+									{/each}
+								</select>
+							</div>
+
+							{#if googleKeyVisible}
+								<div class="settings-row">
+									<div>
+										<label class="label" for="placeSearchGoogleApiKey">Google Places API key</label>
+										<p class="field-help">Required for Google Places. Stored encrypted; leave the masked value unchanged to keep the saved key.</p>
+									</div>
+									<input
+										id="placeSearchGoogleApiKey"
+										name="placeSearchGoogleApiKey"
+										type="password"
+										bind:value={placeSearchGoogleApiKey}
+										placeholder="API key"
+										class="input"
+										autocomplete="off"
+									/>
+								</div>
+								{#if data.mapSettings.placeSearchGoogleApiKey}
+									<div class="settings-row">
+										<div>
+											<label class="label" for="clearPlaceSearchGoogleApiKey">Clear API key</label>
+											<p class="field-help">Remove the stored Google Places API key.</p>
+										</div>
+										<input id="clearPlaceSearchGoogleApiKey" name="clearPlaceSearchGoogleApiKey" type="checkbox" class="checkbox" />
+									</div>
+								{/if}
+							{/if}
+						</div>
+					</div>
+
 					<div class="mt-6 flex justify-end">
 						<button class="btn btn-primary" class:btn-loading={mapAction === '?/saveMaps'} disabled={!!mapAction}>Save map settings</button>
 					</div>
@@ -609,12 +663,69 @@
 							/>
 						</div>
 					</div>
+				</section>
 
-					<div class="mt-6 flex flex-wrap justify-end gap-2">
-						<button class="btn btn-ghost" type="submit" formaction="?/testNotification">Send test notification</button>
-						<button class="btn btn-primary">Save webhook settings</button>
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">ntfy</h2>
+					<p class="mt-1 text-sm muted">Publish notifications to an <a href="https://ntfy.sh" target="_blank" rel="noopener noreferrer">ntfy</a> topic. Leave the topic empty to disable this channel.</p>
+					<div class="settings-rows">
+						<div class="settings-row">
+							<div>
+								<label class="label" for="ntfyServerUrl">Server URL</label>
+								<p class="field-help">Defaults to https://ntfy.sh. Self-hosted servers must use https.</p>
+							</div>
+							<input
+								id="ntfyServerUrl"
+								name="ntfyServerUrl"
+								type="url"
+								value={s.ntfyServerUrl ?? ''}
+								placeholder="https://ntfy.sh"
+								class="input"
+							/>
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="ntfyTopic">Topic</label>
+								<p class="field-help">Letters, digits, dashes and underscores, up to 64 characters. Treat the topic as a secret — anyone who knows it can subscribe.</p>
+							</div>
+							<input
+								id="ntfyTopic"
+								name="ntfyTopic"
+								value={s.ntfyTopic ?? ''}
+								placeholder="roamarr-alerts"
+								class="input"
+							/>
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="ntfyToken">Access token</label>
+								<p class="field-help">Optional Bearer token for protected topics. Stored encrypted.</p>
+							</div>
+							<input
+								id="ntfyToken"
+								name="ntfyToken"
+								type="password"
+								value={s.ntfyToken ?? ''}
+								autocomplete="off"
+								class="input"
+							/>
+						</div>
+						{#if s.ntfyToken}
+							<div class="settings-row">
+								<div>
+									<label class="label" for="clearNtfyToken">Clear token</label>
+									<p class="field-help">Remove the stored access token.</p>
+								</div>
+								<input id="clearNtfyToken" name="clearNtfyToken" type="checkbox" class="checkbox" />
+							</div>
+						{/if}
 					</div>
 				</section>
+
+				<div class="mt-6 flex flex-wrap justify-end gap-2">
+					<button class="btn btn-ghost" type="submit" formaction="?/testNotification">Send test notification</button>
+					<button class="btn btn-primary">Save webhook settings</button>
+				</div>
 			</form>
 		{/if}
 
@@ -654,6 +765,74 @@
 
 					<div class="mt-6 flex justify-end">
 						<button class="btn btn-primary">Save settings</button>
+					</div>
+				</section>
+			</form>
+
+			<form method="POST" action="?/saveOidc" class="space-y-6">
+				<section class="card p-5 sm:p-6">
+					<h2 class="section-title">Single Sign-On (OIDC)</h2>
+					<p class="mt-1 text-sm muted">
+						Let users sign in with an external OpenID Connect provider (Authentik, Keycloak, Google, …).
+						Register this redirect URI with the provider:
+						<code class="font-mono">{data.oidcRedirectUri}</code>
+					</p>
+					<label class="checkbox-label mt-4" for="oidcEnabled">
+						<input id="oidcEnabled" name="oidcEnabled" type="checkbox" class="checkbox" checked={s.oidcEnabled} />
+						Enable SSO sign-in
+					</label>
+					<div class="settings-rows mt-4">
+						<div class="settings-row">
+							<div>
+								<label class="label" for="oidcDisplayName">Button label</label>
+								<p class="field-help">Shown on the login page as "Sign in with …". Defaults to SSO.</p>
+							</div>
+							<input id="oidcDisplayName" name="oidcDisplayName" value={s.oidcDisplayName} placeholder="SSO" class="input" />
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="oidcDiscoveryUrl">Discovery URL</label>
+								<p class="field-help">Issuer base URL or full .well-known/openid-configuration URL.</p>
+							</div>
+							<input
+								id="oidcDiscoveryUrl"
+								name="oidcDiscoveryUrl"
+								type="url"
+								value={s.oidcDiscoveryUrl ?? ''}
+								placeholder="https://auth.example.com/application/o/roamarr"
+								class="input"
+							/>
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="oidcClientId">Client ID</label>
+								<p class="field-help">Client ID issued by the provider.</p>
+							</div>
+							<input id="oidcClientId" name="oidcClientId" value={s.oidcClientId ?? ''} class="input" />
+						</div>
+						<div class="settings-row">
+							<div>
+								<label class="label" for="oidcClientSecret">Client secret</label>
+								<p class="field-help">Leave the masked value to keep the stored secret. Encrypted at rest.</p>
+							</div>
+							<div>
+								<input id="oidcClientSecret" name="oidcClientSecret" type="password" value={s.oidcClientSecret} placeholder="Client secret" class="input" />
+								{#if s.oidcClientSecret}
+									<label class="checkbox-label mt-2 text-xs">
+										<input type="checkbox" name="clearOidcClientSecret" class="checkbox" />
+										Clear the stored secret
+									</label>
+								{/if}
+							</div>
+						</div>
+					</div>
+					<p class="mt-3 text-sm muted">
+						New accounts are created via SSO only while self-registration is allowed. Users with two-factor
+						authentication still complete their 2FA challenge after SSO.
+					</p>
+
+					<div class="mt-6 flex justify-end">
+						<button class="btn btn-primary">Save SSO settings</button>
 					</div>
 				</section>
 			</form>

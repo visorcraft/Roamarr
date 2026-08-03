@@ -6,6 +6,7 @@ import { getSegmentById } from './repositories/segmentsRepo';
 import { duplicateTrip } from '../../routes/trips/shared';
 import { upsertCustomReminder } from './reminders';
 import { duplicateSegment, moveSegmentToDate, setSegmentStatus } from './segments';
+import { optimizeTripDay } from './tripDayOptimize';
 import {
 	attachInsurancePolicyToTrip,
 	detachInsurancePolicyFromTrip
@@ -16,6 +17,8 @@ import { addAttachment } from './tripExpenseAttachments';
 import { uploadTripPoster } from './tripPoster';
 import { saveTripTemplate } from './tripTemplates';
 import { autoMarkFromTrip } from './visitedPlaces';
+import { createPlace } from './places';
+import { findCity } from './cities';
 import { setFlash } from './flash';
 import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
@@ -69,6 +72,29 @@ export async function segmentReminder(event: RequestEvent) {
 	throw redirect(303, `/trips/${tripId}`);
 }
 
+export async function saveSegmentToPlaceAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	requireEditableTrip(user.id, tripId);
+	const segmentIdResult = positiveIdFromForm(formData.get('segmentId'), 'segmentId');
+	if (!segmentIdResult.ok) throw error(400, segmentIdResult.error);
+	const seg = getSegmentById(segmentIdResult.value);
+	if (!seg || seg.tripId !== tripId) throw error(404, 'Segment not found');
+	if (seg.type !== 'poi') throw error(400, 'Only point-of-interest segments can be saved to places');
+	const city =
+		seg.countryCode && seg.cityName ? findCity(seg.countryCode, seg.cityName, seg.admin1Code) : null;
+	const hasCoords = seg.cityLat != null && seg.cityLng != null;
+	createPlace(user.id, {
+		name: seg.title,
+		address: seg.location ?? null,
+		cityId: city?.geonameId ?? null,
+		lat: hasCoords ? seg.cityLat! : (city?.lat ?? null),
+		lng: hasCoords ? seg.cityLng! : (city?.lng ?? null),
+		description: seg.venue ? `Venue: ${seg.venue}` : null
+	});
+	setFlash(event.cookies, 'Saved to your places.');
+	throw redirect(303, `/trips/${tripId}`);
+}
+
 export async function duplicateSegmentAction(event: RequestEvent) {
 	const { user, tripId, formData } = await withTripAction(event);
 	const segmentIdResult = positiveIdFromForm(formData.get('segmentId'), 'segmentId');
@@ -94,6 +120,21 @@ export async function moveSegmentDateAction(event: RequestEvent) {
 	const targetDate = v.requiredDate(formData.get('targetDate'), 'targetDate');
 	if (!v.ok()) throw error(400, v.failMessage());
 	moveSegmentToDate(user.id, tripId, segmentId!, targetDate!);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function optimizeTripDayAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const v = new Validator();
+	const date = v.requiredDate(formData.get('date'), 'date');
+	if (!v.ok()) throw error(400, v.failMessage());
+	const result = optimizeTripDay(user.id, tripId, date!);
+	setFlash(
+		event.cookies,
+		result.applied
+			? `Optimized ${result.orderedSegmentIds.length} stop${result.orderedSegmentIds.length === 1 ? '' : 's'} (${(result.totalDistanceMeters / 1000).toFixed(1)} km).`
+			: 'Nothing to optimize for this day.'
+	);
 	throw redirect(303, `/trips/${tripId}`);
 }
 

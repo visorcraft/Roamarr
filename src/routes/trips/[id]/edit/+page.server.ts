@@ -21,11 +21,15 @@ export const load: PageServerLoad = ({ locals, params }) => {
 	return { trip, owner: trip.ownerId === u.id };
 };
 
-export function _deleteTrip(userId: number, tripId: number) {
+export async function _deleteTrip(userId: number, tripId: number) {
 	requireOwnedTrip(userId, tripId);
 	cancelRemindersFor('trip', tripId);
 	const segs = listSegmentsForTrip(tripId);
 	for (const s of segs) cancelRemindersFor('segment', s.id);
+	// gallery_images.owner_id is polymorphic and cannot cascade via FK, so
+	// remove gallery rows and their attachments explicitly.
+	const { deleteGalleryForOwner } = await import('$lib/server/gallery');
+	await deleteGalleryForOwner('trip', tripId);
 	tripsRepo.deleteTrip(tripId);
 	logAudit(userId, 'trip_delete', 'trip', tripId);
 }
@@ -138,7 +142,7 @@ export const actions: Actions = {
 	},
 	delete: async ({ locals, params }) => {
 		const u = requireUser(locals);
-		_deleteTrip(u.id, parseTripId(params));
+		await _deleteTrip(u.id, parseTripId(params));
 		throw redirect(303, '/trips');
 	}
 };

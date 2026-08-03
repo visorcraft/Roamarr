@@ -21,6 +21,32 @@ rate-limited.
 
 The browser route permits three backup requests per minute.
 
+## Scheduled automatic backups
+
+Open **Maintenance → Backup & Restore → Automatic backups** to let the
+scheduler create backups without a browser download. Configure:
+
+| Setting | Purpose |
+| --- | --- |
+| Enable automatic backups | Master switch; off by default. |
+| Interval (hours) | Minimum time between runs (default 24, maximum 720). |
+| Retention (keep newest) | How many `auto-` archives to keep (default 7, maximum 100). |
+
+When enabled, the 60-second scheduler tick writes
+`auto-roamarr-backup-<timestamp>.mongreldb.tar.gz` archives to a `backups/`
+directory beside the database directory. The archive contents are identical to
+the manual download. Each archive is written to a temporary file and renamed
+into place, so an interrupted run never leaves a half-written backup. After
+each run, archives beyond the retention count are pruned — oldest first, and
+only files with the `auto-` prefix; any other file in the directory is never
+deleted.
+
+The page shows the last run, the next due time, and how many archives are
+stored. A failed run is logged and retried at the next tick; it never blocks
+other scheduler work. Move the archives off the host (or include the directory
+in host-level backups) — automatic backups beside the live database do not
+protect against losing the machine.
+
 ## Archive contents
 
 A backup includes:

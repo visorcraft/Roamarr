@@ -50,7 +50,7 @@ function makeEvent(form: FormData, params: Record<string, string>, userId: numbe
 	} as any;
 }
 
-test('owner can delete a trip and its segments, shares, watches, and reminders', () => {
+test('owner can delete a trip and its segments, shares, watches, and reminders', async () => {
 	const a = makeUser(kit, { email: 'del-owner@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'del-shared@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip', defaultVisibility: 'public' });
@@ -73,7 +73,7 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 		.values({ trip_id: BigInt(t.id), provider_id: provider.id })
 		.executeSync();
 
-	_deleteTrip(a.id, t.id);
+	await _deleteTrip(a.id, t.id);
 
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
 	expect(kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
@@ -88,12 +88,12 @@ test('owner can delete a trip and its segments, shares, watches, and reminders',
 	expect(Number(logs[0].entity_id)).toBe(t.id);
 });
 
-test('non-owner cannot delete a trip', () => {
+test('non-owner cannot delete a trip', async () => {
 	const a = makeUser(kit, { email: 'del-owner2@x.c', passwordHash: 'x', displayName: 'A' });
 	const b = makeUser(kit, { email: 'del-intruder@x.c', passwordHash: 'x', displayName: 'B' });
 	const t = createTrip(a.id, { name: 'Trip' });
 
-	expect(() => _deleteTrip(b.id, t.id)).toThrow();
+	await expect(_deleteTrip(b.id, t.id)).rejects.toThrow();
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeDefined();
 	expect(kit.selectFrom(auditLogs).executeSync()).toHaveLength(0);
 });

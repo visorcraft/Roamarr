@@ -149,7 +149,7 @@
 						form="segment-file-upload-{s.id}"
 						type="file"
 						name="file"
-						accept="image/jpeg,image/png,image/webp,application/pdf"
+						accept="image/jpeg,image/png,image/webp,application/pdf,.gpx,application/gpx+xml"
 						class="input text-sm sm:col-span-2"
 						required
 					/>

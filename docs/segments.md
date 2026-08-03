@@ -75,7 +75,8 @@ Selecting a segment opens:
 
 - **Details** for time, location, status, and booking fields;
 - **Travelers** for companion attendance;
-- **Notes** for structured type-specific data;
+- **Notes** for structured type-specific data (free-text notes render safe
+  Markdown: bold/italic, links, lists, code);
 - **Files** for uploaded PDFs and images (QR codes, vouchers, confirmations);
 - **Reminders** for scheduled alerts.
 

@@ -18,10 +18,15 @@ function sanitizeFilename(name: string): string {
 	return sanitized;
 }
 
-function contentDisposition(filename: string): string {
+function contentDisposition(filename: string, inline: boolean): string {
 	const ascii = filename.replace(/[^\x20-\x7e]/g, '_');
 	const encoded = encodeURIComponent(filename).replace(/['()]/g, escape);
-	return `inline; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+	return `${inline ? 'inline' : 'attachment'}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/** Only images and PDFs may open inline; everything else (e.g. GPX) is a download. */
+function canServeInline(contentType: string): boolean {
+	return contentType === 'application/pdf' || contentType.startsWith('image/');
 }
 
 export const GET: RequestHandler = async ({ locals, params }) => {
@@ -39,7 +44,7 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 	return new Response(stream, {
 		headers: {
 			'Content-Type': record.contentType,
-			'Content-Disposition': contentDisposition(safeFilename),
+			'Content-Disposition': contentDisposition(safeFilename, canServeInline(record.contentType)),
 			'Cache-Control': 'private, no-store'
 		}
 	});

@@ -4,6 +4,7 @@ import { kit } from './db';
 import {
 	cards,
 	fareProviders,
+	placeCategories,
 	segments,
 	tripCompanions,
 	users
@@ -73,6 +74,7 @@ export function assertOwnedRefs(
 		tripId?: number | null;
 		providerId?: number | null;
 		segmentId?: number | null;
+		placeCategoryId?: number | null;
 	}
 ) {
 	if (refs.tripId != null) requireOwnedTrip(userId, refs.tripId);
@@ -94,5 +96,12 @@ export function assertOwnedRefs(
 		const s = kit.selectFrom(segments).where(kitEq(segments.id, BigInt(refs.segmentId))).executeSync()[0];
 		if (!s) throw error(404, 'Not found');
 		requireOwnedTrip(userId, Number(s.trip_id));
+	}
+	if (refs.placeCategoryId != null) {
+		const c = kit
+			.selectFrom(placeCategories)
+			.where(and(kitEq(placeCategories.id, BigInt(refs.placeCategoryId)), kitEq(placeCategories.user_id, BigInt(userId))))
+			.executeSync()[0];
+		if (!c) throw error(404, 'Not found');
 	}
 }

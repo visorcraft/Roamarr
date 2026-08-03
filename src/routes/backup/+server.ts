@@ -1,15 +1,10 @@
-import { createReadStream, createWriteStream, unlinkSync } from 'node:fs';
+import { createReadStream, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
-import { createGzip } from 'node:zlib';
-import { pipeline } from 'node:stream/promises';
+import { join } from 'node:path';
 import { error, type RequestHandler } from '@sveltejs/kit';
 import { requireAdmin } from '$lib/server/auth';
-import { getDatabasePath } from '$lib/server/db/paths';
-import { getAttachmentsPath } from '$lib/server/restore';
 import { checkRateLimit } from '$lib/server/rateLimit';
-import { findGeonamesTableIds, shouldExcludeFromBackup } from '$lib/server/backupFilter';
-import tar from 'tar-fs';
+import { createBackupArchive } from '$lib/server/backupArchive';
 
 const BACKUP_DOWNLOAD_RATE_LIMIT = { maxAttempts: 3, windowMs: 60_000 };
 
@@ -31,51 +26,13 @@ export const GET: RequestHandler = async ({ locals, getClientAddress }) => {
 	const limit = checkRateLimit(getClientAddress(), 'backup:download', BACKUP_DOWNLOAD_RATE_LIMIT);
 	if (!limit.allowed) throw error(429, `Rate limited. Try again in ${limit.retryAfter ?? 1} seconds.`);
 
-	const dbPath = getDatabasePath();
-	const attachmentsPath = getAttachmentsPath(dbPath);
 	const tmpPath = join(
 		tmpdir(),
 		`roamarr-backup-${process.hrtime.bigint().toString(36)}-${Date.now()}.tar.gz`
 	);
 
-	const parentDir = dirname(dbPath);
-	const dbName = basename(dbPath);
-	const entries: string[] = [dbName];
-
-	// Only include a separate attachments entry when attachments live outside the
-	// database directory (e.g. via ATTACHMENTS_PATH). Otherwise the default
-	// <dbDir>/attachments is already included with the database directory.
-	const resolvedAttachments = resolve(attachmentsPath);
-	const resolvedDbPath = resolve(dbPath);
-	const attachmentsInsideDb = resolvedAttachments === resolvedDbPath || resolvedAttachments.startsWith(resolvedDbPath + sep);
-	const attachmentsEntryName = attachmentsInsideDb ? null : basename(attachmentsPath);
-	if (attachmentsEntryName) {
-		entries.push(attachmentsEntryName);
-	}
-
-	// GeoNames city catalog is re-importable reference data (~30 MB). Keep the
-	// table shell so CATALOG opens; omit run/index payloads from the download.
-	const geonamesTableIds = findGeonamesTableIds(resolvedDbPath);
-
 	try {
-		const pack = tar.pack(parentDir, {
-			entries,
-			ignore: (name) => shouldExcludeFromBackup(name, geonamesTableIds),
-			map: (header) => {
-				// Normalize any out-of-tree attachments directory to "attachments/"
-				// so the archive structure is predictable for restore.
-				if (
-					attachmentsEntryName &&
-					(header.name === `${attachmentsEntryName}/` || header.name.startsWith(`${attachmentsEntryName}/`))
-				) {
-					header.name = `attachments${header.name.slice(attachmentsEntryName.length)}`;
-				}
-				return header;
-			}
-		});
-		const gzip = createGzip();
-		const out = createWriteStream(tmpPath);
-		await pipeline(pack, gzip, out);
+		await createBackupArchive(tmpPath);
 	} catch (err) {
 		cleanupTemp(tmpPath);
 		throw err;

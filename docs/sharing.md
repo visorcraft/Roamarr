@@ -104,3 +104,7 @@ After accidental disclosure:
 
 Duplicating a trip does not copy shares or tokens. Merging trips can reconcile
 and retain shares, so review recipient access after a merge.
+
+Share and membership changes also push a live `shares` hint to affected users'
+open sessions, so revoked access stops trip-event delivery and prompts a
+refetch; see [Real-time sync](./realtime.md).

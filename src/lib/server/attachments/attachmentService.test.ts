@@ -129,6 +129,54 @@ describe('attachmentService', () => {
 		expect(existsSync(cipherPath)).toBe(false);
 	});
 
+	test('accepts a valid GPX file and normalizes its content type', async () => {
+		const gpx = '<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="t"><trk><trkseg><trkpt lat="1" lon="2" /></trkseg></trk></gpx>';
+		const file = new File([gpx], 'hike.gpx', { type: 'application/gpx+xml' });
+		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+		expect(att.filename).toBe('hike.gpx');
+		expect(att.contentType).toBe('application/gpx+xml');
+
+		const { stream } = await readAttachmentStream(att.id);
+		const out = await streamToBuffer(stream);
+		expect(out.toString('utf8')).toBe(gpx);
+	});
+
+	test('accepts GPX sent as text/xml or octet-stream when the name ends in .gpx', async () => {
+		const gpx = '<gpx version="1.1" creator="t" />';
+		for (const type of ['text/xml', 'application/xml', 'application/octet-stream', '']) {
+			const file = new File([gpx], 'track.gpx', { type });
+			const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+			expect(att.contentType).toBe('application/gpx+xml');
+		}
+	});
+
+	test('accepts a BOM and XML declaration before the <gpx> root', async () => {
+		const gpx = '\uFEFF<?xml version="1.0"?>\n  <gpx version="1.1" creator="t" />';
+		const file = new File([gpx], 'bom.gpx', { type: 'application/gpx+xml' });
+		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });
+		expect(att.contentType).toBe('application/gpx+xml');
+	});
+
+	test('rejects HTML renamed to .gpx', async () => {
+		const file = new File(['<html><body>pwn</body></html>'], 'evil.gpx', { type: 'text/xml' });
+		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
+	test('rejects XML without a <gpx> root', async () => {
+		const file = new File(['<?xml version="1.0"?><feed><entry /></feed>'], 'feed.gpx', { type: 'application/xml' });
+		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
+	test('rejects lookalike roots such as <gpxx>', async () => {
+		const file = new File(['<gpxx />'], 'fake.gpx', { type: 'application/gpx+xml' });
+		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
+	test('rejects GPX content types without a .gpx file name', async () => {
+		const file = new File(['<gpx version="1.1" creator="t" />'], 'track.xml', { type: 'application/gpx+xml' });
+		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	});
+
 	test('createAttachment writes an audit log entry', async () => {
 		const file = fileFromString('audit', 'audit.pdf', 'application/pdf');
 		const att = await createAttachment({ ownerId: userId, file, context: { kind: 'test' } });

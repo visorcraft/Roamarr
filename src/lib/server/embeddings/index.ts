@@ -1,6 +1,14 @@
 import { and, eq } from '@visorcraft/mongreldb-kit';
+import type { Row } from '@visorcraft/mongreldb-kit';
 import { kit } from '../db';
-import { searchDocuments, trips as tripsTable, SEARCH_EMBEDDING_DIM } from '../db/mongrelSchema';
+import {
+	geonamesCities,
+	placeCategories,
+	places as placesTable,
+	searchDocuments,
+	trips as tripsTable,
+	SEARCH_EMBEDDING_DIM
+} from '../db/mongrelSchema';
 import { nowIso } from '../tz';
 import {
 	DEFAULT_EMBEDDINGS_CONFIG,
@@ -14,7 +22,7 @@ import { canView } from '../sharing';
 import * as tripsRepo from '../repositories/tripsRepo';
 import * as segmentsRepo from '../repositories/segmentsRepo';
 
-export type SearchEntityType = 'trip' | 'segment';
+export type SearchEntityType = 'trip' | 'segment' | 'place';
 
 export type SearchHit = {
 	entityType: SearchEntityType;
@@ -203,6 +211,58 @@ function segmentSearchDoc(
 	};
 }
 
+function resolvePlaceCityName(cityId: bigint | null): string | null {
+	if (cityId == null || cityId === 0n) return null;
+	const row = kit
+		.selectFrom(geonamesCities)
+		.where(eq(geonamesCities.geoname_id, cityId))
+		.executeSync()[0];
+	return row?.name ?? null;
+}
+
+function resolvePlaceCategoryName(categoryId: bigint | null, userId: bigint): string | null {
+	if (categoryId == null || categoryId === 0n) return null;
+	const row = kit
+		.selectFrom(placeCategories)
+		.where(and(eq(placeCategories.id, categoryId), eq(placeCategories.user_id, userId)))
+		.executeSync()[0];
+	return row?.name ?? null;
+}
+
+function placeSearchDoc(place: Row<typeof placesTable>): SearchDocumentInput {
+	return {
+		entityType: 'place',
+		entityId: Number(place.id),
+		ownerId: Number(place.user_id),
+		title: place.name,
+		body: [
+			place.address,
+			resolvePlaceCityName(place.city_id),
+			resolvePlaceCategoryName(place.category_id, place.user_id),
+			place.description,
+			place.status
+		]
+			.filter(Boolean)
+			.join(' '),
+		// Places have no detail page; land on the library list.
+		href: '/places'
+	};
+}
+
+/** Best-effort index of one saved place. No-op when embeddings off. */
+export async function indexPlace(placeId: number): Promise<void> {
+	if (!embeddingsReady()) return;
+	const row = kit
+		.selectFrom(placesTable)
+		.where(eq(placesTable.id, BigInt(placeId)))
+		.executeSync()[0];
+	if (!row) {
+		removeSearchDocument('place', placeId);
+		return;
+	}
+	await writeSearchDocument(placeSearchDoc(row));
+}
+
 /** Best-effort index of one trip (and its segments). No-op when embeddings off. */
 export async function indexTrip(tripId: number): Promise<void> {
 	if (!embeddingsReady()) return;
@@ -230,9 +290,9 @@ export async function indexTrip(tripId: number): Promise<void> {
 	}
 }
 
-export async function reindexAll(): Promise<{ trips: number; segments: number }> {
+export async function reindexAll(): Promise<{ trips: number; segments: number; places: number }> {
 	const cfg = getEmbeddingsConfig();
-	if (!cfg.enabled) return { trips: 0, segments: 0 };
+	if (!cfg.enabled) return { trips: 0, segments: 0, places: 0 };
 
 	// Wipe corpus so deletes/renames do not leave orphans.
 	for (const row of kit.selectFrom(searchDocuments).executeSync()) {
@@ -254,11 +314,17 @@ export async function reindexAll(): Promise<{ trips: number; segments: number }>
 			segmentCount++;
 		}
 	}
-	return { trips: tripCount, segments: segmentCount };
+	let placeCount = 0;
+	for (const place of kit.selectFrom(placesTable).executeSync()) {
+		await writeSearchDocument(placeSearchDoc(place));
+		placeCount++;
+	}
+	return { trips: tripCount, segments: segmentCount, places: placeCount };
 }
 
 /**
- * Semantic ANN search filtered by trip visibility. Empty when embeddings off.
+ * Semantic ANN search filtered by trip visibility (places are owner-only).
+ * Empty when embeddings off.
  */
 export async function semanticSearch(
 	userId: number,
@@ -291,6 +357,14 @@ export async function semanticSearch(
 			if (!seg) continue;
 			const trip = tripsRepo.getTripById(seg.tripId);
 			if (!trip || !canView(userId, trip)) continue;
+		} else if (entityType === 'place') {
+			// Saved places are owner-only (no sharing), so ownership is the whole check.
+			if (Number(row.owner_id) !== userId) continue;
+			const place = kit
+				.selectFrom(placesTable)
+				.where(eq(placesTable.id, BigInt(entityId)))
+				.executeSync()[0];
+			if (!place || Number(place.user_id) !== userId) continue;
 		} else {
 			continue;
 		}

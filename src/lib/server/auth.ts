@@ -25,9 +25,12 @@ export interface AppUser {
 	documentExpiryLeadDays: number;
 	emailNotifications: boolean;
 	webhookNotifications: boolean;
+	ntfyNotifications: boolean;
 	autoMarkVisited: boolean;
 	themeId: string | null;
 	defaultCurrency: string | null;
+	temperatureUnit: 'c' | 'f';
+	timeFormat: '12h' | '24h';
 	calendarToken: string | null;
 	calendarTokenExpiresAt: string | null;
 	createdAt: string;
@@ -47,9 +50,12 @@ function toAppUser(u: KitUser): AppUser {
 		documentExpiryLeadDays: Number(u.document_expiry_lead_days),
 		emailNotifications: u.email_notifications,
 		webhookNotifications: u.webhook_notifications,
+		ntfyNotifications: u.ntfy_notifications ?? true,
 		autoMarkVisited: u.auto_mark_visited,
 		themeId: u.theme_id,
 		defaultCurrency: u.default_currency,
+		temperatureUnit: u.temperature_unit === 'f' ? 'f' : 'c',
+		timeFormat: u.time_format === '12h' ? '12h' : '24h',
 		calendarToken: u.calendar_token,
 		calendarTokenExpiresAt: u.calendar_token_expires_at,
 		createdAt: u.created_at

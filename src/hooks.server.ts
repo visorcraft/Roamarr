@@ -2,6 +2,8 @@ import { redirect, error, type Handle, type HandleServerError, isRedirect, type 
 import { dev } from '$app/environment';
 import { validateOAuthUser, validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { verifyAccessToken, type Scope } from '$lib/server/oauth';
+import { API_KEY_CLIENT_ID, extractApiKeyToken, verifyApiKey } from '$lib/server/apiKeys';
+import { checkRateLimit } from '$lib/server/rateLimit';
 import { isSetupComplete } from '$lib/server/settings';
 import { bootApp, isMissingSecret, getBootError } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
@@ -15,7 +17,7 @@ import type { ToastVariant } from '$lib/toast';
 // (vite bundles without executing, and there are no prerender entries that would).
 bootApp();
 
-const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/oauth\/authorize/, /^\/oauth\/register$/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
+const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/auth\/oidc\//, /^\/oauth\/authorize/, /^\/oauth\/register$/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
 const OAUTH_FORM_ENDPOINTS = new Set(['/oauth/token', '/oauth/revoke']);
 const FORM_CONTENT_TYPES = new Set([
 	'application/x-www-form-urlencoded',
@@ -30,6 +32,9 @@ export function isForbiddenCrossSiteForm(request: Request, url: URL): boolean {
 	// Bearer tokens and often omit Origin (or send a non-site Origin) on multipart
 	// uploads — blocking those breaks poster/receipt uploads from the app.
 	if (/^Bearer\s+\S+/i.test(request.headers.get('authorization') ?? '')) return false;
+	// API-key scripts authenticate with a custom header, which a cross-site
+	// browser form cannot set (it would require a CORS preflight).
+	if (request.headers.get('x-api-token')) return false;
 	const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
 	return !!contentType && FORM_CONTENT_TYPES.has(contentType) && request.headers.get('origin') !== url.origin;
 }
@@ -39,6 +44,7 @@ export function requiredApiScope(path: string, method: string): Scope | null {
 	const routes: Array<[RegExp, string]> = [
 		[/^\/api\/mobile\/trips\/\d+\/sharing(?:\/|$)/, 'sharing'],
 		[/^\/api\/trips(?:\/|$)/, 'trips'],
+		[/^\/api\/events(?:\/|$)/, 'trips'],
 		[/^\/api\/mobile\/trips(?:\/|$)/, 'trips'],
 		[/^\/api\/mobile\/segments(?:\/|$)/, 'segments'],
 		[/^\/api\/mobile\/trip-transfer(?:\/|$)/, 'trips'],
@@ -212,13 +218,39 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 		const sessionToken = event.cookies.get('session');
 		const bearer = event.request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1];
-		event.locals.oauth = bearer ? verifyAccessToken(bearer) ?? undefined : undefined;
+		// Personal API keys (X-Api-Token, or Bearer with the rk_ prefix) authenticate
+		// only the machine endpoints /api/* and /mcp. They never create a session
+		// and are ignored everywhere else, so a key cannot unlock browser pages.
+		const apiKeyToken =
+			path === '/mcp' || path.startsWith('/api/') ? extractApiKeyToken(event.request) : null;
+		if (apiKeyToken) {
+			const verified = verifyApiKey(apiKeyToken);
+			if (!verified) {
+				// Throttle failed key attempts per IP, mirroring login rate limiting.
+				let ip = 'unknown';
+				try {
+					ip = event.getClientAddress();
+				} catch {
+					// best-effort; getClientAddress may throw in some environments
+				}
+				const limit = checkRateLimit(ip, 'api-key-auth');
+				return limit.allowed
+					? jsonError(401, 'Invalid or expired API key')
+					: jsonError(429, 'Too many requests');
+			}
+			// Synthesize exactly the auth context the OAuth path produces; scope
+			// enforcement below and in mcpServer applies unchanged. Disabled users
+			// are already rejected inside verifyApiKey.
+			event.locals.oauth = { userId: verified.userId, scopes: verified.scopes, clientId: API_KEY_CLIENT_ID };
+		} else {
+			event.locals.oauth = bearer ? verifyAccessToken(bearer) ?? undefined : undefined;
+		}
 		event.locals.user = event.locals.oauth
 			? validateOAuthUser(event.locals.oauth.userId)
 			: await validateSession(sessionToken);
-		if (bearer && !event.locals.oauth) return jsonError(401, 'Invalid or expired access token');
-		if (bearer && path.startsWith('/api/')) {
-			const oauth = event.locals.oauth!;
+		if (bearer && !apiKeyToken && !event.locals.oauth) return jsonError(401, 'Invalid or expired access token');
+		if (event.locals.oauth && path.startsWith('/api/')) {
+			const oauth = event.locals.oauth;
 			const scope = requiredApiScope(path, event.request.method);
 			if (!scope || !oauth.scopes.includes(scope)) {
 				return jsonError(403, scope ? `Missing required scope: ${scope}` : 'OAuth access is not allowed for this endpoint');

@@ -75,6 +75,20 @@
 				{/each}
 			</select>
 		</div>
+		<div class="field">
+			<label class="label" for="temperatureUnit">Temperature unit</label>
+			<select id="temperatureUnit" name="temperatureUnit" value={data.user.temperatureUnit} class="input" required>
+				<option value="c">Celsius (°C)</option>
+				<option value="f">Fahrenheit (°F)</option>
+			</select>
+		</div>
+		<div class="field">
+			<label class="label" for="timeFormat">Time format</label>
+			<select id="timeFormat" name="timeFormat" value={data.user.timeFormat} class="input" required>
+				<option value="24h">24-hour (13:30)</option>
+				<option value="12h">12-hour (1:30 PM)</option>
+			</select>
+		</div>
 		<div class="field sm:col-span-2">
 			<label class="checkbox-label">
 				<input type="checkbox" name="emailNotifications" checked={data.user.emailNotifications} class="checkbox" />
@@ -85,6 +99,12 @@
 			<label class="checkbox-label">
 				<input type="checkbox" name="webhookNotifications" checked={data.user.webhookNotifications} class="checkbox" />
 				Webhook notifications
+			</label>
+		</div>
+		<div class="field sm:col-span-2">
+			<label class="checkbox-label">
+				<input type="checkbox" name="ntfyNotifications" checked={data.user.ntfyNotifications} class="checkbox" />
+				ntfy notifications
 			</label>
 		</div>
 		<div class="flex justify-end sm:col-span-2">

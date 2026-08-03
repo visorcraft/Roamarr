@@ -267,6 +267,8 @@ smallest set.
 | `polls:write` | Create polls, vote, and delete polls. |
 | `journal:read` | View trip journal entries. |
 | `journal:write` | Create, update, and delete journal entries. |
+| `day-notes:read` | View per-day trip notes. |
+| `day-notes:write` | Create, update, and delete per-day trip notes. |
 | `items:read` | View important items. |
 | `items:write` | Create and delete important items. |
 | `requirements:read` | View entry requirements. |
@@ -291,6 +293,8 @@ smallest set.
 | `user-smtp:write` | Set or clear personal SMTP. |
 | `comments:read` | View trip comments. |
 | `comments:write` | Create and delete the user's comments. |
+| `gallery:read` | View place and trip photo galleries. |
+| `gallery:write` | Reorder, caption, and delete gallery photos. |
 | `search:read` | Run authenticated global search. |
 | `private-details:read` | Add private trip notes, confirmations, and itinerary details where supported. |
 | `admin:read` | View users, audit events, jobs, and statistics as an administrator. |

@@ -9,29 +9,23 @@ import { checkRateLimit } from './rateLimit';
 import { nowIso } from './tz';
 
 const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
+const OPEN_METEO_ARCHIVE_URL = 'https://archive-api.open-meteo.com/v1/archive';
 const FORECAST_DAYS = 14;
 export const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+/** Climate (typical-weather) rows are stable; cache them far longer. */
+export const CLIMATE_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+/** Years of archive samples averaged for a typical-weather day. */
+const CLIMATE_YEARS = 5;
+/** How many days past the forecast horizon get typical-weather estimates. */
+export const CLIMATE_MAX_DAYS = 14;
 
 export type WeatherUnits = 'metric' | 'imperial';
 
-// IANA zones that default to imperial. The forecast is always fetched + cached in
-// metric (so the cache and the advisory thresholds stay uniform across users) and
-// converted for display only.
-// ponytail: timezone heuristic, not a real locale — swap in an explicit per-user
-// units setting if users outside these zones want imperial.
-const IMPERIAL_TZONES = new Set<string>([
-	'America/New_York', 'America/Detroit', 'America/Kentucky/Louisville', 'America/Kentucky/Monticello',
-	'America/Indiana/Indianapolis', 'America/Indiana/Vincennes', 'America/Indiana/Winamac',
-	'America/Indiana/Marengo', 'America/Indiana/Petersburg', 'America/Indiana/Vevay',
-	'America/Chicago', 'America/Indiana/Tell_City', 'America/Indiana/Knox', 'America/Menominee',
-	'America/North_Dakota/Center', 'America/North_Dakota/New_Salem', 'America/North_Dakota/Beulah',
-	'America/Denver', 'America/Boise', 'America/Phoenix', 'America/Los_Angeles', 'America/Anchorage',
-	'America/Juneau', 'America/Sitka', 'America/Metlakatla', 'America/Yakutat', 'America/Nome', 'America/Adak',
-	'Pacific/Honolulu', 'Pacific/Guam', 'Pacific/Saipan', 'America/Puerto_Rico'
-]);
-
-export function unitsForTimezone(tz: string | null | undefined): WeatherUnits {
-	return tz && IMPERIAL_TZONES.has(tz) ? 'imperial' : 'metric';
+// The forecast is always fetched + cached in metric (so the cache and the
+// advisory thresholds stay uniform across users) and converted for display
+// only, based on the per-user `temperature_unit` preference.
+export function unitsForUser(temperatureUnit: string | null | undefined): WeatherUnits {
+	return temperatureUnit === 'f' ? 'imperial' : 'metric';
 }
 
 const cToF = (c: number) => (c * 9) / 5 + 32;
@@ -47,6 +41,8 @@ export interface DayForecast {
 	code: number | null;
 	summary: string;
 	degraded?: boolean;
+	/** True when the day is a climatological average, not a live forecast. */
+	typical?: boolean;
 }
 
 export interface TripWeatherOverview {
@@ -126,11 +122,15 @@ function parsePayload(value: unknown): OpenMeteoResponse | null {
 	return null;
 }
 
-function getFreshPayload(locationKeyStr: string, forDate: string): OpenMeteoResponse | null {
+function getFreshPayload(
+	locationKeyStr: string,
+	forDate: string,
+	ttlMs: number = CACHE_TTL_MS
+): OpenMeteoResponse | null {
 	const row = getCachedRow(locationKeyStr, forDate);
 	if (!row) return null;
 	const fetchedAt = row.fetched_at as string;
-	if (Date.now() - new Date(fetchedAt).getTime() > CACHE_TTL_MS) return null;
+	if (Date.now() - new Date(fetchedAt).getTime() > ttlMs) return null;
 	return parsePayload(row.payload_json);
 }
 
@@ -238,12 +238,131 @@ export function purgeExpiredWeatherCache(now: Date = new Date()): { deleted: num
 	return { deleted: Number(deleted) };
 }
 
-export async function getCachedForecast(
+interface OpenMeteoArchiveDaily {
+	time: string[];
+	temperature_2m_max: Array<number | null>;
+	temperature_2m_min: Array<number | null>;
+}
+
+interface OpenMeteoArchiveResponse {
+	daily?: OpenMeteoArchiveDaily;
+	error?: string;
+}
+
+/**
+ * Fetch the Open-Meteo archive for the CLIMATE_YEARS-year window ending one
+ * year before `date` and average the samples matching the target month-day.
+ * Keyless like the forecast API; used for trip days beyond the forecast
+ * horizon, where the result is a climatological "typical" day, not a forecast.
+ */
+export async function fetchClimateAverage(
+	lat: number,
+	lng: number,
+	date: string
+): Promise<{ tempMin: number; tempMax: number } | null> {
+	const target = DateTime.fromISO(date);
+	if (!target.isValid) return null;
+	const monthDay = target.toFormat('MM-dd');
+	const params = new URLSearchParams({
+		latitude: String(lat),
+		longitude: String(lng),
+		start_date: target.minus({ years: CLIMATE_YEARS }).toISODate()!,
+		end_date: target.minus({ years: 1 }).toISODate()!,
+		daily: ['temperature_2m_max', 'temperature_2m_min'].join(','),
+		temperature_unit: 'celsius',
+		timezone: 'auto'
+	});
+	const res = await fetch(`${OPEN_METEO_ARCHIVE_URL}?${params}`, {
+		signal: AbortSignal.timeout(10_000)
+	});
+	if (!res.ok) throw new Error(`Open-Meteo archive returned ${res.status}`);
+	const body = (await res.json()) as OpenMeteoArchiveResponse;
+	const daily = body.daily;
+	if (!daily) return null;
+	const highs: number[] = [];
+	const lows: number[] = [];
+	for (let i = 0; i < daily.time.length; i++) {
+		if (daily.time[i].slice(5) !== monthDay) continue;
+		const hi = daily.temperature_2m_max[i];
+		const lo = daily.temperature_2m_min[i];
+		if (hi != null) highs.push(hi);
+		if (lo != null) lows.push(lo);
+	}
+	if (highs.length === 0 || lows.length === 0) return null;
+	const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
+	return { tempMin: avg(lows), tempMax: avg(highs) };
+}
+
+function climateCacheKey(lat: number, lng: number): string {
+	return `${locationKey(lat, lng)}|climate`;
+}
+
+function climatePayload(date: string, temps: { tempMin: number; tempMax: number }): string {
+	return JSON.stringify({
+		daily: {
+			time: [date],
+			temperature_2m_max: [temps.tempMax],
+			temperature_2m_min: [temps.tempMin],
+			precipitation_probability_max: [null],
+			wind_speed_10m_max: [null],
+			weather_code: [null]
+		}
+	});
+}
+
+/**
+ * Typical-weather estimate for a trip day beyond the forecast horizon.
+ * Cached per rounded location + exact date for CLIMATE_CACHE_TTL_MS; on fetch
+ * failure any stale row is used and the result is marked degraded.
+ */
+export async function getCachedClimate(
 	lat: number,
 	lng: number,
 	date: string
 ): Promise<DayForecast | null> {
-	const key = locationKey(lat, lng);
+	const key = climateCacheKey(lat, lng);
+	const fresh = getFreshPayload(key, date, CLIMATE_CACHE_TTL_MS);
+	let temps: { tempMin: number; tempMax: number } | null = null;
+	let degraded = false;
+	if (fresh?.daily) {
+		temps = {
+			tempMin: fresh.daily.temperature_2m_min[0],
+			tempMax: fresh.daily.temperature_2m_max[0]
+		};
+	} else {
+		const stale = getStalePayload(key, date);
+		try {
+			temps = await fetchClimateAverage(lat, lng, date);
+			if (!temps) return null;
+			upsertCache(key, date, climatePayload(date, temps));
+		} catch {
+			if (!stale?.daily) return null;
+			temps = {
+				tempMin: stale.daily.temperature_2m_min[0],
+				tempMax: stale.daily.temperature_2m_max[0]
+			};
+			degraded = true;
+		}
+	}
+	return {
+		date,
+		locationLabel: '',
+		tempMax: temps.tempMax,
+		tempMin: temps.tempMin,
+		precipProb: null,
+		windMax: null,
+		code: null,
+		summary: 'Typical',
+		degraded,
+		typical: true
+	};
+}
+
+export async function getCachedForecast(
+	lat: number,
+	lng: number,
+	date: string
+): Promise<DayForecast | null> {	const key = locationKey(lat, lng);
 	const fresh = getFreshPayload(key, date);
 	let daily: OpenMeteoDaily | undefined;
 	let degraded = false;
@@ -342,9 +461,12 @@ function findSegmentForDate(segments: SegmentLocation[], dateStr: string): Segme
 
 // `days` are metric here; thresholds stay metric and the wind value is formatted
 // in the display unit so the text matches the converted forecast cards.
+// Typical (climatological) days are averages, not predictions, so they never
+// raise advisories.
 function buildAdvisory(days: DayForecast[], units: WeatherUnits): string | null {
 	const warnings: string[] = [];
 	for (const d of days) {
+		if (d.typical) continue;
 		if (d.windMax != null && d.windMax >= 50) {
 			const w = units === 'imperial' ? `${kmhToMph(d.windMax).toFixed(0)} mph` : `${d.windMax.toFixed(0)} km/h`;
 			warnings.push(`High wind (${w}) on ${d.date}`);
@@ -375,15 +497,18 @@ export async function tripWeatherOverview(
 	if (!trip || trip.destinationCityLat == null || trip.destinationCityLng == null) return null;
 	if (!trip.startDate) return null;
 
-	const units = unitsForTimezone(getUserById(userId)?.timezone);
+	const units = unitsForUser(getUserById(userId)?.temperature_unit);
 	const tempUnit = units === 'imperial' ? '°F' : '°C';
 	const windUnit = units === 'imperial' ? 'mph' : 'km/h';
 
 	const segs = loadSegmentLocations(tripId);
 	const today = DateTime.now().startOf('day');
 	const maxDate = today.plus({ days: FORECAST_DAYS - 1 });
+	// Days past the forecast horizon fall back to typical (climatological)
+	// weather, capped so long trips don't fan out unbounded archive requests.
+	const climateEnd = maxDate.plus({ days: CLIMATE_MAX_DAYS });
 	const tripEnd = trip.endDate ? DateTime.fromISO(trip.endDate).endOf('day') : maxDate;
-	const lastDay = tripEnd < maxDate ? tripEnd : maxDate;
+	const lastDay = tripEnd < climateEnd ? tripEnd : climateEnd;
 
 	let cursor = DateTime.fromISO(trip.startDate).startOf('day');
 	if (cursor < today) cursor = today;
@@ -406,9 +531,27 @@ export async function tripWeatherOverview(
 		const lng = seg?.lng ?? trip.destinationCityLng;
 		const label = seg?.cityName ?? trip.destinationCityName ?? '';
 
-		// cursor never exceeds maxDate (lastDay = min(tripEnd, maxDate)), so every
-		// day in range is within the forecast horizon. Days past it are surfaced as
-		// "unavailable" by the trip page, not fabricated here.
+		if (cursor > maxDate) {
+			// Beyond the forecast horizon: climatological average, labeled
+			// "typical" so it is never mistaken for a live forecast.
+			const climate = await getCachedClimate(lat, lng, dateStr);
+			if (climate?.degraded) anyDegraded = true;
+			days.push({
+				date: dateStr,
+				locationLabel: label,
+				tempMin: climate?.tempMin ?? null,
+				tempMax: climate?.tempMax ?? null,
+				precipProb: null,
+				windMax: null,
+				code: null,
+				summary: climate?.summary ?? 'Unavailable',
+				degraded: climate?.degraded,
+				typical: true
+			});
+			cursor = cursor.plus({ days: 1 });
+			continue;
+		}
+
 		const forecast = await getCachedForecast(lat, lng, dateStr);
 		if (forecast?.degraded) anyDegraded = true;
 		days.push({
@@ -425,7 +568,7 @@ export async function tripWeatherOverview(
 		cursor = cursor.plus({ days: 1 });
 	}
 
-	const available = days.filter((d) => d.code != null);
+	const available = days.filter((d) => d.code != null || (d.typical && d.tempMax != null));
 	if (available.length === 0) {
 		return {
 			headline: 'Forecast unavailable for this destination.',
@@ -450,8 +593,14 @@ export async function tripWeatherOverview(
 				}))
 			: days;
 
+	const forecastCount = days.filter((d) => d.code != null).length;
+	const headline =
+		forecastCount > 0
+			? `${forecastCount}-day forecast available`
+			: 'Typical weather shown (outside the forecast window).';
+
 	return {
-		headline: `${available.length}-day forecast available`,
+		headline,
 		days: displayDays,
 		advisory,
 		tempUnit,

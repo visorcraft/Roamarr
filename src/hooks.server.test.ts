@@ -23,6 +23,8 @@ import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
 import { createAuthorizationCode, createClient } from './lib/server/oauth';
+import { createApiKey } from './lib/server/apiKeys';
+import { resetRateLimit } from './lib/server/rateLimit';
 import { POST as tokenPost } from './routes/oauth/token/+server';
 
 const ev = (path: string) => ({
@@ -137,6 +139,7 @@ test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/audit-logs', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/jobs', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBe('security:write');
+	expect(requiredApiScope('/api/events', 'GET')).toBe('trips:read');
 });
 
 test('rejects invalid bearer tokens with JSON instead of login redirect', async () => {
@@ -179,6 +182,118 @@ test('authenticates valid bearer tokens and exposes their scopes', async () => {
 	const denied = await handle({ event: writeEvent as any, resolve: async () => new Response('should not run') }) as Response;
 	expect(denied.status).toBe(403);
 	expect(await denied.json()).toEqual({ error: 'Missing required scope: cards:write' });
+});
+
+test('accepts X-Api-Token on /api routes and enforces its scopes', async () => {
+	updateSettings({ setupComplete: true });
+	const user = makeKitUser({ email: 'key@x.c', password_hash: 'x', display_name: 'Key' });
+	const { token } = createApiKey(Number(user.id), { name: 'script', scopes: ['cards:read'] });
+
+	const event = ev('/api/cards');
+	event.request = new Request(event.url, { headers: { 'x-api-token': token } });
+	const response = await handle({
+		event: event as any,
+		resolve: async ({ locals }) => {
+			expect(locals.user?.id).toBe(Number(user.id));
+			expect(locals.oauth?.scopes).toEqual(['cards:read']);
+			expect(locals.oauth?.clientId).toBe('api-key');
+			return new Response('ok');
+		}
+	}) as Response;
+	expect(response.status).toBe(200);
+
+	// Scope denial propagates through the same guard OAuth tokens use.
+	const write = ev('/api/cards/1');
+	write.request = new Request(write.url, {
+		method: 'DELETE',
+		headers: { 'x-api-token': token }
+	});
+	const denied = await handle({
+		event: write as any,
+		resolve: async () => new Response('should not run')
+	}) as Response;
+	expect(denied.status).toBe(403);
+	expect(await denied.json()).toEqual({ error: 'Missing required scope: cards:write' });
+});
+
+test('accepts an rk_-prefixed Bearer token as an API key', async () => {
+	updateSettings({ setupComplete: true });
+	const user = makeKitUser({ email: 'key2@x.c', password_hash: 'x', display_name: 'Key2' });
+	const { token } = createApiKey(Number(user.id), { name: 'script', scopes: ['trips:read'] });
+	const event = ev('/api/trips');
+	event.request = new Request(event.url, { headers: { authorization: `Bearer ${token}` } });
+	const response = await handle({
+		event: event as any,
+		resolve: async ({ locals }) => {
+			expect(locals.user?.id).toBe(Number(user.id));
+			expect(locals.oauth?.clientId).toBe('api-key');
+			return new Response('ok');
+		}
+	}) as Response;
+	expect(response.status).toBe(200);
+});
+
+test('rejects invalid API keys with 401 and rate-limits repeated failures', async () => {
+	updateSettings({ setupComplete: true });
+	resetRateLimit();
+	try {
+		const attempt = () => {
+			const event = ev('/api/cards');
+			event.request = new Request(event.url, {
+				headers: { 'x-api-token': 'rk_' + '0'.repeat(64) }
+			});
+			return handle({
+				event: event as any,
+				resolve: async () => new Response('should not run')
+			}) as Promise<Response>;
+		};
+		for (let i = 0; i < 10; i++) {
+			const res = await attempt();
+			expect(res.status).toBe(401);
+			expect(await res.json()).toEqual({ error: 'Invalid or expired API key' });
+		}
+		const limited = await attempt();
+		expect(limited.status).toBe(429);
+	} finally {
+		resetRateLimit();
+	}
+});
+
+test('API keys never authenticate browser page routes', async () => {
+	updateSettings({ setupComplete: true });
+	const user = makeKitUser({ email: 'key3@x.c', password_hash: 'x', display_name: 'Key3' });
+	const { token } = createApiKey(Number(user.id), { name: 'script', scopes: ['trips:read'] });
+
+	// X-Api-Token on a page route is ignored: no session, plain /login redirect.
+	const headerEvent = ev('/trips');
+	headerEvent.request = new Request(headerEvent.url, { headers: { 'x-api-token': token } });
+	const res = (await handle({
+		event: headerEvent as any,
+		resolve: async () => new Response('should not run')
+	})) as Response;
+	expect(res.status).toBe(302);
+	expect(res.headers.get('location')).toBe('/login');
+
+	// Bearer rk_ on a page route is treated like any unknown bearer: 401, never a session.
+	const bearerEvent = ev('/trips');
+	bearerEvent.request = new Request(bearerEvent.url, {
+		headers: { authorization: `Bearer ${token}` }
+	});
+	const bearerRes = (await handle({
+		event: bearerEvent as any,
+		resolve: async () => new Response('should not run')
+	})) as Response;
+	expect(bearerRes.status).toBe(401);
+});
+
+test('allows X-Api-Token-authenticated form posts without matching Origin', () => {
+	const request = new Request('https://roamarr.example/api/mobile/trips/1/poster', {
+		method: 'POST',
+		headers: { 'content-type': 'multipart/form-data; boundary=----x', 'x-api-token': 'rk_x' }
+	});
+	expect(
+		isForbiddenCrossSiteForm(request, new URL('https://roamarr.example/api/mobile/trips/1/poster'))
+	).toBe(false);
 });
 
 function parseCsp(header: string | null) {

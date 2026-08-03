@@ -10,6 +10,8 @@ import {
 export interface DateFormatContext {
 	readonly dateFormat: string;
 	readonly datetimeFormat: string;
+	/** Per-user time-of-day preference; drives `formatTime`. */
+	readonly timeFormat: '12h' | '24h';
 }
 
 const KEY = Symbol('dateFormat');
@@ -21,7 +23,8 @@ export function provideDateFormat(ctx: DateFormatContext) {
 function resolveCtx(): DateFormatContext {
 	return getContext<DateFormatContext | undefined>(KEY) ?? {
 		dateFormat: DEFAULT_DATE_FORMAT,
-		datetimeFormat: DEFAULT_DATETIME_FORMAT
+		datetimeFormat: DEFAULT_DATETIME_FORMAT,
+		timeFormat: '24h'
 	};
 }
 
@@ -58,6 +61,7 @@ export function useDateFormat() {
 				timeStyle: opts?.timeStyle,
 				timeZone: opts?.timeZone
 			}),
-		formatTime: (iso: string | null | undefined, timeZone = 'UTC') => formatTimeBase(iso, timeZone)
+		formatTime: (iso: string | null | undefined, timeZone = 'UTC') =>
+			formatTimeBase(iso, timeZone, ctx.timeFormat === '12h' ? 'h:mm a' : 'HH:mm')
 	};
 }

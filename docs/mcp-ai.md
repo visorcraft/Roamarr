@@ -15,7 +15,9 @@ budgets, reminders, travel records, and other Roamarr data through OAuth 2.1.
   `https://your-roamarr-origin/.well-known/oauth-authorization-server`.
 - **MCP metadata:**
   `https://your-roamarr-origin/.well-known/mcp.json`.
-- **Authentication:** OAuth authorization code with mandatory PKCE (`S256`).
+- **Authentication:** OAuth authorization code with mandatory PKCE (`S256`),
+  or a personal API key sent as `Authorization: Bearer rk_…` /
+  `X-Api-Token: rk_…` (see [Personal API keys](./api-keys.md)).
 
 Roamarr supports both manual clients and RFC 7591 Dynamic Client Registration.
 An administrator must enable **Allow users to set up MCP Clients**. Dynamic
@@ -28,6 +30,23 @@ discovery or issuer URL, use
 
 When Roamarr is behind a reverse proxy, set `ORIGIN` to its public HTTPS origin.
 The discovery document builds its endpoint URLs from that origin.
+
+## API key setup (no OAuth)
+
+For scripts and MCP hosts that can send a static header but cannot complete an
+OAuth consent flow, a personal API key is the simplest credential:
+
+1. Sign in and open **Profile → API Keys**.
+2. Create a key with only the scopes the client needs, then copy the one-time
+   token.
+3. Configure the client with the `/mcp` URL and the token as a static bearer
+   credential (`Authorization: Bearer rk_…`) or `X-Api-Token` header.
+
+Keys bypass client registration and consent — the key authenticates as its
+owner directly — but every tool call is still checked against the key's
+scopes. Admin scopes can never be granted to a key. Reading private trip
+details requires `private-details:read` in the key's scope list **and** the
+administrator's private-details gate, exactly as for OAuth tokens.
 
 ## Automatic setup
 
@@ -93,7 +112,7 @@ Start read-only. Add write scopes only after the read connection works.
 | Travel wallet summary | `cards:read`, `loyalty:read`, `insurance:read`, `travel-docs:read` |
 | Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read` |
 
-Roamarr currently exposes 63 scopes. Always fetch `scopes_supported` from OAuth
+Roamarr currently exposes 69 scopes. Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
 MCP Clients UI come from `src/lib/oauthScopes.ts`.
 
@@ -170,7 +189,7 @@ Useful requests to give an AI assistant:
 
 ## Surface
 
-The current server exposes 109 tools, 16 prompts, and 9 resource templates.
+The current server exposes 135 tools, 16 prompts, and 9 resource templates.
 `tools/list` is the complete current tool catalog and includes every JSON input
 schema. Use live list methods because the surface can change between releases,
 and clients see only prompts/resources allowed by their scopes.
@@ -190,11 +209,31 @@ and clients see only prompts/resources allowed by their scopes.
 | `roamarr_budget_set` | `budgets:write` | Set a trip budget category. |
 | `roamarr_budget_update` | `budgets:read` | View budget and spent amounts. |
 | `roamarr_places_list` | `places:read` | List visited countries and states. |
+| `roamarr_saved_places_list` | `saved-places:read` | List saved places (POI library). |
+| `roamarr_saved_places_create` | `saved-places:write` | Create a saved place. |
+| `roamarr_saved_places_update` | `saved-places:write` | Partially update a saved place. |
+| `roamarr_saved_places_delete` | `saved-places:write` | Delete a saved place (`confirm`). |
+| `roamarr_saved_places_mark_visited` / `roamarr_saved_places_unmark_visited` | `saved-places:write` | Toggle a saved place's visited status. |
+| `roamarr_place_category_list` / `roamarr_place_category_create` / `roamarr_place_category_update` / `roamarr_place_category_delete` | `saved-places:read` / `saved-places:write` | Manage saved-place categories (delete requires `confirm`). |
+| `roamarr_saved_places_search` | `saved-places:read` | OpenStreetMap (Nominatim) search for place candidates. |
+| `roamarr_saved_places_import` | `saved-places:write` | Bulk-import saved places from structured rows (`confirm`). Duplicates (exact name or within 50 m) are skipped by default. |
+| `roamarr_place_links_list` / `roamarr_place_links_create` / `roamarr_place_links_update` / `roamarr_place_links_delete` | `saved-places:read` / `saved-places:write` | Manage external links on a saved place (delete requires `confirm`). Links are part of a place's data, so they ride on the `saved-places:*` scopes instead of a separate scope group. |
+| `roamarr_trip_day_notes_list` | `day-notes:read` | List per-day itinerary notes for a trip. |
+| `roamarr_trip_day_notes_set` | `day-notes:write` | Set (upsert) the note for one trip day. |
+| `roamarr_trip_day_notes_delete` | `day-notes:write` | Delete a trip day's note (`confirm`). |
+| `roamarr_gallery_list` | `gallery:read` | List gallery photos for a place or trip. |
+| `roamarr_gallery_reorder` | `gallery:write` | Reorder a gallery (full id permutation). |
+| `roamarr_gallery_set_caption` | `gallery:write` | Set or clear a photo caption. |
+| `roamarr_gallery_remove` | `gallery:write` | Remove a gallery photo (`confirm`). |
 | `roamarr_reminder_add` | `reminders:write` | Add a trip reminder. |
 
 `tools/list` returns every current tool and its JSON input schema. Treat that
 schema as authoritative, especially for required IDs, enums, pagination,
 amount units, and `confirm`.
+
+Binary file transfer does not exist over MCP: gallery photos, trip documents,
+receipts, and GPX tracks are uploaded in the web UI only. MCP tools manage
+their metadata (list, captions, ordering, removal).
 
 ### Prompts
 
@@ -310,7 +349,8 @@ restart or stale session returns `404 Session not found`; initialize again.
   viewable shared trip. Their returned feature data is not controlled by
   `private-details:read`. Do not grant those scopes or trip shares casually.
 - Search can return indexed note/confirmation text when semantic search is
-  enabled. See [Search](./search.md).
+  enabled. Saved places also appear in semantic search results, filtered to
+  the calling user (places are owner-only). See [Search](./search.md).
 - Access and refresh tokens are long-lived bearer secrets. Plaintext tokens are
   returned only to the client; stored values are SHA-256 hashes.
 - Deleting an MCP client invalidates its grants. Password changes do not

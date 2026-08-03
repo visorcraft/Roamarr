@@ -18,6 +18,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 			allowRegistration: false,
 			dateFormat: DEFAULT_DATE_FORMAT,
 			datetimeFormat: DEFAULT_DATETIME_FORMAT,
+			timeFormat: '24h' as const,
 			flash: locals.flash,
 			unreadCount: 0
 		};
@@ -39,6 +40,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 		allowUserMcpClients: s.allowUserMcpClients,
 		dateFormat: s.defaultDateFormat || 'yyyy-MM-dd',
 		datetimeFormat: s.defaultDatetimeFormat || 'yyyy-MM-dd h:mm a',
+		timeFormat: locals.user?.timeFormat ?? '24h',
 		flash: locals.flash,
 		unreadCount
 	};

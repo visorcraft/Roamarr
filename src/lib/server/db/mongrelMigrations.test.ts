@@ -49,7 +49,7 @@ describe('mongrelMigrations', () => {
 	});
 
 	test('migrations include the invitation upgrade for existing databases', () => {
-		expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6]);
+		expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 		const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-weather-json-'));
 		const db = openEncrypted(dir, schema);
 		try {

@@ -3,10 +3,11 @@
 
 # Trip and segment file documents
 
-Roamarr stores **uploaded files** (PDF and images) for a trip or for a specific
-itinerary segment. This is separate from [external document links](./document-links.md)
-(URL-only) and from account-level [travel documents](./travel-documents.md)
-(passports, visas).
+Roamarr stores **uploaded files** (PDF, images, and GPX tracks) for a trip or
+for a specific itinerary segment. This is separate from [external document
+links](./document-links.md) (URL-only), from account-level
+[travel documents](./travel-documents.md) (passports, visas), and from
+[photo galleries](./gallery.md) (image-only, ordered, with captions).
 
 ## What you can attach
 
@@ -14,12 +15,14 @@ Allowed types (same rules as expense receipts):
 
 - JPEG, PNG, WebP images
 - PDF
+- GPX tracks (`.gpx`)
 
 Maximum size: **10 MB** per file. Content is checked against magic bytes so the
-declared type must match the payload.
+declared type must match the payload. GPX files are sniffed for a `<gpx>` root
+element and are always stored and served as `application/gpx+xml`.
 
 Typical uses: event QR codes, shuttle vouchers, hotel confirmations, boarding
-passes, parking receipts.
+passes, parking receipts, hiking or cycling tracks.
 
 ## Scope
 
@@ -55,5 +58,13 @@ edit access with others.
 
 ## Download
 
-Each file is served from `/trips/{tripId}/documents/{documentId}` with an
-`inline` disposition so PDFs and QR images can open in the browser.
+Each file is served from `/trips/{tripId}/documents/{documentId}`. Images and
+PDFs use an `inline` disposition so QR codes and vouchers can open in the
+browser; GPX and any other type is served as an `attachment` download and is
+never rendered inline.
+
+## GPX tracks on the map
+
+When Maps are enabled, GPX files attached to the trip (or to a segment) render
+as colored lines on the trip's hero map — one color per segment, gray for
+whole-trip files — with a **GPX tracks** toggle. See [Maps](./maps.md).

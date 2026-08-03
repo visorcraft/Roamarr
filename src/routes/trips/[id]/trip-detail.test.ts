@@ -35,11 +35,15 @@ import {
 	tripMedications,
 	tripEntryRequirements,
 	tripImportantItems,
-	tripExpenseAttachments
+	tripExpenseAttachments,
+	galleryImages,
+	attachments
 } from '$lib/server/db/mongrelSchema';
 import * as usersRepo from '$lib/server/repositories/usersRepo';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { upsertCustomReminder } from '$lib/server/reminders';
+import { setDayNote } from '$lib/server/tripDayNotes';
+import { tripDayNotes } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 
 function event(user: { id: number }, tripId: number) {
@@ -190,13 +194,13 @@ test('deleteComment action removes the users own comment', async () => {
 	expect(kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(c.id))).executeSync()[0]).toBeUndefined();
 });
 
-test('delete action removes trip-level reminders', () => {
+test('delete action removes trip-level reminders', async () => {
 	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'Del', startDate: '2099-01-01' });
 	upsertCustomReminder(u.id, 'trip', t.id, `${t.startDate}T09:00:00Z`, 60);
 	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(1);
 
-	_deleteTrip(u.id, t.id);
+	await _deleteTrip(u.id, t.id);
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
 	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(0);
 });
@@ -374,6 +378,46 @@ test('moveSegmentDate action moves a segment to a new local date', async () => {
 	expect(row?.end_at).toBe('2026-09-15T04:30:00.000Z');
 });
 
+test('optimizeTripDay action persists the optimized order and redirects', async () => {
+	const u = makeUser(kit, { email: 'opt-action@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const a = makeSegment(kit, t.id, { type: 'poi', startAt: '2026-07-10T00:00:00Z', cityLat: 0, cityLng: 0 });
+	const b = makeSegment(kit, t.id, { type: 'poi', startAt: '2026-07-10T00:00:00Z', cityLat: 0, cityLng: 1 });
+	const c = makeSegment(kit, t.id, { type: 'poi', startAt: '2026-07-10T00:00:00Z', cityLat: 0, cityLng: 2 });
+
+	const f = new FormData();
+	f.set('date', '2026-07-10');
+	const cookies = { set: vi.fn() };
+	await expect(
+		actions.optimizeTripDay({ ...formEvent(u, t.id, f), cookies })
+	).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+	expect(cookies.set).toHaveBeenCalledWith('flash', expect.stringContaining('Optimized 3 stops'), expect.anything());
+
+	for (const [index, s] of [a, b, c].entries()) {
+		const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0];
+		expect(row?.day_sort_order).toBe(BigInt(index + 1));
+	}
+});
+
+test('optimizeTripDay action rejects read-share viewers and invalid dates', async () => {
+	const u = makeUser(kit, { email: 'opt-owner@x.c', passwordHash: 'x', displayName: 'U' });
+	const viewer = makeUser(kit, { email: 'opt-viewer@x.c', passwordHash: 'x', displayName: 'V' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	makeShare(kit, { tripId: t.id, sharedWithUserId: viewer.id, permission: 'read' });
+
+	const f = new FormData();
+	f.set('date', '2026-07-10');
+	await expect(
+		actions.optimizeTripDay({ ...formEvent(viewer, t.id, f), cookies: { set: vi.fn() } })
+	).rejects.toMatchObject({ status: 404 });
+
+	const bad = new FormData();
+	bad.set('date', 'not-a-date');
+	await expect(
+		actions.optimizeTripDay({ ...formEvent(u, t.id, bad), cookies: { set: vi.fn() } })
+	).rejects.toMatchObject({ status: 400 });
+});
+
 test('saveTripTemplate action saves a template and redirects', async () => {
 	const u = usersRepo.createUser({
 		email: 'stpl@x.c',
@@ -492,4 +536,241 @@ test('uploadTripPoster action stores the selected image and redirects', async ()
 
 	const row = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0];
 	expect(row.poster_attachment_id).not.toBeNull();
+});
+
+test('load includes day notes for the owner and for shared read viewers', async () => {
+	const owner = makeUser(kit, { email: 'dn-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const reader = makeUser(kit, { email: 'dn-reader@x.c', passwordHash: 'x', displayName: 'R' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	setDayNote(owner.id, t.id, '2026-06-10', { icon: 'star', body: 'Museum day' });
+	makeShare(kit, { tripId: t.id, sharedWithUserId: reader.id });
+
+	const ownerResult = await load(event(owner, t.id)) as { dayNotes: { date: string; body: string }[] };
+	expect(ownerResult.dayNotes).toHaveLength(1);
+	expect(ownerResult.dayNotes[0].body).toBe('Museum day');
+
+	const readerResult = await load(event(reader, t.id)) as { dayNotes: { date: string; body: string }[] };
+	expect(readerResult.dayNotes).toHaveLength(1);
+});
+
+test('setDayNote action upserts a note and redirects', async () => {
+	const u = makeUser(kit, { email: 'dn-act@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+
+	const f = new FormData();
+	f.set('date', '2026-06-10');
+	f.set('icon', 'info');
+	f.set('body', 'Note from action');
+	await expect(actions.setDayNote(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+
+	const rows = kit.selectFrom(tripDayNotes).where(eq(tripDayNotes.trip_id, BigInt(t.id))).executeSync();
+	expect(rows).toHaveLength(1);
+	expect(rows[0].body).toBe('Note from action');
+});
+
+test('setDayNote action rejects a non-editor', async () => {
+	const owner = makeUser(kit, { email: 'dn-ne-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'dn-ne-other@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+
+	const f = new FormData();
+	f.set('date', '2026-06-10');
+	f.set('body', 'Hacked');
+	await expect(actions.setDayNote(formEvent(other, t.id, f))).rejects.toMatchObject({ status: 404 });
+	expect(kit.selectFrom(tripDayNotes).where(eq(tripDayNotes.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
+});
+
+test('deleteDayNote action removes the note and redirects', async () => {
+	const u = makeUser(kit, { email: 'dn-del@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	setDayNote(u.id, t.id, '2026-06-10', { body: 'Gone' });
+
+	const f = new FormData();
+	f.set('date', '2026-06-10');
+	await expect(actions.deleteDayNote(formEvent(u, t.id, f))).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	expect(kit.selectFrom(tripDayNotes).where(eq(tripDayNotes.trip_id, BigInt(t.id))).executeSync()).toHaveLength(0);
+});
+
+// ---------------------------------------------------------------------------
+// Gallery (Phase 5)
+// ---------------------------------------------------------------------------
+
+const GALLERY_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+
+function galleryPng(name = 'photo.png') {
+	return new File([GALLERY_PNG], name, { type: 'image/png' });
+}
+
+async function withAttachmentsPath<T>(fn: () => Promise<T>): Promise<T> {
+	const { mkdtempSync, rmSync } = await import('node:fs');
+	const { tmpdir } = await import('node:os');
+	const path = await import('node:path');
+	const original = process.env.ATTACHMENTS_PATH;
+	const dir = mkdtempSync(path.join(tmpdir(), 'roamarr-trip-gallery-'));
+	process.env.ATTACHMENTS_PATH = dir;
+	try {
+		return await fn();
+	} finally {
+		if (original === undefined) delete process.env.ATTACHMENTS_PATH;
+		else process.env.ATTACHMENTS_PATH = original;
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+test('load includes gallery images for editors and hides them from view shares', async () => {
+	await withAttachmentsPath(async () => {
+		const u = makeUser(kit, { email: 'gal@x.c', passwordHash: 'x', displayName: 'U' });
+		const viewer = makeUser(kit, { email: 'gal-v@x.c', passwordHash: 'x', displayName: 'V' });
+		const t = makeTrip(kit, u.id, { name: 'T' });
+		makeShare(kit, { tripId: t.id, sharedWithUserId: viewer.id, permission: 'read' });
+
+		const f = new FormData();
+		f.append('images', galleryPng('one.png'));
+		f.append('images', galleryPng('two.png'));
+		await expect(actions.uploadGalleryImages(formEvent(u, t.id, f))).rejects.toMatchObject({
+			status: 303,
+			location: `/trips/${t.id}`
+		});
+
+		const owned = (await load(event(u, t.id))) as {
+			gallery: { id: number; attachmentId: number; filename: string; sortOrder: number }[];
+		};
+		expect(owned.gallery).toHaveLength(2);
+		expect(owned.gallery[0].filename).toBe('one.png');
+		expect(owned.gallery.map((g) => g.sortOrder)).toEqual([0, 1]);
+
+		const shared = (await load(event(viewer, t.id))) as { gallery: unknown[] };
+		expect(shared.gallery).toEqual([]);
+	});
+});
+
+function tripGalleryRows(tripId: number) {
+	return kit
+		.selectFrom(galleryImages)
+		.where(eq(galleryImages.owner_id, BigInt(tripId)))
+		.executeSync();
+}
+
+test('uploadGalleryImages rejects non-images and read-only shares', async () => {
+	await withAttachmentsPath(async () => {
+		const u = makeUser(kit, { email: 'gal2@x.c', passwordHash: 'x', displayName: 'U' });
+		const viewer = makeUser(kit, { email: 'gal2-v@x.c', passwordHash: 'x', displayName: 'V' });
+		const t = makeTrip(kit, u.id, { name: 'T' });
+		makeShare(kit, { tripId: t.id, sharedWithUserId: viewer.id, permission: 'read' });
+
+		const pdfForm = new FormData();
+		pdfForm.append(
+			'images',
+			new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'doc.pdf', { type: 'application/pdf' })
+		);
+		await expect(actions.uploadGalleryImages(formEvent(u, t.id, pdfForm))).rejects.toMatchObject({
+			status: 400
+		});
+
+		const shareForm = new FormData();
+		shareForm.append('images', galleryPng());
+		await expect(
+			actions.uploadGalleryImages(formEvent(viewer, t.id, shareForm))
+		).rejects.toMatchObject({ status: 404 });
+		expect(tripGalleryRows(t.id)).toHaveLength(0);
+	});
+});
+
+test('removeGalleryImage deletes the attachment; cross-trip image ids are 404', async () => {
+	await withAttachmentsPath(async () => {
+		const u = makeUser(kit, { email: 'gal3@x.c', passwordHash: 'x', displayName: 'U' });
+		const t = makeTrip(kit, u.id, { name: 'T' });
+		const other = makeTrip(kit, u.id, { name: 'T2' });
+
+		const upload = new FormData();
+		upload.append('images', galleryPng());
+		await expect(actions.uploadGalleryImages(formEvent(u, t.id, upload))).rejects.toMatchObject({
+			status: 303
+		});
+		const image = tripGalleryRows(t.id)[0]!;
+		const attachmentRow = () =>
+			kit
+				.selectFrom(attachments)
+				.where(eq(attachments.id, image.attachment_id))
+				.executeSync()[0];
+		expect(attachmentRow()).toBeTruthy();
+
+		const wrongTrip = new FormData();
+		wrongTrip.set('imageId', String(Number(image.id)));
+		await expect(
+			actions.removeGalleryImage(formEvent(u, other.id, wrongTrip))
+		).rejects.toMatchObject({ status: 404 });
+
+		const f = new FormData();
+		f.set('imageId', String(Number(image.id)));
+		await expect(actions.removeGalleryImage(formEvent(u, t.id, f))).rejects.toMatchObject({
+			status: 303
+		});
+		expect(tripGalleryRows(t.id)).toHaveLength(0);
+		expect(attachmentRow()).toBeUndefined();
+	});
+});
+
+test('moveGalleryImage and setGalleryCaption update ordering and captions', async () => {
+	await withAttachmentsPath(async () => {
+		const u = makeUser(kit, { email: 'gal4@x.c', passwordHash: 'x', displayName: 'U' });
+		const t = makeTrip(kit, u.id, { name: 'T' });
+
+		const upload = new FormData();
+		upload.append('images', galleryPng('a.png'));
+		upload.append('images', galleryPng('b.png'));
+		await expect(actions.uploadGalleryImages(formEvent(u, t.id, upload))).rejects.toMatchObject({
+			status: 303
+		});
+		const rows = tripGalleryRows(t.id);
+		const first = rows.find((r) => r.sort_order === 0n)!;
+
+		const move = new FormData();
+		move.set('imageId', String(Number(first.id)));
+		move.set('direction', 'later');
+		await expect(actions.moveGalleryImage(formEvent(u, t.id, move))).rejects.toMatchObject({
+			status: 303
+		});
+		const after = tripGalleryRows(t.id);
+		expect(after.find((r) => r.id === first.id)!.sort_order).toBe(1n);
+
+		const caption = new FormData();
+		caption.set('imageId', String(Number(first.id)));
+		caption.set('caption', 'Beach day');
+		await expect(actions.setGalleryCaption(formEvent(u, t.id, caption))).rejects.toMatchObject({
+			status: 303
+		});
+		expect(tripGalleryRows(t.id).find((r) => r.id === first.id)!.caption).toBe(
+			'Beach day'
+		);
+	});
+});
+
+test('_deleteTrip removes gallery rows and attachments', async () => {
+	await withAttachmentsPath(async () => {
+		const u = makeUser(kit, { email: 'gal5@x.c', passwordHash: 'x', displayName: 'U' });
+		const t = makeTrip(kit, u.id, { name: 'T' });
+		const upload = new FormData();
+		upload.append('images', galleryPng());
+		await expect(actions.uploadGalleryImages(formEvent(u, t.id, upload))).rejects.toMatchObject({
+			status: 303
+		});
+		const seeded = tripGalleryRows(t.id);
+		expect(seeded).toHaveLength(1);
+
+		await _deleteTrip(u.id, t.id);
+		expect(tripGalleryRows(t.id)).toHaveLength(0);
+		expect(
+			kit
+				.selectFrom(attachments)
+				.where(eq(attachments.id, seeded[0]!.attachment_id))
+				.executeSync()
+		).toHaveLength(0);
+	});
 });

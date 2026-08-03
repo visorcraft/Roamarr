@@ -9,17 +9,21 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, usesPickupDropoff, type SegmentType } from '$lib/segmentLabels';
+	import { compareSegmentsWithinDay, isUntimedSegment } from '$lib/segmentDay';
+	import { buildGoogleMapsDirectionsUrl } from '$lib/googleMaps';
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
-	import { renderMarkdown } from '$lib/markdown';
-	import { formatArrivalLocal, formatTime, formatZoneLabel } from '$lib/dateFormat';
+	import MarkdownText from '$lib/components/MarkdownText.svelte';
+	import { formatArrivalLocal, formatZoneLabel } from '$lib/dateFormat';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
+	import { weatherIconForCode } from '$lib/weatherCodes';
 	import { formatDestination } from '$lib/tripDestination';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
 	import { segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
 	import { tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
+	import { coalesceTrailing, subscribeLiveEvents } from '$lib/liveEvents';
 	import { onMount, tick } from 'svelte';
 	import type { PageData, SubmitFunction } from './$types';
 	import TripMap from '$lib/components/TripMap.svelte';
@@ -28,10 +32,11 @@
 	import { freeTextTravelerNames, peopleDetailMetaLines } from '$lib/segmentPeopleDisplay';
 	import { segmentNotesRows } from '$lib/segmentDetailsDisplay';
 	import TripDocumentsTable from '$lib/components/TripDocumentsTable.svelte';
+	import Gallery from '$lib/components/Gallery.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 
-	const { formatDate, formatDateTime } = useDateFormat();
+	const { formatDate, formatDateTime, formatTime } = useDateFormat();
 
 	type TripTab = 'itinerary' | 'prep' | 'money' | 'people' | 'notes' | 'documents';
 	type TripTabLink = { id: TripTab; label: string; icon: IconName; count?: number | null; visible: boolean };
@@ -84,6 +89,17 @@
 	let travelerCategory = $state('adult');
 	let inviteTraveler = $state(false);
 	let inviteEmail = $state('');
+	let showDayNotes = $state(true);
+	let editingDayNoteDate = $state<string | null>(null);
+	let confirmingDayNoteDelete = $state<string | null>(null);
+
+	const DAY_NOTE_ICONS: { name: IconName; label: string }[] = [
+		{ name: 'document', label: 'Note' },
+		{ name: 'info', label: 'Info' },
+		{ name: 'warning', label: 'Warning' },
+		{ name: 'star', label: 'Highlight' },
+		{ name: 'reminder', label: 'Reminder' }
+	];
 
 	async function fetchRoamarrUsers(query: string): Promise<AutocompleteSuggestion[]> {
 		const response = await fetch(`/trips/${data.trip.id}/people/users?q=${encodeURIComponent(query)}`);
@@ -116,6 +132,21 @@
 	onMount(() => {
 		const hashTab = window.location.hash.slice(1);
 		if (isTripTab(hashTab)) activeTab = hashTab;
+
+		// Live sync: another user/tab (or MCP client) mutating this trip pushes a
+		// `trip` event over /api/events; coalesce bursts and refetch cheaply.
+		const refresh = coalesceTrailing(() => {
+			void invalidateAll();
+		}, 500);
+		const unsubscribe = subscribeLiveEvents((event) => {
+			if (event.type === 'shares' || (event.type === 'trip' && event.id === data.trip.id)) {
+				refresh.trigger();
+			}
+		});
+		return () => {
+			refresh.cancel();
+			unsubscribe();
+		};
 	});
 
 	type SharedSegment = {
@@ -147,6 +178,7 @@
 		cardId?: number | null;
 		paymentStatus?: string | null;
 		paymentDueDate?: string | null;
+		daySortOrder?: number | null;
 	};
 
 	const cardMap = $derived(new Map((data.cards ?? []).map((c) => [c.id, c])));
@@ -160,6 +192,14 @@
 		isEditor ? (data.segments as SegmentRow[]) : ((data.trip as { segments: SharedSegment[] }).segments as SegmentRow[])
 	);
 	const reminderList = $derived((data.reminders ?? []) as TripReminder[]);
+	const galleryImages = $derived(
+		(data.gallery ?? []).map((image) => ({
+			id: image.id,
+			url: `/trips/${trip.id}/gallery/${image.id}`,
+			caption: image.caption,
+			filename: image.filename
+		}))
+	);
 
 	function settlementName(id: 'owner' | number) {
 		return id === 'owner' ? 'You' : (companionNameMap.get(id) ?? 'Unknown');
@@ -267,7 +307,39 @@
 				groups.push({ key, label, segments: [s] });
 			}
 		}
+		// Within a day: untimed (local-midnight) segments first, ordered by
+		// daySortOrder (set by "Optimize order"; nulls keep natural order),
+		// then timed segments in local-time order. See $lib/segmentDay.ts.
+		for (const group of groups) {
+			if (group.key === 'unscheduled') continue;
+			const ordered = group.segments.slice().sort(compareSegmentsWithinDay);
+			if (!ascending) ordered.reverse();
+			group.segments = ordered;
+		}
 		return groups;
+	}
+
+	function untimedCoordSegments(group: { key: string; segments: SegmentRow[] }): SegmentRow[] {
+		if (group.key === 'unscheduled') return [];
+		return group.segments.filter(
+			(s) =>
+				s.cityLat != null &&
+				s.cityLng != null &&
+				isUntimedSegment(s.startAt ?? null, s.startTz)
+		);
+	}
+
+	function dayCanOptimize(group: { key: string; segments: SegmentRow[] }): boolean {
+		return untimedCoordSegments(group).length >= 2;
+	}
+
+	function dayDirectionsUrl(group: { key: string; segments: SegmentRow[] }): string | null {
+		if (group.key === 'unscheduled') return null;
+		return buildGoogleMapsDirectionsUrl(
+			group.segments
+				.filter((s) => s.cityLat != null && s.cityLng != null)
+				.map((s) => ({ lat: s.cityLat!, lng: s.cityLng! }))
+		);
 	}
 
 	function isInteractiveSegmentTarget(event: MouseEvent | KeyboardEvent) {
@@ -396,6 +468,19 @@
 		};
 	};
 
+	const dayNoteAction: SubmitFunction = () => {
+		return async ({ result }) => {
+			if (result.type === 'redirect' || result.type === 'success') {
+				editingDayNoteDate = null;
+				confirmingDayNoteDelete = null;
+				await invalidateAll();
+				await tick();
+				return;
+			}
+			await applyAction(result);
+		};
+	};
+
 	function endSegmentDrag() {
 		draggingSegmentId = null;
 		draggingSegmentDate = null;
@@ -415,6 +500,7 @@
 		})
 	);
 	const dayGroups = $derived(groupSegmentsByDay(filteredSegmentList, sortAscending));
+	const dayNotesByDate = $derived(new Map((data.dayNotes ?? []).map((n) => [n.date, n])));
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 	const daysUntil = $derived(daysUntilStart(trip.startDate));
 	const status = $derived(tripStatus(trip.startDate, trip.endDate));
@@ -455,7 +541,7 @@
 	const peopleItemCount = $derived((data.companions?.length ?? 0) + (data.polls?.length ?? 0));
 	const notesItemCount = $derived((data.journalEntries?.length ?? 0) + (data.comments?.length ?? 0));
 	const documentsItemCount = $derived(
-		(data.documentLinks?.length ?? 0) + (data.tripDocuments?.length ?? 0) + (data.policies?.length ?? 0)
+		(data.documentLinks?.length ?? 0) + (data.tripDocuments?.length ?? 0) + (data.policies?.length ?? 0) + (data.gallery?.length ?? 0)
 	);
 	const segmentTitleById = $derived(
 		Object.fromEntries(
@@ -468,6 +554,22 @@
 					(data.tripDocuments ?? []).filter((d) => d.segmentId === selectedSegment.id))
 			: []
 	);
+	const GPX_TRACK_COLORS = ['#e8590c', '#1971c2', '#2f9e44', '#7048e8', '#c2255c', '#f08c00', '#0ca678', '#868e96'];
+	const gpxTracks = $derived.by(() => {
+		const docs = (data.tripDocuments ?? []).filter((d) => d.contentType === 'application/gpx+xml');
+		// Stable per-segment color assignment across the trip's GPX files.
+		const segmentIds = [
+			...new Set(docs.map((d) => d.segmentId).filter((s): s is number => s != null))
+		].sort((a, b) => a - b);
+		return docs.map((d) => ({
+			url: `/trips/${trip.id}/documents/${d.id}`,
+			label: d.label || d.filename,
+			color:
+				d.segmentId != null
+					? GPX_TRACK_COLORS[segmentIds.indexOf(d.segmentId) % GPX_TRACK_COLORS.length]!
+					: '#495057'
+		}));
+	});
 	const hasPrepTab = $derived(isEditor || prepItemCount > 0);
 	const hasMoneyTab = $derived(isEditor || moneyItemCount > 0 || data.budgets?.some((b) => b.amount != null) === true);
 	const hasPeopleTab = $derived(isEditor || peopleItemCount > 0 || (data.owner === true && (data.emergencyContacts?.length ?? 0) > 0));
@@ -678,6 +780,11 @@
 		return dt.isValid ? formatDate(dt.toISODate()!) : value;
 	}
 
+	function weatherDayChip(date: string) {
+		const dt = DateTime.fromISO(date);
+		return dt.isValid ? dt.toFormat('EEE, MMM d') : date;
+	}
+
 	function formatUpdatedDate(value: string) {
 		const dt = DateTime.fromISO(value);
 		if (!dt.isValid) return value;
@@ -697,7 +804,7 @@
 		<div class="trip-hero-backdrop"></div>
 		{#if data.nextCity && data.tileConfig}
 			<div class="trip-hero-map-layer">
-				<TripMap fill lat={data.nextCity.lat} lng={data.nextCity.lng} cityName={data.nextCity.cityName} tileUrls={data.tileConfig.tileUrls} attribution={data.tileConfig.attribution} onExpand={() => (globeOpen = true)} />
+				<TripMap fill lat={data.nextCity.lat} lng={data.nextCity.lng} cityName={data.nextCity.cityName} tileUrls={data.tileConfig.tileUrls} attribution={data.tileConfig.attribution} tracks={gpxTracks} onExpand={() => (globeOpen = true)} />
 			</div>
 			<div class="trip-hero-map-scrim"></div>
 		{/if}
@@ -759,18 +866,76 @@
 			<div class="trip-modern-toolbar">
 				<div class="trip-modern-control" aria-label="Trip date range"><span class="inline-flex items-center gap-2"><Icon name="calendar" class="h-4 w-4" /><span>{dateRangeText}</span></span><Icon name="chevron-down" class="h-4 w-4" /></div>
 				<label class="trip-modern-search"><Icon name="search" class="h-4.5 w-4.5" /><span class="sr-only">Search itinerary</span><input type="search" placeholder="Search itinerary…" bind:value={segmentQuery} /></label>
-				<div class="trip-modern-toolbar-actions"><button type="button" class="trip-modern-control" onclick={() => (showTypeFilters = !showTypeFilters)}><Icon name="settings" class="h-4 w-4" /><span>Filters</span></button><button type="button" class="trip-modern-control" onclick={() => (sortAscending = !sortAscending)}><span>{sortAscending ? '↑↓' : '↓↑'}</span><span>Sort</span></button><div class="trip-modern-view-toggle" aria-label="Itinerary view">{#each VIEW_MODES as mode}<button type="button" class="trip-modern-view-button {viewMode === mode ? 'trip-modern-view-button-active' : ''}" onclick={() => (viewMode = mode)}><Icon name={mode === 'timeline' ? 'trips' : mode === 'list' ? 'document' : 'card'} class="h-4 w-4" /><span>{viewModeLabel(mode)}</span></button>{/each}</div>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary flex items-center gap-2"><Icon name="plus" class="h-4 w-4" /><span>Add segment</span></a>{/if}</div>
+				<div class="trip-modern-toolbar-actions"><button type="button" class="trip-modern-control" onclick={() => (showTypeFilters = !showTypeFilters)}><Icon name="settings" class="h-4 w-4" /><span>Filters</span></button><button type="button" class="trip-modern-control" onclick={() => (sortAscending = !sortAscending)}><span>{sortAscending ? '↑↓' : '↓↑'}</span><span>Sort</span></button><button type="button" class="trip-modern-control" aria-pressed={showDayNotes} onclick={() => (showDayNotes = !showDayNotes)}><Icon name="document" class="h-4 w-4" /><span>Day notes</span></button><div class="trip-modern-view-toggle" aria-label="Itinerary view">{#each VIEW_MODES as mode}<button type="button" class="trip-modern-view-button {viewMode === mode ? 'trip-modern-view-button-active' : ''}" onclick={() => (viewMode = mode)}><Icon name={mode === 'timeline' ? 'trips' : mode === 'list' ? 'document' : 'card'} class="h-4 w-4" /><span>{viewModeLabel(mode)}</span></button>{/each}</div>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary flex items-center gap-2"><Icon name="plus" class="h-4 w-4" /><span>Add segment</span></a>{/if}</div>
 			</div>
 			{#if showTypeFilters && typeCounts.length}<div class="trip-modern-filter-row" aria-label="Filter plans by type">{#each typeCounts as t (t.type)}{@const active = selectedTypes.has(t.type)}<button type="button" class="trip-modern-filter-chip {active ? 'trip-modern-filter-chip-active' : ''}" onclick={() => toggleType(t.type)}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">{@html SEG[t.type].icon}</svg><span>{SEG[t.type].label}</span><span class="font-mono">{t.count}</span></button>{/each}{#if selectedTypes.size}<button type="button" class="trip-modern-filter-chip" onclick={() => (selectedTypes = new Set())}>Clear filters</button>{/if}</div>{/if}
 			{#if isEditor}<form method="POST" action="?/moveSegmentDate" class="hidden" bind:this={moveSegmentDateForm} use:enhance={preserveScrollOnMove}><input type="hidden" name="segmentId" bind:this={moveSegmentIdInput} /><input type="hidden" name="targetDate" bind:this={moveTargetDateInput} /></form><form method="POST" action={`/trips/${trip.id}/segments?/delete`} class="hidden" bind:this={deleteSegmentForm} use:enhance={refreshTripAction}><input type="hidden" name="segmentId" bind:this={deleteSegmentIdInput} /></form>{/if}
 
 			<div class="trip-modern-content">
 				<main class="trip-modern-main trip-modern-main-{viewMode}" id="trip-panel-itinerary">
-					{#if ownerTrip?.notes}<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Overview</h2></div><div class="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300">{@html renderMarkdown(ownerTrip.notes)}</div></section>{/if}
+					{#if ownerTrip?.notes}<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Overview</h2></div><MarkdownText text={ownerTrip.notes} class="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300" /></section>{/if}
+					{#if data.weather && data.weather.days.length > 0}
+						{@const weather = data.weather}
+						<section class="trip-modern-panel" aria-label="Trip weather">
+							<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Weather</h2></div>
+							{#if weather.advisory}<p class="notice notice-warning mb-3">{weather.advisory}</p>{/if}
+							<div class="flex flex-wrap gap-2">
+								{#each weather.days as day (day.date)}
+									{@const icon = weatherIconForCode(day.code)}
+									<div class="badge badge-brand" title={day.locationLabel ? `${day.summary} — ${day.locationLabel}` : day.summary}>
+										{#if icon}<Icon name={icon} class="h-3.5 w-3.5" />{/if}
+										<span>{weatherDayChip(day.date)}</span>
+										{#if day.tempMax != null && day.tempMin != null}<span class="font-mono">{Math.round(day.tempMax)}{weather.tempUnit} / {Math.round(day.tempMin)}{weather.tempUnit}</span>{:else}<span>{day.summary}</span>{/if}
+										{#if day.typical}<span class="text-xs opacity-70">typical</span>{:else if day.degraded}<span class="text-xs opacity-70">stale</span>{/if}
+									</div>
+								{/each}
+							</div>
+						</section>
+					{/if}
 					{#if dayGroups.length}
 						{#each dayGroups as group (group.key)}
 							<section class="trip-modern-day-card {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
-								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3"><span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
+								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3">{#if isEditor && dayCanOptimize(group)}<form method="POST" action="?/optimizeTripDay" use:enhance={preserveScrollOnMove}><input type="hidden" name="date" value={group.key} /><button type="submit" class="trip-modern-day-plus" title="Optimize order" aria-label={`Optimize stop order for ${group.label}`}><Icon name="trips" class="h-4 w-4" /></button></form>{/if}{#if dayDirectionsUrl(group)}<a href={dayDirectionsUrl(group)!} target="_blank" rel="noopener noreferrer" class="trip-modern-day-plus" title="Open in Google Maps" aria-label={`Open ${group.label} in Google Maps`}><Icon name="location" class="h-4 w-4" /></a>{/if}<span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
+								{#if group.key !== 'unscheduled' && showDayNotes}
+									{@const note = dayNotesByDate.get(group.key)}
+									{#if isEditor && editingDayNoteDate === group.key}
+										<div class="trip-modern-day-note-editor">
+											<form method="POST" action="?/setDayNote" use:enhance={dayNoteAction}>
+												<input type="hidden" name="date" value={group.key} />
+												<select name="icon" class="input input-compact w-auto text-sm" aria-label="Day note icon" value={note?.icon ?? ''}>
+													<option value="">No icon</option>
+													{#each DAY_NOTE_ICONS as opt (opt.name)}<option value={opt.name}>{opt.label}</option>{/each}
+												</select>
+												<textarea name="body" rows="3" maxlength="10000" class="input text-sm" placeholder="Add a note for this day…" required>{note?.body ?? ''}</textarea>
+											<p class="field-help">Markdown supported</p>
+												<div class="flex items-center gap-2">
+													<button class="btn btn-primary btn-sm">Save note</button>
+													<button type="button" class="btn btn-secondary btn-sm" onclick={() => (editingDayNoteDate = null)}>Cancel</button>
+												</div>
+											</form>
+											{#if note}
+												{#if confirmingDayNoteDelete === group.key}
+													<form method="POST" action="?/deleteDayNote" use:enhance={dayNoteAction} class="mt-2 flex items-center gap-2">
+														<input type="hidden" name="date" value={group.key} />
+														<span class="trip-modern-panel-muted text-sm">Delete this day note?</span>
+														<button class="btn btn-danger btn-sm">Delete</button>
+														<button type="button" class="btn btn-secondary btn-sm" onclick={() => (confirmingDayNoteDelete = null)}>Keep</button>
+													</form>
+												{:else}
+													<button type="button" class="btn btn-secondary btn-sm mt-2" onclick={() => (confirmingDayNoteDelete = group.key)}>Delete note</button>
+												{/if}
+											{/if}
+										</div>
+									{:else if note}
+										<div class="trip-modern-day-note">
+											{#if note.icon}<Icon name={note.icon} class="mt-0.5 h-4 w-4 shrink-0" />{/if}
+											<MarkdownText text={note.body} class="text-sm" />
+											{#if isEditor}<button type="button" class="trip-modern-day-note-edit" aria-label="Edit day note" onclick={() => (editingDayNoteDate = group.key)}><Icon name="edit" class="h-3.5 w-3.5" /></button>{/if}
+										</div>
+									{:else if isEditor}
+										<button type="button" class="trip-modern-day-note-add" onclick={() => (editingDayNoteDate = group.key)}><Icon name="plus" class="h-3.5 w-3.5" />Add day note</button>
+									{/if}
+								{/if}
 								<div class="trip-modern-day-body" class:trip-modern-day-body-editing={group.segments.some((segment) => segment.id === editingId)}>
 									{#each group.segments as s, i (s.id ?? `${group.key}-${i}`)}
 										{@const duration = formatSegmentDuration(s.startAt, s.endAt)}
@@ -811,9 +976,9 @@
 						<div class="trip-modern-selected-summary {segmentTypeClass(selectedSegment.type)}"><span class="trip-modern-selected-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html SEG[selectedSegment.type as keyof typeof SEG]?.icon ?? ''}</svg></span><div class="min-w-0 flex-1"><h3 class="trip-modern-selected-name">{selectedSegment.title}</h3><div class="mt-2 flex flex-wrap gap-1.5">{#if selectedSegment.status}<span class="badge badge-compact {segmentStatusClass(selectedSegment.status)}">{segmentStatusLabel(selectedSegment.status)}</span>{/if}{#if selectedSegment.paymentStatus}<span class="badge badge-compact badge-green">{paymentStatusLabel(selectedSegment.paymentStatus)}</span>{/if}</div>{#if selectedPlaceLines.place}<p class="trip-modern-selected-place">{selectedPlaceLines.place}</p>{/if}{#if selectedPlaceLines.address}<p class="trip-modern-selected-address">{selectedPlaceLines.address}</p>{/if}</div></div>
 						<nav class="trip-modern-detail-tabs" aria-label="Selected segment sections">{#each SEGMENT_PANEL_TABS as tab (tab.id)}<button type="button" class="trip-modern-detail-tab {segmentPanelTab === tab.id ? 'trip-modern-detail-tab-active' : ''}" onclick={() => (segmentPanelTab = tab.id)}>{tab.label}{#if tab.id === 'travelers' && (selectedAttendees.length || selectedFreeTextTravelers.length)} ({selectedAttendees.length || selectedFreeTextTravelers.length}){/if}{#if tab.id === 'files' && selectedSegmentDocuments.length} ({selectedSegmentDocuments.length}){/if}{#if tab.id === 'reminders' && selectedSegmentReminders.length} ({selectedSegmentReminders.length}){/if}</button>{/each}</nav>
 
-						{#if segmentPanelTab === 'details'}<div class="trip-modern-detail-list">{#each selectedDetailRows as row (row.label)}<div class="trip-modern-detail-row"><Icon name={row.icon} class="trip-modern-detail-icon h-4 w-4" /><span class="trip-modern-detail-label">{row.label}</span><span class="trip-modern-detail-value">{row.value}</span></div>{/each}</div>{:else if segmentPanelTab === 'travelers'}<div class="trip-modern-detail-list">{#if selectedAttendees.length}{#each selectedAttendees as a (a.id)}<div class="trip-modern-list-row"><span>{a.name}</span><span class="badge badge-compact {a.status === 'going' ? 'badge-green' : a.status === 'maybe' ? 'badge-amber' : 'badge-slate'} capitalize">{a.status.replace('_', ' ')}</span></div>{/each}{:else if selectedFreeTextTravelers.length}{#each selectedFreeTextTravelers as name (name)}<div class="trip-modern-list-row"><span>{name}</span><span class="badge badge-compact badge-slate">listed</span></div>{/each}<p class="trip-modern-panel-muted text-sm mt-2">From booking details (not linked as trip people).</p>{:else}<p class="trip-modern-empty">No travelers assigned to this segment.</p>{/if}</div>{:else if segmentPanelTab === 'notes'}<div class="trip-modern-detail-list">{#if selectedNotesRows.length}{#each selectedNotesRows as row (row.label)}{@const stacked = notesRowStacked(row)}<div class="trip-modern-list-row trip-modern-kv-row {stacked ? 'trip-modern-kv-row-stacked' : ''}"><span class="trip-modern-kv-label">{row.label}</span><span class="trip-modern-kv-value">{row.value}</span></div>{/each}{:else}<p class="trip-modern-empty">No extra notes for this segment.</p>{/if}</div>{:else if segmentPanelTab === 'files'}<div class="trip-modern-detail-list"><TripDocumentsTable tripId={trip.id} documents={selectedSegmentDocuments} canEdit={isEditor} pageSize={5} showScope={false} compact={true} emptyMessage="No files attached to this segment." />{#if isEditor && selectedSegment.id}<form method="POST" action="?/uploadTripDocument" enctype="multipart/form-data" class="trip-modern-reminder-card mt-3"><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="segment-doc-file">Upload PDF or image</label><input id="segment-doc-file" type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="input text-sm" required /><input name="label" class="input text-sm" placeholder="Label (optional)" /><button class="btn btn-primary btn-sm"><Icon name="upload" class="h-4 w-4" />Upload file</button></form>{/if}</div>{:else}<div class="trip-modern-detail-list">{#if reminderFeedback}<p class="notice notice-success">{reminderFeedback}</p>{/if}{#if selectedSegmentReminders.length}<div class="trip-modern-list">{#each selectedSegmentReminders as r (r.id)}<div class="trip-modern-list-row"><div><strong>{reminderKindLabel(r.kind)}</strong><p class="trip-modern-panel-muted text-sm">{formatDateTime(r.fireAt)}</p></div><span class="badge badge-compact {r.status === 'pending' ? 'badge-green' : r.status === 'sending' ? 'badge-amber' : 'badge-slate'} capitalize">{r.status}</span></div>{/each}</div>{:else}<p class="trip-modern-empty">No reminders for this segment yet.</p>{/if}{#if isEditor && selectedSegment.id}<form method="POST" action="?/segmentReminder" class="trip-modern-reminder-card" use:enhance={keepReminderTabAfterSubmit}><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="selected-reminder-offset">Remind me before this segment</label><select id="selected-reminder-offset" name="offsetMinutes" class="input text-sm">{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}<option value={offset.minutes}>{offset.label}</option>{/each}</select><button class="btn btn-primary btn-sm"><Icon name="notification" class="h-4 w-4" />Save reminder</button></form>{/if}</div>{/if}
+						{#if segmentPanelTab === 'details'}<div class="trip-modern-detail-list">{#each selectedDetailRows as row (row.label)}<div class="trip-modern-detail-row"><Icon name={row.icon} class="trip-modern-detail-icon h-4 w-4" /><span class="trip-modern-detail-label">{row.label}</span><span class="trip-modern-detail-value">{row.value}</span></div>{/each}</div>{:else if segmentPanelTab === 'travelers'}<div class="trip-modern-detail-list">{#if selectedAttendees.length}{#each selectedAttendees as a (a.id)}<div class="trip-modern-list-row"><span>{a.name}</span><span class="badge badge-compact {a.status === 'going' ? 'badge-green' : a.status === 'maybe' ? 'badge-amber' : 'badge-slate'} capitalize">{a.status.replace('_', ' ')}</span></div>{/each}{:else if selectedFreeTextTravelers.length}{#each selectedFreeTextTravelers as name (name)}<div class="trip-modern-list-row"><span>{name}</span><span class="badge badge-compact badge-slate">listed</span></div>{/each}<p class="trip-modern-panel-muted text-sm mt-2">From booking details (not linked as trip people).</p>{:else}<p class="trip-modern-empty">No travelers assigned to this segment.</p>{/if}</div>{:else if segmentPanelTab === 'notes'}<div class="trip-modern-detail-list">{#if selectedNotesRows.length}{#each selectedNotesRows as row (row.label)}{@const stacked = notesRowStacked(row)}<div class="trip-modern-list-row trip-modern-kv-row {stacked ? 'trip-modern-kv-row-stacked' : ''}"><span class="trip-modern-kv-label">{row.label}</span>{#if row.label === 'Notes'}<span class="trip-modern-kv-value"><MarkdownText text={row.value} /></span>{:else}<span class="trip-modern-kv-value">{row.value}</span>{/if}</div>{/each}{:else}<p class="trip-modern-empty">No extra notes for this segment.</p>{/if}</div>{:else if segmentPanelTab === 'files'}<div class="trip-modern-detail-list"><TripDocumentsTable tripId={trip.id} documents={selectedSegmentDocuments} canEdit={isEditor} pageSize={5} showScope={false} compact={true} emptyMessage="No files attached to this segment." />{#if isEditor && selectedSegment.id}<form method="POST" action="?/uploadTripDocument" enctype="multipart/form-data" class="trip-modern-reminder-card mt-3"><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="segment-doc-file">Upload PDF or image</label><input id="segment-doc-file" type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="input text-sm" required /><input name="label" class="input text-sm" placeholder="Label (optional)" /><button class="btn btn-primary btn-sm"><Icon name="upload" class="h-4 w-4" />Upload file</button></form>{/if}</div>{:else}<div class="trip-modern-detail-list">{#if reminderFeedback}<p class="notice notice-success">{reminderFeedback}</p>{/if}{#if selectedSegmentReminders.length}<div class="trip-modern-list">{#each selectedSegmentReminders as r (r.id)}<div class="trip-modern-list-row"><div><strong>{reminderKindLabel(r.kind)}</strong><p class="trip-modern-panel-muted text-sm">{formatDateTime(r.fireAt)}</p></div><span class="badge badge-compact {r.status === 'pending' ? 'badge-green' : r.status === 'sending' ? 'badge-amber' : 'badge-slate'} capitalize">{r.status}</span></div>{/each}</div>{:else}<p class="trip-modern-empty">No reminders for this segment yet.</p>{/if}{#if isEditor && selectedSegment.id}<form method="POST" action="?/segmentReminder" class="trip-modern-reminder-card" use:enhance={keepReminderTabAfterSubmit}><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="selected-reminder-offset">Remind me before this segment</label><select id="selected-reminder-offset" name="offsetMinutes" class="input text-sm">{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}<option value={offset.minutes}>{offset.label}</option>{/each}</select><button class="btn btn-primary btn-sm"><Icon name="notification" class="h-4 w-4" />Save reminder</button></form>{/if}</div>{/if}
 
-						{#if isEditor && selectedSegment.id}<div class="trip-modern-selected-actions"><button type="button" class="btn btn-primary" onclick={() => { editingId = selectedSegment.id ?? null; focusedSegmentId = null; }}><Icon name="edit" class="h-4 w-4" />Edit</button><form method="POST" action="?/duplicateSegment" use:enhance={refreshTripAction}><input type="hidden" name="segmentId" value={selectedSegment.id} /><button class="btn btn-secondary"><Icon name="duplicate" class="h-4 w-4" />Duplicate</button></form><button type="button" class="btn btn-danger" onclick={() => requestDeleteSegment(selectedSegment)}><Icon name="close" class="h-4 w-4" />Delete</button><button type="button" class="btn btn-secondary" onclick={() => (segmentPanelTab = 'reminders')}><Icon name="notification" class="h-4 w-4" />Add reminder</button></div>{/if}
+						{#if isEditor && selectedSegment.id}<div class="trip-modern-selected-actions"><button type="button" class="btn btn-primary" onclick={() => { editingId = selectedSegment.id ?? null; focusedSegmentId = null; }}><Icon name="edit" class="h-4 w-4" />Edit</button><form method="POST" action="?/duplicateSegment" use:enhance={refreshTripAction}><input type="hidden" name="segmentId" value={selectedSegment.id} /><button class="btn btn-secondary"><Icon name="duplicate" class="h-4 w-4" />Duplicate</button></form>{#if selectedSegment.type === 'poi'}<form method="POST" action="?/saveSegmentToPlace" use:enhance={refreshTripAction}><input type="hidden" name="segmentId" value={selectedSegment.id} /><button class="btn btn-secondary"><Icon name="location" class="h-4 w-4" />Save to places</button></form>{/if}<button type="button" class="btn btn-danger" onclick={() => requestDeleteSegment(selectedSegment)}><Icon name="close" class="h-4 w-4" />Delete</button><button type="button" class="btn btn-secondary" onclick={() => (segmentPanelTab = 'reminders')}><Icon name="notification" class="h-4 w-4" />Add reminder</button></div>{/if}
 						{#if selectedSegment.createdAt || selectedSegment.updatedAt}<p class="trip-modern-selected-footer">{#if selectedSegment.createdAt}<span>Created by {selectedCreatorName()} on {formatCreatedDate(selectedSegment.createdAt)}</span>{/if}{#if selectedSegment.createdAt && selectedSegment.updatedAt}<span> · </span>{/if}{#if selectedSegment.updatedAt}<span>Updated {formatUpdatedDate(selectedSegment.updatedAt)}</span>{/if}</p>{/if}
 					{:else}<div class="trip-modern-selected-empty"><div><Icon name="trips" class="mx-auto mb-3 h-8 w-8" /><p>Select a segment to see its details.</p></div></div>{/if}
 				</aside>
@@ -908,7 +1073,7 @@
 				{/if}
 			</section>
 		{:else if activeTab === 'notes'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><p class="mt-1 whitespace-pre-wrap text-sm">{entry.body}</p></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><p class="mt-1 whitespace-pre-wrap text-sm">{c.body}</p></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addJournalEntry" class="trip-modern-form-grid"><input name="title" class="input text-sm" placeholder="Title" required /><input name="entryDate" type="date" class="input text-sm" required /><textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea><button class="btn btn-primary btn-sm justify-self-end">Add journal entry</button></form><form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
+			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><MarkdownText text={entry.body} class="mt-1 text-sm" /></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><MarkdownText text={c.body} class="mt-1 text-sm" /></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addJournalEntry" class="trip-modern-form-grid"><input name="title" class="input text-sm" placeholder="Title" required /><input name="entryDate" type="date" class="input text-sm" required /><textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Add journal entry</button></form><form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
 		{:else if activeTab === 'documents'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Files</h2><span class="badge badge-slate badge-compact">{data.tripDocuments?.length ?? 0}</span></div>
@@ -930,11 +1095,23 @@
 								{#if s.id != null}<option value={s.id}>{s.title}</option>{/if}
 							{/each}
 						</select>
-						<input type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="input text-sm" required />
+						<input type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf,.gpx,application/gpx+xml" class="input text-sm" required />
 						<input name="notes" class="input text-sm" placeholder="Notes (optional)" />
 						<button class="btn btn-primary btn-sm justify-self-end"><Icon name="upload" class="h-4 w-4" />Upload file</button>
 					</form>
 				{/if}
+			</section>
+			<section class="trip-modern-panel mt-4">
+				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Photos</h2><span class="badge badge-slate badge-compact">{data.gallery?.length ?? 0}</span></div>
+				<Gallery
+					images={galleryImages}
+					canEdit={isEditor}
+					uploadAction="?/uploadGalleryImages"
+					removeAction="?/removeGalleryImage"
+					moveAction="?/moveGalleryImage"
+					captionAction="?/setGalleryCaption"
+					emptyMessage="No photos yet. Upload trip photos below."
+				/>
 			</section>
 			<section class="trip-modern-panel mt-4">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">External links</h2></div>

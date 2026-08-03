@@ -16,7 +16,10 @@ import {
 	validateRestoredDirectory,
 	writeRestoreMarker
 } from '$lib/server/restore';
+import { updateSettings } from '$lib/server/settings';
+import { autoBackupStatus } from '$lib/server/autoBackup';
 import tar from 'tar-fs';
+import type { PageServerLoad } from './$types';
 
 function userFacingError(e: unknown, fallback: string): string {
 	console.error(fallback, e);
@@ -31,7 +34,32 @@ function isBackupFilename(name: string): boolean {
 	return ALLOWED_BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext));
 }
 
+export const load: PageServerLoad = ({ locals }) => {
+	requireAdmin(locals);
+	return { autoBackup: autoBackupStatus() };
+};
+
 export const actions: Actions = {
+	saveAutoBackup: async ({ request, locals, cookies }) => {
+		const u = requireAdmin(locals);
+		const f = await request.formData();
+		const backupAutoEnabled = f.get('backupAutoEnabled') === 'on';
+		const backupIntervalHours = Number(f.get('backupIntervalHours') ?? 24);
+		const backupRetentionCount = Number(f.get('backupRetentionCount') ?? 7);
+		if (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 720) {
+			return fail(400, { error: 'Backup interval must be an integer between 1 and 720 hours' });
+		}
+		if (!Number.isInteger(backupRetentionCount) || backupRetentionCount < 1 || backupRetentionCount > 100) {
+			return fail(400, { error: 'Retention must be an integer between 1 and 100 backups' });
+		}
+		updateSettings({ backupAutoEnabled, backupIntervalHours, backupRetentionCount });
+		logAudit(u.id, 'settings_update', 'settings', 1, {
+			changed: ['backupAutoEnabled', 'backupIntervalHours', 'backupRetentionCount']
+		});
+		setFlash(cookies, 'Auto-backup settings saved.');
+		throw redirect(303, '/backup');
+	},
+
 	restore: async ({ locals, request, cookies, getClientAddress }) => {
 		const u = requireAdmin(locals);
 		const limit = checkRateLimit(getClientAddress(), 'backup:restore', RESTORE_RATE_LIMIT);

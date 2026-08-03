@@ -28,7 +28,9 @@ export async function createTrip(page: Page, opts: { name?: string; start?: stri
 	await page.getByLabel('Start date').fill(start);
 	await page.getByLabel('End date').fill(end);
 	await page.click('button:has-text("Create trip")');
-	await page.waitForURL(/\/trips\/\d+/, { waitUntil: 'networkidle' });
+	// 'load', not 'networkidle': the trip detail page opens a persistent
+	// /api/events SSE stream, so the network never goes idle there.
+	await page.waitForURL(/\/trips\/\d+/, { waitUntil: 'load' });
 
 	const url = page.url();
 	const match = url.match(/\/trips\/(\d+)/);

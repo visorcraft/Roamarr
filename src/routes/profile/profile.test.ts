@@ -94,7 +94,10 @@ test('update profile changes display name, timezone and reminder leads', () => {
 		documentExpiryLeadDays: 60,
 		emailNotifications: true,
 		webhookNotifications: false,
-		defaultCurrency: 'eur'
+		ntfyNotifications: false,
+		defaultCurrency: 'eur',
+		temperatureUnit: 'f',
+		timeFormat: '12h'
 	});
 	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
 	expect(row.display_name).toBe('Ada');
@@ -102,6 +105,29 @@ test('update profile changes display name, timezone and reminder leads', () => {
 	expect(Number(row.flight_checkin_lead_hours)).toBe(48);
 	expect(Number(row.document_expiry_lead_days)).toBe(60);
 	expect(row.default_currency).toBe('EUR');
+	expect(row.temperature_unit).toBe('f');
+	expect(row.time_format).toBe('12h');
+	expect(row.ntfy_notifications).toBe(false);
+});
+
+test('update profile rejects invalid unit preferences', () => {
+	const u = makeUser(kit, { email: 'p-units@x.c', passwordHash: 'x', displayName: 'P', timezone: 'UTC' });
+	const base = {
+		displayName: 'P',
+		timezone: 'UTC',
+		flightCheckinLeadHours: 24,
+		documentExpiryLeadDays: 90,
+		emailNotifications: true,
+		webhookNotifications: true,
+		ntfyNotifications: true,
+		defaultCurrency: 'USD'
+	};
+	expect(() => _updateProfile(u.id, { ...base, temperatureUnit: 'kelvin', timeFormat: '24h' })).toThrow(
+		'Temperature unit must be °C or °F'
+	);
+	expect(() => _updateProfile(u.id, { ...base, temperatureUnit: 'c', timeFormat: '8h' })).toThrow(
+		'Time format must be 12h or 24h'
+	);
 });
 
 test('update profile rejects invalid timezone', () => {
@@ -114,7 +140,10 @@ test('update profile rejects invalid timezone', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			defaultCurrency: 'USD'
+			ntfyNotifications: true,
+			defaultCurrency: 'USD',
+			temperatureUnit: 'c',
+			timeFormat: '24h'
 		})
 	).toThrow('Invalid timezone');
 });
@@ -129,7 +158,10 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			defaultCurrency: 'USD'
+			ntfyNotifications: true,
+			defaultCurrency: 'USD',
+			temperatureUnit: 'c',
+			timeFormat: '24h'
 		})
 	).toThrow('Flight check-in lead must be a non-negative integer');
 	expect(() =>
@@ -140,7 +172,10 @@ test('update profile rejects negative or fractional reminder leads', () => {
 			documentExpiryLeadDays: 1.5,
 			emailNotifications: true,
 			webhookNotifications: true,
-			defaultCurrency: 'USD'
+			ntfyNotifications: true,
+			defaultCurrency: 'USD',
+			temperatureUnit: 'c',
+			timeFormat: '24h'
 		})
 	).toThrow('Document expiry lead must be a non-negative integer');
 });
@@ -155,7 +190,10 @@ test('update profile rejects invalid default currency', () => {
 			documentExpiryLeadDays: 90,
 			emailNotifications: true,
 			webhookNotifications: true,
-			defaultCurrency: 'US Dollar'
+			ntfyNotifications: true,
+			defaultCurrency: 'US Dollar',
+			temperatureUnit: 'c',
+			timeFormat: '24h'
 		})
 	).toThrow('Default currency must be a 3-letter currency code');
 });

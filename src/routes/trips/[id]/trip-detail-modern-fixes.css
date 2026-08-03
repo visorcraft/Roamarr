@@ -300,3 +300,54 @@
 		left: 0.75rem;
 	}
 }
+
+/* Per-day itinerary notes. */
+.trip-modern .trip-modern-day-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.6rem;
+	margin: 0 1.1rem 0.85rem;
+	padding: 0.65rem 0.85rem;
+	border-radius: 0.75rem;
+	background: var(--theme-subtle);
+	box-shadow: inset 0 0 0 1px var(--trip-modern-line);
+	color: var(--trip-modern-strong);
+}
+
+.trip-modern .trip-modern-day-note p {
+	flex: 1;
+	min-width: 0;
+}
+
+.trip-modern .trip-modern-day-note-edit {
+	display: grid;
+	place-items: center;
+	color: var(--trip-modern-muted);
+}
+
+.trip-modern .trip-modern-day-note-edit:hover {
+	color: var(--trip-modern-strong);
+}
+
+.trip-modern .trip-modern-day-note-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	margin: 0 1.1rem 0.85rem;
+	font-size: 0.85rem;
+	color: var(--trip-modern-muted);
+}
+
+.trip-modern .trip-modern-day-note-add:hover {
+	color: var(--trip-modern-strong);
+}
+
+.trip-modern .trip-modern-day-note-editor {
+	margin: 0 1.1rem 0.85rem;
+}
+
+.trip-modern .trip-modern-day-note-editor > form {
+	display: grid;
+	gap: 0.65rem;
+	justify-items: start;
+}

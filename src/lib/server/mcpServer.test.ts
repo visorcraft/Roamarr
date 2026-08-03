@@ -11,13 +11,15 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import { createMcpServer } from './mcpServer';
+import { createApiKey, verifyApiKey } from './apiKeys';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
-import { makeUser } from '../../../tests/helpers';
+import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
+import * as segmentsRepo from './repositories/segmentsRepo';
 import { updateSettings } from './settings';
 
 async function connect(userId: number, scopes: Scope[]) {
@@ -75,6 +77,21 @@ describe('mcpServer', () => {
 		const res: any = await client.callTool({ name: 'roamarr_trip_create', arguments: { name: 'Nope' } });
 		expect(res.isError).toBe(true);
 		expect(res.content[0].text).toContain('trips:write');
+	});
+
+	test('an MCP session authorized via a personal API key honors the key scopes', async () => {
+		const { token } = createApiKey(userId, { name: 'agent', scopes: ['trips:read'] });
+		const verified = verifyApiKey(token);
+		expect(verified).toBeTruthy();
+		// The MCP server consumes exactly the (userId, scopes) pair the key supplies.
+		const { client } = await connect(verified!.userId, verified!.scopes);
+
+		const allowed: any = await client.callTool({ name: 'roamarr_trip_list', arguments: {} });
+		expect(allowed.isError).toBeFalsy();
+
+		const denied: any = await client.callTool({ name: 'roamarr_trip_create', arguments: { name: 'Nope' } });
+		expect(denied.isError).toBe(true);
+		expect(denied.content[0].text).toContain('trips:write');
 	});
 
 	test('profile exposes role for native capability gating', async () => {
@@ -511,6 +528,50 @@ describe('mcpServer', () => {
 		expect(JSON.parse(response.content[0].text).trips).toEqual([expect.objectContaining({ id: trip.id })]);
 	});
 
+	test('search returns place hits with a projection, owner-only', async () => {
+		const { hashEmbed, setTestEmbedFn } = await import('./embeddings/model');
+		const { enableEmbeddings, disableEmbeddings } = await import('./embeddings/index');
+		const { createPlace, createPlaceCategory } = await import('./places');
+		const { searchDocuments } = await import('./db/mongrelSchema');
+		setTestEmbedFn(async (text) => hashEmbed(text));
+		try {
+			const category = createPlaceCategory(userId, { name: 'Food & Drink' });
+			const place = createPlace(userId, {
+				name: 'Ramen Alley Stall',
+				categoryId: category.id,
+				lat: 43.06,
+				lng: 141.35,
+				description: 'miso butter corn ramen'
+			});
+			const otherUserId = makeUser(ctx.kit).id;
+			createPlace(otherUserId, { name: 'Foreign Ramen Place', description: 'miso ramen' });
+			await enableEmbeddings();
+
+			const { client } = await connect(userId, ['search:read']);
+			const response: any = await client.callTool({
+				name: 'roamarr_search',
+				arguments: { query: 'miso ramen stall' }
+			});
+			const payload = JSON.parse(response.content[0].text);
+			expect(payload.semantic).toBe(true);
+			const placeHits = payload.hits.filter((h: any) => h.entityType === 'place');
+			expect(placeHits).toHaveLength(1);
+			expect(placeHits[0].place).toEqual({
+				id: place.id,
+				name: 'Ramen Alley Stall',
+				category: 'Food & Drink',
+				lat: 43.06,
+				lng: 141.35,
+				status: 'planned'
+			});
+			expect(placeHits[0].snippet).toContain('miso butter corn ramen');
+		} finally {
+			disableEmbeddings();
+			setTestEmbedFn(null);
+			ctx.kit.deleteFrom(searchDocuments).executeSync();
+		}
+	});
+
 	test('weather overview returns null when trip lacks forecast coordinates', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'No coordinates' });
 		const { client } = await connect(userId, ['trips:read']);
@@ -666,6 +727,47 @@ describe('mcpServer', () => {
 		expect(after.email_notifications).toBe(false);
 		expect(after.webhook_notifications).toBe(true);
 		expect(after.email).toBeTruthy();
+	});
+
+	test('profile_update accepts and validates unit preferences', async () => {
+		const { client } = await connect(userId, ['profile-prefs:write', 'profile-prefs:read']);
+		const bad: any = await client.callTool({
+			name: 'roamarr_profile_update',
+			arguments: { temperatureUnit: 'kelvin' }
+		});
+		expect(bad.isError).toBe(true);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_profile_update',
+			arguments: { temperatureUnit: 'f', timeFormat: '12h' }
+		});
+		expect(res.isError).toBeFalsy();
+		const got: any = await client.callTool({ name: 'roamarr_profile_get', arguments: {} });
+		const profile = JSON.parse(got.content[0].text);
+		expect(profile.temperatureUnit).toBe('f');
+		expect(profile.timeFormat).toBe('12h');
+		// Other preferences survive the merge.
+		const after = ctx.kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+		expect(after.timezone).toBeTruthy();
+		expect(after.email).toBeTruthy();
+	});
+
+	test('notification_channels_update toggles ntfy without disturbing the other channels', async () => {
+		const { client } = await connect(userId, ['notifications:write', 'notifications:read']);
+		const res: any = await client.callTool({
+			name: 'roamarr_notification_channels_update',
+			arguments: { ntfyNotifications: false }
+		});
+		expect(res.isError).toBeFalsy();
+		const after = ctx.kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+		expect(after.ntfy_notifications).toBe(false);
+		expect(after.email_notifications).toBe(true);
+		expect(after.webhook_notifications).toBe(true);
+
+		const got: any = await client.callTool({ name: 'roamarr_notification_channels_get', arguments: {} });
+		const channels = JSON.parse(got.content[0].text);
+		expect(channels.ntfyNotifications).toBe(false);
+		expect(channels.emailNotifications).toBe(true);
 	});
 
 	test('card_update preserves notes when only the label is changed', async () => {
@@ -1204,6 +1306,703 @@ describe('mcpServer', () => {
 		test('resources/read rejects unknown URI schemes', async () => {
 			const { client } = await connect(userId, ['trips:read']);
 			await expect(client.readResource({ uri: 'http://example.com/x' })).rejects.toThrow();
+		});
+	});
+
+	describe('saved places tools', () => {
+		beforeEach(() => {
+			ctx.kit.deleteFrom(placeLinks).executeSync();
+			ctx.kit.deleteFrom(places).executeSync();
+			ctx.kit.deleteFrom(placeCategories).executeSync();
+		});
+
+		test('lists the saved places tools', async () => {
+			const { client } = await connect(userId, ['saved-places:read']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toContain('roamarr_saved_places_list');
+			expect(names).toContain('roamarr_place_category_create');
+			expect(names).toContain('roamarr_saved_places_search');
+		});
+
+		test('write tools require saved-places:write', async () => {
+			const { client } = await connect(userId, ['saved-places:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_saved_places_create',
+				arguments: { name: 'Nope' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('saved-places:write');
+		});
+
+		test('read tools require saved-places:read', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const res: any = await client.callTool({ name: 'roamarr_saved_places_list', arguments: {} });
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('saved-places:read');
+		});
+
+		test('category and place round-trip with partial update semantics', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+
+			// Defaults are seeded lazily on first category list.
+			const seeded = await call('roamarr_place_category_list', {});
+			expect(seeded.items.length).toBe(8);
+
+			const category = await call('roamarr_place_category_create', {
+				name: 'Coffee',
+				color: '#6f4e37'
+			});
+			const place = await call('roamarr_saved_places_create', {
+				name: 'Cafe Central',
+				categoryId: category.id,
+				address: 'Herrengasse 14, Vienna',
+				priceCents: 450
+			});
+			expect(place.id).toBeGreaterThan(0);
+
+			// Partial update renames without wiping address/price/category.
+			const updated = await call('roamarr_saved_places_update', {
+				placeId: place.id,
+				name: 'Café Central'
+			});
+			expect(updated.name).toBe('Café Central');
+			expect(updated.address).toBe('Herrengasse 14, Vienna');
+			expect(updated.priceCents).toBe(450);
+			expect(updated.categoryId).toBe(category.id);
+
+			const got = await call('roamarr_saved_places_get', { placeId: place.id });
+			expect(got.status).toBe('planned');
+
+			const visited = await call('roamarr_saved_places_mark_visited', { placeId: place.id });
+			expect(visited.status).toBe('visited');
+			expect(visited.visitedAt).toBeTruthy();
+			const planned = await call('roamarr_saved_places_unmark_visited', { placeId: place.id });
+			expect(planned.status).toBe('planned');
+			expect(planned.visitedAt).toBeNull();
+
+			// Delete requires confirm: true.
+			const denied: any = await client.callTool({
+				name: 'roamarr_saved_places_delete',
+				arguments: { placeId: place.id }
+			});
+			expect(denied.isError).toBe(true);
+			expect(denied.content[0].text).toContain('confirm');
+			const deleted = await call('roamarr_saved_places_delete', { placeId: place.id, confirm: true });
+			expect(deleted.ok).toBe(true);
+
+			// Category delete unlinks but keeps places; also requires confirm.
+			const catDenied: any = await client.callTool({
+				name: 'roamarr_place_category_delete',
+				arguments: { categoryId: category.id }
+			});
+			expect(catDenied.isError).toBe(true);
+			const catDeleted = await call('roamarr_place_category_delete', {
+				categoryId: category.id,
+				confirm: true
+			});
+			expect(catDeleted.ok).toBe(true);
+		});
+
+		test('places IDOR: another user\'s place is not visible or mutable', async () => {
+			const other = makeUser(ctx.kit).id;
+			const { client: otherClient } = await connect(other, ['saved-places:write']);
+			const created: any = await otherClient.callTool({
+				name: 'roamarr_saved_places_create',
+				arguments: { name: 'Other place' }
+			});
+			const placeId = JSON.parse(created.content[0].text).id;
+
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const got: any = await client.callTool({
+				name: 'roamarr_saved_places_get',
+				arguments: { placeId }
+			});
+			expect(got.isError).toBe(true);
+			const deleted: any = await client.callTool({
+				name: 'roamarr_saved_places_delete',
+				arguments: { placeId, confirm: true }
+			});
+			expect(deleted.isError).toBe(true);
+		});
+
+		test('saved_places_search degrades gracefully when Nominatim is unreachable', async () => {
+			vi.stubGlobal('fetch', async () => {
+				throw new TypeError('fetch failed');
+			});
+			try {
+				const { client } = await connect(userId, ['saved-places:read']);
+				const res: any = await client.callTool({
+					name: 'roamarr_saved_places_search',
+					arguments: { query: 'eiffel tower' }
+				});
+				expect(res.isError).toBe(true);
+				expect(res.content[0].text).toContain('unavailable');
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		});
+
+		test('saved_places_import requires the write scope and confirm', async () => {
+			const { client: reader } = await connect(userId, ['saved-places:read']);
+			const scopeDenied: any = await reader.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: { rows: [{ name: 'X' }], confirm: true }
+			});
+			expect(scopeDenied.isError).toBe(true);
+			expect(scopeDenied.content[0].text).toContain('saved-places:write');
+
+			const { client } = await connect(userId, ['saved-places:write']);
+			const confirmDenied: any = await client.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: { rows: [{ name: 'X' }] }
+			});
+			expect(confirmDenied.isError).toBe(true);
+			expect(confirmDenied.content[0].text).toContain('confirm');
+		});
+
+		test('saved_places_import creates rows and skips duplicates', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			await client.callTool({
+				name: 'roamarr_saved_places_create',
+				arguments: { name: 'Existing', lat: 48.8583, lng: 2.2945 }
+			});
+
+			const res: any = await client.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: {
+					rows: [
+						{ name: 'Existing', lat: null, lng: null },
+						{ name: 'Near Existing', lat: 48.85831, lng: 2.29451 },
+						{ name: 'Brand New', lat: 40.4168, lng: -3.7038, address: 'Madrid' }
+					],
+					confirm: true
+				}
+			});
+			expect(res.isError).not.toBe(true);
+			const result = JSON.parse(res.content[0].text);
+			expect(result.created).toBe(1);
+			expect(result.skippedDuplicates).toBe(2);
+			expect(result.errors).toHaveLength(0);
+
+			// skipDuplicates: false imports everything.
+			const res2: any = await client.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: {
+					rows: [{ name: 'Existing', lat: 1, lng: 1 }],
+					skipDuplicates: false,
+					confirm: true
+				}
+			});
+			const result2 = JSON.parse(res2.content[0].text);
+			expect(result2.created).toBe(1);
+			expect(result2.skippedDuplicates).toBe(0);
+		});
+
+		test('saved_places_import validates the rows payload', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const noRows: any = await client.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: { confirm: true }
+			});
+			expect(noRows.isError).toBe(true);
+			expect(noRows.content[0].text).toContain('rows must be an array');
+
+			const nameless: any = await client.callTool({
+				name: 'roamarr_saved_places_import',
+				arguments: { rows: [{ lat: 1, lng: 2 }], confirm: true }
+			});
+			expect(nameless.isError).toBe(true);
+			expect(nameless.content[0].text).toContain('name');
+		});
+	});
+
+	describe('place links tools', () => {
+		beforeEach(() => {
+			ctx.kit.deleteFrom(placeLinks).executeSync();
+			ctx.kit.deleteFrom(places).executeSync();
+		});
+
+		async function seedPlace(client: Client) {
+			const res: any = await client.callTool({
+				name: 'roamarr_saved_places_create',
+				arguments: { name: 'Linkable place' }
+			});
+			return JSON.parse(res.content[0].text).id as number;
+		}
+
+		test('lists the place links tools', async () => {
+			const { client } = await connect(userId, ['saved-places:read']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toContain('roamarr_place_links_list');
+			expect(names).toContain('roamarr_place_links_create');
+			expect(names).toContain('roamarr_place_links_update');
+			expect(names).toContain('roamarr_place_links_delete');
+		});
+
+		test('place links ride on the saved-places scopes', async () => {
+			const { client: reader } = await connect(userId, ['saved-places:read']);
+			const writeDenied: any = await reader.callTool({
+				name: 'roamarr_place_links_create',
+				arguments: { placeId: 1, label: 'X', url: 'https://a.example' }
+			});
+			expect(writeDenied.isError).toBe(true);
+			expect(writeDenied.content[0].text).toContain('saved-places:write');
+
+			const { client: writer } = await connect(userId, ['saved-places:write']);
+			const readDenied: any = await writer.callTool({
+				name: 'roamarr_place_links_list',
+				arguments: { placeId: 1 }
+			});
+			expect(readDenied.isError).toBe(true);
+			expect(readDenied.content[0].text).toContain('saved-places:read');
+		});
+
+		test('place links round-trip with partial update and confirm-gated delete', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+			const placeId = await seedPlace(client);
+
+			const created = await call('roamarr_place_links_create', {
+				placeId,
+				label: 'Official site',
+				url: 'https://cafe.example',
+				notes: 'Menu PDF'
+			});
+			expect(created.id).toBeGreaterThan(0);
+
+			// Non-http(s) URLs are rejected.
+			const badUrl: any = await client.callTool({
+				name: 'roamarr_place_links_create',
+				arguments: { placeId, label: 'X', url: 'javascript:alert(1)' }
+			});
+			expect(badUrl.isError).toBe(true);
+
+			// Partial update renames without wiping url/notes.
+			await call('roamarr_place_links_update', { linkId: created.id, label: 'Website' });
+			const listed = await call('roamarr_place_links_list', { placeId });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].label).toBe('Website');
+			expect(listed.items[0].url).toBe('https://cafe.example');
+			expect(listed.items[0].notes).toBe('Menu PDF');
+
+			// Delete requires confirm: true.
+			const denied: any = await client.callTool({
+				name: 'roamarr_place_links_delete',
+				arguments: { linkId: created.id }
+			});
+			expect(denied.isError).toBe(true);
+			expect(denied.content[0].text).toContain('confirm');
+			const deleted = await call('roamarr_place_links_delete', { linkId: created.id, confirm: true });
+			expect(deleted.ok).toBe(true);
+			expect((await call('roamarr_place_links_list', { placeId })).items).toHaveLength(0);
+		});
+
+		test('place links IDOR: another user\'s place is not visible or mutable', async () => {
+			const other = makeUser(ctx.kit).id;
+			const { client: otherClient } = await connect(other, ['saved-places:read', 'saved-places:write']);
+			const placeId = await seedPlace(otherClient);
+			const created: any = await otherClient.callTool({
+				name: 'roamarr_place_links_create',
+				arguments: { placeId, label: 'Secret', url: 'https://secret.example' }
+			});
+			const linkId = JSON.parse(created.content[0].text).id;
+
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const listed: any = await client.callTool({
+				name: 'roamarr_place_links_list',
+				arguments: { placeId }
+			});
+			expect(listed.isError).toBe(true);
+			const updated: any = await client.callTool({
+				name: 'roamarr_place_links_update',
+				arguments: { linkId, label: 'Hijacked' }
+			});
+			expect(updated.isError).toBe(true);
+			const deleted: any = await client.callTool({
+				name: 'roamarr_place_links_delete',
+				arguments: { linkId, confirm: true }
+			});
+			expect(deleted.isError).toBe(true);
+		});
+	});
+
+	describe('day notes tools', () => {
+		test('lists the day notes tools', async () => {
+			const { client } = await connect(userId, ['day-notes:read']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toContain('roamarr_trip_day_notes_list');
+			expect(names).toContain('roamarr_trip_day_notes_set');
+			expect(names).toContain('roamarr_trip_day_notes_delete');
+		});
+
+		test('read tools require day-notes:read', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_list',
+				arguments: { tripId: trip.id }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('day-notes:read');
+		});
+
+		test('write tools require day-notes:write', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_set',
+				arguments: { tripId: trip.id, date: '2026-06-10', body: 'Nope' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('day-notes:write');
+		});
+
+		test('set, list, and delete round-trip with confirm gate', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+
+			const note = await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-06-10',
+				icon: 'star',
+				body: 'Museum day'
+			});
+			expect(note.date).toBe('2026-06-10');
+			expect(note.icon).toBe('star');
+
+			// Upsert on the same (trip, date) keeps a single note.
+			await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-06-10',
+				body: 'Updated'
+			});
+			const listed = await call('roamarr_trip_day_notes_list', { tripId: trip.id });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].body).toBe('Updated');
+
+			const denied: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_delete',
+				arguments: { tripId: trip.id, date: '2026-06-10' }
+			});
+			expect(denied.isError).toBe(true);
+			expect(denied.content[0].text).toContain('confirm');
+
+			const deleted = await call('roamarr_trip_day_notes_delete', {
+				tripId: trip.id,
+				date: '2026-06-10',
+				confirm: true
+			});
+			expect(deleted.ok).toBe(true);
+			expect((await call('roamarr_trip_day_notes_list', { tripId: trip.id })).items).toHaveLength(0);
+		});
+
+		test("day notes of another user's trip are not visible or mutable", async () => {
+			const other = makeUser(ctx.kit).id;
+			const trip = tripsRepo.createTrip(other, { name: 'Other trip' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+
+			const set: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_set',
+				arguments: { tripId: trip.id, date: '2026-06-10', body: 'Hacked' }
+			});
+			expect(set.isError).toBe(true);
+			const listed: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_list',
+				arguments: { tripId: trip.id }
+			});
+			expect(listed.isError).toBe(true);
+		});
+	});
+
+	describe('gallery tools', () => {
+		const GALLERY_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+
+		async function withAttachmentsDir<T>(fn: () => Promise<T>): Promise<T> {
+			const { mkdtempSync, rmSync } = await import('node:fs');
+			const { tmpdir } = await import('node:os');
+			const path = await import('node:path');
+			const original = process.env.ATTACHMENTS_PATH;
+			const dir = mkdtempSync(path.join(tmpdir(), 'roamarr-mcp-gallery-'));
+			process.env.ATTACHMENTS_PATH = dir;
+			try {
+				return await fn();
+			} finally {
+				if (original === undefined) delete process.env.ATTACHMENTS_PATH;
+				else process.env.ATTACHMENTS_PATH = original;
+				rmSync(dir, { recursive: true, force: true });
+			}
+		}
+
+		test('lists the gallery tools', async () => {
+			const { client } = await connect(userId, ['gallery:read']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toContain('roamarr_gallery_list');
+			expect(names).toContain('roamarr_gallery_remove');
+			expect(names).toContain('roamarr_gallery_reorder');
+			expect(names).toContain('roamarr_gallery_set_caption');
+		});
+
+		test('read tools require gallery:read', async () => {
+			const { client } = await connect(userId, ['gallery:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_gallery_list',
+				arguments: { ownerType: 'trip', ownerId: 1 }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('gallery:read');
+		});
+
+		test('write tools require gallery:write', async () => {
+			const { client } = await connect(userId, ['gallery:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_gallery_set_caption',
+				arguments: { imageId: 1, caption: 'x' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('gallery:write');
+		});
+
+		test('list, caption, reorder, and remove round-trip with confirm gate', async () => {
+			await withAttachmentsDir(async () => {
+				const { createPlace } = await import('./places');
+				const { addGalleryImages } = await import('./gallery');
+				const place = createPlace(userId, { name: 'Overlook' });
+				const added = await addGalleryImages(userId, 'place', place.id, [
+					new File([GALLERY_PNG], 'a.png', { type: 'image/png' }),
+					new File([GALLERY_PNG], 'b.png', { type: 'image/png' })
+				]);
+
+				const { client } = await connect(userId, ['gallery:read', 'gallery:write']);
+				const call = async (name: string, args: Record<string, unknown>) => {
+					const res: any = await client.callTool({ name, arguments: args });
+					expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+					return JSON.parse(res.content[0].text);
+				};
+
+				const listed = await call('roamarr_gallery_list', { ownerType: 'place', ownerId: place.id });
+				expect(listed.items).toHaveLength(2);
+				expect(listed.items[0].filename).toBe('a.png');
+				// The projection never exposes attachment internals.
+				expect(listed.items[0].attachmentId).toBeUndefined();
+				expect(listed.items[0].storageKey).toBeUndefined();
+
+				const captioned = await call('roamarr_gallery_set_caption', {
+					imageId: added[0].id,
+					caption: 'Sunset'
+				});
+				expect(captioned.caption).toBe('Sunset');
+
+				const reordered = await call('roamarr_gallery_reorder', {
+					ownerType: 'place',
+					ownerId: place.id,
+					imageIds: [added[1].id, added[0].id]
+				});
+				expect(reordered.items.map((i: { filename: string }) => i.filename)).toEqual(['b.png', 'a.png']);
+
+				const badOrder: any = await client.callTool({
+					name: 'roamarr_gallery_reorder',
+					arguments: { ownerType: 'place', ownerId: place.id, imageIds: [added[0].id] }
+				});
+				expect(badOrder.isError).toBe(true);
+
+				const denied: any = await client.callTool({
+					name: 'roamarr_gallery_remove',
+					arguments: { imageId: added[1].id }
+				});
+				expect(denied.isError).toBe(true);
+				expect(denied.content[0].text).toContain('confirm');
+
+				const removed = await call('roamarr_gallery_remove', { imageId: added[1].id, confirm: true });
+				expect(removed.ok).toBe(true);
+				expect(
+					(await call('roamarr_gallery_list', { ownerType: 'place', ownerId: place.id })).items
+				).toHaveLength(1);
+			});
+		});
+
+		test("galleries of another user's trip or place are not visible or mutable", async () => {
+			await withAttachmentsDir(async () => {
+				const other = makeUser(ctx.kit).id;
+				const trip = tripsRepo.createTrip(other, { name: 'Other trip' });
+				const { createPlace } = await import('./places');
+				const { addGalleryImages } = await import('./gallery');
+				const place = createPlace(other, { name: 'Foreign' });
+				const [image] = await addGalleryImages(other, 'place', place.id, [
+					new File([GALLERY_PNG], 'a.png', { type: 'image/png' })
+				]);
+
+				const { client } = await connect(userId, ['gallery:read', 'gallery:write']);
+				const listTrip: any = await client.callTool({
+					name: 'roamarr_gallery_list',
+					arguments: { ownerType: 'trip', ownerId: trip.id }
+				});
+				expect(listTrip.isError).toBe(true);
+				const listPlace: any = await client.callTool({
+					name: 'roamarr_gallery_list',
+					arguments: { ownerType: 'place', ownerId: place.id }
+				});
+				expect(listPlace.isError).toBe(true);
+				const removed: any = await client.callTool({
+					name: 'roamarr_gallery_remove',
+					arguments: { imageId: image.id, confirm: true }
+				});
+				expect(removed.isError).toBe(true);
+			});
+		});
+
+		test('invalid ownerType is rejected', async () => {
+			const { client } = await connect(userId, ['gallery:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_gallery_list',
+				arguments: { ownerType: 'user', ownerId: 1 }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('ownerType');
+		});
+	});
+
+	describe('trip day optimization tools', () => {
+		const DAY = '2026-07-10';
+		const UNTIMED = '2026-07-10T00:00:00Z';
+
+		function seedDay(ownerId: number) {
+			const trip = makeTrip(ctx.kit, ownerId, { name: 'Optimize me' });
+			const a = makeSegment(ctx.kit, trip.id, { type: 'poi', startAt: UNTIMED, cityLat: 0, cityLng: 0 });
+			const b = makeSegment(ctx.kit, trip.id, { type: 'poi', startAt: UNTIMED, cityLat: 0, cityLng: 1 });
+			const c = makeSegment(ctx.kit, trip.id, { type: 'poi', startAt: UNTIMED, cityLat: 0, cityLng: 2 });
+			return { trip, segments: [a, b, c] };
+		}
+
+		test('both tools are advertised', async () => {
+			const { client } = await connect(userId, ['segments:read', 'segments:write']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toContain('roamarr_trip_day_optimize');
+			expect(names).toContain('roamarr_trip_day_directions_url');
+		});
+
+		test('optimize requires segments:write, directions requires segments:read', async () => {
+			const { trip } = seedDay(userId);
+			const { client } = await connect(userId, ['trips:read']);
+			const deniedWrite: any = await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY, confirm: true }
+			});
+			expect(deniedWrite.isError).toBe(true);
+			expect(deniedWrite.content[0].text).toContain('segments:write');
+			const deniedRead: any = await client.callTool({
+				name: 'roamarr_trip_day_directions_url',
+				arguments: { tripId: trip.id, date: DAY }
+			});
+			expect(deniedRead.isError).toBe(true);
+			expect(deniedRead.content[0].text).toContain('segments:read');
+		});
+
+		test('without confirm the optimizer previews and persists nothing', async () => {
+			const { trip, segments } = seedDay(userId);
+			const { client } = await connect(userId, ['segments:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY }
+			});
+			expect(res.isError).toBeFalsy();
+			const parsed = JSON.parse(res.content[0].text);
+			expect(parsed.preview).toBe(true);
+			expect(parsed.applied).toBe(false);
+			expect(parsed.orderedSegmentIds).toHaveLength(3);
+			for (const s of segments) {
+				expect(segmentsRepo.getSegmentById(s.id)!.daySortOrder).toBeNull();
+			}
+		});
+
+		test('with confirm the optimizer applies and persists day_sort_order', async () => {
+			const { trip } = seedDay(userId);
+			const { client } = await connect(userId, ['segments:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY, confirm: true }
+			});
+			expect(res.isError).toBeFalsy();
+			const parsed = JSON.parse(res.content[0].text);
+			expect(parsed.applied).toBe(true);
+			parsed.orderedSegmentIds.forEach((id: number, index: number) => {
+				expect(segmentsRepo.getSegmentById(id)!.daySortOrder).toBe(index + 1);
+			});
+		});
+
+		test("optimize on another user's trip is rejected (IDOR)", async () => {
+			const other = makeUser(ctx.kit).id;
+			const { trip } = seedDay(other);
+			const { client } = await connect(userId, ['segments:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY, confirm: true }
+			});
+			expect(res.isError).toBe(true);
+			const preview: any = await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY }
+			});
+			expect(preview.isError).toBe(true);
+		});
+
+		test('directions URL assembles origin, destination, and waypoints', async () => {
+			const { trip } = seedDay(userId);
+			const { client } = await connect(userId, ['segments:read', 'segments:write']);
+			await client.callTool({
+				name: 'roamarr_trip_day_optimize',
+				arguments: { tripId: trip.id, date: DAY, confirm: true }
+			});
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_directions_url',
+				arguments: { tripId: trip.id, date: DAY }
+			});
+			expect(res.isError).toBeFalsy();
+			const parsed = JSON.parse(res.content[0].text);
+			const url = new URL(parsed.url);
+			expect(url.origin + url.pathname).toBe('https://www.google.com/maps/dir/');
+			expect(url.searchParams.get('origin')).toBe('0,0');
+			expect(url.searchParams.get('destination')).toBe('0,2');
+			expect(url.searchParams.get('waypoints')).toBe('0,1');
+		});
+
+		test('directions URL is null for days with fewer than two points and IDOR-safe', async () => {
+			const trip = makeTrip(ctx.kit, userId, { name: 'Sparse' });
+			makeSegment(ctx.kit, trip.id, { type: 'note', startAt: UNTIMED });
+			const other = makeUser(ctx.kit).id;
+			const foreign = makeTrip(ctx.kit, other, { name: 'Foreign' });
+
+			const { client } = await connect(userId, ['segments:read']);
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_directions_url',
+				arguments: { tripId: trip.id, date: DAY }
+			});
+			expect(res.isError).toBeFalsy();
+			expect(JSON.parse(res.content[0].text).url).toBeNull();
+
+			const idor: any = await client.callTool({
+				name: 'roamarr_trip_day_directions_url',
+				arguments: { tripId: foreign.id, date: DAY }
+			});
+			expect(idor.isError).toBe(true);
 		});
 	});
 });

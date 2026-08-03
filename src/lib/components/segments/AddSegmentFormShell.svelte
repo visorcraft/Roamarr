@@ -73,7 +73,7 @@
 				name="documents"
 				type="file"
 				multiple
-				accept="image/jpeg,image/png,image/webp,application/pdf"
+				accept="image/jpeg,image/png,image/webp,application/pdf,.gpx,application/gpx+xml"
 				class="input"
 			/>
 		</div>

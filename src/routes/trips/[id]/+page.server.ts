@@ -11,11 +11,18 @@ import {
 import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
 import { setAttendee } from '$lib/server/segmentAttendees';
 import { addJournalEntry, deleteJournalEntry } from '$lib/server/tripJournal';
+import { setDayNoteAction, deleteDayNoteAction } from '$lib/server/tripDayNotes';
 import { addDocumentLink, deleteDocumentLink } from '$lib/server/tripDocumentLinks';
 import {
 	uploadTripDocumentAction,
 	deleteTripDocumentAction
 } from '$lib/server/tripDocuments';
+import {
+	uploadGalleryImagesAction,
+	removeGalleryImageAction,
+	moveGalleryImageAction,
+	setGalleryCaptionAction
+} from '$lib/server/gallery';
 import { createPoll, votePoll, deletePoll } from '$lib/server/tripPolls';
 import { setBudgetAction, deleteBudgetAction } from '$lib/server/tripBudgets';
 import { saveChecklistTemplate, applyChecklistTemplate } from '$lib/server/packingTemplates';
@@ -46,6 +53,8 @@ import {
 	duplicateSegmentAction,
 	setSegmentStatusAction,
 	moveSegmentDateAction,
+	optimizeTripDayAction,
+	saveSegmentToPlaceAction,
 	attachPolicy,
 	detachPolicy,
 	addCommentAction,
@@ -74,6 +83,8 @@ export const actions: Actions = {
 	duplicateSegment: duplicateSegmentAction,
 	setSegmentStatus: setSegmentStatusAction,
 	moveSegmentDate: moveSegmentDateAction,
+	optimizeTripDay: optimizeTripDayAction,
+	saveSegmentToPlace: saveSegmentToPlaceAction,
 	attachPolicy,
 	detachPolicy,
 	addComment: addCommentAction,
@@ -89,10 +100,16 @@ export const actions: Actions = {
 	setAttendee,
 	addJournalEntry,
 	deleteJournalEntry,
+	setDayNote: setDayNoteAction,
+	deleteDayNote: deleteDayNoteAction,
 	addDocumentLink,
 	deleteDocumentLink,
 	uploadTripDocument: uploadTripDocumentAction,
 	deleteTripDocument: deleteTripDocumentAction,
+	uploadGalleryImages: uploadGalleryImagesAction,
+	removeGalleryImage: removeGalleryImageAction,
+	moveGalleryImage: moveGalleryImageAction,
+	setGalleryCaption: setGalleryCaptionAction,
 	createPoll,
 	votePoll,
 	deletePoll,

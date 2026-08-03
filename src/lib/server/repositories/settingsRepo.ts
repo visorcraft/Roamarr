@@ -64,8 +64,29 @@ export type Settings = {
 	mapsTileUrl: string | null;
 	mapsTileAttribution: string | null;
 	mapsTileApiKey: string | null;
+	placeSearchProvider: 'nominatim' | 'google';
+	/** Encrypted at rest; null when no Google Places API key is stored. */
+	placeSearchGoogleApiKey: string | null;
 	sessionCookieSameSite: SessionCookieSameSite;
 	oauthClientAllowList: string[] | null;
+	oidcEnabled: boolean;
+	oidcDiscoveryUrl: string | null;
+	oidcClientId: string | null;
+	/** Encrypted at rest; null when no secret is stored. */
+	oidcClientSecret: string | null;
+	/** Login-button label; defaults to "SSO". */
+	oidcDisplayName: string;
+	/** ntfy server base URL; null means the default https://ntfy.sh. */
+	ntfyServerUrl: string | null;
+	/** ntfy topic; null disables the ntfy channel. */
+	ntfyTopic: string | null;
+	/** Encrypted at rest; null when no token is stored. */
+	ntfyToken: string | null;
+	/** Scheduled automatic backups (admin). */
+	backupAutoEnabled: boolean;
+	backupIntervalHours: number;
+	backupRetentionCount: number;
+	backupLastAutoAt: string | null;
 	/** Local MiniLM / ONNX semantic search settings (disabled by default). */
 	embeddings: EmbeddingsConfig;
 };
@@ -108,15 +129,31 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	mapsTileUrl: 'maps_tile_url',
 	mapsTileAttribution: 'maps_tile_attribution',
 	mapsTileApiKey: 'maps_tile_api_key',
+	placeSearchProvider: 'place_search_provider',
+	placeSearchGoogleApiKey: 'place_search_google_api_key',
 	sessionCookieSameSite: 'session_cookie_same_site',
-	oauthClientAllowList: 'oauth_client_allow_list'
+	oauthClientAllowList: 'oauth_client_allow_list',
+	oidcEnabled: 'oidc_enabled',
+	oidcDiscoveryUrl: 'oidc_discovery_url',
+	oidcClientId: 'oidc_client_id',
+	oidcClientSecret: 'oidc_client_secret',
+	oidcDisplayName: 'oidc_display_name',
+	ntfyServerUrl: 'ntfy_server_url',
+	ntfyTopic: 'ntfy_topic',
+	ntfyToken: 'ntfy_token',
+	backupAutoEnabled: 'backup_auto_enabled',
+	backupIntervalHours: 'backup_interval_hours',
+	backupRetentionCount: 'backup_retention_count',
+	backupLastAutoAt: 'backup_last_auto_at'
 };
 
 const SETTINGS_INT_FIELDS = new Set([
 	'default_flight_checkin_lead_hours',
 	'default_document_expiry_lead_days',
 	'email_poll_interval_minutes',
-	'smtp_port'
+	'smtp_port',
+	'backup_interval_hours',
+	'backup_retention_count'
 ]);
 
 const EMAIL_SETTING_KEYS = [
@@ -171,10 +208,26 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 		mapsTileUrl: nullableText(row.maps_tile_url),
 		mapsTileAttribution: nullableText(row.maps_tile_attribution),
 		mapsTileApiKey: nullableText(row.maps_tile_api_key),
+		placeSearchProvider: row.place_search_provider === 'google' ? 'google' : 'nominatim',
+		placeSearchGoogleApiKey: nullableText(row.place_search_google_api_key),
 		sessionCookieSameSite: (row.session_cookie_same_site as SessionCookieSameSite) ?? 'lax',
 		oauthClientAllowList: row.oauth_client_allow_list
 			? (JSON.parse(row.oauth_client_allow_list as string) as string[])
 			: null,
+		oidcEnabled: Boolean(row.oidc_enabled),
+		oidcDiscoveryUrl: nullableText(row.oidc_discovery_url),
+		oidcClientId: nullableText(row.oidc_client_id),
+		oidcClientSecret: nullableText(row.oidc_client_secret),
+		oidcDisplayName: nullableText(row.oidc_display_name) ?? 'SSO',
+		ntfyServerUrl: nullableText(row.ntfy_server_url),
+		ntfyTopic: nullableText(row.ntfy_topic),
+		ntfyToken: nullableText(row.ntfy_token),
+		backupAutoEnabled: Boolean(row.backup_auto_enabled),
+		backupIntervalHours:
+			row.backup_interval_hours == null ? 24 : Number(row.backup_interval_hours),
+		backupRetentionCount:
+			row.backup_retention_count == null ? 7 : Number(row.backup_retention_count),
+		backupLastAutoAt: nullableText(row.backup_last_auto_at),
 		embeddings: parseEmbeddingsConfig(row.embeddings_config)
 	};
 }
@@ -320,6 +373,20 @@ function rebuildSettingsRow(existing: Record<string, unknown>): void {
 		maps_tile_attribution: null,
 		maps_tile_api_key: null,
 		oauth_client_allow_list: null,
+		oidc_enabled: false,
+		oidc_discovery_url: null,
+		oidc_client_id: null,
+		oidc_client_secret: null,
+		oidc_display_name: null,
+		ntfy_server_url: null,
+		ntfy_topic: null,
+		ntfy_token: null,
+		backup_auto_enabled: false,
+		backup_interval_hours: 24n,
+		backup_retention_count: 7n,
+		backup_last_auto_at: null,
+		place_search_provider: null,
+		place_search_google_api_key: null,
 		embeddings_config: serializeEmbeddingsConfig(DEFAULT_EMBEDDINGS_CONFIG)
 	};
 
@@ -377,6 +444,20 @@ export function getSettings(): Settings {
 				maps_tile_attribution: null,
 				maps_tile_api_key: null,
 				oauth_client_allow_list: null,
+				oidc_enabled: false,
+				oidc_discovery_url: null,
+				oidc_client_id: null,
+				oidc_client_secret: null,
+				oidc_display_name: null,
+				ntfy_server_url: null,
+				ntfy_topic: null,
+				ntfy_token: null,
+				backup_auto_enabled: false,
+				backup_interval_hours: 24n,
+				backup_retention_count: 7n,
+				backup_last_auto_at: null,
+				place_search_provider: null,
+				place_search_google_api_key: null,
 				embeddings_config: serializeEmbeddingsConfig(DEFAULT_EMBEDDINGS_CONFIG)
 			} as Insert<typeof settings>)
 			.executeSync();
@@ -427,7 +508,8 @@ export function updateSettings(patch: SettingsPatch): void {
 		default_document_expiry_lead_days: 90n,
 		maps_enabled: false,
 		maps_tile_provider: 'openstreetmap',
-		session_cookie_same_site: 'lax'
+		session_cookie_same_site: 'lax',
+		oidc_enabled: false
 	};
 	for (const [key, def] of Object.entries(HARDCODED_DEFAULTS)) {
 		const v = merged[key];

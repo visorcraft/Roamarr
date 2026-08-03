@@ -21,6 +21,36 @@ import { logAudit } from '../audit';
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 export const MAX_SIZE = 10 * 1024 * 1024;
 
+/** Canonical stored type for GPS tracks; downloads always use this, never text/xml. */
+export const GPX_CONTENT_TYPE = 'application/gpx+xml';
+// Browsers label .gpx files inconsistently; tolerate generic XML/binary types,
+// but only when the file name actually ends in .gpx.
+const GPX_TOLERATED_TYPES = [GPX_CONTENT_TYPE, 'application/xml', 'text/xml', 'application/octet-stream', ''];
+
+export function isGpxFile(file: File): boolean {
+	return file.name.toLowerCase().endsWith('.gpx') && GPX_TOLERATED_TYPES.includes(file.type);
+}
+
+/**
+ * Content sniff for GPX: after an optional BOM and XML declaration, the root
+ * tag must be <gpx>. This rejects HTML or arbitrary XML renamed to .gpx, which
+ * matters anywhere a file could otherwise be served with an XML/HTML type.
+ */
+async function validateGpxContent(file: File): Promise<void> {
+	const head = new TextDecoder().decode(await file.slice(0, 4096).arrayBuffer());
+	let s = head;
+	if (s.charCodeAt(0) === 0xfeff) s = s.slice(1); // strip UTF-8 BOM
+	s = s.trimStart();
+	if (s.startsWith('<?xml')) {
+		const end = s.indexOf('?>');
+		if (end === -1) throw error(400, 'File content does not match its extension/content type');
+		s = s.slice(end + 2).trimStart();
+	}
+	if (!s.startsWith('<gpx') || !'/> \t\r\n'.includes(s.charAt(4))) {
+		throw error(400, 'File content does not match its extension/content type');
+	}
+}
+
 const MAGIC_BYTES: Record<string, Uint8Array[]> = {
 	'image/jpeg': [new Uint8Array([0xff, 0xd8, 0xff])],
 	'image/png': [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
@@ -46,13 +76,21 @@ export interface CreateAttachmentInput {
 export async function createAttachment(input: CreateAttachmentInput) {
 	const { ownerId, file, context } = input;
 
-	if (!ALLOWED_TYPES.includes(file.type)) {
-		throw error(400, 'Only JPEG, PNG, WebP, or PDF files are allowed');
+	const gpx = isGpxFile(file);
+	if (!gpx && !ALLOWED_TYPES.includes(file.type)) {
+		throw error(400, 'Only JPEG, PNG, WebP, PDF, or GPX files are allowed');
 	}
 	if (file.size > MAX_SIZE) {
 		throw error(400, 'File must be 10 MB or smaller');
 	}
-	await validateMagicBytes(file);
+	if (gpx) {
+		await validateGpxContent(file);
+	} else {
+		await validateMagicBytes(file);
+	}
+	// Normalize the stored type so GPX is never later served as text/xml or
+	// application/octet-stream.
+	const contentType = gpx ? GPX_CONTENT_TYPE : file.type;
 
 	const baseDir = getAttachmentsPath();
 	let stageResult: Awaited<ReturnType<typeof stageEncryptedAttachment>>;
@@ -71,7 +109,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 			ownerId,
 			storageKey: stageResult.storageKey,
 			filename: file.name,
-			contentType: file.type,
+			contentType,
 			sizeBytes: stageResult.plaintextBytes,
 			context
 		});
@@ -83,7 +121,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 
 	logAudit(ownerId, 'create', 'attachment', row.id, {
 		filename: file.name,
-		contentType: file.type,
+		contentType,
 		contextKind: context.kind
 	});
 

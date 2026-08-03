@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
 	import { startAuthentication } from '@simplewebauthn/browser';
 	import TextField from '$lib/components/TextField.svelte';
 
@@ -7,6 +8,15 @@
 	let submitting = $state(false);
 	let passkeyBusy = $state(false);
 	let passkeyError = $state('');
+
+	// Preserve the post-login target through the SSO round-trip, with the same
+	// same-origin rule as the password form's `next` handling.
+	const ssoHref = $derived.by(() => {
+		const next = page.url.searchParams.get('next');
+		return next && next.startsWith('/') && !next.startsWith('//')
+			? `/auth/oidc/start?next=${encodeURIComponent(next)}`
+			: '/auth/oidc/start';
+	});
 
 	async function signInWithPasskey() {
 		passkeyError = '';
@@ -58,6 +68,12 @@
 			<button class="btn btn-primary w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
 				{passkeyBusy ? 'Waiting…' : 'Sign in with a passkey'}
 			</button>
+		</div>
+	{/if}
+
+	{#if data.oidc?.enabled}
+		<div class="mt-4 {data.passkeyAvailable ? '' : 'border-t border-slate-200 pt-4 dark:border-slate-700'}">
+			<a href={ssoHref} class="btn btn-primary w-full text-center">Sign in with {data.oidc.displayName}</a>
 		</div>
 	{/if}
 

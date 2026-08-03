@@ -18,12 +18,12 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 	return new Response('ok', { status: 200 });
 });
 
-import { deliver, isAllowedWebhookUrl, sendMail, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
+import { deliver, isAllowedWebhookUrl, isValidNtfyServerUrl, isValidNtfyTopic, sendMail, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
 import { SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
-import { encrypt } from './crypto';
-import { updateSettings } from './settings';
+import { decrypt, encrypt } from './crypto';
+import { getSettings, updateSettings } from './settings';
 import { upsertUserSmtpOverride } from './smtpConfig';
 
 type MakeUserOver = Partial<import('./repositories/usersRepo').CreateUserInput> & {
@@ -209,4 +209,73 @@ test('deliver absorbs a failing channel so one outage does not fail the tick', a
 		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
 		errorSpy.mockRestore();
 	}
+});
+
+test('ntfy server URL and topic validation', () => {
+	expect(isValidNtfyServerUrl('https://ntfy.sh')).toBe(true);
+	expect(isValidNtfyServerUrl('https://ntfy.example.com/base')).toBe(true);
+	expect(isValidNtfyServerUrl('http://ntfy.sh')).toBe(false);
+	expect(isValidNtfyServerUrl('https://user:pass@ntfy.sh')).toBe(false);
+	expect(isValidNtfyServerUrl('not-a-url')).toBe(false);
+
+	expect(isValidNtfyTopic('roamarr-alerts_2')).toBe(true);
+	expect(isValidNtfyTopic('a'.repeat(64))).toBe(true);
+	expect(isValidNtfyTopic('a'.repeat(65))).toBe(false);
+	expect(isValidNtfyTopic('has space')).toBe(false);
+	expect(isValidNtfyTopic('slash/topic')).toBe(false);
+	expect(isValidNtfyTopic('')).toBe(false);
+});
+
+test('POSTs to the default ntfy server when only a topic is configured', async () => {
+	const u = makeUser({ email: 'n1@x.c', display_name: 'N1' });
+	updateSettings({ webhookUrl: null, ntfyServerUrl: null, ntfyTopic: 'roamarr-alerts', ntfyToken: null });
+	const before = fetches.length;
+	await deliver(Number(u.id), { title: 'Trip soon', body: 'Pack up', link: 'https://r/t/1' });
+	expect(fetches.length).toBe(before + 1);
+	const call = fetches.at(-1)!;
+	expect(call.url).toBe('https://ntfy.sh/roamarr-alerts');
+	expect(call.init.method).toBe('POST');
+	const headers = call.init.headers as Record<string, string>;
+	expect(headers.Title).toBe('Trip soon');
+	expect(headers.Click).toBe('https://r/t/1');
+	expect(headers.Authorization).toBeUndefined();
+	expect(call.init.body).toBe('Pack up');
+});
+
+test('ntfy token is encrypted at rest and sent as a Bearer header', async () => {
+	const u = makeUser({ email: 'n2@x.c', display_name: 'N2' });
+	updateSettings({
+		webhookUrl: null,
+		ntfyServerUrl: 'https://ntfy.example.com',
+		ntfyTopic: 'secure-topic',
+		ntfyToken: encrypt('tk_secret')
+	});
+	const stored = getSettings().ntfyToken;
+	expect(stored).toBeTruthy();
+	expect(stored).not.toBe('tk_secret');
+	expect(decrypt(stored!)).toBe('tk_secret');
+
+	const before = fetches.length;
+	await deliver(Number(u.id), { title: 'T', body: 'B' });
+	expect(fetches.length).toBe(before + 1);
+	const call = fetches.at(-1)!;
+	expect(call.url).toBe('https://ntfy.example.com/secure-topic');
+	expect((call.init.headers as Record<string, string>).Authorization).toBe('Bearer tk_secret');
+});
+
+test('skips ntfy when the user disabled the channel or the topic is invalid', async () => {
+	updateSettings({ webhookUrl: null, ntfyServerUrl: null, ntfyTopic: 'roamarr-alerts', ntfyToken: null });
+	const off = makeUser({ email: 'n3@x.c', display_name: 'N3', ntfy_notifications: false });
+	let before = fetches.length;
+	await deliver(Number(off.id), { title: 'T', body: 'B' });
+	expect(fetches.length).toBe(before);
+
+	const on = makeUser({ email: 'n4@x.c', display_name: 'N4' });
+	updateSettings({ ntfyTopic: 'bad topic!' });
+	before = fetches.length;
+	await deliver(Number(on.id), { title: 'T', body: 'B' });
+	expect(fetches.length).toBe(before);
+
+	// Clean up so no later suite in this process sees a configured topic.
+	updateSettings({ ntfyTopic: null });
 });

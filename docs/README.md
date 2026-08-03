@@ -23,10 +23,14 @@ operating, securing, integrating, and contributing to the application.
   details, and privacy.
 - [Trip checklists](./checklists.md): preparation items, assignments, packed
   state, tools, and visibility.
+- [Day notes](./day-notes.md): per-day itinerary notes, icons, MCP tools, and
+  visibility.
 - [Companions](./companions.md): travelers, linked users, invitations,
   preferences, assignments, and sensitive details.
 - [Sharing](./sharing.md): direct and group access, public links, exact data
   visibility, expiry, and revocation.
+- [Real-time sync](./realtime.md): live trip-page updates over SSE, limits,
+  privacy filtering, and client consumption.
 - [Calendars](./calendars.md): downloads, per-trip subscription feeds, the
   account feed, token rotation, and event contents.
 - [Printable itinerary](./printable-itinerary.md): print/PDF output and its
@@ -37,10 +41,14 @@ operating, securing, integrating, and contributing to the application.
   management, security, and privacy.
 - [Trip and segment file documents](./trip-documents.md): uploaded PDFs and
   images scoped to a trip or segment (QR codes, vouchers, confirmations).
+- [Photo galleries](./gallery.md): ordered place and trip photos with
+  captions, covers, visibility, and MCP tools.
 - [Templates and trip merge](./templates-and-merge.md): trip templates,
   packing templates, duplication, and donor-to-recipient merge behavior.
 - [Maps](./maps.md): map enablement, GeoNames, the globe, tile providers,
   network access, and attribution.
+- [Route optimization](./route-optimization.md): per-day stop ordering, Google
+  Maps day export, and the MCP tools.
 - [Weather](./weather.md): Open-Meteo forecasts, cache behavior, advisories,
   privacy, and limitations.
 - [Search](./search.md): lexical search, optional local semantic search,
@@ -75,6 +83,8 @@ operating, securing, integrating, and contributing to the application.
 - [Travel documents](./travel-documents.md): passports, visas, licenses,
   encryption, ownership, and expiry reminders.
 - [Cards](./cards.md): safe card metadata and travel benefits.
+- [Places](./places.md): the saved-places library, categories, links, map,
+  geo import, and trip bridge.
 - [Loyalty](./loyalty.md): memberships, balances, and privacy.
 - [Insurance](./insurances.md): policies, benefits, trip links, and privacy.
 - [Notifications](./notifications.md): in-app, SMTP, and signed webhook
@@ -101,10 +111,14 @@ operating, securing, integrating, and contributing to the application.
 
 - [OAuth 2.1](./oauth.md): discovery, client registration, PKCE, consent,
   scopes, tokens, revocation, and administrator controls.
+- [OIDC single sign-on](./oidc.md): external identity-provider login,
+  redirect URI, account linking, provisioning rules, and 2FA interaction.
 - [MCP and AI](./mcp-ai.md): Streamable HTTP setup, tools, prompts, resources,
   privacy gates, client examples, and protocol troubleshooting.
 - [HTTP JSON API](./http-api.md): supported bearer-authenticated route
   families, methods, scopes, errors, and compatibility expectations.
+- [Personal API keys](./api-keys.md): long-lived scoped tokens for scripts and
+  AI agents calling the REST API or MCP without the OAuth flow.
 
 ## Development
 

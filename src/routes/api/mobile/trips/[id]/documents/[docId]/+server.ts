@@ -40,7 +40,9 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 
 	const displayName = label?.trim() || record.filename;
 	const safeFilename = sanitizeFilename(displayName);
-	const inline = url.searchParams.get('inline') === '1';
+	// Only images and PDFs may open inline; GPX and anything else downloads.
+	const canInline = record.contentType === 'application/pdf' || record.contentType.startsWith('image/');
+	const inline = canInline && url.searchParams.get('inline') === '1';
 	return new Response(stream, {
 		headers: {
 			'Content-Type': record.contentType,

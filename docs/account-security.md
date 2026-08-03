@@ -71,6 +71,15 @@ separate TOTP step. TOTP remains active for password login.
 Passkeys can be renamed and deleted. Roamarr prevents deletion of the last
 usable sign-in method when that would lock out the account.
 
+## Single sign-on (OIDC)
+
+When the administrator enables an external OpenID Connect provider, the login
+page shows a "Sign in with …" button. SSO sign-in creates the same session
+cookie as password login, still requires the TOTP challenge for accounts with
+two-factor enabled, and is rejected for disabled accounts. SSO-provisioned
+accounts have no usable password until one is set through the normal
+reset/change flows. See [OIDC single sign-on](./oidc.md).
+
 ## Sessions
 
 Session cookies contain a random 32-byte token. The database stores its

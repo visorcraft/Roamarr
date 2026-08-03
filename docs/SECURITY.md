@@ -125,10 +125,10 @@ enabling it on a multi-user instance.
 
 ## Attachments and uploads
 
-Receipt uploads:
+Receipt and document uploads:
 
 - maximum 10 MB;
-- JPEG, PNG, WebP, or PDF;
+- JPEG, PNG, WebP, PDF, or GPX (`.gpx` only, sniffed for a `<gpx>` root);
 - content-signature validation;
 - randomized storage name;
 - chunked authenticated encryption.

@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import * as expensesRepo from '../repositories/expensesRepo';
 import { requireCompanionOnTrip, requireCompanionsOnTrip, requireEditableTrip } from '../ownership';
 import { logAudit } from '../audit';
+import { publishTripChanged } from '../eventBus';
 import { BUDGET_CATEGORIES } from '../tripBudgets';
 import type { TripExpenseView } from './types';
 
@@ -110,6 +111,7 @@ export function addTripExpense(
 		currency,
 		category
 	});
+	publishTripChanged(tripId);
 
 	return { ...toExpenseView(inserted), splitAmong };
 }
@@ -120,6 +122,7 @@ export function deleteTripExpense(userId: number, expenseId: number) {
 	requireEditableTrip(userId, expense.tripId);
 	expensesRepo.deleteExpense(expenseId);
 	logAudit(userId, 'delete', 'trip_expense', expenseId, { tripId: expense.tripId });
+	publishTripChanged(expense.tripId);
 }
 
 export function updateTripExpense(
@@ -151,5 +154,6 @@ export function updateTripExpense(
 	const updated = expensesRepo.updateExpense(expenseId, repoPatch);
 	if (!updated) throw error(404, 'Expense not found');
 	logAudit(userId, 'update', 'trip_expense', expenseId, { tripId: existing.tripId });
+	publishTripChanged(existing.tripId);
 	return updated;
 }

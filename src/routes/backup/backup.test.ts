@@ -275,3 +275,48 @@ test('restore accepts a valid backup and writes a pending restore marker', async
 	);
 	expect(leftoverWrappers.length).toBe(0);
 });
+
+test('saveAutoBackup validates interval and retention bounds', async () => {
+	const badInterval = new Request('http://localhost/backup', {
+		method: 'POST',
+		body: new URLSearchParams({ backupAutoEnabled: 'on', backupIntervalHours: '0', backupRetentionCount: '7' })
+	});
+	const r1 = await actions.saveAutoBackup({
+		locals: adminLocals(),
+		request: badInterval,
+		cookies: { set: vi.fn() }
+	} as any);
+	expect(r1?.status).toBe(400);
+	expect(r1?.data.error).toContain('interval');
+
+	const badRetention = new Request('http://localhost/backup', {
+		method: 'POST',
+		body: new URLSearchParams({ backupAutoEnabled: 'on', backupIntervalHours: '24', backupRetentionCount: '0' })
+	});
+	const r2 = await actions.saveAutoBackup({
+		locals: adminLocals(),
+		request: badRetention,
+		cookies: { set: vi.fn() }
+	} as any);
+	expect(r2?.status).toBe(400);
+	expect(r2?.data.error).toContain('Retention');
+});
+
+test('saveAutoBackup persists valid settings and redirects', async () => {
+	const cookies = { set: vi.fn() };
+	const request = new Request('http://localhost/backup', {
+		method: 'POST',
+		body: new URLSearchParams({ backupAutoEnabled: 'on', backupIntervalHours: '12', backupRetentionCount: '3' })
+	});
+	await expect(
+		actions.saveAutoBackup({ locals: adminLocals(), request, cookies } as any)
+	).rejects.toMatchObject({ status: 303, location: '/backup' });
+
+	const { getSettings, updateSettings } = await import('$lib/server/settings');
+	const s = getSettings();
+	expect(s.backupAutoEnabled).toBe(true);
+	expect(s.backupIntervalHours).toBe(12);
+	expect(s.backupRetentionCount).toBe(3);
+	// Reset so no other suite in this process sees auto-backups enabled.
+	updateSettings({ backupAutoEnabled: false, backupIntervalHours: 24, backupRetentionCount: 7 });
+});

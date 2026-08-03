@@ -44,14 +44,17 @@ test('qa-compat trip and itinerary create/edit/delete', async ({ page }) => {
 		await tz.selectOption('UTC').catch(() => undefined);
 	}
 	await page.click('button:has-text("Save")');
-	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'networkidle' });
+	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'load' });
 	const segment = page.locator('.trip-modern-segment', { hasText: segmentTitle });
 	await expect(segment).toBeVisible();
 
 	// 3) Edit segment inline — select card, click Edit, change title, save
-	await segment.click();
+	// The card click needs client-side hydration; retry until the dialog opens.
 	const details = page.getByRole('dialog', { name: 'Selected segment details' });
-	await expect(details).toBeVisible({ timeout: 15_000 });
+	await expect(async () => {
+		if (!(await details.isVisible().catch(() => false))) await segment.click();
+		await expect(details).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 15_000 });
 	await details.getByRole('button', { name: 'Edit', exact: true }).click();
 	// Inline edit form on trip page
 	const titleField = page.getByLabel('Note title').or(page.getByLabel(/^Title$/i)).first();
@@ -64,8 +67,11 @@ test('qa-compat trip and itinerary create/edit/delete', async ({ page }) => {
 	});
 
 	// 4) Delete segment via panel + ConfirmModal
-	await page.locator('.trip-modern-segment', { hasText: editedSegmentTitle }).click();
-	await expect(details).toBeVisible({ timeout: 15_000 });
+	const editedSegment = page.locator('.trip-modern-segment', { hasText: editedSegmentTitle });
+	await expect(async () => {
+		if (!(await details.isVisible().catch(() => false))) await editedSegment.click();
+		await expect(details).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 15_000 });
 	await details.getByRole('button', { name: 'Delete', exact: true }).click();
 	// ConfirmModal uses native <dialog class="modal-dialog"> with confirmLabel "Delete"
 	const confirmModal = page.locator('dialog.modal-dialog[open]');
@@ -79,7 +85,7 @@ test('qa-compat trip and itinerary create/edit/delete', async ({ page }) => {
 	await page.goto(`/trips/${tripId}/edit`, { waitUntil: 'networkidle' });
 	await page.getByLabel('Trip name').fill(editedTripName);
 	await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'networkidle' });
+	await page.waitForURL(`/trips/${tripId}`, { waitUntil: 'load' });
 	await expect(page.locator('h1')).toContainText(editedTripName);
 
 	// 6) Delete trip

@@ -12,6 +12,7 @@ vi.mock('$lib/server/db', async () => {
 import { POST as mcpPost, GET as mcpGet } from './+server';
 import { POST as tokenPost } from '../oauth/token/+server';
 import { createClient, createAuthorizationCode } from '$lib/server/oauth';
+import { createApiKey } from '$lib/server/apiKeys';
 import { oauthTokens, oauthClients } from '$lib/server/db/mongrelSchema';
 import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -267,5 +268,86 @@ describe('mcp route', () => {
 		expect(res.status).toBe(200);
 		const body = await res.json();
 		expect(body.result.content[0].text).toContain('status must be one of');
+	});
+
+	test('a personal API key authenticates MCP end-to-end and scopes still bind', async () => {
+		const { token } = createApiKey(userId, { name: 'agent', scopes: ['trips:read'] });
+
+		// Bearer rk_… works exactly like an OAuth bearer token.
+		const init = await mcpPost({
+			request: initRequest(token, {
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'initialize',
+				params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0.0' } }
+			}),
+			getClientAddress: () => '127.0.0.1'
+		} as any);
+		expect(init.status).toBe(200);
+		const sessionId = init.headers.get('mcp-session-id')!;
+
+		const call = (name: string, args: unknown) =>
+			mcpPost({
+				request: new Request('http://localhost/mcp', {
+					method: 'POST',
+					body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }),
+					headers: {
+						'Authorization': `Bearer ${token}`,
+						'Content-Type': 'application/json',
+						'Accept': 'application/json, text/event-stream',
+						'mcp-session-id': sessionId
+					}
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+
+		// Within scope: the read tool succeeds.
+		const ok = await call('roamarr_trip_list', {});
+		expect(ok.status).toBe(200);
+		expect((await ok.json()).result.isError).toBeFalsy();
+
+		// Outside scope: the write tool is rejected with the standard scope error.
+		const denied = await call('roamarr_trip_create', { name: 'Nope' });
+		expect(denied.status).toBe(200);
+		const deniedBody = await denied.json();
+		expect(deniedBody.result.isError).toBe(true);
+		expect(deniedBody.result.content[0].text).toContain('trips:write');
+	});
+
+	test('a personal API key is accepted via the X-Api-Token header', async () => {
+		const { token } = createApiKey(userId, { name: 'agent', scopes: ['trips:read'] });
+		const res = await mcpPost({
+			request: new Request('http://localhost/mcp', {
+				method: 'POST',
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'initialize',
+					params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0.0' } }
+				}),
+				headers: {
+					'X-Api-Token': token,
+					'Content-Type': 'application/json',
+					'Accept': 'application/json, text/event-stream'
+				}
+			}),
+			getClientAddress: () => '127.0.0.1'
+		} as any);
+		expect(res.status).toBe(200);
+		expect(res.headers.get('mcp-session-id')).toBeTruthy();
+	});
+
+	test('an invalid API key is rejected with 401', async () => {
+		const res = await mcpPost({
+			request: initRequest('rk_' + '0'.repeat(64), {
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'initialize',
+				params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0.0' } }
+			}),
+			getClientAddress: () => '127.0.0.1'
+		} as any);
+		expect(res.status).toBe(401);
+		expect(await res.json()).toEqual({ error: 'Invalid or expired API key' });
 	});
 });

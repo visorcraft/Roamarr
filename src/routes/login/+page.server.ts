@@ -6,6 +6,7 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 import { normalizeEmail } from '$lib/server/users';
 import { isTwoFactorEnabled, createPendingCookie } from '$lib/server/twoFactor';
 import { isPasskeyAvailable } from '$lib/server/passkeys';
+import { getOidcPublicInfo } from '$lib/server/oidc';
 
 export async function _authenticate(email: string, password: string) {
 	const u = usersRepo.getUserByEmail(normalizeEmail(email));
@@ -24,7 +25,8 @@ export async function _authenticate(email: string, password: string) {
 }
 
 export const load: PageServerLoad = () => {
-	return { passkeyAvailable: isPasskeyAvailable() };
+	// Only enabled + button label are exposed — never URLs or secrets.
+	return { passkeyAvailable: isPasskeyAvailable(), oidc: getOidcPublicInfo() };
 };
 
 function safeNext(url: URL | undefined): string | null {

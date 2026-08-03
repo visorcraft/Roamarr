@@ -21,8 +21,14 @@ route works with a session cookie.
 
 ## Authentication
 
-Register an OAuth client, complete authorization code flow with mandatory S256
-PKCE, and send:
+Two credential types work, with identical scope enforcement:
+
+- **OAuth access token:** register an OAuth client, complete authorization
+  code flow with mandatory S256 PKCE, and send
+  `Authorization: Bearer <access-token>`.
+- **Personal API key:** create a key under **Profile → API Keys** and send it
+  as `X-Api-Token: rk_…` or `Authorization: Bearer rk_…`. No OAuth flow is
+  needed; see [Personal API keys](./api-keys.md).
 
 ```http
 Authorization: Bearer <access-token>
@@ -44,6 +50,7 @@ exchange, and all scopes.
 | Routes | Methods | Scope | Purpose |
 | --- | --- | --- | --- |
 | `/api/trips/autocomplete` | `GET` | `trips:read` | Search accessible trips for a picker. |
+| `/api/events` | `GET` | `trips:read` | Long-lived SSE stream of trip invalidation events; see [Real-time sync](./realtime.md). |
 | `/api/mobile/trips/{id}` | `GET` | `trips:read` | Load one viewable trip. |
 | `/api/mobile/trips/{id}/poster` | `GET`, `POST` | `trips:read`, `trips:write` | Read or upload a trip poster. |
 | `/api/mobile/trip-transfer` | `GET`, `POST` | `trips:read`, `trips:write` | Inspect or transfer an owned trip. |

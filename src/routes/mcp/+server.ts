@@ -1,7 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
-import { verifyAccessToken } from '$lib/server/oauth';
+import { verifyAccessToken, type AuthenticatedToken } from '$lib/server/oauth';
+import { API_KEY_CLIENT_ID, extractApiKeyToken, verifyApiKey } from '$lib/server/apiKeys';
 import { createMcpServer } from '$lib/server/mcpServer';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { RequestHandler } from '@sveltejs/kit';
@@ -16,6 +17,30 @@ function extractBearer(request: Request): string | null {
 	const auth = request.headers.get('authorization') ?? '';
 	if (!auth.startsWith('Bearer ')) return null;
 	return auth.slice(7);
+}
+
+/**
+ * Resolve the request credential: a personal API key (X-Api-Token header or an
+ * rk_-prefixed Bearer token) or a standard OAuth access token. API keys are
+ * checked first; the rk_ prefix guarantees real OAuth tokens are never
+ * shadowed. Keys carry the user's own scopes, so no client registry or consent
+ * checks apply — scope enforcement stays inside the MCP server.
+ */
+function resolveCredential(request: Request): { auth: AuthenticatedToken; raw: string } | { error: string } {
+	const apiKeyToken = extractApiKeyToken(request);
+	if (apiKeyToken) {
+		const verified = verifyApiKey(apiKeyToken);
+		if (!verified) return { error: 'Invalid or expired API key' };
+		return {
+			auth: { userId: verified.userId, scopes: verified.scopes, clientId: API_KEY_CLIENT_ID },
+			raw: apiKeyToken
+		};
+	}
+	const bearer = extractBearer(request);
+	if (!bearer) return { error: 'Bearer token required' };
+	const auth = verifyAccessToken(bearer);
+	if (!auth) return { error: 'Invalid or expired token' };
+	return { auth, raw: bearer };
 }
 
 function unauthorizedJson(body: unknown, status = 401): Response {
@@ -41,13 +66,12 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		});
 	}
 
-	const bearer = extractBearer(request);
-	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
-	const token = verifyAccessToken(bearer);
-	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+	const credential = resolveCredential(request);
+	if ('error' in credential) return unauthorizedJson({ error: credential.error });
+	const { auth: token, raw } = credential;
 
 	const authInfo: AuthInfo = {
-		token: bearer,
+		token: raw,
 		clientId: token.clientId,
 		scopes: token.scopes
 	};
@@ -103,13 +127,12 @@ export const GET: RequestHandler = async ({ request, getClientAddress }) => {
 		});
 	}
 
-	const bearer = extractBearer(request);
-	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
-	const token = verifyAccessToken(bearer);
-	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+	const credential = resolveCredential(request);
+	if ('error' in credential) return unauthorizedJson({ error: credential.error });
+	const { auth: token, raw } = credential;
 
 	const authInfo: AuthInfo = {
-		token: bearer,
+		token: raw,
 		clientId: token.clientId,
 		scopes: token.scopes
 	};
@@ -134,13 +157,12 @@ export const DELETE: RequestHandler = async ({ request, getClientAddress }) => {
 		});
 	}
 
-	const bearer = extractBearer(request);
-	if (!bearer) return unauthorizedJson({ error: 'Bearer token required' });
-	const token = verifyAccessToken(bearer);
-	if (!token) return unauthorizedJson({ error: 'Invalid or expired token' });
+	const credential = resolveCredential(request);
+	if ('error' in credential) return unauthorizedJson({ error: credential.error });
+	const { auth: token, raw } = credential;
 
 	const authInfo: AuthInfo = {
-		token: bearer,
+		token: raw,
 		clientId: token.clientId,
 		scopes: token.scopes
 	};

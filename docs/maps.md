@@ -44,6 +44,23 @@ GeoNames city points.
 The selected upcoming city controls map focus. Items without coordinates
 remain usable in the itinerary but cannot be positioned.
 
+The **Places** page shows the saved-places library on a clustered MapLibre
+map with category-colored pins. Places without coordinates appear in the
+list only.
+
+## GPX tracks
+
+Places and trip documents can carry GPS tracks (`.gpx` files). When Maps are
+enabled, tracks render as lines on the relevant map:
+
+- **Places** map: each place's track in its category color, with a
+  **GPX tracks** toggle in the top-left corner.
+- **Trip** hero map: tracks attached to trip/segment documents, colored per
+  segment, with the same toggle. The map reframes to include track bounds.
+
+Tracks are fetched from the same authenticated download endpoints used for
+file downloads; nothing leaves the instance.
+
 ## Tile providers
 
 Supported choices:
@@ -65,6 +82,14 @@ Roamarr encrypts saved API keys at rest.
 A custom raster URL must use `{z}`, `{x}`, and `{y}` placeholders and include
 correct attribution. Changing provider updates the content security policy to
 permit its tile origin.
+
+## Place search providers
+
+The Maps tab also configures the provider behind the saved-place prefill
+search (see [Saved places](./places.md#place-search-nominatim-or-google-places)):
+OpenStreetMap Nominatim (default, no key) or Google Places (requires an API
+key, encrypted at rest and masked in the UI). When Google is selected without
+a key, searches fall back to Nominatim with a warning in the dialog.
 
 ## Network and privacy
 

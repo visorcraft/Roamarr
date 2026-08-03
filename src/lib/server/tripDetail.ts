@@ -27,6 +27,8 @@ import {
 	listImportantItemsForTrip
 } from './repositories/tripMiscRepo';
 import { listTripDocuments, listDocumentsBySegment } from './tripDocuments';
+import { listGalleryImages } from './gallery';
+import { listDayNotesForTrip } from './tripDayNotes';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -102,10 +104,15 @@ export async function buildTripDetail(
 	const journalEntries = view.editor ? listJournalEntriesForTrip(view.trip.id) : [];
 	const documentLinks = view.editor ? listDocumentLinksForTrip(view.trip.id) : [];
 	const tripDocuments = view.editor ? listTripDocuments(view.trip.id) : [];
+	// Galleries follow trip_documents: editor-only, never in shared/public views.
+	const gallery = view.editor ? listGalleryImages('trip', view.trip.id) : [];
 	const documentsBySegment = view.editor
 		? listDocumentsBySegment(view.segments.map((s) => s.id).filter((id): id is number => id != null))
 		: new Map<number, ReturnType<typeof listTripDocuments>>();
 	const polls = view.editor ? listPollsWithVotes(view.trip.id) : [];
+	// Day notes are visible to anyone who can view the trip (read-only render
+	// for non-editors), unlike the editor-only private modules above.
+	const dayNotes = listDayNotesForTrip(view.trip.id);
 	const homeTasks = view.editor ? listHomeTasksForTrip(view.trip.id) : [];
 	const medications = view.editor ? listMedicationsForTrip(view.trip.id) : [];
 	const entryRequirements = view.editor ? listEntryRequirementsForTrip(view.trip.id) : [];
@@ -177,8 +184,10 @@ export async function buildTripDetail(
 			budgets,
 			journalEntries,
 			documentLinks,
+			dayNotes,
 			tripDocuments,
 			documentsBySegment,
+			gallery,
 			polls,
 			attendeesBySegment,
 			providers,
@@ -213,8 +222,10 @@ export async function buildTripDetail(
 		budgets,
 		journalEntries,
 		documentLinks,
+		dayNotes,
 		tripDocuments,
 		documentsBySegment,
+		gallery,
 		polls,
 		attendeesBySegment,
 		comments: view.editor ? listComments(view.trip.id) : [],

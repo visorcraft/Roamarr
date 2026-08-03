@@ -842,6 +842,33 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				}
 			},
 			{
+				name: 'roamarr_trip_day_optimize',
+				description:
+					'Optimize the visiting order of one trip day using nearest-neighbor + 2-opt over haversine distances. Only untimed (date-only, midnight start) segments with coordinates are reordered; timed segments keep their time order. Without confirm: true this returns the proposed order as a preview and changes nothing; with confirm: true the new per-day order is persisted.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						date: { type: 'string', description: 'ISO date YYYY-MM-DD (local trip day)' },
+						confirm: { type: 'boolean', description: 'Must be true to apply the optimized order' }
+					},
+					required: ['tripId', 'date']
+				}
+			},
+			{
+				name: 'roamarr_trip_day_directions_url',
+				description:
+					'Build a Google Maps directions URL for one trip day from its coordinate-bearing segments in display order (untimed by optimized order first, then timed by local time). Returns null when the day has fewer than two mappable points.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						date: { type: 'string', description: 'ISO date YYYY-MM-DD (local trip day)' }
+					},
+					required: ['tripId', 'date']
+				}
+			},
+			{
 				name: 'roamarr_trip_delete',
 				description: 'Permanently delete a trip. Cancels all reminders and shares. Cannot be undone.',
 				inputSchema: {
@@ -1388,13 +1415,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						defaultCurrency: { type: 'string' },
 						flightCheckinLeadHours: { type: 'integer' },
 						documentExpiryLeadDays: { type: 'integer' },
-						themeId: { type: 'string' }
+						themeId: { type: 'string' },
+						temperatureUnit: { type: 'string', enum: ['c', 'f'] },
+						timeFormat: { type: 'string', enum: ['12h', '24h'] }
 					}
 				}
 			},
 			{
 				name: 'roamarr_notification_channels_get',
-				description: 'Get your notification channel preferences (email/webhook).',
+				description: 'Get your notification channel preferences (email/webhook/ntfy).',
 				inputSchema: { type: 'object', properties: {} }
 			},
 			{
@@ -1404,7 +1433,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						emailNotifications: { type: 'boolean' },
-						webhookNotifications: { type: 'boolean' }
+						webhookNotifications: { type: 'boolean' },
+						ntfyNotifications: { type: 'boolean' }
 					}
 				}
 			},
@@ -1434,6 +1464,223 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				description: 'Clear your SMTP override.',
 				inputSchema: { type: 'object', properties: {
 				confirm: { type: "boolean", description: "Must be true to confirm destructive action" },} }
+			},
+			// ---- Round 4: saved places library ----
+			{
+				name: 'roamarr_saved_places_list',
+				description: 'List your saved places (POI library), optionally filtered. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						categoryId: { type: 'number' },
+						status: { type: 'string', enum: ['planned', 'visited'] },
+						favorite: { type: 'boolean' },
+						q: { type: 'string', description: 'Free-text search over name/address/notes' },
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
+			},
+			{
+				name: 'roamarr_saved_places_get',
+				description: 'Get one saved place by id.',
+				inputSchema: {
+					type: 'object',
+					properties: { placeId: { type: 'number' } },
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_create',
+				description: 'Create a saved place. priceCents is minor currency units.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						name: { type: 'string' },
+						categoryId: { type: 'number' },
+						address: { type: 'string' },
+						cityId: { type: 'number', description: 'GeoNames geoname_id' },
+						lat: { type: 'number' },
+						lng: { type: 'number' },
+						durationMin: { type: 'integer' },
+						priceCents: { type: 'integer' },
+						description: { type: 'string' },
+						status: { type: 'string', enum: ['planned', 'visited'] },
+						favorite: { type: 'boolean' }
+					},
+					required: ['name']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_update',
+				description: 'Update a saved place by id. Only provided fields change.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						placeId: { type: 'number' },
+						name: { type: 'string' },
+						categoryId: { type: 'number', nullable: true },
+						address: { type: 'string', nullable: true },
+						cityId: { type: 'number', nullable: true },
+						lat: { type: 'number', nullable: true },
+						lng: { type: 'number', nullable: true },
+						durationMin: { type: 'integer', nullable: true },
+						priceCents: { type: 'integer', nullable: true },
+						description: { type: 'string', nullable: true },
+						status: { type: 'string', enum: ['planned', 'visited'] },
+						favorite: { type: 'boolean' }
+					},
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_delete',
+				description: 'Delete a saved place by id.',
+				inputSchema: {
+					type: 'object',
+					properties: { placeId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_mark_visited',
+				description: 'Mark a saved place as visited (records visited timestamp).',
+				inputSchema: {
+					type: 'object',
+					properties: { placeId: { type: 'number' } },
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_unmark_visited',
+				description: 'Return a visited saved place to planned.',
+				inputSchema: {
+					type: 'object',
+					properties: { placeId: { type: 'number' } },
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_place_category_list',
+				description: 'List your saved-place categories (seeds defaults on first use).',
+				inputSchema: { type: 'object', properties: {} }
+			},
+			{
+				name: 'roamarr_place_category_create',
+				description: 'Create a saved-place category. color is a hex value like #2f9e44.',
+				inputSchema: {
+					type: 'object',
+					properties: { name: { type: 'string' }, color: { type: 'string' } },
+					required: ['name']
+				}
+			},
+			{
+				name: 'roamarr_place_category_update',
+				description: 'Rename or recolor a saved-place category.',
+				inputSchema: {
+					type: 'object',
+					properties: { categoryId: { type: 'number' }, name: { type: 'string' }, color: { type: 'string' } },
+					required: ['categoryId', 'name']
+				}
+			},
+			{
+				name: 'roamarr_place_category_delete',
+				description: 'Delete a saved-place category. Places in it are kept but unlinked.',
+				inputSchema: {
+					type: 'object',
+					properties: { categoryId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
+					required: ['categoryId']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_search',
+				description: 'Search OpenStreetMap (Nominatim) for a place to save; returns name/address/coords candidates.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						query: { type: 'string' },
+						limit: { type: 'integer', description: '1-20, default 8' }
+					},
+					required: ['query']
+				}
+			},
+			{
+				name: 'roamarr_saved_places_import',
+				description: 'Bulk-import saved places from structured rows. Duplicates (exact name or within 50 m) are skipped by default.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						rows: {
+							type: 'array',
+							description: 'Up to 10,000 rows',
+							items: {
+								type: 'object',
+								properties: {
+									name: { type: 'string' },
+									lat: { type: 'number' },
+									lng: { type: 'number' },
+									address: { type: 'string' },
+									description: { type: 'string' },
+									category: { type: 'string', description: 'Category name matched case-insensitively against existing categories' }
+								},
+								required: ['name']
+							}
+						},
+						categoryId: { type: 'number', description: 'Bulk category override for every imported row' },
+						skipDuplicates: { type: 'boolean', description: 'Default true' },
+						confirm: { type: 'boolean', description: 'Must be true to confirm the bulk import' }
+					},
+					required: ['rows', 'confirm']
+				}
+			},
+			{
+				name: 'roamarr_place_links_list',
+				description: 'List external links attached to a saved place. Cursor-paginated.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						placeId: { type: 'number' },
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					},
+					required: ['placeId']
+				}
+			},
+			{
+				name: 'roamarr_place_links_create',
+				description: 'Attach an external link (http/https URL) to a saved place.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						placeId: { type: 'number' },
+						label: { type: 'string' }, url: { type: 'string' }, notes: { type: 'string' }
+					},
+					required: ['placeId', 'label', 'url']
+				}
+			},
+			{
+				name: 'roamarr_place_links_update',
+				description: 'Update a saved-place link by id. Only provided fields change.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						linkId: { type: 'number' },
+						label: { type: 'string' }, url: { type: 'string' }, notes: { type: 'string', nullable: true }
+					},
+					required: ['linkId']
+				}
+			},
+			{
+				name: 'roamarr_place_links_delete',
+				description: 'Delete a saved-place link by id.',
+				inputSchema: {
+					type: 'object',
+					properties: { linkId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
+					required: ['linkId']
+				}
 			},
 			// ---- Round 3: depth + UX ----
 			{
@@ -1637,6 +1884,39 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				}
 			},
 			{
+				name: 'roamarr_trip_day_notes_list',
+				description: 'List per-day notes for a trip itinerary.',
+				inputSchema: {
+					type: 'object',
+					properties: { tripId: { type: 'number' } },
+					required: ['tripId']
+				}
+			},
+			{
+				name: 'roamarr_trip_day_notes_set',
+				description: 'Set (upsert) the note for one trip day.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						date: { type: 'string', description: 'Local trip day, YYYY-MM-DD' },
+						icon: { type: 'string', description: 'Optional icon name (document, info, warning, star, reminder); omit or empty for none' },
+						body: { type: 'string' }
+					},
+					required: ['tripId', 'date', 'body']
+				}
+			},
+			{
+				name: 'roamarr_trip_day_notes_delete',
+				description: 'Delete the note for one trip day.',
+				inputSchema: {
+					type: 'object',
+					properties: { tripId: { type: 'number' }, date: { type: 'string', description: 'Local trip day, YYYY-MM-DD' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
+					required: ['tripId', 'date']
+				}
+			},
+			{
 				name: 'roamarr_home_task_list',
 				description: 'List home tasks for a trip.',
 				inputSchema: {
@@ -1821,7 +2101,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			{
 				name: 'roamarr_search',
 				description:
-					'Search across your trips and segments. Uses contextual semantic ranking (local MiniLM + MongrelDB ANN) when an admin has enabled embeddings; otherwise substring match on name, destination, and segment titles. Returns trips plus optional hits[] and a semantic flag.',
+					'Search across your trips, segments, and saved places. Uses contextual semantic ranking (local MiniLM + MongrelDB ANN) when an admin has enabled embeddings; otherwise substring match on name, destination, and segment titles. Returns trips plus optional hits[] (place hits carry a place projection with name, category, coordinates, and status) and a semantic flag.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -1832,6 +2112,55 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						}
 					},
 					required: ['query']
+				}
+			},
+			{
+				name: 'roamarr_gallery_list',
+				description:
+					'List gallery photos for a saved place or a trip (captions and order). Image upload is web-only; MCP cannot transfer binary files.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						ownerType: { type: 'string', enum: ['place', 'trip'] },
+						ownerId: { type: 'number' }
+					},
+					required: ['ownerType', 'ownerId']
+				}
+			},
+			{
+				name: 'roamarr_gallery_remove',
+				description: 'Remove a gallery photo and delete its stored image.',
+				inputSchema: {
+					type: 'object',
+					properties: { imageId: { type: 'number' },
+					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
+					required: ['imageId']
+				}
+			},
+			{
+				name: 'roamarr_gallery_reorder',
+				description:
+					'Reorder a gallery. imageIds must list every current image id exactly once, in the desired order.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						ownerType: { type: 'string', enum: ['place', 'trip'] },
+						ownerId: { type: 'number' },
+						imageIds: { type: 'array', items: { type: 'number' } }
+					},
+					required: ['ownerType', 'ownerId', 'imageIds']
+				}
+			},
+			{
+				name: 'roamarr_gallery_set_caption',
+				description: 'Set or clear (empty string) the caption of a gallery photo.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						imageId: { type: 'number' },
+						caption: { type: 'string', description: 'Up to 200 characters; empty clears' }
+					},
+					required: ['imageId', 'caption']
 				}
 			}
 		]
@@ -2161,6 +2490,29 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				logAudit(userId, 'mcp_segment_status', 'segment', segId, { tripId: segRow.tripId, status: args.status });
 				return textResult({ ok: true, segmentId: segId, status: args.status });
 			}
+			case 'roamarr_trip_day_optimize': {
+				if (!hasScope(scopes, 'segments:write')) return scopeError('segments:write');
+				const { optimizeTripDay, planTripDay } = await import('./tripDayOptimize');
+				const tripId = Number(args.tripId);
+				const date = String(args.date);
+				if (args.confirm === true) {
+					const applied = optimizeTripDay(userId, tripId, date);
+					logAudit(userId, 'mcp_trip_day_optimize', 'trip', tripId, { date, applied: applied.applied });
+					return textResult({ ok: true, ...applied });
+				}
+				// Preview: proposed order only, nothing persisted.
+				const preview = planTripDay(userId, tripId, date);
+				return textResult({ ok: true, preview: true, ...preview });
+			}
+			case 'roamarr_trip_day_directions_url': {
+				if (!hasScope(scopes, 'segments:read')) return scopeError('segments:read');
+				const { tripDayDirectionsPoints } = await import('./tripDayOptimize');
+				const { buildGoogleMapsDirectionsUrl } = await import('$lib/googleMaps');
+				const tripId = Number(args.tripId);
+				const date = String(args.date);
+				const points = tripDayDirectionsPoints(userId, tripId, date);
+				return textResult({ ok: true, tripId, date, url: buildGoogleMapsDirectionsUrl(points) });
+			}
 			case 'roamarr_trip_delete': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
 				if (args.confirm !== true) {
@@ -2171,7 +2523,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// reminders, then deletes, then logs trip_delete. MCP logs
 				// its own mcp_trip_delete on top for traceability.
 				const { _deleteTrip } = await import('../../routes/trips/[id]/edit/+page.server');
-				_deleteTrip(userId, tripId);
+				await _deleteTrip(userId, tripId);
 				logAudit(userId, 'mcp_trip_delete', 'trip', tripId, {});
 				return textResult({ ok: true, tripId, deleted: true });
 			}
@@ -2805,6 +3157,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
 					documentExpiryLeadDays: Number(u.document_expiry_lead_days),
 					themeId: u.theme_id,
+					temperatureUnit: u.temperature_unit === 'f' ? 'f' : 'c',
+					timeFormat: u.time_format === '12h' ? '12h' : '24h',
 					// Instance display formats (same values the web UI uses) for mobile clients.
 					dateFormat: settings.defaultDateFormat || 'yyyy-MM-dd',
 					datetimeFormat: settings.defaultDatetimeFormat || 'yyyy-MM-dd h:mm a'
@@ -2837,13 +3191,21 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					}
 					expiryDays = BigInt(v);
 				}
+				if (args.temperatureUnit != null && args.temperatureUnit !== 'c' && args.temperatureUnit !== 'f') {
+					return { content: [{ type: 'text' as const, text: "temperatureUnit must be 'c' or 'f'" }], isError: true };
+				}
+				if (args.timeFormat != null && args.timeFormat !== '12h' && args.timeFormat !== '24h') {
+					return { content: [{ type: 'text' as const, text: "timeFormat must be '12h' or '24h'" }], isError: true };
+				}
 				updateUser(userId, {
 					display_name: (args.displayName as string | undefined)?.trim() || existing.display_name,
 					timezone: (args.timezone as string | undefined) ?? existing.timezone,
 					default_currency: (args.defaultCurrency as string | undefined) ?? existing.default_currency,
 					flight_checkin_lead_hours: leadHours ?? existing.flight_checkin_lead_hours,
 					document_expiry_lead_days: expiryDays ?? existing.document_expiry_lead_days,
-					theme_id: (args.themeId as string | undefined) ?? existing.theme_id
+					theme_id: (args.themeId as string | undefined) ?? existing.theme_id,
+					temperature_unit: (args.temperatureUnit as 'c' | 'f' | undefined) ?? existing.temperature_unit,
+					time_format: (args.timeFormat as '12h' | '24h' | undefined) ?? existing.time_format
 				});
 				logAudit(userId, 'mcp_profile_update', 'user', userId, {});
 				return textResult({ ok: true });
@@ -2855,7 +3217,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!u) return { content: [{ type: 'text' as const, text: 'User not found' }], isError: true };
 				return textResult({
 					emailNotifications: Boolean(u.email_notifications),
-					webhookNotifications: Boolean(u.webhook_notifications)
+					webhookNotifications: Boolean(u.webhook_notifications),
+					ntfyNotifications: u.ntfy_notifications ?? true
 				});
 			}
 			case 'roamarr_notification_channels_update': {
@@ -2868,6 +3231,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const patch: Record<string, unknown> = {};
 				if (args.emailNotifications != null) patch.email_notifications = Boolean(args.emailNotifications);
 				if (args.webhookNotifications != null) patch.webhook_notifications = Boolean(args.webhookNotifications);
+				if (args.ntfyNotifications != null) patch.ntfy_notifications = Boolean(args.ntfyNotifications);
 				if (Object.keys(patch).length === 0) {
 					return textResult({ ok: true, unchanged: true });
 				}
@@ -3146,6 +3510,34 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				logAudit(userId, 'mcp_journal_delete', 'trip_journal_entry', Number(args.entryId), {});
 				return textResult({ ok: true, entryId: Number(args.entryId) });
 			}
+			case 'roamarr_trip_day_notes_list': {
+				if (!hasScope(scopes, 'day-notes:read')) return scopeError('day-notes:read');
+				const { listDayNotes } = await import('./tripDayNotes');
+				const tripId = Number(args.tripId);
+				return textResult({ tripId, items: listDayNotes(userId, tripId) });
+			}
+			case 'roamarr_trip_day_notes_set': {
+				if (!hasScope(scopes, 'day-notes:write')) return scopeError('day-notes:write');
+				const { setDayNote } = await import('./tripDayNotes');
+				const tripId = Number(args.tripId);
+				const note = setDayNote(userId, tripId, args.date, {
+					icon: args.icon != null && String(args.icon).trim() !== '' ? String(args.icon) : null,
+					body: String(args.body ?? '')
+				});
+				logAudit(userId, 'mcp_day_note_set', 'trip_day_note', note.id, { tripId, date: note.date });
+				return textResult(note);
+			}
+			case 'roamarr_trip_day_notes_delete': {
+				if (!hasScope(scopes, 'day-notes:write')) return scopeError('day-notes:write');
+				const confirmErr = requireConfirm(args, 'roamarr_trip_day_notes_delete');
+				if (confirmErr) return confirmErr;
+				const { getDayNote, deleteDayNote } = await import('./tripDayNotes');
+				const tripId = Number(args.tripId);
+				const existing = getDayNote(userId, tripId, String(args.date ?? ''));
+				deleteDayNote(userId, tripId, args.date);
+				logAudit(userId, 'mcp_day_note_delete', 'trip_day_note', existing?.id ?? 0, { tripId, date: String(args.date ?? '') });
+				return textResult({ ok: true, tripId, date: String(args.date ?? '') });
+			}
 			case 'roamarr_home_task_list': {
 				if (!hasScope(scopes, 'home-tasks:read')) return scopeError('home-tasks:read');
 				const { listHomeTasksForTrip } = await import('./repositories/tripMiscRepo');
@@ -3324,17 +3716,268 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				logAudit(userId, 'mcp_comment_delete', 'trip_comment', id, {});
 				return textResult({ ok: true, commentId: id });
 			}
-			case 'roamarr_search': {
+			case 'roamarr_saved_places_list': {
+			if (!hasScope(scopes, 'saved-places:read')) return scopeError('saved-places:read');
+			const { listPlaces, projectPlace } = await import('./places');
+			const places = listPlaces(userId, {
+				categoryId: args.categoryId != null ? Number(args.categoryId) : undefined,
+				status: args.status as 'planned' | 'visited' | undefined,
+				favorite: args.favorite === true || undefined,
+				search: (args.q as string) ?? undefined
+			});
+			const page = paginateList(places, args, (p) => p.id);
+			return textResult({ items: page.items.map(projectPlace), nextCursor: page.nextCursor });
+		}
+		case 'roamarr_saved_places_get': {
+			if (!hasScope(scopes, 'saved-places:read')) return scopeError('saved-places:read');
+			const { getPlaceById, projectPlace } = await import('./places');
+			const place = getPlaceById(Number(args.placeId), userId);
+			if (!place) return { content: [{ type: 'text' as const, text: 'Place not found' }], isError: true };
+			return textResult(projectPlace(place));
+		}
+		case 'roamarr_saved_places_create': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { createPlace, projectPlace } = await import('./places');
+			const place = createPlace(userId, {
+				name: String(args.name ?? ''),
+				categoryId: args.categoryId != null ? Number(args.categoryId) : null,
+				address: (args.address as string) ?? null,
+				cityId: args.cityId != null ? Number(args.cityId) : null,
+				lat: args.lat != null ? Number(args.lat) : null,
+				lng: args.lng != null ? Number(args.lng) : null,
+				durationMin: args.durationMin != null ? Number(args.durationMin) : null,
+				priceCents: args.priceCents != null ? Number(args.priceCents) : null,
+				description: (args.description as string) ?? null,
+				status: args.status as 'planned' | 'visited' | undefined,
+				favorite: args.favorite === true
+			});
+			logAudit(userId, 'mcp_place_create', 'place', place.id, {});
+			return textResult(projectPlace(place));
+		}
+		case 'roamarr_saved_places_update': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { getPlaceById, updatePlace, projectPlace } = await import('./places');
+			const id = Number(args.placeId);
+			if (!getPlaceById(id, userId)) return { content: [{ type: 'text' as const, text: 'Place not found' }], isError: true };
+			// Partial patch: absent keys are omitted entirely so they are never
+			// written as NULL (Kit treats explicit undefined as NULL).
+			const patch: Parameters<typeof updatePlace>[2] = {};
+			if (args.name !== undefined) patch.name = String(args.name);
+			if (args.categoryId !== undefined) patch.categoryId = args.categoryId === null ? null : Number(args.categoryId);
+			if (args.address !== undefined) patch.address = args.address as string | null;
+			if (args.cityId !== undefined) patch.cityId = args.cityId === null ? null : Number(args.cityId);
+			if (args.lat !== undefined) patch.lat = args.lat === null ? null : Number(args.lat);
+			if (args.lng !== undefined) patch.lng = args.lng === null ? null : Number(args.lng);
+			if (args.durationMin !== undefined) patch.durationMin = args.durationMin === null ? null : Number(args.durationMin);
+			if (args.priceCents !== undefined) patch.priceCents = args.priceCents === null ? null : Number(args.priceCents);
+			if (args.description !== undefined) patch.description = args.description as string | null;
+			if (args.status !== undefined) patch.status = args.status as 'planned' | 'visited';
+			if (args.favorite !== undefined) patch.favorite = args.favorite === true;
+			const place = updatePlace(id, userId, patch);
+			logAudit(userId, 'mcp_place_update', 'place', id, {});
+			return textResult(place ? projectPlace(place) : { ok: false });
+		}
+		case 'roamarr_saved_places_delete': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const confirmErr = requireConfirm(args, 'roamarr_saved_places_delete');
+			if (confirmErr) return confirmErr;
+			const { getPlaceById, deletePlace } = await import('./places');
+			const id = Number(args.placeId);
+			if (!getPlaceById(id, userId)) return { content: [{ type: 'text' as const, text: 'Place not found' }], isError: true };
+			await deletePlace(id, userId);
+			logAudit(userId, 'mcp_place_delete', 'place', id, {});
+			return textResult({ ok: true, placeId: id });
+		}
+		case 'roamarr_saved_places_mark_visited': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { setPlaceVisited, projectPlace } = await import('./places');
+			const id = Number(args.placeId);
+			const place = setPlaceVisited(id, userId, true);
+			logAudit(userId, 'mcp_place_mark_visited', 'place', id, {});
+			return textResult(projectPlace(place));
+		}
+		case 'roamarr_saved_places_unmark_visited': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { setPlaceVisited, projectPlace } = await import('./places');
+			const id = Number(args.placeId);
+			const place = setPlaceVisited(id, userId, false);
+			logAudit(userId, 'mcp_place_unmark_visited', 'place', id, {});
+			return textResult(projectPlace(place));
+		}
+		case 'roamarr_place_category_list': {
+			if (!hasScope(scopes, 'saved-places:read')) return scopeError('saved-places:read');
+			const { listPlaceCategories, projectPlaceCategory } = await import('./places');
+			return textResult({ items: listPlaceCategories(userId).map(projectPlaceCategory) });
+		}
+		case 'roamarr_place_category_create': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { createPlaceCategory, projectPlaceCategory } = await import('./places');
+			const category = createPlaceCategory(userId, {
+				name: String(args.name ?? ''),
+				color: (args.color as string) ?? null
+			});
+			logAudit(userId, 'mcp_place_category_create', 'place_category', category.id, {});
+			return textResult(projectPlaceCategory(category));
+		}
+		case 'roamarr_place_category_update': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { getPlaceCategoryById, updatePlaceCategory, projectPlaceCategory } = await import('./places');
+			const id = Number(args.categoryId);
+			if (!getPlaceCategoryById(id, userId)) return { content: [{ type: 'text' as const, text: 'Category not found' }], isError: true };
+			const category = updatePlaceCategory(id, userId, {
+				name: String(args.name ?? ''),
+				color: (args.color as string) ?? null
+			});
+			logAudit(userId, 'mcp_place_category_update', 'place_category', id, {});
+			return textResult(category ? projectPlaceCategory(category) : { ok: false });
+		}
+		case 'roamarr_place_category_delete': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const confirmErr = requireConfirm(args, 'roamarr_place_category_delete');
+			if (confirmErr) return confirmErr;
+			const { getPlaceCategoryById, deletePlaceCategory } = await import('./places');
+			const id = Number(args.categoryId);
+			if (!getPlaceCategoryById(id, userId)) return { content: [{ type: 'text' as const, text: 'Category not found' }], isError: true };
+			deletePlaceCategory(id, userId);
+			logAudit(userId, 'mcp_place_category_delete', 'place_category', id, {});
+			return textResult({ ok: true, categoryId: id });
+		}
+		case 'roamarr_saved_places_search': {
+			if (!hasScope(scopes, 'saved-places:read')) return scopeError('saved-places:read');
+			const { searchPlaceCatalog } = await import('./placeSearch');
+			const outcome = await searchPlaceCatalog(String(args.query ?? ''), {
+				limit: args.limit != null ? Number(args.limit) : undefined
+			});
+			if (!outcome.ok) return { content: [{ type: 'text' as const, text: outcome.error }], isError: true };
+			return textResult({ results: outcome.results });
+		}
+		case 'roamarr_saved_places_import': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const confirmErr = requireConfirm(args, 'roamarr_saved_places_import');
+			if (confirmErr) return confirmErr;
+			const { executeGeoImport, GEO_IMPORT_MAX_ROWS } = await import('./geoImport');
+			if (!Array.isArray(args.rows)) {
+				return { content: [{ type: 'text' as const, text: 'rows must be an array of { name, lat, lng, address, description, categoryId }' }], isError: true };
+			}
+			if (args.rows.length === 0 || args.rows.length > GEO_IMPORT_MAX_ROWS) {
+				return { content: [{ type: 'text' as const, text: `rows must contain 1-${GEO_IMPORT_MAX_ROWS} entries` }], isError: true };
+			}
+			const rows = args.rows.map((r) => {
+				const row = (r ?? {}) as Record<string, unknown>;
+				return {
+					name: typeof row.name === 'string' ? row.name : '',
+					lat: row.lat != null && Number.isFinite(Number(row.lat)) ? Number(row.lat) : null,
+					lng: row.lng != null && Number.isFinite(Number(row.lng)) ? Number(row.lng) : null,
+					address: typeof row.address === 'string' ? row.address : null,
+					description: typeof row.description === 'string' ? row.description : null,
+					sourceUrl: null,
+					categoryGuess: typeof row.category === 'string' ? row.category : null
+				};
+			});
+			if (rows.some((r) => !r.name.trim())) {
+				return { content: [{ type: 'text' as const, text: 'Every row needs a non-empty name' }], isError: true };
+			}
+			const result = executeGeoImport(userId, rows, {
+				categoryId: args.categoryId != null ? Number(args.categoryId) : null,
+				skipDuplicates: args.skipDuplicates !== false
+			});
+			logAudit(userId, 'mcp_places_import', 'place', 0, { created: result.created });
+			return textResult(result);
+		}
+		case 'roamarr_place_links_list': {
+			if (!hasScope(scopes, 'saved-places:read')) return scopeError('saved-places:read');
+			const { getPlaceById } = await import('./places');
+			const { listPlaceLinks } = await import('./placeLinks');
+			const placeId = Number(args.placeId);
+			if (!getPlaceById(placeId, userId)) return { content: [{ type: 'text' as const, text: 'Place not found' }], isError: true };
+			const links = listPlaceLinks(placeId);
+			const page = paginateList(links, args, (l) => l.id);
+			return textResult({ placeId, items: page.items, nextCursor: page.nextCursor });
+		}
+		case 'roamarr_place_links_create': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { getPlaceById } = await import('./places');
+			const { createPlaceLink } = await import('./placeLinks');
+			const placeId = Number(args.placeId);
+			if (!getPlaceById(placeId, userId)) return { content: [{ type: 'text' as const, text: 'Place not found' }], isError: true };
+			// Helper enforces URL validation + audit log.
+			const link = createPlaceLink(userId, placeId, {
+				label: String(args.label ?? ''),
+				url: String(args.url ?? ''),
+				notes: (args.notes as string) ?? null
+			});
+			logAudit(userId, 'mcp_place_link_create', 'place_link', link.id, { placeId });
+			return textResult({ id: link.id, placeId });
+		}
+		case 'roamarr_place_links_update': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const { getPlaceById } = await import('./places');
+			const { getPlaceLinkById, updatePlaceLink } = await import('./placeLinks');
+			const id = Number(args.linkId);
+			const existing = getPlaceLinkById(id);
+			if (!existing || !getPlaceById(existing.placeId, userId)) {
+				return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
+			}
+			// Partial patch: absent keys are omitted entirely so they are never
+			// written as NULL (Kit treats explicit undefined as NULL).
+			const patch: Parameters<typeof updatePlaceLink>[3] = {};
+			if (args.label !== undefined) patch.label = String(args.label);
+			if (args.url !== undefined) patch.url = String(args.url);
+			if (args.notes !== undefined) patch.notes = args.notes === null ? null : String(args.notes);
+			updatePlaceLink(userId, existing.placeId, id, patch);
+			logAudit(userId, 'mcp_place_link_update', 'place_link', id, {});
+			return textResult({ ok: true, linkId: id });
+		}
+		case 'roamarr_place_links_delete': {
+			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const confirmErr = requireConfirm(args, 'roamarr_place_links_delete');
+			if (confirmErr) return confirmErr;
+			const { getPlaceById } = await import('./places');
+			const { getPlaceLinkById, deletePlaceLink } = await import('./placeLinks');
+			const id = Number(args.linkId);
+			const existing = getPlaceLinkById(id);
+			if (!existing || !getPlaceById(existing.placeId, userId)) {
+				return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
+			}
+			deletePlaceLink(userId, existing.placeId, id);
+			logAudit(userId, 'mcp_place_link_delete', 'place_link', id, {});
+			return textResult({ ok: true, linkId: id });
+		}
+		case 'roamarr_search': {
 				if (!hasScope(scopes, 'search:read')) return scopeError('search:read');
 				const q = String(args.query ?? '').trim();
 				const { globalSearch } = await import('./embeddings/search');
 				const result = q
 					? await globalSearch(userId, q)
 					: { trips: [], hits: [], semantic: false, q: '' };
+				// Place hits are owner-filtered upstream; hydrate a useful projection here.
+				let hits: unknown[] = result.hits;
+				if (result.hits.some((h) => h.entityType === 'place')) {
+					const { getPlaceById, getPlaceCategoryById } = await import('./places');
+					hits = result.hits.map((h) => {
+						if (h.entityType !== 'place') return h;
+						const place = getPlaceById(h.entityId, userId);
+						if (!place) return h;
+						const category =
+							place.categoryId != null ? getPlaceCategoryById(place.categoryId, userId) : null;
+						return {
+							...h,
+							snippet: h.body,
+							place: {
+								id: place.id,
+								name: place.name,
+								category: category?.name ?? null,
+								lat: place.lat,
+								lng: place.lng,
+								status: place.status
+							}
+						};
+					});
+				}
 				return textResult({
 					query: result.q,
 					semantic: result.semantic,
-					hits: result.hits,
+					hits,
 					trips: result.trips.map((t) => ({
 						id: t.id,
 						name: t.name,
@@ -3344,7 +3987,50 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					}))
 				});
 			}
-			default:
+			case 'roamarr_gallery_list': {
+			if (!hasScope(scopes, 'gallery:read')) return scopeError('gallery:read');
+			const ownerType = String(args.ownerType ?? '');
+			if (ownerType !== 'place' && ownerType !== 'trip') {
+				return { content: [{ type: 'text' as const, text: 'ownerType must be place or trip' }], isError: true };
+			}
+			const { listGallery, projectGalleryImage } = await import('./gallery');
+			const ownerId = Number(args.ownerId);
+			return textResult({ ownerType, ownerId, items: listGallery(userId, ownerType, ownerId).map(projectGalleryImage) });
+		}
+		case 'roamarr_gallery_remove': {
+			if (!hasScope(scopes, 'gallery:write')) return scopeError('gallery:write');
+			const confirmErr = requireConfirm(args, 'roamarr_gallery_remove');
+			if (confirmErr) return confirmErr;
+			const { removeGalleryImage } = await import('./gallery');
+			const imageId = Number(args.imageId);
+			await removeGalleryImage(userId, imageId);
+			return textResult({ ok: true, imageId });
+		}
+		case 'roamarr_gallery_reorder': {
+			if (!hasScope(scopes, 'gallery:write')) return scopeError('gallery:write');
+			const ownerType = String(args.ownerType ?? '');
+			if (ownerType !== 'place' && ownerType !== 'trip') {
+				return { content: [{ type: 'text' as const, text: 'ownerType must be place or trip' }], isError: true };
+			}
+			if (!Array.isArray(args.imageIds)) {
+				return { content: [{ type: 'text' as const, text: 'imageIds must be an array of image ids' }], isError: true };
+			}
+			const { reorderGallery, projectGalleryImage } = await import('./gallery');
+			const items = reorderGallery(
+				userId,
+				ownerType,
+				Number(args.ownerId),
+				args.imageIds.map((id) => Number(id))
+			);
+			return textResult({ items: items.map(projectGalleryImage) });
+		}
+		case 'roamarr_gallery_set_caption': {
+			if (!hasScope(scopes, 'gallery:write')) return scopeError('gallery:write');
+			const { setGalleryCaption, projectGalleryImage } = await import('./gallery');
+			const image = setGalleryCaption(userId, Number(args.imageId), String(args.caption ?? ''));
+			return textResult(projectGalleryImage(image));
+		}
+		default:
 				return {
 					content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],
 					isError: true

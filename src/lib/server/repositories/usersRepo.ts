@@ -27,6 +27,11 @@ export function getUserByCalendarToken(token: string): KitUser | null {
 	return rows[0] ?? null;
 }
 
+export function getUserByOidcSub(sub: string): KitUser | null {
+	const rows = kit.selectFrom(users).where(kitEq(users.oidc_sub, sub)).executeSync();
+	return rows[0] ?? null;
+}
+
 export function listAllUsers(): KitUser[] {
 	return kit.selectFrom(users).orderBy(asc(users.email)).executeSync();
 }

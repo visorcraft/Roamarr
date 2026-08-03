@@ -109,6 +109,28 @@ test('addTripDocument attaches to a segment', async () => {
 	expect(listTripDocuments(t.id)[0]!.segmentId).toBe(Number(seg.id));
 });
 
+test('addTripDocument accepts a GPX track file', async () => {
+	const { u, t } = seed();
+	const seg = addSegment(u.id, t.id, {
+		type: 'event',
+		title: 'Hike',
+		localStart: '2026-09-01T09:00',
+		startTz: 'Asia/Bangkok'
+	});
+	const gpx = '<gpx version="1.1" creator="t"><trk><trkseg><trkpt lat="1" lon="2" /></trkseg></trk></gpx>';
+	const file = new File([gpx], 'trail.gpx', { type: 'text/xml' });
+	const { link, attachment } = await addTripDocument(u.id, t.id, {
+		file,
+		segmentId: Number(seg.id)
+	});
+
+	expect(attachment.contentType).toBe('application/gpx+xml');
+	expect(link.segmentId).toBe(Number(seg.id));
+	const listed = listSegmentDocuments(Number(seg.id));
+	expect(listed).toHaveLength(1);
+	expect(listed[0]!.contentType).toBe('application/gpx+xml');
+});
+
 test('addTripDocument rejects segment from another trip', async () => {
 	const { kit, u, t } = seed();
 	const other = makeSyncedTrip(kit, { ownerId: u.id, name: 'Other' });

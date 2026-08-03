@@ -57,6 +57,8 @@ export function requiredApiScope(path: string, method: string): Scope | null {
 		[/^\/api\/reminders(?:\/|$)/, 'reminders'],
 		[/^\/api\/mobile\/notifications(?:\/|$)/, 'notifications'],
 		[/^\/api\/mobile\/calendar(?:\/|$)/, 'calendar'],
+		[/^\/api\/mobile\/places(?:\/|$)/, 'saved-places'],
+		[/^\/api\/places(?:\/|$)/, 'saved-places'],
 		[/^\/api\/fare-watches(?:\/|$)/, 'fares'],
 		[/^\/api\/fare-providers(?:\/|$)/, 'fares'],
 		[/^\/api\/groups(?:\/|$)/, 'sharing'],

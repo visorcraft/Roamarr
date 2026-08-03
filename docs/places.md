@@ -148,7 +148,10 @@ surface over MCP.
 
 Saved places are exposed over MCP under the `saved-places:read` /
 `saved-places:write` scopes (distinct from `places:*`, which covers visited
-countries and U.S. states). Place links ride on the same scopes — they are
+countries and U.S. states). Place projections include `hasImage` and `hasGpx`
+flags derived from the attachment links, so clients can skip blind-probing
+the gallery/GPX download endpoints for places without attachments. Place
+links ride on the same scopes — they are
 part of a place's data, so no separate scope group exists for them. Full
 link management is available through `roamarr_place_links_list`,
 `roamarr_place_links_create`, `roamarr_place_links_update`, and

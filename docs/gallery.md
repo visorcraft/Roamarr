@@ -33,6 +33,20 @@ in order; removing the last image clears the cover.
 
 Deleting a place or a trip deletes its gallery rows and attachments.
 
+## Mobile upload
+
+Native clients upload photos over the bearer-authenticated JSON API (see
+[HTTP JSON API](./http-api.md)):
+
+- `POST /api/mobile/trips/{id}/gallery` (`trips:write`) — owner or edit share;
+- `POST /api/mobile/places/{id}/gallery` (`saved-places:write`) — owner only.
+
+Both accept a multipart body with image files in `file` or `images` fields and
+an optional `caption` (applied to the first image of the batch), and answer
+`201` with the created gallery projections. The same image-type and 50-image
+cap rules apply. Image bytes download with the same token from
+`/trips/{id}/gallery/{imageId}` and `/places/{id}/gallery/{imageId}`.
+
 ## Visibility
 
 - **Places** have no sharing: only the owner can see or change a place
@@ -53,5 +67,5 @@ scopes:
 - `roamarr_gallery_set_caption` — set or clear a caption;
 - `roamarr_gallery_remove` — delete a photo (`confirm: true` required).
 
-There is no binary upload over MCP; photos are uploaded in the web UI only.
-See [MCP and AI access](./mcp-ai.md).
+There is no binary upload over MCP; photos are uploaded in the web UI or via
+the mobile upload endpoints above. See [MCP and AI access](./mcp-ai.md).

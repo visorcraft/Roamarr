@@ -382,6 +382,31 @@ export function collectGalleryFiles(formData: FormData): File[] {
 	return out;
 }
 
+/**
+ * Shared body of the mobile multipart gallery upload endpoints
+ * (/api/mobile/trips/[id]/gallery and /api/mobile/places/[id]/gallery).
+ * An optional `caption` field describes a single photo, so it applies to the
+ * first image of the batch only.
+ */
+export async function addGalleryImagesFromForm(
+	userId: number,
+	ownerType: GalleryOwnerType,
+	ownerId: number,
+	formData: FormData
+): Promise<GalleryImage[]> {
+	const files = collectGalleryFiles(formData);
+	if (!files.length) throw error(400, 'At least one image file is required');
+	const captionRaw = formData.get('caption');
+	const caption = typeof captionRaw === 'string' ? captionRaw.trim() : '';
+	if (caption.length > MAX_CAPTION_LENGTH) {
+		throw error(400, `Caption must be ${MAX_CAPTION_LENGTH} characters or less`);
+	}
+	const added = await addGalleryImages(userId, ownerType, ownerId, files);
+	if (!caption) return added;
+	const captioned = setGalleryCaption(userId, added[0]!.id, caption);
+	return [captioned, ...added.slice(1)];
+}
+
 function galleryRedirect(tripId: number, formData: FormData): never {
 	const redirectTo = String(formData.get('redirectTo') || '').trim();
 	throw redirect(303, redirectTo.startsWith(`/trips/${tripId}`) ? redirectTo : `/trips/${tripId}`);

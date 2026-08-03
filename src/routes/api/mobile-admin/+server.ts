@@ -12,6 +12,8 @@ import { getSettings } from '$lib/server/settings';
 import { _saveAdminSettings } from '../../general/+page.server';
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from '$lib/server/mapTiles';
 import { PLACE_SEARCH_PROVIDERS, type PlaceSearchProvider } from '$lib/server/placeSearch';
+import { autoBackupStatus } from '$lib/server/autoBackup';
+import { isValidNtfyServerUrl, isValidNtfyTopic } from '$lib/server/notify';
 
 const publicUser = (user: ReturnType<typeof listUsers>[number]) => ({
 	id: Number(user.id), email: user.email, displayName: user.display_name ?? '', role: user.role,
@@ -21,13 +23,18 @@ const safe = (value: unknown) => JSON.parse(JSON.stringify(value, (_key, item) =
 
 export const GET: RequestHandler = ({ locals }) => {
 	requireAdmin(locals);
-	const audit = listAuditLogs({ limit: 50 }), settings = getSettings();
+	const audit = listAuditLogs({ limit: 50 }), settings = getSettings(), autoBackup = autoBackupStatus();
 	return json({ users: listUsers().map(publicUser), stats: getAdminStats(), audit: audit.logs, auditTotal: audit.total, settings: {
 		instanceName: settings.instanceName, allowRegistration: settings.allowRegistration, defaultTimezone: settings.defaultTimezone,
 		defaultCurrency: settings.defaultCurrency, defaultDateFormat: settings.defaultDateFormat, defaultDatetimeFormat: settings.defaultDatetimeFormat,
 		defaultFlightCheckinLeadHours: settings.defaultFlightCheckinLeadHours, defaultDocumentExpiryLeadDays: settings.defaultDocumentExpiryLeadDays,
 		emailPollIntervalMinutes: settings.emailPollIntervalMinutes, sessionCookieSameSite: settings.sessionCookieSameSite,
-		webhookUrl: settings.webhookUrl, mapsTileProvider: settings.mapsTileProvider, mapsTileUrl: settings.mapsTileUrl,
+		webhookUrl: settings.webhookUrl,
+		ntfyServerUrl: settings.ntfyServerUrl, ntfyTopic: settings.ntfyTopic, ntfyTokenSet: !!settings.ntfyToken,
+		backupAutoEnabled: autoBackup.enabled, backupIntervalHours: autoBackup.intervalHours,
+		backupRetentionCount: autoBackup.retentionCount, backupLastAutoAt: autoBackup.lastRunAt,
+		backupStoredCount: autoBackup.storedCount,
+		mapsTileProvider: settings.mapsTileProvider, mapsTileUrl: settings.mapsTileUrl,
 		mapsTileAttribution: settings.mapsTileAttribution, mapsTileApiKeySet: !!settings.mapsTileApiKey,
 		placeSearchProvider: settings.placeSearchProvider, placeSearchGoogleApiKeySet: !!settings.placeSearchGoogleApiKey,
 		allowUserImap: settings.allowUserImap, allowUserSmtp: settings.allowUserSmtp,
@@ -60,13 +67,28 @@ export const POST: RequestHandler = async ({ request, locals, url, getClientAddr
 		if (aiEnabled && (!body.globalAiBaseUrl || !body.globalAiModel)) throw error(400, 'Global parsing requires API base URL and model');
 		if (aiEnabled && aiMode === 'token' && !(aiToken === undefined ? current.globalAiToken : aiToken)) throw error(400, 'API/subscription key is required');
 		if (aiEnabled && aiMode === 'oauth' && (!body.globalAiTokenUrl || !body.globalAiClientId || !(aiSecret === undefined ? current.globalAiClientSecret : aiSecret))) throw error(400, 'OAuth requires token URL, client ID, and client secret');
+		// ntfy and auto-backup fields keep their current values when omitted, so
+		// older clients that do not round-trip them cannot wipe the web config.
+		const ntfyServerUrl = body.ntfyServerUrl === undefined ? undefined : String(body.ntfyServerUrl ?? '').trim();
+		if (ntfyServerUrl && !isValidNtfyServerUrl(ntfyServerUrl)) throw error(400, 'ntfy server URL must be a valid https URL without credentials');
+		const ntfyTopic = body.ntfyTopic === undefined ? undefined : String(body.ntfyTopic ?? '').trim();
+		if (ntfyTopic && !isValidNtfyTopic(ntfyTopic)) throw error(400, 'ntfy topic may only contain letters, digits, dashes and underscores (max 64)');
+		const backupIntervalHours = body.backupIntervalHours === undefined ? undefined : Number(body.backupIntervalHours);
+		if (backupIntervalHours !== undefined && (!Number.isInteger(backupIntervalHours) || backupIntervalHours < 1 || backupIntervalHours > 720)) throw error(400, 'Backup interval must be an integer between 1 and 720 hours');
+		const backupRetentionCount = body.backupRetentionCount === undefined ? undefined : Number(body.backupRetentionCount);
+		if (backupRetentionCount !== undefined && (!Number.isInteger(backupRetentionCount) || backupRetentionCount < 1 || backupRetentionCount > 100)) throw error(400, 'Retention must be an integer between 1 and 100 backups');
 		_saveAdminSettings(admin.id, {
 			instanceName: String(body.instanceName ?? 'Roamarr'), allowRegistration: body.allowRegistration === true,
 			defaultTimezone: String(body.defaultTimezone ?? 'UTC'), defaultCurrency: String(body.defaultCurrency ?? 'USD'),
 			defaultDateFormat: String(body.defaultDateFormat ?? 'yyyy-MM-dd'), defaultDatetimeFormat: String(body.defaultDatetimeFormat ?? 'yyyy-MM-dd h:mm a'),
 			defaultFlightCheckinLeadHours: Number(body.defaultFlightCheckinLeadHours), defaultDocumentExpiryLeadDays: Number(body.defaultDocumentExpiryLeadDays),
 			emailPollIntervalMinutes: Number(body.emailPollIntervalMinutes), sessionCookieSameSite: body.sessionCookieSameSite === 'strict' ? 'strict' : 'lax',
-			webhookUrl: String(body.webhookUrl ?? ''), mapsTileProvider: provider as MapTileProvider, mapsTileUrl: String(body.mapsTileUrl ?? '') || null,
+			webhookUrl: String(body.webhookUrl ?? ''),
+			ntfyServerUrl, ntfyTopic,
+			ntfyToken: typeof body.ntfyToken === 'string' && body.ntfyToken ? body.ntfyToken : body.clearNtfyToken === true || body.ntfyToken === null ? null : undefined,
+			backupAutoEnabled: body.backupAutoEnabled === undefined ? undefined : body.backupAutoEnabled === true,
+			backupIntervalHours, backupRetentionCount,
+			mapsTileProvider: provider as MapTileProvider, mapsTileUrl: String(body.mapsTileUrl ?? '') || null,
 			mapsTileAttribution: String(body.mapsTileAttribution ?? '') || null,
 			mapsTileApiKey: typeof body.mapsTileApiKey === 'string' && body.mapsTileApiKey ? body.mapsTileApiKey : undefined,
 			placeSearchProvider: placeSearchProvider as PlaceSearchProvider,

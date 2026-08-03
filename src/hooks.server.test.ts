@@ -136,6 +136,9 @@ test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/mobile/notifications', 'PATCH')).toBe('notifications:write');
 	expect(requiredApiScope('/api/mobile/security', 'POST')).toBe('security:write');
 	expect(requiredApiScope('/api/mobile/calendar', 'POST')).toBe('calendar:write');
+	expect(requiredApiScope('/api/places/search', 'GET')).toBe('saved-places:read');
+	expect(requiredApiScope('/api/mobile/places/3/gallery', 'POST')).toBe('saved-places:write');
+	expect(requiredApiScope('/api/mobile/trips/1/gallery', 'POST')).toBe('trips:write');
 	expect(requiredApiScope('/api/audit-logs', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/jobs', 'GET')).toBe('admin:read');
 	expect(requiredApiScope('/api/webauthn/register/options', 'POST')).toBe('security:write');

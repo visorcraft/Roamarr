@@ -590,6 +590,10 @@ export function projectPlace(place: Place) {
 		status: place.status,
 		visitedAt: place.visitedAt,
 		favorite: place.favorite,
+		// Presence flags derived from the attachment FKs (no extra queries) so
+		// clients can skip blind-probing the image/GPX download endpoints.
+		hasImage: place.imageAttachmentId != null,
+		hasGpx: place.gpxAttachmentId != null,
 		createdAt: place.createdAt,
 		updatedAt: place.updatedAt
 	};

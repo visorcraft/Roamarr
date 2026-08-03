@@ -32,6 +32,9 @@ scheduler create backups without a browser download. Configure:
 | Interval (hours) | Minimum time between runs (default 24, maximum 720). |
 | Retention (keep newest) | How many `auto-` archives to keep (default 7, maximum 100). |
 
+The same three settings, plus the last-run timestamp and stored-archive count,
+round-trip through the admin JSON API (`/api/mobile-admin`).
+
 When enabled, the 60-second scheduler tick writes
 `auto-roamarr-backup-<timestamp>.mongreldb.tar.gz` archives to a `backups/`
 directory beside the database directory. The archive contents are identical to

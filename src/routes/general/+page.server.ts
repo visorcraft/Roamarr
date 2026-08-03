@@ -81,6 +81,9 @@ export function _saveAdminSettings(
 		ntfyServerUrl?: string;
 		ntfyTopic?: string;
 		ntfyToken?: string | null;
+		backupAutoEnabled?: boolean;
+		backupIntervalHours?: number;
+		backupRetentionCount?: number;
 		mapsTileProvider?: MapTileProvider;
 		mapsTileUrl?: string | null;
 		mapsTileAttribution?: string | null;
@@ -136,6 +139,16 @@ export function _saveAdminSettings(
 	if (i.ntfyTopic && !isValidNtfyTopic(i.ntfyTopic)) {
 		throw new Error('ntfy topic may only contain letters, digits, dashes and underscores (max 64)');
 	}
+	if (
+		i.backupIntervalHours !== undefined &&
+		(!Number.isInteger(i.backupIntervalHours) || i.backupIntervalHours < 1 || i.backupIntervalHours > 720)
+	)
+		throw new Error('Backup interval must be an integer between 1 and 720 hours');
+	if (
+		i.backupRetentionCount !== undefined &&
+		(!Number.isInteger(i.backupRetentionCount) || i.backupRetentionCount < 1 || i.backupRetentionCount > 100)
+	)
+		throw new Error('Retention must be an integer between 1 and 100 backups');
 	const patch: Record<string, unknown> = {};
 	if (i.instanceName !== undefined) patch.instanceName = i.instanceName;
 	if (i.allowRegistration !== undefined) patch.allowRegistration = i.allowRegistration;
@@ -173,6 +186,9 @@ export function _saveAdminSettings(
 	if (i.ntfyServerUrl !== undefined) patch.ntfyServerUrl = i.ntfyServerUrl || null;
 	if (i.ntfyTopic !== undefined) patch.ntfyTopic = i.ntfyTopic || null;
 	if (i.ntfyToken !== undefined) patch.ntfyToken = i.ntfyToken ? encrypt(i.ntfyToken) : null;
+	if (i.backupAutoEnabled !== undefined) patch.backupAutoEnabled = i.backupAutoEnabled;
+	if (i.backupIntervalHours !== undefined) patch.backupIntervalHours = i.backupIntervalHours;
+	if (i.backupRetentionCount !== undefined) patch.backupRetentionCount = i.backupRetentionCount;
 	if (i.mapsTileProvider !== undefined) patch.mapsTileProvider = i.mapsTileProvider ?? 'openstreetmap';
 	if (i.mapsTileUrl !== undefined) patch.mapsTileUrl = i.mapsTileUrl ?? null;
 	if (i.mapsTileAttribution !== undefined) patch.mapsTileAttribution = i.mapsTileAttribution ?? null;

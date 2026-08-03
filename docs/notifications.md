@@ -101,6 +101,11 @@ in the `Title` header, the body as the request body, and the trip link in the
 10 seconds. Treat the topic name as a secret: anyone who knows it can
 subscribe to the stream.
 
+The same ntfy configuration round-trips through the admin JSON API
+(`/api/mobile-admin`): server URL and topic are readable and writable, and the
+access token is write-only (reported as `ntfyTokenSet`, kept when omitted,
+cleared by an explicit `null`).
+
 ## Sources
 
 Notifications can be created by:

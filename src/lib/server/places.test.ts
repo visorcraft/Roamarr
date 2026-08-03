@@ -23,6 +23,8 @@ import {
 	updatePlace,
 	deletePlace,
 	setPlaceVisited,
+	setPlaceImageAttachment,
+	projectPlace,
 	DEFAULT_PLACE_CATEGORIES
 } from './places';
 import { placeCategories, places, users } from './db/mongrelSchema';
@@ -238,4 +240,23 @@ test('listPlaces filters by category, status, favorite, and search', () => {
 	expect(listPlaces(userId, { favorite: true })).toHaveLength(1);
 	expect(listPlaces(userId, { search: 'museum' })).toHaveLength(1);
 	expect(listPlaces(userId, { search: 'a' }).length).toBeGreaterThanOrEqual(2);
+});
+
+test('projectPlace derives hasImage/hasGpx from the attachment links', () => {
+	const place = createPlace(userId, { name: 'Trailhead' });
+	expect(projectPlace(place).hasImage).toBe(false);
+	expect(projectPlace(place).hasGpx).toBe(false);
+
+	const withImage = setPlaceImageAttachment(place.id, userId, 42);
+	expect(projectPlace(withImage).hasImage).toBe(true);
+	expect(projectPlace(withImage).hasGpx).toBe(false);
+
+	ctx.kit
+		.updateTable(places)
+		.set({ gpx_attachment_id: 43n })
+		.where(eq(places.id, BigInt(place.id)))
+		.executeSync();
+	const withGpx = getPlaceById(place.id, userId)!;
+	expect(projectPlace(withGpx).hasImage).toBe(true);
+	expect(projectPlace(withGpx).hasGpx).toBe(true);
 });

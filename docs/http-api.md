@@ -73,6 +73,9 @@ exchange, and all scopes.
 | `/api/groups/{id}` | `PATCH`, `DELETE` | `sharing:write` | Update or delete a sharing group. |
 | `/api/cities`, `/api/cities/globe` | `GET` | `places:read` | GeoNames lookup and globe points. |
 | `/api/maps/texture` | `GET` | `places:read` | Download the configured globe texture. |
+| `/api/places/search` | `GET` | `saved-places:read` | Search the configured place catalog (Nominatim or Google). |
+| `/api/mobile/trips/{id}/gallery` | `POST` | `trips:write` | Upload images into a trip gallery (multipart; edit access required). |
+| `/api/mobile/places/{id}/gallery` | `POST` | `saved-places:write` | Upload images into a place gallery (multipart; owner only). |
 | `/api/mobile/notifications` | `GET`, `PATCH` | `notifications:read`, `notifications:write` | List or mark notifications. |
 | `/api/mobile/calendar` | `GET`, `POST` | `calendar:read`, `calendar:write` | Inspect or rotate the account calendar token. |
 | `/api/mobile/security` | `GET`, `POST` | `security:read`, `security:write` | Mobile account-security actions. |
@@ -88,9 +91,22 @@ Method scope is selected mechanically: `GET` and `HEAD` use `:read`; `POST`,
 
 ## Bodies and uploads
 
-Most mutation routes accept JSON and return JSON. Poster and backup routes use
-stream or multipart bodies as implemented by that endpoint. Send
+Most mutation routes accept JSON and return JSON. Poster, gallery, and backup
+routes use stream or multipart bodies as implemented by that endpoint. Send
 `Content-Type: application/json` only for JSON.
+
+The gallery upload routes accept one or more image files in `file` or `images`
+multipart fields plus an optional `caption` (applied to the first image), and
+return the created gallery projections as JSON. Uploaded image bytes are
+downloadable with the same bearer token at `/trips/{id}/gallery/{imageId}` and
+`/places/{id}/gallery/{imageId}`.
+
+The `/api/mobile-admin` settings action also round-trips the scheduled-backup
+settings (`backupAutoEnabled`, `backupIntervalHours`, `backupRetentionCount`,
+plus the `backupLastAutoAt`/`backupStoredCount` status) and the ntfy
+configuration (`ntfyServerUrl`, `ntfyTopic`, and a masked `ntfyTokenSet`; the
+token keeps its stored value when omitted and clears on an explicit `null` or
+`clearNtfyToken: true`).
 
 Payload validation is strict. IDs must be safe positive integers, enum values
 must match the current server definitions, and dates/times use the endpoint's

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,17 +32,96 @@ import {
 	schema
 } from '../src/lib/server/db/mongrelSchema';
 import { migrations } from '../src/lib/server/db/mongrelMigrations';
+import { migrations as initialMigrations } from '../src/lib/server/db/mongrelMigrations/0001_initial';
 
 let userCounter = 0;
 let tripCounter = 0;
 
+// Per-process migrated template databases. Creating a full-schema MongrelDB
+// (67 tables) costs several seconds of engine durability waits per open, and
+// the waits serialize across parallel Vitest worker processes — enough to
+// blow the 10s hook timeout when several real-DB test files are scheduled
+// together. Each worker therefore builds one encrypted and one unencrypted
+// template lazily, and every freshDb*() call clones it (a ~10ms directory
+// copy plus a fast reopen) instead of replaying creation and migrations.
+let encryptedTemplateDir: string | null = null;
+let plainTemplateDir: string | null = null;
+let dbCopyCounter = 0;
+
+function removeOnExit(dir: string) {
+	process.once('exit', () => {
+		try {
+			rmSync(dir, { recursive: true, force: true });
+		} catch {
+			/* best-effort cleanup */
+		}
+	});
+}
+
+function uniqueDbDir(prefix: string): string {
+	return join(tmpdir(), `${prefix}${process.pid}-${Date.now().toString(36)}-${dbCopyCounter++}`);
+}
+
+function encryptedTemplate(): string {
+	if (!encryptedTemplateDir) {
+		encryptedTemplateDir = mkdtempSync(join(tmpdir(), 'roamarr-kit-template-'));
+		const kit = openTestDb(encryptedTemplateDir, schema);
+		kit.migrateSync(schema, migrations);
+		kit.close();
+		removeOnExit(encryptedTemplateDir);
+	}
+	return encryptedTemplateDir;
+}
+
+function plainTemplate(): string {
+	if (!plainTemplateDir) {
+		// Match the established makeDbDir pattern: openSync on a path that does
+		// not exist yet creates an unencrypted database there. Only 0001_initial
+		// is applied — openKitDatabase (mongrel.ts) migrates with that list and
+		// rejects databases that record later migrations it does not know about.
+		plainTemplateDir = uniqueDbDir('roamarr-kit-plain-template-');
+		const kit = KitDatabase.openSync(plainTemplateDir, schema);
+		kit.migrateSync(schema, initialMigrations);
+		kit.close();
+		removeOnExit(plainTemplateDir);
+	}
+	return plainTemplateDir;
+}
+
+function copyTemplate(template: string, prefix: string, destDir?: string): string {
+	const dir = destDir ?? uniqueDbDir(prefix);
+	cpSync(template, dir, { recursive: true });
+	return dir;
+}
+
+/**
+ * A fully migrated, encrypted database directory cloned from the per-process
+ * template. Pass `destDir` to place the copy at a specific (not yet existing)
+ * path. The caller owns cleanup of the returned directory.
+ */
+export function freshDbDir(destDir?: string): string {
+	return copyTemplate(encryptedTemplate(), 'roamarr-kit-test-', destDir);
+}
+
+/**
+ * Unencrypted counterpart of {@link freshDbDir} for tests that need a valid
+ * MongrelDB directory on disk without a passphrase (restore, auto-backup).
+ * Migrated with 0001_initial only, matching the previous makeDbDir helpers.
+ */
+export function freshPlainDbDir(destDir?: string): string {
+	return copyTemplate(plainTemplate(), 'roamarr-kit-plain-test-', destDir);
+}
 
 export function freshDb() {
-	const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-test-'));
-	const kitInstance = openTestDb(dir, schema);
+	const dir = freshDbDir();
+	const passphrase = process.env.ROAMARR_SECRET;
+	if (!passphrase) {
+		throw new Error('ROAMARR_SECRET must be set to create encrypted test databases.');
+	}
+	// The template copy is already fully migrated, so this is a cheap reopen.
 	// The 0001_initial migration seeds the singleton settings row, so there is
 	// no need to insert it here (doing so would now be a duplicate primary key).
-	kitInstance.migrateSync(schema, migrations);
+	const kitInstance = KitDatabase.openSync(dir, schema, { encryption: { passphrase } });
 
 	const close = () => {
 		kitInstance.close();

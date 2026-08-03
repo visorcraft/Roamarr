@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,23 +8,30 @@ import { settings, benefitTemplates } from './mongrelSchema';
 import { schema } from './mongrelSchema';
 import { migrations } from './mongrelMigrations';
 import { eq } from '@visorcraft/mongreldb-kit';
+import { freshDbDir } from '../../../../tests/helpers';
 
 function openEncrypted(path: string, openSchema: Schema): KitDatabase {
 	const passphrase = process.env.ROAMARR_SECRET;
 	if (!passphrase) throw new Error('ROAMARR_SECRET must be set');
-	return KitDatabase.createEncryptedSync(path, openSchema, passphrase);
+	return KitDatabase.openSync(path, openSchema, { encryption: { passphrase } });
 }
 
 describe('mongrelMigrations', () => {
 	let tmpDir: string;
 	let kit: Awaited<ReturnType<typeof openKitDatabase>>;
 
-	beforeEach(async () => {
+	// One shared, freshly created database for the read-only assertions below.
+	// openKitDatabase must create the database itself: reopening an existing
+	// directory through the engine's static `open` returns a native handle
+	// without the wrapper's `transaction` helper that async migrate() needs.
+	// A from-scratch full-schema create takes several seconds under parallel
+	// workers, hence the generous hook timeout.
+	beforeAll(async () => {
 		tmpDir = mkdtempSync(join(tmpdir(), 'roamarr-kit-migration-'));
 		kit = await openKitDatabase(tmpDir);
-	});
+	}, 120_000);
 
-	afterEach(() => {
+	afterAll(() => {
 		kit.close();
 		rmSync(tmpDir, { recursive: true, force: true });
 	});
@@ -50,10 +57,11 @@ describe('mongrelMigrations', () => {
 
 	test('migrations include the invitation upgrade for existing databases', () => {
 		expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
-		const dir = mkdtempSync(join(tmpdir(), 'roamarr-kit-weather-json-'));
+		// Clone the fully migrated template; the assertion only needs the
+		// post-migration schema state.
+		const dir = freshDbDir();
 		const db = openEncrypted(dir, schema);
 		try {
-			db.migrateSync(schema, migrations);
 			const col = db.schema.table('weather_cache').column('payload_json');
 			expect(col.applicationType).toBe('json');
 		} finally {
@@ -118,6 +126,6 @@ describe('mongrelMigrations', () => {
 			post.close();
 			rmSync(dir, { recursive: true, force: true });
 		}
-	});
+	}, 60_000);
 
 });

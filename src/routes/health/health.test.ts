@@ -1,5 +1,5 @@
 import { test, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -7,13 +7,16 @@ import { GET as healthGet } from './+server';
 import { GET as deepHealthGet } from './deep/+server';
 import { getDb, closeDb } from '$lib/server/db/index';
 import { resetRateLimit } from '$lib/server/rateLimit';
+import { freshDbDir } from '../../../tests/helpers';
 
 let dbDir: string;
 let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
 	resetRateLimit();
-	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-test-'));
+	// Clone the per-process migrated template: creating a full-schema database
+	// from scratch per test is slow enough to time out under parallel workers.
+	dbDir = freshDbDir();
 	originalDatabasePath = process.env.DATABASE_PATH;
 	process.env.DATABASE_PATH = dbDir;
 	getDb();

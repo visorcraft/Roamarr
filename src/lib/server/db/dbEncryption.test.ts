@@ -44,7 +44,7 @@ describe('getDb encryption', () => {
 		expect(reopened.tableNames()).toContain('users');
 		reopened.nativeDb.close();
 		expect(() => openOrCreateEncryptedSync(path, process.env.ROAMARR_SECRET!, { ...credentials, password: 'wrong' })).toThrow();
-	});
+	}, 60_000);
 
 	function tempDbPath(): string {
 		const dir = mkdtempSync(join(tmpdir(), 'roamarr-encryption-test-'));
@@ -76,5 +76,5 @@ describe('getDb encryption', () => {
 			.executeSync()[0];
 		expect(row?.email).toBe('encryption@test.local');
 		db2.nativeDb.close();
-	});
+	}, 60_000);
 });

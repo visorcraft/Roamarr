@@ -9,13 +9,16 @@ import { GET } from './+server';
 import { isSchedulerRunning } from '$lib/server/scheduler';
 import { getDb, closeDb } from '$lib/server/db/index';
 import { checkRateLimit, resetRateLimit } from '$lib/server/rateLimit';
+import { freshDbDir } from '../../../../tests/helpers';
 
 let dbDir: string;
 let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
 	resetRateLimit();
-	dbDir = mkdtempSync(join(tmpdir(), 'roamarr-health-deep-test-'));
+	// Clone the per-process migrated template: creating a full-schema database
+	// from scratch per test is slow enough to time out under parallel workers.
+	dbDir = freshDbDir();
 	originalDatabasePath = process.env.DATABASE_PATH;
 	process.env.DATABASE_PATH = dbDir;
 	getDb();

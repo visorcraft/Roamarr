@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -95,12 +95,17 @@ describe('mongrelSchema', () => {
 		let tmpDir: string;
 		let kit: Awaited<ReturnType<typeof openKitDatabase>>;
 
-		beforeEach(async () => {
+		// openKitDatabase must create the database itself: reopening an existing
+		// directory through the engine's static `open` returns a native handle
+		// without the wrapper's `transaction` helper that async migrate() needs.
+		// A from-scratch full-schema create takes several seconds under parallel
+		// workers, hence the generous hook timeout.
+		beforeAll(async () => {
 			tmpDir = mkdtempSync(join(tmpdir(), 'roamarr-kit-'));
 			kit = await openKitDatabase(tmpDir);
-		});
+		}, 120_000);
 
-		afterEach(() => {
+		afterAll(() => {
 			kit.close();
 			rmSync(tmpDir, { recursive: true, force: true });
 		});

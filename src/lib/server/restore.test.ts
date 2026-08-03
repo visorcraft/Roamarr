@@ -2,11 +2,9 @@ import { test, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { KitDatabase } from '@visorcraft/mongreldb-kit';
 import mongreldb from '@visorcraft/mongreldb';
 import type { Database as NativeDatabase } from '@visorcraft/mongreldb/native.js';
-import { schema as kitSchema } from './db/mongrelSchema';
-import { migrations as kitMigrations } from './db/mongrelMigrations/0001_initial';
+import { freshPlainDbDir } from '../../../tests/helpers';
 
 const NativeDatabaseClass = (mongreldb as unknown as { Database: typeof NativeDatabase }).Database;
 import {
@@ -24,7 +22,7 @@ let testRoot: string;
 let originalDatabasePath: string | undefined;
 
 beforeEach(() => {
-	testRoot = join(tmpdir(), `roamarr-restore-test-${Date.now()}`);
+	testRoot = join(tmpdir(), `roamarr-restore-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(testRoot, { recursive: true });
 	originalDatabasePath = process.env.DATABASE_PATH;
 });
@@ -36,11 +34,9 @@ afterEach(() => {
 });
 
 function makeDbDir(name = 'roamarr-db'): string {
-	const dir = join(testRoot, name);
-	const kitInstance = KitDatabase.openSync(dir, kitSchema);
-	kitInstance.migrateSync(kitSchema, kitMigrations);
-	kitInstance.close();
-	return dir;
+	// Clone the per-process migrated template: creating a full-schema database
+	// from scratch per test is slow enough to time out under parallel workers.
+	return freshPlainDbDir(join(testRoot, name));
 }
 
 test('getAttachmentsPath defaults to a directory inside the database directory', () => {

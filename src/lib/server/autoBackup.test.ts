@@ -2,9 +2,7 @@ import { test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { KitDatabase } from '@visorcraft/mongreldb-kit';
-import { schema as kitSchema } from '$lib/server/db/mongrelSchema';
-import { migrations as kitMigrations } from '$lib/server/db/mongrelMigrations/0001_initial';
+import { freshPlainDbDir } from '../../../tests/helpers';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -27,11 +25,9 @@ let dbDir: string;
 let originalDatabasePath: string | undefined;
 
 function makeDbDir(): string {
-	const dir = join(testRoot, 'roamarr-db');
-	const kitInstance = KitDatabase.openSync(dir, kitSchema);
-	kitInstance.migrateSync(kitSchema, kitMigrations);
-	kitInstance.close();
-	return dir;
+	// Clone the per-process migrated template: creating a full-schema database
+	// from scratch per test is slow enough to time out under parallel workers.
+	return freshPlainDbDir(join(testRoot, 'roamarr-db'));
 }
 
 beforeEach(() => {

@@ -11,7 +11,7 @@ import {
 	attachInsurancePolicyToTrip,
 	detachInsurancePolicyFromTrip
 } from './repositories/profileRepo';
-import { addComment, deleteComment } from './tripComments';
+import { addComment, updateComment, deleteComment } from './tripComments';
 import { shareItineraryWithContact } from './emergencyContacts';
 import { addAttachment } from './tripExpenseAttachments';
 import { uploadTripPoster } from './tripPoster';
@@ -162,6 +162,14 @@ export async function addCommentAction(event: RequestEvent) {
 	const body = String(formData.get('body') || '');
 	if (!body.trim()) throw error(400, 'Comment is required');
 	addComment(user.id, tripId, body);
+	throw redirect(303, `/trips/${tripId}`);
+}
+
+export async function updateCommentAction(event: RequestEvent) {
+	const { user, tripId, formData } = await withTripAction(event);
+	const commentIdResult = positiveIdFromForm(formData.get('commentId'), 'commentId');
+	if (!commentIdResult.ok) throw error(400, commentIdResult.error);
+	updateComment(user.id, commentIdResult.value, String(formData.get('body') || ''));
 	throw redirect(303, `/trips/${tripId}`);
 }
 

@@ -9,7 +9,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import type { IconName } from '$lib/icons';
 	import { SEG, SEGMENT_TYPES, usesPickupDropoff, type SegmentType } from '$lib/segmentLabels';
-	import { compareSegmentsWithinDay, isUntimedSegment } from '$lib/segmentDay';
+	import { compareSegmentsWithinDay, isUntimedSegment, sameFlightBooking } from '$lib/segmentDay';
 	import { buildGoogleMapsDirectionsUrl } from '$lib/googleMaps';
 	import { DateTime } from 'luxon';
 	import type { Trip } from '$lib/server/repositories/tripsRepo';
@@ -92,6 +92,8 @@
 	let showDayNotes = $state(true);
 	let editingDayNoteDate = $state<string | null>(null);
 	let confirmingDayNoteDelete = $state<string | null>(null);
+	let editingJournalEntryId = $state<number | null>(null);
+	let editingCommentId = $state<number | null>(null);
 
 	const DAY_NOTE_ICONS: { name: IconName; label: string }[] = [
 		{ name: 'document', label: 'Note' },
@@ -473,6 +475,19 @@
 			if (result.type === 'redirect' || result.type === 'success') {
 				editingDayNoteDate = null;
 				confirmingDayNoteDelete = null;
+				await invalidateAll();
+				await tick();
+				return;
+			}
+			await applyAction(result);
+		};
+	};
+
+	const notesAction: SubmitFunction = () => {
+		return async ({ result }) => {
+			if (result.type === 'redirect' || result.type === 'success') {
+				editingJournalEntryId = null;
+				editingCommentId = null;
 				await invalidateAll();
 				await tick();
 				return;
@@ -893,8 +908,10 @@
 						</section>
 					{/if}
 					{#if dayGroups.length}
-						{#each dayGroups as group (group.key)}
-							<section class="trip-modern-day-card {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
+						{#each dayGroups as group, groupIndex (group.key)}
+							{@const connectsBefore = viewMode === 'timeline' && groupIndex > 0 && sameFlightBooking(dayGroups[groupIndex - 1]?.segments.at(-1), group.segments[0])}
+							{@const connectsAfter = viewMode === 'timeline' && groupIndex < dayGroups.length - 1 && sameFlightBooking(group.segments.at(-1), dayGroups[groupIndex + 1]?.segments[0])}
+							<section class="trip-modern-day-card {connectsBefore ? 'trip-modern-day-card-connects-before' : ''} {connectsAfter ? 'trip-modern-day-card-connects-after' : ''} {dragOverDate === group.key ? 'trip-modern-drop-target' : ''}" aria-label={`${group.label} itinerary plans`} ondragover={(e) => allowDayDrop(e, group.key)} ondragenter={(e) => allowDayDrop(e, group.key)} ondragleave={(e) => leaveDayDrop(e, group.key)} ondrop={(e) => dropSegmentOnDay(e, group.key)}>
 								<header class="trip-modern-day-head"><div class="trip-modern-day-title"><Icon name="calendar" class="h-5 w-5" /><div><h2 class="trip-modern-day-date">{group.label}</h2>{#if groupWeekday(group.key)}<p class="trip-modern-day-weekday">{groupWeekday(group.key)}</p>{/if}</div></div><div class="flex items-center gap-3">{#if isEditor && dayCanOptimize(group)}<form method="POST" action="?/optimizeTripDay" use:enhance={preserveScrollOnMove}><input type="hidden" name="date" value={group.key} /><button type="submit" class="trip-modern-day-plus" title="Optimize order" aria-label={`Optimize stop order for ${group.label}`}><Icon name="trips" class="h-4 w-4" /></button></form>{/if}{#if dayDirectionsUrl(group)}<a href={dayDirectionsUrl(group)!} target="_blank" rel="noopener noreferrer" class="trip-modern-day-plus" title="Open in Google Maps" aria-label={`Open ${group.label} in Google Maps`}><Icon name="location" class="h-4 w-4" /></a>{/if}<span class="trip-modern-day-count">{group.segments.length} segment{group.segments.length === 1 ? '' : 's'}</span>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="trip-modern-day-plus" aria-label="Add segment"><Icon name="plus" class="h-4 w-4" /></a>{/if}</div></header>
 								{#if group.key !== 'unscheduled' && showDayNotes}
 									{@const note = dayNotesByDate.get(group.key)}
@@ -1073,7 +1090,48 @@
 				{/if}
 			</section>
 		{:else if activeTab === 'notes'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>{#if data.journalEntries?.length}<div class="trip-modern-list">{#each data.journalEntries as entry (entry.id)}<div class="trip-modern-list-row"><div><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><MarkdownText text={entry.body} class="mt-1 text-sm" /></div></div>{/each}</div>{/if}{#if data.comments?.length}<div class="mt-4 trip-modern-list">{#each data.comments as c (c.id)}<div class="trip-modern-list-row"><div><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><MarkdownText text={c.body} class="mt-1 text-sm" /></div></div>{/each}</div>{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addJournalEntry" class="trip-modern-form-grid"><input name="title" class="input text-sm" placeholder="Title" required /><input name="entryDate" type="date" class="input text-sm" required /><textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Add journal entry</button></form><form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}</section>
+			<section class="trip-modern-panel">
+				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Notes & activity</h2></div>
+				{#if data.journalEntries?.length}
+					<div class="trip-modern-list">
+						{#each data.journalEntries as entry (entry.id)}
+							<div class="trip-modern-list-row">
+								{#if editingJournalEntryId === entry.id}
+									<form method="POST" action="?/updateJournalEntry" class="trip-modern-form-grid mt-0 w-full" use:enhance={notesAction}>
+										<input type="hidden" name="entryId" value={entry.id} />
+										<input name="title" class="input text-sm" value={entry.title} required />
+										<input name="entryDate" type="date" class="input text-sm" value={entry.entryDate} required />
+										<textarea name="body" rows="4" maxlength="10000" class="input text-sm" required>{entry.body}</textarea>
+										<div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary btn-sm" onclick={() => (editingJournalEntryId = null)}>Cancel</button><button class="btn btn-primary btn-sm">Save</button></div>
+									</form>
+								{:else}
+									<div class="min-w-0 flex-1"><strong>{entry.title}</strong><p class="trip-modern-panel-muted text-sm">{entry.entryDate}</p><MarkdownText text={entry.body} class="mt-1 text-sm" /></div>
+									{#if isEditor}<button type="button" class="icon-button icon-button-sm shrink-0" aria-label={`Edit ${entry.title}`} onclick={() => (editingJournalEntryId = entry.id)}><Icon name="edit" class="h-4 w-4" /></button>{/if}
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+				{#if data.comments?.length}
+					<div class="mt-4 trip-modern-list">
+						{#each data.comments as c (c.id)}
+							<div class="trip-modern-list-row">
+								{#if editingCommentId === c.id}
+									<form method="POST" action="?/updateComment" class="trip-modern-form-grid mt-0 w-full" use:enhance={notesAction}>
+										<input type="hidden" name="commentId" value={c.id} />
+										<textarea name="body" rows="4" class="input text-sm" required>{c.body}</textarea>
+										<div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary btn-sm" onclick={() => (editingCommentId = null)}>Cancel</button><button class="btn btn-primary btn-sm">Save</button></div>
+									</form>
+								{:else}
+									<div class="min-w-0 flex-1"><strong>{c.displayName}</strong><p class="trip-modern-panel-muted text-xs">{formatDateTime(c.createdAt)}</p><MarkdownText text={c.body} class="mt-1 text-sm" /></div>
+									{#if c.userId === data.user?.id}<button type="button" class="icon-button icon-button-sm shrink-0" aria-label="Edit note" onclick={() => (editingCommentId = c.id)}><Icon name="edit" class="h-4 w-4" /></button>{/if}
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{:else if !data.journalEntries?.length}<p class="trip-modern-empty">No notes yet.</p>{/if}
+				{#if isEditor}<form method="POST" action="?/addJournalEntry" class="trip-modern-form-grid"><input name="title" class="input text-sm" placeholder="Title" required /><input name="entryDate" type="date" class="input text-sm" required /><textarea name="body" rows="3" class="input text-sm" placeholder="Write about your day..." required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Add journal entry</button></form><form method="POST" action="?/addComment" class="trip-modern-form-grid"><textarea name="body" rows="3" class="input text-sm" placeholder="Write a note…" required></textarea><p class="field-help">Markdown supported</p><button class="btn btn-primary btn-sm justify-self-end">Post note</button></form>{/if}
+			</section>
 		{:else if activeTab === 'documents'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Files</h2><span class="badge badge-slate badge-compact">{data.tripDocuments?.length ?? 0}</span></div>

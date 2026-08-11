@@ -22,4 +22,10 @@ test('add a journal entry to a trip', async ({ page }) => {
 		await page.locator('#trip-tab-notes').click();
 		await expect(page.getByText(title)).toBeVisible({ timeout: 2000 });
 	}).toPass();
+
+	await page.getByRole('button', { name: `Edit ${title}` }).click();
+	const editForm = page.locator('form[action="?/updateJournalEntry"]');
+	await editForm.locator('textarea[name="body"]').fill('Edited journal entry.');
+	await editForm.getByRole('button', { name: 'Save' }).click();
+	await expect(page.getByText('Edited journal entry.')).toBeVisible();
 });

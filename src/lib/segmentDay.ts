@@ -21,6 +21,19 @@ export interface DaySegmentLike {
 	daySortOrder?: number | null;
 }
 
+export interface FlightBookingLike {
+	type: string;
+	confirmationNumber?: string | null;
+}
+
+export function sameFlightBooking(
+	a: FlightBookingLike | null | undefined,
+	b: FlightBookingLike | null | undefined
+): boolean {
+	const reference = a?.confirmationNumber?.trim().toLowerCase();
+	return a?.type === 'flight' && b?.type === 'flight' && !!reference && reference === b.confirmationNumber?.trim().toLowerCase();
+}
+
 export function segmentLocalDateTime(startAt: string | null, startTz?: string | null): DateTime | null {
 	if (!startAt) return null;
 	const dt = DateTime.fromISO(startAt, { zone: 'utc' }).setZone(startTz ?? 'UTC');

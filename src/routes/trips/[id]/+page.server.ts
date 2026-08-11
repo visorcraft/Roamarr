@@ -10,7 +10,7 @@ import {
 } from '$lib/server/tripChecklists';
 import { addExpense, deleteExpense } from '$lib/server/tripExpenses';
 import { setAttendee } from '$lib/server/segmentAttendees';
-import { addJournalEntry, deleteJournalEntry } from '$lib/server/tripJournal';
+import { addJournalEntry, updateJournalEntry, deleteJournalEntry } from '$lib/server/tripJournal';
 import { setDayNoteAction, deleteDayNoteAction } from '$lib/server/tripDayNotes';
 import { addDocumentLink, deleteDocumentLink } from '$lib/server/tripDocumentLinks';
 import {
@@ -58,6 +58,7 @@ import {
 	attachPolicy,
 	detachPolicy,
 	addCommentAction,
+	updateCommentAction,
 	deleteCommentAction,
 	shareItineraryWithContactAction,
 	addAttachmentAction,
@@ -88,6 +89,7 @@ export const actions: Actions = {
 	attachPolicy,
 	detachPolicy,
 	addComment: addCommentAction,
+	updateComment: updateCommentAction,
 	deleteComment: deleteCommentAction,
 	addCompanion,
 	updateCompanion,
@@ -99,6 +101,7 @@ export const actions: Actions = {
 	deleteExpense,
 	setAttendee,
 	addJournalEntry,
+	updateJournalEntry,
 	deleteJournalEntry,
 	setDayNote: setDayNoteAction,
 	deleteDayNote: deleteDayNoteAction,

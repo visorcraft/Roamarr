@@ -36,13 +36,9 @@ export function selectNextSegmentCity(tripId: number): NextCity | null {
 	return null;
 }
 
-// City to focus the trip map/globe on: the next upcoming segment's city, or — when no
-// upcoming segment has a city — the trip's own destination city (so trips whose segments
-// lack coordinates still get a map centered on where they're going).
+// City to focus the trip map/globe on: the trip's declared destination, falling back to
+// the next upcoming segment only when the trip has no destination coordinates.
 export function tripMapCity(tripId: number): NextCity | null {
-	const segmentCity = selectNextSegmentCity(tripId);
-	if (segmentCity) return segmentCity;
-
 	const trip = tripsRepo.getTripById(tripId);
 
 	if (trip?.destinationCityName && trip.destinationCityLat != null && trip.destinationCityLng != null) {
@@ -56,5 +52,5 @@ export function tripMapCity(tripId: number): NextCity | null {
 			startTz: null
 		};
 	}
-	return null;
+	return selectNextSegmentCity(tripId);
 }

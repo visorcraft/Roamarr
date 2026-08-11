@@ -194,6 +194,21 @@ test('deleteComment action removes the users own comment', async () => {
 	expect(kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(c.id))).executeSync()[0]).toBeUndefined();
 });
 
+test('updateComment action saves the users edited note', async () => {
+	const u = makeUser(kit, { email: 'uc@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const c = addComment(u.id, t.id, 'Before');
+	const request = new Request('http://localhost/trips/' + t.id, {
+		method: 'POST',
+		body: new URLSearchParams({ commentId: String(c.id), body: 'After' })
+	});
+	await expect(actions.updateComment({ ...event(u, t.id), request })).rejects.toMatchObject({
+		status: 303,
+		location: `/trips/${t.id}`
+	});
+	expect(kit.selectFrom(tripComments).where(eq(tripComments.id, BigInt(c.id))).executeSync()[0]?.body).toBe('After');
+});
+
 test('delete action removes trip-level reminders', async () => {
 	const u = makeUser(kit, { email: 'del@x.c', passwordHash: 'x', displayName: 'U' });
 	const t = makeTrip(kit, u.id, { name: 'Del', startDate: '2099-01-01' });

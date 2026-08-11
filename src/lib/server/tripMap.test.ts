@@ -64,7 +64,7 @@ test('returns null when no upcoming segment has coordinates', () => {
 	expect(selectNextSegmentCity(t.id)).toBeNull();
 });
 
-test('tripMapCity prefers the next segment city', () => {
+test('tripMapCity prefers the declared trip destination', () => {
 	const { kit, t } = insertFixtures();
 	kit.updateTable(trips)
 		.set({ destination_city_name: 'Tokyo', destination_country_code: 'JP', destination_city_lat: 35.68, destination_city_lng: 139.76 } as never)
@@ -74,11 +74,10 @@ test('tripMapCity prefers the next segment city', () => {
 		{ trip_id: BigInt(t.id), type: 'hotel', title: 'Next', start_at: '2099-01-01T10:00:00Z', start_tz: 'UTC', country_code: 'FR', city_name: 'Paris', city_lat: 48.85, city_lng: 2.35 }
 	]);
 	const city = tripMapCity(t.id);
-	expect(city?.cityName).toBe('Paris');
-	expect(city?.segmentId).not.toBeNull();
+	expect(city).toMatchObject({ cityName: 'Tokyo', countryCode: 'JP', lat: 35.68, lng: 139.76, segmentId: null });
 });
 
-test('tripMapCity falls back to the destination city when no segment has one', () => {
+test('tripMapCity uses the destination city when no segment has one', () => {
 	const { kit, t } = insertFixtures();
 	kit.updateTable(trips)
 		.set({ destination_city_name: 'Tokyo', destination_country_code: 'JP', destination_city_lat: 35.68, destination_city_lng: 139.76 } as never)
@@ -89,6 +88,14 @@ test('tripMapCity falls back to the destination city when no segment has one', (
 	]);
 	const city = tripMapCity(t.id);
 	expect(city).toMatchObject({ cityName: 'Tokyo', countryCode: 'JP', lat: 35.68, lng: 139.76, segmentId: null });
+});
+
+test('tripMapCity falls back to the next segment city without destination coordinates', () => {
+	const { kit, t } = insertFixtures();
+	insertSegments(kit, [
+		{ trip_id: BigInt(t.id), type: 'hotel', title: 'Next', start_at: '2099-01-01T10:00:00Z', start_tz: 'UTC', country_code: 'FR', city_name: 'Paris', city_lat: 48.85, city_lng: 2.35 }
+	]);
+	expect(tripMapCity(t.id)).toMatchObject({ cityName: 'Paris', countryCode: 'FR', segmentId: expect.any(Number) });
 });
 
 test('tripMapCity returns null when neither a segment nor a destination has coordinates', () => {

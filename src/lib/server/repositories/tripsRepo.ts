@@ -432,6 +432,17 @@ export function createComment(userId: number, tripId: number, body: string): Tri
 	return toTripComment(row);
 }
 
+export function updateComment(userId: number, commentId: number, body: string): TripComment | null {
+	const updated = kit
+		.updateTable(tripComments)
+		.set({ body } as Update<typeof tripComments>)
+		.where(and(kitEq(tripComments.id, kitId(commentId)), kitEq(tripComments.user_id, kitId(userId))))
+		.executeSync()[0];
+	if (!updated) return null;
+	publishTripChanged(num(updated.trip_id));
+	return toTripComment(updated);
+}
+
 export function deleteComment(userId: number, commentId: number): number {
 	const existing = kit
 		.selectFrom(tripComments)

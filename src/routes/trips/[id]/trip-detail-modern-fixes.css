@@ -10,6 +10,8 @@
 }
 
 .trip-modern .trip-modern-day-card {
+	position: relative;
+	anchor-scope: --trip-timeline-start, --trip-timeline-end;
 	background: color-mix(in oklab, var(--theme-panel-solid) 96%, var(--theme-canvas));
 	box-shadow:
 		0 14px 34px color-mix(in oklab, var(--theme-shadow) 10%, transparent),
@@ -25,7 +27,6 @@
 }
 
 .trip-modern .trip-modern-day-body {
-	anchor-scope: --trip-timeline-start, --trip-timeline-end;
 	padding: 0.55rem 0.65rem 0.75rem 1rem;
 }
 
@@ -51,6 +52,27 @@
 
 .trip-modern .trip-modern-segment:only-child .trip-modern-type-node {
 	anchor-name: --trip-timeline-start, --trip-timeline-end;
+}
+
+.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-before::before,
+.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-after::after {
+	content: '';
+	position: absolute;
+	left: 9.45rem;
+	z-index: 1;
+	width: 1px;
+	background: color-mix(in oklab, var(--theme-brand) 16%, var(--trip-modern-line));
+	pointer-events: none;
+}
+
+.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-before::before {
+	top: -0.8rem;
+	bottom: calc(100% - anchor(--trip-timeline-start center, 2.1rem));
+}
+
+.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-after::after {
+	top: anchor(--trip-timeline-end center, calc(100% - 2.1rem));
+	bottom: -0.8rem;
 }
 
 .trip-modern .trip-modern-segment {
@@ -293,6 +315,11 @@
 	}
 
 	.trip-modern .trip-modern-day-body::before {
+		left: 3rem;
+	}
+
+	.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-before::before,
+	.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-after::after {
 		left: 3rem;
 	}
 

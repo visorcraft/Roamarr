@@ -13,6 +13,7 @@ import {
 	modifyJournalEntry,
 	removeJournalEntry,
 	addJournalEntry,
+	updateJournalEntry,
 	deleteJournalEntry
 } from './tripJournal';
 import { tripJournalEntries, tripShares, auditLogs } from './db/mongrelSchema';
@@ -218,6 +219,25 @@ test('addJournalEntry action returns fail for invalid input', async () => {
 	const result = await addJournalEntry(event);
 	expect(result?.status).toBe(400);
 	expect((result as unknown as { data: { error: string } }).data.error).toBe('Please fix the highlighted fields.');
+});
+
+test('updateJournalEntry action saves edited notes', async () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'j-update@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const entry = createJournalEntry(u.id, t.id, {
+		entryDate: '2026-06-20',
+		title: 'Before',
+		body: 'Old body'
+	});
+	const event = makeEvent(u, { id: String(t.id) }, {
+		entryId: String(entry.id),
+		entryDate: '2026-06-21',
+		title: 'After',
+		body: 'New body'
+	});
+	await expect(updateJournalEntry(event)).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
+	expect(listJournalEntries(t.id)[0]).toMatchObject({ entryDate: '2026-06-21', title: 'After', body: 'New body' });
 });
 
 test('deleteJournalEntry action deletes and redirects', async () => {

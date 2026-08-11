@@ -456,9 +456,11 @@
 .trip-modern-side-panel {
 	position: sticky;
 	top: 8.7rem;
+	max-height: calc(100dvh - 9.7rem);
 	min-width: 0;
 	padding: 1.35rem;
-	overflow-x: hidden;
+	overflow: hidden auto;
+	overscroll-behavior: contain;
 }
 
 .trip-modern-selected-empty {
@@ -741,6 +743,7 @@
 		inset: 0;
 		z-index: 100;
 		height: 100dvh;
+		max-height: 100dvh;
 		overflow-y: auto;
 		overscroll-behavior: contain;
 		border-radius: 0;

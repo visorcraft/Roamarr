@@ -50,7 +50,7 @@
 			action: 'gc',
 			title: 'Garbage collect',
 			description:
-				'Compact sorted runs, then vacuum (engine GC). After a successful flush, this can delete rotated WAL segments that only exist for crash recovery — the main reason backups look huge relative to trip data.',
+				'Compact sorted runs, then checkpoint. Checkpoint flushes memtables and drops rotated WAL segments so crash recovery stays small and backups shrink.'
 			badge: 'Operational',
 			badgeClass: 'badge-amber',
 			buttonClass: 'btn btn-primary',

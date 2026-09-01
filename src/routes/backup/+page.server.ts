@@ -27,8 +27,18 @@ function userFacingError(e: unknown, fallback: string): string {
 }
 
 const ALLOWED_BACKUP_EXTENSIONS = ['.mongreldb.tar.gz', '.tar.gz'];
-const MAX_RESTORE_BYTES = 512 * 1024 * 1024;
 const RESTORE_RATE_LIMIT = { maxAttempts: 3, windowMs: 60_000 };
+
+/** `undefined` / `0` / `unlimited` = no application cap (adapter `BODY_SIZE_LIMIT` still applies). */
+export function maxRestoreBytes(): number | null {
+	const raw = process.env.ROAMARR_MAX_RESTORE_BYTES?.trim();
+	if (!raw || raw === '0' || raw.toLowerCase() === 'unlimited') return null;
+	const parsed = Number(raw);
+	if (!Number.isFinite(parsed) || parsed < 1) {
+		throw new Error('ROAMARR_MAX_RESTORE_BYTES must be a positive byte count, 0, or unlimited');
+	}
+	return parsed;
+}
 
 function isBackupFilename(name: string): boolean {
 	return ALLOWED_BACKUP_EXTENSIONS.some((ext) => name.endsWith(ext));
@@ -72,8 +82,11 @@ export const actions: Actions = {
 		if (!isBackupFilename(file.name.toLowerCase())) {
 			return fail(400, { error: 'Upload a Roamarr MongrelDB backup (.mongreldb.tar.gz)' });
 		}
-		if (file.size > MAX_RESTORE_BYTES) {
-			return fail(400, { error: 'Backup file must be 512 MB or smaller' });
+		const restoreLimit = maxRestoreBytes();
+		if (restoreLimit !== null && file.size > restoreLimit) {
+			return fail(400, {
+				error: `Backup file must be ${restoreLimit} bytes or smaller`
+			});
 		}
 
 		const dbPath = resolve(getDatabasePath());
@@ -83,8 +96,8 @@ export const actions: Actions = {
 		let markerWritten = false;
 
 		try {
-			// Stream the upload straight to disk instead of materializing up to
-			// MAX_RESTORE_BYTES (512 MB) on the heap.
+			// Stream the upload straight to disk instead of materializing the
+			// archive on the heap.
 			await pipeline(Readable.fromWeb(file.stream() as any), createWriteStream(archivePath));
 
 			await pipeline(createReadStream(archivePath), createGunzip(), tar.extract(extractRoot));

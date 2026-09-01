@@ -86,6 +86,7 @@ afterEach(() => {
 	rmSync(testRoot, { recursive: true, force: true });
 	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
 	else process.env.DATABASE_PATH = originalDatabasePath;
+	delete process.env.ROAMARR_MAX_RESTORE_BYTES;
 });
 
 test('backup downloads a tar.gz archive of the database directory and attachments', async () => {
@@ -168,9 +169,32 @@ test('restore rejects an invalid archive', async () => {
 	expect(result?.status).toBe(400);
 });
 
-test('restore rejects oversized archives before extracting', async () => {
+test('restore rejects oversized archives before extracting when a cap is set', async () => {
 	const dbDir = makeDbDir();
 	process.env.DATABASE_PATH = dbDir;
+	process.env.ROAMARR_MAX_RESTORE_BYTES = String(1024);
+
+	const large = new File([Buffer.from('x')], 'large.mongreldb.tar.gz', {
+		type: 'application/gzip'
+	});
+	Object.defineProperty(large, 'size', { value: 1025 });
+	const form = new FormData();
+	form.append('file', large);
+	const result = await actions.restore({
+		locals: adminLocals(),
+		request: { formData: async () => form },
+		cookies: { set: vi.fn() },
+		getClientAddress: () => '127.0.0.1'
+	} as any);
+	expect(result?.status).toBe(400);
+	expect(result?.data.error).toContain('1024 bytes or smaller');
+	delete process.env.ROAMARR_MAX_RESTORE_BYTES;
+});
+
+test('restore does not apply an application size cap by default', async () => {
+	const dbDir = makeDbDir();
+	process.env.DATABASE_PATH = dbDir;
+	delete process.env.ROAMARR_MAX_RESTORE_BYTES;
 
 	const large = new File([Buffer.from('x')], 'large.mongreldb.tar.gz', {
 		type: 'application/gzip'
@@ -184,8 +208,9 @@ test('restore rejects oversized archives before extracting', async () => {
 		cookies: { set: vi.fn() },
 		getClientAddress: () => '127.0.0.1'
 	} as any);
+	// Size check passes; extract of the stub bytes fails later.
 	expect(result?.status).toBe(400);
-	expect(result?.data.error).toContain('512 MB');
+	expect(result?.data.error).not.toContain('bytes or smaller');
 });
 
 test('restore is rate limited before parsing the archive', async () => {

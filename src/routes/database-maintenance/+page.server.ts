@@ -113,11 +113,20 @@ export const actions: Actions = {
 			// (no memtable / mutable-run rows). That is what shrinks multi‑MB _wal/
 			// directories after GeoNames imports and long-lived write history.
 			const compactResult = kit.compactAll();
-			await kit.vacuum();
+			await kit.flushAsync();
+			const native = kit as typeof kit & { checkpoint?: () => void };
+			let checkpointed = false;
+			if (typeof native.checkpoint === 'function') {
+				native.checkpoint();
+				checkpointed = true;
+			} else {
+				await kit.vacuum();
+			}
 			const result = {
 				compacted: Number(compactResult.compacted ?? 0),
 				skipped: Number(compactResult.skipped ?? 0),
-				vacuumed: true
+				checkpointed,
+				vacuumed: !checkpointed
 			};
 			logAudit(u.id, 'db_gc', 'settings', 1, result);
 			return { action: 'gc', success: true, result };

@@ -55,7 +55,7 @@ ATTACHMENTS_PATH=/var/lib/roamarr/attachments
 EMBEDDINGS_CACHE_PATH=/var/lib/roamarr/models
 PORT=3000
 ORIGIN=https://travel.example.com
-BODY_SIZE_LIMIT=512M
+BODY_SIZE_LIMIT=Infinity
 ```
 
 `ROAMARR_SECRET` must decode to exactly 32 bytes. Roamarr uses it to unlock the
@@ -116,10 +116,11 @@ The generated server also supports the standard adapter-node runtime variables:
 | `LISTEN_PID`, `LISTEN_FDS` | `0` | Unprefixed systemd socket-activation variables. One socket is supported. |
 
 The adapter default body limit is smaller than Roamarr's supported uploads.
-Use a limit of at least `10M` for receipt attachments. Use `512M` if browser
-backup restore is required, matching Roamarr's restore limit. Configure the
-reverse proxy with a compatible limit. Only trust forwarded headers from a
-proxy you control.
+Use a limit of at least `10M` for receipt attachments. Browser backup restore
+has no Roamarr application size cap by default, so set `BODY_SIZE_LIMIT` (and
+the reverse proxy) to the largest archive you intend to upload, or
+`Infinity` to leave it to disk space. `ROAMARR_MAX_RESTORE_BYTES` can add an
+application cap. Only trust forwarded headers from a proxy you control.
 
 ## Persistent data
 

@@ -53,13 +53,14 @@ read-only integrity check.
 ## Upload returns HTTP `413`
 
 The default adapter-node request limit is `512K`. Receipts can be up to 10 MB
-and restore archives up to 512 MB.
+and restore archives (no application size cap by default; set
+`ROAMARR_MAX_RESTORE_BYTES` to impose one).
 
 Set `BODY_SIZE_LIMIT` to the required size and configure the reverse proxy with
 an equal or larger request limit:
 
 ```env
-BODY_SIZE_LIMIT=512M
+BODY_SIZE_LIMIT=Infinity
 ```
 
 Restart after changing the environment. A receipt must also be JPEG, PNG,

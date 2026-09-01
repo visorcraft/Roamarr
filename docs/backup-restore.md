@@ -102,9 +102,12 @@ Do not email a production archive or place it in a public object store.
 
 ## Restore prerequisites
 
-The restore page accepts `.mongreldb.tar.gz` and `.tar.gz` archives up to
-512 MB. The adapter-node and reverse-proxy upload limits must also allow the
-file. See [Deployment and upgrades](./deployment.md#adapter-node-variables).
+The restore page accepts `.mongreldb.tar.gz` and `.tar.gz` archives. Roamarr
+does not impose an application size cap by default; set
+`ROAMARR_MAX_RESTORE_BYTES` to a positive byte count if you want one (`0` or
+`unlimited` keep the default). Adapter-node `BODY_SIZE_LIMIT` and the reverse
+proxy still bound the HTTP upload. See
+[Deployment and upgrades](./deployment.md#adapter-node-variables).
 
 Allow enough free storage for:
 
@@ -145,7 +148,7 @@ The restore endpoint allows three requests per minute.
 
 If upload fails:
 
-- confirm the extension and 512 MB application limit;
+- confirm the extension and any `ROAMARR_MAX_RESTORE_BYTES` cap;
 - check `BODY_SIZE_LIMIT` and proxy limits for HTTP `413`;
 - verify free disk space and service-account permissions;
 - confirm the archive is a Roamarr full backup, not trip JSON/CSV;

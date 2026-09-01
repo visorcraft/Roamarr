@@ -133,8 +133,9 @@ Receipt and document uploads:
 - randomized storage name;
 - chunked authenticated encryption.
 
-Restore uploads are at most 512 MB and undergo archive-layout and MongrelDB
-validation before staging. Adapter and reverse-proxy body limits apply first.
+Restore uploads undergo archive-layout and MongrelDB validation before
+staging. Adapter and reverse-proxy body limits apply first. An optional
+`ROAMARR_MAX_RESTORE_BYTES` cap can bound the archive further.
 
 Never serve the attachment or database directories directly from the reverse
 proxy.

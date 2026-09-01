@@ -30,7 +30,7 @@ const ALLOWED_BACKUP_EXTENSIONS = ['.mongreldb.tar.gz', '.tar.gz'];
 const RESTORE_RATE_LIMIT = { maxAttempts: 3, windowMs: 60_000 };
 
 /** `undefined` / `0` / `unlimited` = no application cap (adapter `BODY_SIZE_LIMIT` still applies). */
-export function maxRestoreBytes(): number | null {
+function maxRestoreBytes(): number | null {
 	const raw = process.env.ROAMARR_MAX_RESTORE_BYTES?.trim();
 	if (!raw || raw === '0' || raw.toLowerCase() === 'unlimited') return null;
 	const parsed = Number(raw);

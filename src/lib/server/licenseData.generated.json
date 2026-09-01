@@ -2,8 +2,8 @@
 	"schemaVersion": 1,
 	"source": {
 		"packageName": "roamarr",
-		"packageVersion": "0.41.5",
-		"lockfileSha256": "bd716577e010bf343fcd98e8c844c2e10bc2953c2f45d05ad5e2a33af4c01bff"
+		"packageVersion": "0.41.6",
+		"lockfileSha256": "448f431d069031242cda034bcbb60b2662480dd552fac07c008fafbff3f37ba5"
 	},
 	"projectLicense": {
 		"title": "Roamarr License",

@@ -50,7 +50,7 @@
 			action: 'gc',
 			title: 'Garbage collect',
 			description:
-				'Compact sorted runs, then checkpoint. Checkpoint flushes memtables and drops rotated WAL segments so crash recovery stays small and backups shrink.'
+				'Compact sorted runs, then checkpoint. Checkpoint flushes memtables and drops rotated WAL segments so crash recovery stays small and backups shrink.',
 			badge: 'Operational',
 			badgeClass: 'badge-amber',
 			buttonClass: 'btn btn-primary',

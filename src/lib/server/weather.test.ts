@@ -177,7 +177,9 @@ describe('weather', () => {
 
 	test('tripWeatherOverview uses segment location when available', async () => {
 		const u = makeUser(ctx.kit);
-		const today = new Date().toISOString().slice(0, 10);
+		// Match weather.ts (local calendar days). UTC `toISOString()` midnight
+		// can fall on the previous local day east of UTC and miss the segment.
+		const today = DateTime.now().toISODate()!;
 		fetchMock.mockResolvedValue({
 			ok: true,
 			json: async () => mockForecastResponse([today])
@@ -193,7 +195,7 @@ describe('weather', () => {
 			cityLat: 40.71,
 			cityLng: -74.01,
 			cityName: 'New York',
-			startAt: `${today}T00:00:00.000Z`
+			startAt: DateTime.fromISO(today).startOf('day').toUTC().toISO()!
 		});
 		const w = await tripWeatherOverview(t.id, u.id);
 		expect(w).not.toBeNull();

@@ -535,6 +535,10 @@ calendar-feed routes expose only a reduced `viewerProjection`.
 SvelteKit configuration lives in `vite.config.ts`. Type checks use TypeScript 7;
 TypeScript 6 remains installed for the Svelte compiler API. The adapter-node
 patch preserves runtime `ORIGIN` configuration for existing deployments.
+The `deepmerge` patch blocks prototype poisoning in both merge inputs
+([GHSA-gcqx-w48m-w2h4](https://github.com/advisories/GHSA-gcqx-w48m-w2h4));
+keep it until an upstream fix is available. `npm audit` still reports the
+unpatched package version because it does not inspect local patches.
 
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and

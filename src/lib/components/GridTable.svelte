@@ -82,8 +82,9 @@
 
 	let wrapper: HTMLDivElement | undefined = $state();
 	let pendingAction: { action: string; row: Record<string, unknown> } | null = $state(null);
-	// Seed from prop; $effect below keeps it in sync when pageSize changes.
+	// Restore each page/table preference before Grid.js mounts.
 	let selectedPageSize = $state(10);
+	let pageSizeStorageKey = '';
 	let searchInput = $state('');
 	let searchTerm = '';
 	let filterValues = $state<Record<string, string>>({});
@@ -197,6 +198,11 @@
 
 	function setPageSize(value: number) {
 		selectedPageSize = value;
+		try {
+			localStorage.setItem(pageSizeStorageKey, String(value));
+		} catch {
+			// Table controls still work when browser storage is unavailable.
+		}
 		grid?.updateConfig({ pagination: paginationConfig() }).forceRender();
 		schedulePageSizeControlInstall();
 	}
@@ -284,6 +290,13 @@
 
 	$effect(() => {
 		selectedPageSize = pageSize;
+		pageSizeStorageKey = `roamarr:table-rows:${window.location.pathname}:${columns.map((column) => column.id).join(',')}`;
+		try {
+			const saved = Number(localStorage.getItem(pageSizeStorageKey));
+			if (pageSizeOptions.includes(saved)) selectedPageSize = saved;
+		} catch {
+			// Use the prop default when browser storage is unavailable.
+		}
 	});
 
 	$effect(() => {

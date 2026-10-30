@@ -56,7 +56,7 @@ describe('mongrelMigrations', () => {
 	});
 
 	test('migrations include the invitation upgrade for existing databases', () => {
-		expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
+		expect(migrations.map((migration) => migration.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
 		// Clone the fully migrated template; the assertion only needs the
 		// post-migration schema state.
 		const dir = freshDbDir();

@@ -1,0 +1,23 @@
+diff --git a/node_modules/@sveltejs/adapter-node/src/env.js b/node_modules/@sveltejs/adapter-node/src/env.js
+--- a/node_modules/@sveltejs/adapter-node/src/env.js
++++ b/node_modules/@sveltejs/adapter-node/src/env.js
+@@ -2,6 +2,7 @@
+ import { env_prefix } from '#@sveltejs/adapter-node';
+ 
+ const expected = new Set([
++	'ORIGIN',
+ 	'SOCKET_PATH',
+ 	'HOST',
+ 	'PORT',
+diff --git a/node_modules/@sveltejs/adapter-node/src/handler.js b/node_modules/@sveltejs/adapter-node/src/handler.js
+--- a/node_modules/@sveltejs/adapter-node/src/handler.js
++++ b/node_modules/@sveltejs/adapter-node/src/handler.js
+@@ -43,7 +43,7 @@
+ const ssr = async (req, res) => {
+ 	/** @type {Request} */
+ 	let request;
+-	let request_origin = origin;
++	let request_origin = env('ORIGIN', origin);
+ 
+ 	if (!request_origin) {
+ 		try {

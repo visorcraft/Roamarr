@@ -261,7 +261,7 @@
 		<TextField
 			name="currency"
 			label="Currency"
-			value={(addBenefitValues?.currency as string | undefined) ?? 'USD'}
+			value={(addBenefitValues?.currency as string | undefined) ?? data.user?.defaultCurrency ?? 'USD'}
 			placeholder="USD"
 			disabled={benefitSubmitting || !!selectedTemplate}
 			errors={form?.errors ?? {}}

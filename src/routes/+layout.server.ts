@@ -29,7 +29,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 	const theme = themeForId(locals.user?.themeId);
 	return {
 		user: locals.user
-			? { id: locals.user.id, email: locals.user.email, displayName: locals.user.displayName, role: locals.user.role }
+			? { id: locals.user.id, email: locals.user.email, displayName: locals.user.displayName, role: locals.user.role, defaultCurrency: locals.user.defaultCurrency ?? s.defaultCurrency }
 			: null,
 		appName: appInfo.name,
 		appVersion: appInfo.version,

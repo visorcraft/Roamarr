@@ -44,7 +44,7 @@ test('markRead only affects the caller’s own notification', () => {
 	const b = makeUser('b1@x.c', 'B');
 	const nB = insertNotification(b.id, 't');
 	expect(() => markRead(a.id, nB.id)).toThrow(
-		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
+		expect.objectContaining({ status: 404, body: { status: 404, message: 'Notification not found' } })
 	);
 	// Kit returns '' for an unset nullable timestamp, not null.
 	expect(kit.selectFrom(notifications).executeSync()[0]!.read_at).toBeFalsy();
@@ -59,7 +59,7 @@ test('markUnread clears readAt for the caller’s own notification', () => {
 	const nB = insertNotification(b.id, 't');
 	markRead(b.id, nB.id);
 	expect(() => markUnread(a.id, nB.id)).toThrow(
-		expect.objectContaining({ status: 404, body: { message: 'Notification not found' } })
+		expect.objectContaining({ status: 404, body: { status: 404, message: 'Notification not found' } })
 	);
 	markUnread(b.id, nB.id);
 	expect(

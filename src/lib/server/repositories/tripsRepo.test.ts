@@ -232,3 +232,13 @@ test('listGroupsForUserPaginated searches, sorts, and paginates', () => {
 	const searched = tripsRepo.listGroupsForUserPaginated(owner.id, { search: 'mm' });
 	expect(searched.map((g) => g.name)).toEqual(['Gamma']);
 });
+
+
+test('new trips use the owner currency unless explicitly supplied', () => {
+	const owner = makeUser('currency@x.c');
+	kitDb().updateTable(users).set({ default_currency: 'EUR' }).where(eq(users.id, BigInt(owner.id))).executeSync();
+	expect(tripsRepo.createTrip(owner.id, { name: 'Default' }).baseCurrency).toBe('EUR');
+	expect(tripsRepo.createTrip(owner.id, { name: 'Override', baseCurrency: 'GBP' }).baseCurrency).toBe('GBP');
+	const other = makeUser('currency-other@x.c');
+	expect(tripsRepo.createTrip(other.id, { name: 'Other owner' }).baseCurrency).toBe('USD');
+});

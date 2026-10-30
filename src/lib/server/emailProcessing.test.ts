@@ -94,3 +94,26 @@ test.runIf(!!process.env.MINIMAX)('MiniMax OpenAI-compatible parser works live',
 	updateSettings({ globalAiEnabled: true, globalAiBaseUrl: 'https://api.minimax.io/v1', globalAiModel: 'MiniMax-M2.7', globalAiToken: encrypt(process.env.MINIMAX!) });
 	await expect(parseEmailForUser(user.id, 'Flight confirmation to Paris', 'Flight departure May 3, 2027 at 10:30 AM. Confirmation ABC123.')).resolves.toMatchObject({ isTravel: true, type: 'flight' });
 }, 30_000);
+
+
+test.each(['\n', '\r\n'])('local parser prefers table pickup and return dates over forwarded headers (%j)', (newline) => {
+	const body = [
+		'---------- Forwarded message ---------',
+		'Date: Thu, Sep 24, 2026 at 3:29 PM',
+		'Reservation Details', '', 'Pickup Location: Airport branch', '', 'Pickup Date & Time', '',
+		'Sat, Oct 3 2026 9:00 AM', '', 'Return Location: Airport branch', '', 'Return Date & Time', '',
+		'Mon, Oct 12 2026 9:00 AM'
+	].join(newline);
+	const parsed = parseTravelEmailLocal('Enterprise Rent-A-Car Confirmation', body);
+	expect(parsed).toMatchObject({
+		isTravel: true, type: 'rental_car',
+		startAt: new Date('Oct 3 2026 9:00 AM').toISOString(),
+		endAt: new Date('Oct 12 2026 9:00 AM').toISOString()
+	});
+});
+
+test('local parser keeps same-line labelled dates ahead of forwarded headers', () => {
+	const parsed = parseTravelEmailLocal('Hotel confirmation', 'Date: Sep 24 2026\nCheck-in: Oct 3 2026 3:00 PM\nCheck-out: Oct 12 2026 11:00 AM');
+	expect(parsed.startAt).toBe(new Date('Oct 3 2026 3:00 PM').toISOString());
+	expect(parsed.endAt).toBe(new Date('Oct 12 2026 11:00 AM').toISOString());
+});

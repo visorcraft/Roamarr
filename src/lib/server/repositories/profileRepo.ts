@@ -7,7 +7,8 @@ import {
 	cards,
 	cardBenefits,
 	insurancePolicies,
-	emergencyContacts
+	emergencyContacts,
+	type TravelDocumentType
 } from '$lib/server/db/mongrelSchema';
 import { encrypt, decrypt } from '$lib/server/crypto';
 import { sanitizeLast4 } from '$lib/server/validation';
@@ -54,7 +55,7 @@ function kitReinsertWithId(
 // Travel documents
 // ============================================================================
 
-export type TravelDocumentType = 'passport' | 'drivers_license' | 'global_entry' | 'visa';
+export type { TravelDocumentType } from '$lib/server/db/mongrelSchema';
 
 export interface TravelDocument {
 	id: number;

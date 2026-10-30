@@ -43,7 +43,7 @@ const MAPS_TILE_PROVIDERS = [
 const PLACE_SEARCH_PROVIDERS = ['nominatim', 'google'] as const;
 const SEGMENT_STATUSES = ['planned', 'checked_in', 'boarded', 'arrived', 'completed'] as const;
 const SEGMENT_PAYMENT_STATUSES = ['quoted', 'deposit_paid', 'fully_paid', 'refunded'] as const;
-const TRAVEL_DOCUMENT_TYPES = ['passport', 'drivers_license', 'global_entry', 'visa'] as const;
+const TRAVEL_DOCUMENT_TYPES = ['passport', 'drivers_license', 'global_entry', 'visa', 'national_id'] as const;
 const COMPANION_CATEGORIES = ['adult', 'child', 'other', 'guide', 'driver'] as const;
 const SEAT_PREFERENCES = ['aisle', 'window', 'middle', 'none'] as const;
 const BED_PREFERENCES = ['king', 'queen', 'twin', 'two_doubles', 'other'] as const;
@@ -574,7 +574,8 @@ export const geonamesCities = table('geonames_cities', {
 		real('lat'),
 		real('lng'),
 		int('population', { nullable: true }),
-		text('timezone', { nullable: true })
+		text('timezone', { nullable: true }),
+		text('alternate_names', { nullable: true })
 	],
 	primaryKey: 'geoname_id',
 	indexes: [

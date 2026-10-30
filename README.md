@@ -18,9 +18,9 @@
 <p align="center">
   <a href="https://github.com/visorcraft/Roamarr/releases/latest"><img src="https://img.shields.io/github/v/release/visorcraft/Roamarr?sort=semver" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only" /></a>
-  <img src="https://img.shields.io/badge/SvelteKit-2-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 2" />
+  <img src="https://img.shields.io/badge/SvelteKit-3-ff3e00?logo=svelte&amp;logoColor=white" alt="Built with SvelteKit 3" />
   <img src="https://img.shields.io/badge/storage-MongrelDB-003b57" alt="MongrelDB storage" />
-  <img src="https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&amp;logoColor=white" alt="Node.js 24 or newer" />
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D24.15-339933?logo=node.js&amp;logoColor=white" alt="Node.js 24.15 or newer" />
   <img src="https://img.shields.io/badge/container-Docker%20%2F%20Podman-892ca0?logo=podman&amp;logoColor=white" alt="Docker or Podman container" />
 </p>
 
@@ -190,7 +190,7 @@ troubleshooting.
 
 ### Requirements
 
-- Node.js 24 or newer.
+- Node.js 24.15 or newer.
 - npm, using the checked-in `package-lock.json`.
 - MongrelDB (with the MongrelDB Kit toolkit) installed by `npm ci`.
 - A persistent database path for local app data.
@@ -509,7 +509,7 @@ also require `confirm: true`.
 
 ## Architecture
 
-Roamarr is a SvelteKit 2 app using Svelte 5, TypeScript ES modules,
+Roamarr is a SvelteKit 3 app using Svelte 5, TypeScript ES modules,
 `@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB (via MongrelDB Kit), Luxon,
 Nodemailer, MapLibre GL JS v6, and Vitest. Supporting libraries include WebAuthn
 (`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
@@ -532,12 +532,18 @@ Trip access is centralized in three ownership helpers — `requireOwnedTrip`
 resource reads all share one consistent authorization layer. Public share and
 calendar-feed routes expose only a reduced `viewerProjection`.
 
+SvelteKit configuration lives in `vite.config.ts`. Type checks use TypeScript 7;
+TypeScript 6 remains installed for the Svelte compiler API. The adapter-node
+patch preserves runtime `ORIGIN` configuration for existing deployments.
+
 The main app shell lives in `src/routes/+layout.svelte` and
 `src/routes/+layout.server.ts`. Shared components, icons, themes, labels, and
 formatting helpers live under `src/lib/`. Database schema and migrations live
 under `src/lib/server/db/`. Map rendering uses MapLibre GL JS
 with configurable raster tile providers; city data is imported from GeoNames
-`cities1000.zip`.
+`cities1000.zip`. City search includes alternate names and ignores accents.
+After upgrading an existing city database, reimport GeoNames from General → Maps
+to populate alternate names.
 
 ### Map and globe attribution
 

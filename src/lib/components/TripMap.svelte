@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { browser } from '$app/environment';
+	import { browser } from '$app/env';
 	import type { Map as MapType } from 'maplibre-gl';
 	import { loadGpxTracks, type GpxTrackRef } from '$lib/gpxTracks';
 

@@ -42,6 +42,9 @@ describe('GridTable', () => {
 		mounted.length = 0;
 		document.body.innerHTML = '';
 		renderFn.mockClear();
+		vi.restoreAllMocks();
+		localStorage.clear();
+		window.history.replaceState(null, '', '/');
 	});
 
 	function mountTable(props: Record<string, unknown>) {
@@ -435,5 +438,64 @@ describe('GridTable', () => {
 			to: '-',
 			results: '\u00a0'
 		});
+	});
+});
+
+
+describe('GridTable saved row counts', () => {
+	const apps: unknown[] = [];
+	const props = { columns: [{ id: 'name', name: 'Name' }], fetchData: async () => ({ rows: [], total: 0 }) };
+	const key = 'roamarr:table-rows:/:name';
+
+	afterEach(() => {
+		for (const app of apps) unmount(app);
+		apps.length = 0;
+		document.body.innerHTML = '';
+		vi.restoreAllMocks();
+		localStorage.clear();
+		window.history.replaceState(null, '', '/');
+		renderFn.mockClear();
+	});
+
+	async function render(extra = {}) {
+		apps.push(mount(GridTable, { target: document.body, props: { ...props, ...extra } }));
+		flushSync();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		return renderFn.mock.lastCall![1] as any;
+	}
+
+	it('restores the selected rows after remounting', async () => {
+		await render();
+		const select = document.body.querySelector('[data-grid-page-size]') as HTMLSelectElement;
+		select.value = '50';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		expect(localStorage.getItem(key)).toBe('50');
+		await unmount(apps.pop());
+		document.body.innerHTML = '';
+		const grid = await render();
+		expect(grid.config.pagination.limit).toBe(50);
+	});
+
+	it('keeps preferences separate by table and page', async () => {
+		localStorage.setItem(key, '50');
+		expect((await render({ columns: [{ id: 'other', name: 'Other' }] })).config.pagination.limit).toBe(10);
+		window.history.replaceState(null, '', '/other');
+		expect((await render()).config.pagination.limit).toBe(10);
+	});
+
+	it.each(['garbage', '0', '-1', '1000000'])('ignores invalid stored rows %s', async (saved) => {
+		localStorage.setItem(key, saved);
+		expect((await render({ pageSize: 25 })).config.pagination.limit).toBe(25);
+	});
+
+	it('works when storage access throws', async () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+		const grid = await render();
+		const update = vi.spyOn(grid, 'updateConfig');
+		const select = document.body.querySelector('[data-grid-page-size]') as HTMLSelectElement;
+		select.value = '50';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		expect(update).toHaveBeenCalledWith({ pagination: expect.objectContaining({ limit: 50 }) });
 	});
 });

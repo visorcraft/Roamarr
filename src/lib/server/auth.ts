@@ -1,7 +1,7 @@
 import { hash, verify } from '@node-rs/argon2';
 import { randomBytes, createHash } from 'node:crypto';
 import { error } from '@sveltejs/kit';
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import * as usersRepo from './repositories/usersRepo';
 import type { KitUser } from './repositories/usersRepo';
 import { getSettings } from './settings';

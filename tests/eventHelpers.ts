@@ -55,6 +55,7 @@ function baseEvent(
 			getAll: () => [],
 			set: () => {},
 			delete: () => {},
+			parse: () => ({ name: '', value: '' }),
 			serialize: () => ''
 		}
 	};

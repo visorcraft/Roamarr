@@ -308,7 +308,7 @@ export const actions: Actions = {
 				});
 				setFlash(cookies, 'Semantic search enabled. Model ready and index rebuilt.');
 			} else {
-				disableEmbeddings();
+				await disableEmbeddings();
 				logAudit(u.id, 'embeddings_disable', 'settings', 1, {
 					model: getEmbeddingsConfig().model
 				});

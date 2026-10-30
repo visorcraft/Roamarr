@@ -1,11 +1,11 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.41.7",
+	"version": "0.42.0",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
-		"node": ">=24"
+		"node": ">=24.15.0"
 	},
 	"scripts": {
 		"dev": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js dev",
@@ -14,8 +14,8 @@
 		"preview": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js preview",
 		"postinstall": "patch-package",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "node tests/e2e/prepare.mjs && playwright test",
@@ -27,51 +27,49 @@
 		"db:compat-fixture": "node --experimental-strip-types --import ./scripts/seed-alias-loader.mjs scripts/generate-compat-fixture.mjs"
 	},
 	"devDependencies": {
-		"@playwright/test": "^1.61.1",
-		"@sveltejs/adapter-node": "^5.5.7",
-		"@sveltejs/kit": "^2.68.0",
-		"@sveltejs/vite-plugin-svelte": "^7.1.3",
-		"@tailwindcss/vite": "^4.3.1",
-		"@types/jsdom": "^28.0.3",
-		"@types/luxon": "^3.7.2",
-		"@types/mailparser": "^3.4.6",
-		"@types/nodemailer": "^8.0.1",
+		"@playwright/test": "^1.64.1",
+		"@sveltejs/adapter-node": "^6.0.1",
+		"@sveltejs/kit": "^3.1.1",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@tailwindcss/vite": "^4.3.3",
+		"@types/jsdom": "^30.0.0",
+		"@types/luxon": "^3.7.6",
+		"@types/mailparser": "^3.9.0",
+		"@types/nodemailer": "^8.0.2",
 		"@types/qrcode": "^1.5.6",
 		"@types/unzipper": "^0.10.11",
-		"axe-core": "^4.12.1",
-		"jsdom": "^29.1.1",
+		"@typescript/native": "npm:typescript@^7.0.2",
+		"axe-core": "^4.14.0",
+		"jsdom": "^30.1.3",
 		"patch-package": "^8.0.1",
-		"svelte": "^5.56.4",
-		"svelte-check": "^4.7.1",
-		"tailwindcss": "^4.3.1",
-		"typescript": "^6.0.3",
-		"vite": "^8.1.0",
-		"vitest": "^4.1.10"
+		"svelte": "^5.57.3",
+		"svelte-check": "^4.7.7",
+		"tailwindcss": "^4.3.3",
+		"typescript": "~6.0.3",
+		"vite": "^8.3.5",
+		"vitest": "^5.0.5"
 	},
 	"dependencies": {
-		"@huggingface/transformers": "^4.2.0",
-		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@node-rs/argon2": "^2.0.2",
-		"@simplewebauthn/browser": "^13.3.0",
-		"@simplewebauthn/server": "^13.3.2",
-		"@visorcraft/mongreldb": "^0.64.18",
-		"@visorcraft/mongreldb-kit": "^0.64.18",
+		"@huggingface/transformers": "^4.3.2",
+		"@modelcontextprotocol/sdk": "^1.32.2",
+		"@node-rs/argon2": "^2.2.2",
+		"@simplewebauthn/browser": "^14.0.0",
+		"@simplewebauthn/server": "^14.0.3",
+		"@visorcraft/mongreldb": "^0.65.0",
+		"@visorcraft/mongreldb-kit": "^0.65.0",
 		"gridjs": "^6.2.0",
-		"imapflow": "^1.4.7",
+		"imapflow": "^2.10.0",
 		"luxon": "^3.7.2",
-		"mailparser": "^3.9.14",
-		"maplibre-gl": "^6.0.0",
-		"nodemailer": "^9.0.1",
-		"otpauth": "^9.5.1",
+		"mailparser": "^3.14.1",
+		"maplibre-gl": "^6.16.0",
+		"nodemailer": "^10.3.1",
+		"otpauth": "^9.5.2",
 		"qrcode": "^1.5.4",
 		"tar-fs": "^3.1.3",
-		"three": "^0.185.0",
+		"three": "^0.186.1",
 		"unzipper": "^0.12.5"
 	},
-	"overrides": {
-		"cookie": "^0.7.0"
-	},
 	"allowScripts": {
-		"onnxruntime-node@1.24.3": true
+		"onnxruntime-node@1.30.0": true
 	}
 }

@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 const repoRoot = new URL('../', import.meta.url);
-const APP_ENV_URL = 'virtual:$app/environment';
+const APP_ENV_URL = 'virtual:$app/env';
 
 /**
  * Resolve a `$lib/` specifier to a concrete `.ts` file URL.
@@ -62,7 +62,7 @@ function isLocalPathSpecifier(specifier) {
 
 registerHooks({
 	resolve(specifier, context, nextResolve) {
-		if (specifier === '$app/environment') {
+		if (specifier === '$app/env') {
 			return { url: APP_ENV_URL, shortCircuit: true };
 		}
 

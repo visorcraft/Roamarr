@@ -8,7 +8,7 @@
 
 	function pickPlace(e: Event) {
 		const value = (e.currentTarget as HTMLSelectElement).value;
-		goto(value ? `?placeId=${value}` : '?', { noScroll: true });
+		goto(value ? `?placeId=${value}` : '?', { reset: false });
 	}
 </script>
 

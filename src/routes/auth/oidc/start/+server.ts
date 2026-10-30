@@ -40,5 +40,5 @@ export const GET: RequestHandler = async ({ cookies, getClientAddress, url }) =>
 	cookies.set('oidc_flow', flow.cookieValue, oidcFlowCookieOptions());
 
 	const redirectUri = oidcRedirectUri(resolveOrigin(url.origin));
-	throw redirect(302, buildAuthorizationUrl(discovery, config, flow, redirectUri));
+	throw redirect(302, buildAuthorizationUrl(discovery, config, flow, redirectUri), { external: true });
 };

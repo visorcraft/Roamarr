@@ -164,3 +164,18 @@ test('create action rate limits', async () => {
 	};
 	expect(result.status).toBe(429);
 });
+
+
+test('national ID cards retain encrypted numbers and expiry reminders', async () => {
+	const user = makeUserLocals(ctx.kit);
+	const f = new FormData();
+	f.set('type', 'national_id');
+	f.set('number', 'ID123456');
+	f.set('issuingAuthority', 'Germany');
+	f.set('expiresOn', '2030-01-01');
+	await expect(actions.create(event(user.user, f))).rejects.toMatchObject({ status: 303 });
+	const doc = ctx.kit.selectFrom(travelDocuments).executeSync()[0];
+	expect(doc.type).toBe('national_id');
+	expect(doc.number).not.toBe('ID123456');
+	expect(ctx.kit.selectFrom(reminders).executeSync()[0].kind).toBe('document_expiry');
+});

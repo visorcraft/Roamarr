@@ -74,9 +74,17 @@ test('disableEmbeddings turns off semantic ranking', async () => {
 	makeTrip(db(), user.id, { name: 'Paris Weekend' });
 	await enableEmbeddings();
 	expect(embeddingsReady()).toBe(true);
-	disableEmbeddings();
+	await disableEmbeddings();
 	expect(embeddingsReady()).toBe(false);
 	const global = await globalSearch(user.id, 'Paris');
 	expect(global.semantic).toBe(false);
 	expect(global.trips.some((t) => t.name.includes('Paris'))).toBe(true);
+});
+
+
+test('disable during enable leaves semantic search disabled', async () => {
+	const enabling = enableEmbeddings();
+	await disableEmbeddings();
+	await expect(enabling).resolves.toMatchObject({ enabled: false, status: 'disabled' });
+	expect(embeddingsReady()).toBe(false);
 });

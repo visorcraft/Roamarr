@@ -373,3 +373,20 @@ test('getFareWatchByTripAndProvider is idempotent', () => {
 	const w2 = repo.getFareWatchByTripAndProvider(trip.id, provider.id);
 	expect(w2?.id).toBe(w1.id);
 });
+
+
+test('city lookup matches alternate names and accents without changing display names', () => {
+	repo.importCitiesBatch([
+		{ ...BERLIN, geonameId: 1, name: 'Munich', asciiName: 'Munich', alternateNames: 'München,Monaco di Baviera', admin1Code: '02' },
+		{ ...BERLIN, geonameId: 2, name: 'Lübeck', asciiName: 'Luebeck', population: 200000 }
+	]);
+	for (const query of ['München', 'munchen', 'Monaco di Baviera']) {
+		expect(repo.searchCities(query, 'DE')[0]?.name).toBe('Munich');
+		expect(repo.findCityByCountryAndName('DE', query, '02')?.name).toBe('Munich');
+	}
+	expect(repo.searchCities('Lubeck', 'DE')[0]?.name).toBe('Lübeck');
+	expect(repo.findCityByCountryAndName('DE', 'Lubeck')?.name).toBe('Lübeck');
+	expect(repo.searchCities('München', 'FR')).toEqual([]);
+	expect(repo.searchCities('München', 'DE', 20, '01')).toEqual([]);
+	expect(repo.findCityByCountryAndName('DE', 'München', '01')).toBeNull();
+});

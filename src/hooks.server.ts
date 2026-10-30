@@ -1,5 +1,6 @@
-import { redirect, error, type Handle, type HandleServerError, isRedirect, type Redirect } from '@sveltejs/kit';
-import { dev } from '$app/environment';
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
+import { redirect, error, isRedirect, type Redirect } from '@sveltejs/kit';
+import { dev } from '$app/env';
 import { validateOAuthUser, validateSession, updateSessionMetadata } from '$lib/server/auth';
 import { verifyAccessToken, type Scope } from '$lib/server/oauth';
 import { API_KEY_CLIENT_ID, extractApiKeyToken, verifyApiKey } from '$lib/server/apiKeys';
@@ -319,7 +320,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 // Log unexpected errors server-side without exposing details to the client.
 // SvelteKit renders src/error.svelte with the status + a safe message.
-export const handleError: HandleServerError = ({ error, event }) => {
+export const handleError: HandleServerError = ({ error, event, kind }) => {
+	if (kind !== 'unknown') return;
 	console.error('Unhandled server error:', error?.toString?.() ?? String(error), 'on', event.url.pathname);
 	return {
 		message: 'Something went wrong. Please try again.'

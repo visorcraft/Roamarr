@@ -15,11 +15,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pipeline } from 'node:stream/promises';
 import { createGunzip } from 'node:zlib';
-import { describe, test, expect, afterEach } from 'vitest';
+import { describe, test, expect, afterEach, vi } from 'vitest';
 import tar from 'tar-fs';
 import mongreldb from '@visorcraft/mongreldb';
 import { KitDatabase, eq } from '@visorcraft/mongreldb-kit';
-import { schema, settings, users, trips, segments } from './mongrelSchema';
+import { schema, settings, users, trips, segments, travelDocuments, geonamesCities } from './mongrelSchema';
 import { migrations } from './mongrelMigrations';
 
 const fixtureDir = join(
@@ -81,6 +81,28 @@ describe('MongrelDB cross-version sample database', () => {
 			encryption: { passphrase: manifest.passphrase }
 		});
 		try {
+			const oldUser = kit.selectFrom(users).where(eq(users.email, manifest.expected.userEmail)).executeSync()[0];
+			const oldDoc = kit.insertInto(travelDocuments).values({ user_id: oldUser.id, type: 'passport', number: 'encrypted-canary', notes: 'Private notes' }).executeSync();
+
+			const rename = kit.nativeDb.renameTable.bind(kit.nativeDb);
+			const interruptedRename = vi.spyOn(kit.nativeDb, 'renameTable').mockImplementation((from, to) => {
+				if (from === '__roamarr_documents_v16') {
+					interruptedRename.mockRestore();
+					throw new Error('Simulated interrupted document migration');
+				}
+				rename(from, to);
+			});
+			try {
+				expect(() => kit.migrateSync(schema, migrations)).toThrow('Simulated interrupted document migration');
+			} finally {
+				interruptedRename.mockRestore();
+			}
+			expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, oldDoc.id)).executeSync()[0].number).toBe('encrypted-canary');
+			// Kit requires clearing a failed migration marker after its source is repaired.
+			const migrationLog = kit.nativeDb.table('__kit_schema_migrations');
+			migrationLog.deleteByPkInt64(16n);
+			migrationLog.commit();
+
 			// App migrations may have advanced past the fixture's generation era;
 			// applying them is part of the upgrade path under test.
 			kit.migrateSync(schema, migrations);
@@ -125,8 +147,27 @@ describe('MongrelDB cross-version sample database', () => {
 			expect(segmentRows[0].title).toBe(manifest.expected.segmentTitle);
 			expect(segmentRows[0].type).toBe(manifest.expected.segmentType);
 			expect(segmentRows[0].confirmation_number).toBe('COMPAT1');
+
+			const doc = kit.insertInto(travelDocuments).values({ user_id: userRows[0].id, type: 'national_id' }).executeSync();
+			expect(doc.type).toBe('national_id');
+			expect(kit.selectFrom(travelDocuments).where(eq(travelDocuments.id, oldDoc.id)).executeSync()[0].type).toBe('passport');
+			const city = kit.insertInto(geonamesCities).values({ geoname_id: 123n, name: 'Munich', ascii_name: 'Munich', alternate_names: 'München', country_code: 'DE', lat: 48.1, lng: 11.6 }).executeSync();
+			expect(city.alternate_names).toBe('München');
 		} finally {
 			kit.close();
+		}
+		const reopened = KitDatabase.openSync(dbPath, schema, {
+			encryption: { passphrase: manifest.passphrase }
+		});
+		try {
+			reopened.migrateSync(schema, migrations);
+			const docs = reopened.selectFrom(travelDocuments).executeSync();
+			expect(docs.map((doc) => doc.type)).toEqual(['passport', 'national_id']);
+			expect(docs[0]).toMatchObject({ number: 'encrypted-canary', notes: 'Private notes' });
+			expect(reopened.nativeDb.tableNames()).not.toContain('__roamarr_documents_v16_old');
+			expect(reopened.selectFrom(geonamesCities).where(eq(geonamesCities.geoname_id, 123n)).executeSync()[0].alternate_names).toBe('München');
+		} finally {
+			reopened.close();
 		}
 	});
 

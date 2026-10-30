@@ -6,7 +6,9 @@ import { DEFAULT_EMBEDDING_MODEL_ID, onnxModelIdFor } from './config';
 
 export type EmbedFn = (text: string) => Promise<number[]>;
 
-let pipelinePromise: Promise<EmbedFn> | null = null;
+type EmbeddingModel = { embed: EmbedFn; dispose: () => Promise<void> };
+
+let pipelinePromise: Promise<EmbeddingModel> | null = null;
 let loadedOnnxId: string | null = null;
 
 /** Override for tests — when set, `embedText` / `ensureEmbeddingModel` use it. */
@@ -60,7 +62,7 @@ export function hashEmbed(text: string, dim = SEARCH_EMBEDDING_DIM): number[] {
 	return out;
 }
 
-async function loadPipeline(modelId: string): Promise<EmbedFn> {
+async function loadPipeline(modelId: string): Promise<EmbeddingModel> {
 	const onnxId = onnxModelIdFor(modelId);
 	const cacheDir = getEmbeddingsCacheDir();
 	mkdirSync(cacheDir, { recursive: true });
@@ -77,7 +79,9 @@ async function loadPipeline(modelId: string): Promise<EmbedFn> {
 		dtype: 'fp32'
 	});
 
-	return async (text: string) => {
+	const active = new Set<Promise<number[]>>();
+	let disposed = false;
+	const extract: EmbedFn = async (text) => {
 		const input = text.trim() || ' ';
 		const output = await extractor(input, { pooling: 'mean', normalize: true });
 		// transformers.js Tensor → nested data
@@ -90,6 +94,23 @@ async function loadPipeline(modelId: string): Promise<EmbedFn> {
 			);
 		}
 		return data;
+	};
+	return {
+		embed: async (text) => {
+			if (disposed) throw new Error('Embedding model was unloaded');
+			const task = extract(text);
+			active.add(task);
+			try {
+				return await task;
+			} finally {
+				active.delete(task);
+			}
+		},
+		dispose: async () => {
+			disposed = true;
+			await Promise.allSettled(active);
+			await extractor.dispose();
+		}
 	};
 }
 
@@ -110,20 +131,31 @@ export async function ensureEmbeddingModel(
 ): Promise<EmbedFn> {
 	if (testEmbedFn) return testEmbedFn;
 	const onnxId = onnxModelIdFor(modelId);
-	if (pipelinePromise && loadedOnnxId === onnxId) return pipelinePromise;
+	if (pipelinePromise && loadedOnnxId === onnxId) return (await pipelinePromise).embed;
+	const previous = pipelinePromise;
 	loadedOnnxId = onnxId;
-	pipelinePromise = loadPipeline(modelId).catch((err) => {
-		pipelinePromise = null;
-		loadedOnnxId = null;
+	const next = (async () => {
+		const oldModel = await previous?.catch(() => null);
+		await oldModel?.dispose();
+		return loadPipeline(modelId);
+	})().catch((err) => {
+		if (pipelinePromise === next) {
+			pipelinePromise = null;
+			loadedOnnxId = null;
+		}
 		throw err;
 	});
-	return pipelinePromise;
+	pipelinePromise = next;
+	return (await next).embed;
 }
 
-/** Drop the in-process model handle (e.g. after disable). Cache files remain. */
-export function unloadEmbeddingModel(): void {
+/** Release the model after loading/inference finishes. Cache files remain. */
+export async function unloadEmbeddingModel(): Promise<void> {
+	const previous = pipelinePromise;
 	pipelinePromise = null;
 	loadedOnnxId = null;
+	const model = await previous?.catch(() => null);
+	await model?.dispose();
 }
 
 export async function embedText(

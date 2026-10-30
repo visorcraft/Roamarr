@@ -21,7 +21,7 @@ import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
 import { findCity, resolveCitySelection } from './cities';
-import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, type CompanionCategory } from './db/mongrelSchema';
+import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType, type CompanionCategory } from './db/mongrelSchema';
 import {
 	projectCard,
 	projectLoyalty,
@@ -1180,7 +1180,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				inputSchema: {
 					type: 'object',
 					properties: {
-						type: { type: 'string', enum: ['passport', 'drivers_license', 'global_entry', 'visa'] },
+						type: { type: 'string', enum: [...TRAVEL_DOCUMENT_TYPES] },
 						issuer: { type: 'string' },
 						number: { type: 'string' },
 						expiresOn: { type: 'string', description: 'ISO date' }
@@ -2875,7 +2875,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'travel-docs:write')) return scopeError('travel-docs:write');
 				const { createTravelDocument } = await import('./repositories/profileRepo');
 				const d = createTravelDocument(userId, {
-					type: String(args.type) as 'passport' | 'drivers_license' | 'global_entry' | 'visa',
+					type: String(args.type) as TravelDocumentType,
 					issuingAuthority: (args.issuer as string) ?? null,
 					number: (args.number as string) ?? null,
 					expiresOn: (args.expiresOn as string) ?? null

@@ -35,10 +35,10 @@ const { created, disposed, selectUnsubs, createMock, GlobeClass } = vi.hoisted((
 	return { created, disposed, selectUnsubs, createMock, GlobeClass: FakeGlobe };
 });
 
-// The component gates mount work on `$app/environment` browser. Vitest loads
+// The component gates mount work on `$app/env` browser. Vitest loads
 // the kit virtual module under the SSR transform, which makes `browser` false;
 // force it true so the client teardown paths under test actually run.
-vi.mock('$app/environment', () => ({ browser: true, dev: false, building: false, version: '0.0.0' }));
+vi.mock('$app/env', () => ({ browser: true, dev: false, building: false, version: '0.0.0' }));
 vi.mock('$lib/EarthCityGlobe.js', () => ({ EarthCityGlobe: { create: createMock } }));
 
 type FakeGlobe = InstanceType<typeof GlobeClass>;

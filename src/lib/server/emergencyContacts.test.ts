@@ -86,7 +86,7 @@ test('addEmergencyContact rejects empty name', () => {
 	const u = makeKitUser({ email: 'ec3@x.c' });
 
 	expect(() => addEmergencyContact(Number(u.id), { name: '   ' })).toThrow(
-		expect.objectContaining({ status: 400, body: { message: 'Name is required' } })
+		expect.objectContaining({ status: 400, body: { status: 400, message: 'Name is required' } })
 	);
 });
 

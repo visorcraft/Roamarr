@@ -17,6 +17,7 @@
 
 	const types = [
 		{ key: 'passport', label: 'Passport' },
+		{ key: 'national_id', label: 'National ID card' },
 		{ key: 'drivers_license', label: "Driver's license" },
 		{ key: 'global_entry', label: 'Global Entry' },
 		{ key: 'visa', label: 'Visa' }
@@ -26,7 +27,7 @@
 <header class="page-header">
 	<div>
 		<h1 class="page-title">Add travel document</h1>
-		<p class="page-subtitle">Record a passport, license, visa, or trusted-traveler card. Document numbers are encrypted at rest.</p>
+		<p class="page-subtitle">Record a passport, national ID card, license, visa, or trusted-traveler card. Document numbers are encrypted at rest.</p>
 	</div>
 </header>
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import { browser } from '$app/environment';
+	import { browser } from '$app/env';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import Toast from '$lib/components/Toast.svelte';
@@ -200,9 +200,9 @@
 	function goToSearch() {
 		const q = searchValue.trim();
 		if (q) {
-			goto(`/search?q=${encodeURIComponent(q)}`, { replaceState: true });
+			goto(`/search?q=${encodeURIComponent(q)}`, { replace: true });
 		} else {
-			goto('/search', { replaceState: true });
+			goto('/search', { replace: true });
 		}
 	}
 

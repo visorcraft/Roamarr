@@ -6,6 +6,7 @@ import { listTravelDocuments } from '$lib/server/repositories/profileRepo';
 
 const TYPE_LABELS: Record<string, string> = {
 	passport: 'Passport',
+	national_id: 'National ID card',
 	drivers_license: "Driver's license",
 	global_entry: 'Global Entry',
 	visa: 'Visa'

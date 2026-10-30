@@ -240,7 +240,7 @@ export function createTrip(ownerId: number, input: CreateTripInput): Trip {
 			public_show_details: input.publicShowDetails ?? false,
 			calendar_token: input.calendarToken ?? null,
 			calendar_token_expires_at: input.calendarTokenExpiresAt ?? null,
-			base_currency: input.baseCurrency ?? 'USD',
+			base_currency: input.baseCurrency ?? kit.selectFrom(usersTable).where(kitEq(usersTable.id, kitId(ownerId))).executeSync()[0]?.default_currency ?? 'USD',
 			status: input.status ?? 'booked',
 			poster_attachment_id: input.posterAttachmentId != null ? kitId(input.posterAttachmentId) : null
 		} as Insert<typeof trips>)

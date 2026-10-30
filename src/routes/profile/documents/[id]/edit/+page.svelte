@@ -19,6 +19,7 @@
 
 	const types = [
 		{ key: 'passport', label: 'Passport' },
+		{ key: 'national_id', label: 'National ID card' },
 		{ key: 'drivers_license', label: "Driver's license" },
 		{ key: 'global_entry', label: 'Global Entry' },
 		{ key: 'visa', label: 'Visa' }

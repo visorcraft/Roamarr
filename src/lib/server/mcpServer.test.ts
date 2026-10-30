@@ -566,7 +566,7 @@ describe('mcpServer', () => {
 			});
 			expect(placeHits[0].snippet).toContain('miso butter corn ramen');
 		} finally {
-			disableEmbeddings();
+			await disableEmbeddings();
 			setTestEmbedFn(null);
 			ctx.kit.deleteFrom(searchDocuments).executeSync();
 		}

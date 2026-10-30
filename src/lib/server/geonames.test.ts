@@ -79,3 +79,13 @@ test('bulkInsertCities replaces existing data and inserts rows', () => {
 	const row = kit.selectFrom(geonamesCities).where(eq(geonamesCities.geoname_id, BigInt(2988507))).executeSync()[0];
 	expect(row?.name).toBe('Paris');
 });
+
+
+test('city import preserves alternate names', () => {
+	const row = parseCities1000Line(SAMPLE_LINE.replace('Paris\tParis\t\t', 'Paris\tParis\tParís,Parigi,巴黎\t'))!;
+	expect(row.alternateNames).toBe('París,Parigi,巴黎');
+	bulkInsertCities([row]);
+	const stored = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit
+		.selectFrom(geonamesCities).where(eq(geonamesCities.geoname_id, BigInt(row.geonameId))).executeSync()[0];
+	expect(stored.alternate_names).toBe(row.alternateNames);
+});

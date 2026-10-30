@@ -72,9 +72,11 @@ export async function enableEmbeddings(model?: string): Promise<EmbeddingsConfig
 	});
 	try {
 		await ensureEmbeddingModel(modelId);
+		if (!getEmbeddingsConfig().enabled) return getEmbeddingsConfig();
 		// Temporarily treat as ready so upsert helpers work during reindex.
 		patchEmbeddings({ enabled: true, model: modelId, status: 'ready', error: null });
 		await reindexAll();
+		if (!getEmbeddingsConfig().enabled) return getEmbeddingsConfig();
 		return patchEmbeddings({
 			enabled: true,
 			model: modelId,
@@ -83,6 +85,7 @@ export async function enableEmbeddings(model?: string): Promise<EmbeddingsConfig
 			readyAt: nowIso()
 		});
 	} catch (e) {
+		if (!getEmbeddingsConfig().enabled) return getEmbeddingsConfig();
 		const message = e instanceof Error ? e.message : String(e);
 		return patchEmbeddings({
 			enabled: true,
@@ -94,13 +97,14 @@ export async function enableEmbeddings(model?: string): Promise<EmbeddingsConfig
 	}
 }
 
-export function disableEmbeddings(): EmbeddingsConfig {
-	unloadEmbeddingModel();
-	return patchEmbeddings({
+export async function disableEmbeddings(): Promise<EmbeddingsConfig> {
+	const cfg = patchEmbeddings({
 		enabled: false,
 		status: 'disabled',
 		error: null
 	});
+	await unloadEmbeddingModel();
+	return cfg;
 }
 
 export function embeddingsReady(): boolean {

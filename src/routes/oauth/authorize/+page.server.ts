@@ -94,7 +94,7 @@ export const actions: Actions = {
 
 		const sep = ru.includes('?') ? '&' : '?';
 		const location = `${ru}${sep}code=${encodeURIComponent(code)}${state ? `&state=${encodeURIComponent(state)}` : ''}`;
-		throw redirect(302, location);
+		throw redirect(302, location, { external: true });
 	},
 
 	deny: async ({ request, getClientAddress }) => {
@@ -109,6 +109,6 @@ export const actions: Actions = {
 		const client = getClient(clientId);
 		if (!client || !client.redirectUris.includes(redirectUri)) throw error(400, 'redirect_uri mismatch');
 		const sep = redirectUri.includes('?') ? '&' : '?';
-		throw redirect(302, `${redirectUri}${sep}error=access_denied${state ? `&state=${encodeURIComponent(state)}` : ''}`);
+		throw redirect(302, `${redirectUri}${sep}error=access_denied${state ? `&state=${encodeURIComponent(state)}` : ''}`, { external: true });
 	}
 };

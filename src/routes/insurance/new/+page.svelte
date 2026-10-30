@@ -79,7 +79,7 @@
 			<TextField
 				name="currency"
 				label="Currency"
-				value={form?.values?.currency ?? 'USD'}
+				value={form?.values?.currency ?? data.user?.defaultCurrency ?? 'USD'}
 				placeholder="USD"
 				disabled={submitting}
 				errors={form?.errors ?? {}}

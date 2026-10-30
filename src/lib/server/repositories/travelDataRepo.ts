@@ -28,6 +28,7 @@ export interface GeonamesCityRow {
 	geonameId: number;
 	name: string;
 	asciiName: string;
+	alternateNames?: string | null;
 	countryCode: string;
 	/** GeoNames admin1 code within the country (e.g. TX, ON). */
 	admin1Code?: string | null;
@@ -49,6 +50,7 @@ function toGeonamesCityRow(row: Row<typeof geonamesCities>): GeonamesCityRow {
 		geonameId: Number(row.geoname_id),
 		name: row.name,
 		asciiName: row.ascii_name,
+		alternateNames: row.alternate_names ?? null,
 		countryCode: row.country_code,
 		admin1Code: row.admin1_code ?? null,
 		lat: row.lat,
@@ -63,6 +65,7 @@ function toKitGeonamesCityInput(row: GeonamesCityRow): Insert<typeof geonamesCit
 		geoname_id: BigInt(row.geonameId),
 		name: row.name,
 		ascii_name: row.asciiName,
+		alternate_names: row.alternateNames ?? null,
 		country_code: row.countryCode,
 		admin1_code: row.admin1Code ?? null,
 		lat: row.lat,
@@ -194,8 +197,16 @@ export function getCityByGeoNameId(geonameId: number): GeonamesCityRow | null {
 	return rows[0] ? toGeonamesCityRow(rows[0]) : null;
 }
 
+function normalizeCityName(name: string): string {
+	return name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+function cityNames(city: GeonamesCityRow): string[] {
+	return [city.name, city.asciiName, ...(city.alternateNames?.split(',') ?? [])].map(normalizeCityName);
+}
+
 /**
- * Exact name match (case-insensitive on name or asciiName) within a country,
+ * Exact name match (case- and accent-insensitive, including alternate names) within a country,
  * optionally restricted to an admin1 subdivision. Among identical names, prefer
  * the highest population.
  */
@@ -205,7 +216,7 @@ export function findCityByCountryAndName(
 	admin1Code?: string | null
 ): GeonamesCityRow | null {
 	const code = countryCode.toUpperCase();
-	const normalized = name.trim().toLowerCase();
+	const normalized = normalizeCityName(name.trim());
 	if (!normalized) return null;
 	const admin1 = admin1Code?.trim() || null;
 	// The kit ColumnMap omits columns whose names collide with TableSpec keys
@@ -217,7 +228,7 @@ export function findCityByCountryAndName(
 	const matches = rows
 		.map(toGeonamesCityRow)
 		.filter((r) => {
-			if (r.name.toLowerCase() !== normalized && r.asciiName.toLowerCase() !== normalized) {
+			if (!cityNames(r).includes(normalized)) {
 				return false;
 			}
 			if (admin1) {
@@ -236,7 +247,7 @@ export function searchCities(
 	limit = 20,
 	admin1Code?: string | null
 ): GeonamesCityRow[] {
-	const q = query.trim().toLowerCase();
+	const q = normalizeCityName(query.trim());
 	if (!q || q.length < 2) return [];
 
 	const code = countryCode?.toUpperCase();
@@ -268,12 +279,12 @@ export function searchCities(
 
 	const filtered = candidates.filter(
 		(c) =>
-			c.name.toLowerCase().includes(q) || c.asciiName.toLowerCase().includes(q)
+			cityNames(c).some((name) => name.includes(q))
 	);
 
 	filtered.sort((a, b) => {
-		const aExact = a.name.toLowerCase() === q || a.asciiName.toLowerCase() === q;
-		const bExact = b.name.toLowerCase() === q || b.asciiName.toLowerCase() === q;
+		const aExact = cityNames(a).includes(q);
+		const bExact = cityNames(b).includes(q);
 		if (aExact && !bExact) return -1;
 		if (!aExact && bExact) return 1;
 		const ap = a.population ?? 0;

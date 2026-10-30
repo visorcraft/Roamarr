@@ -15,6 +15,9 @@ import { oidcSsoMigration } from './0013_oidc_sso';
 import { unitsNtfyAutoBackupMigration } from './0014_units_ntfy_autobackup';
 import { placeSearchProviderMigration } from './0015_place_search_provider';
 
+import { nationalIdMigration } from './0016_national_id';
+import { cityAlternateNamesMigration } from './0017_city_alternate_names';
+
 export const migrations: Migration[] = [
 	...initial,
 	tripInvitationsMigration,
@@ -30,5 +33,7 @@ export const migrations: Migration[] = [
 	segmentDaySortOrderMigration,
 	oidcSsoMigration,
 	unitsNtfyAutoBackupMigration,
-	placeSearchProviderMigration
+	placeSearchProviderMigration,
+	nationalIdMigration,
+	cityAlternateNamesMigration
 ];

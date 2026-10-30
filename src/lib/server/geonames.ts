@@ -48,7 +48,7 @@ export function parseCities1000Line(line: string): GeonamesCityRow | null {
 	) {
 		return null;
 	}
-	return { geonameId, name, asciiName, countryCode, admin1Code, lat, lng, population, timezone };
+	return { geonameId, name, asciiName, alternateNames: parts[3] || null, countryCode, admin1Code, lat, lng, population, timezone };
 }
 
 /** Parse admin1CodesASCII.txt lines: `US.TX\tTexas\tTexas\tgeonameId` */

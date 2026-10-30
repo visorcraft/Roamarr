@@ -79,10 +79,10 @@ test('createDocumentLink rejects invalid URLs', () => {
 	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
 
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'not-a-url' })).toThrow(
-		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
+		expect.objectContaining({ status: 400, body: { status: 400, message: 'URL must be a valid http or https URL' } })
 	);
 	expect(() => createDocumentLink(u.id, t.id, { label: 'X', url: 'ftp://files.example' })).toThrow(
-		expect.objectContaining({ status: 400, body: { message: 'URL must be a valid http or https URL' } })
+		expect.objectContaining({ status: 400, body: { status: 400, message: 'URL must be a valid http or https URL' } })
 	);
 });
 

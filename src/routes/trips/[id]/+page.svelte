@@ -1040,7 +1040,7 @@
 					<form method="POST" action="?/addExpense" class="trip-modern-form-grid mt-5 sm:grid-cols-2">
 						<input name="description" class="input text-sm" placeholder="Description" required />
 						<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="input text-sm" placeholder="Amount" required />
-						<input name="currency" class="input text-sm" value="USD" placeholder="USD" required />
+						<input name="currency" class="input text-sm" value={data.user?.defaultCurrency ?? baseCurrency} placeholder="USD" required />
 						<select name="category" class="input text-sm"><option value="lodging">Lodging</option><option value="transport">Transport</option><option value="food">Food</option><option value="activities">Activities</option><option value="other" selected>Other</option></select>
 						<button class="btn btn-primary btn-sm sm:col-span-2">Add expense</button>
 					</form>

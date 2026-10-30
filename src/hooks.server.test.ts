@@ -18,7 +18,7 @@ vi.mock('./lib/server/boot', async () => ({
 	getBootError: () => bootMock.bootError
 }));
 
-import { handle, isForbiddenCrossSiteForm, requiredApiScope } from './hooks.server';
+import { handle, handleError, isForbiddenCrossSiteForm, requiredApiScope } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
@@ -511,5 +511,20 @@ test('security invariant: missing secret on a configured instance uses /boot-err
 		expect(res.headers.get('location')).toBe('/boot-error');
 	} finally {
 		bootMock.missingSecret = false;
+	}
+});
+
+
+test('error hook preserves safe app errors and hides unexpected error details', () => {
+	const event = ev('/') as any;
+	expect(handleError({ kind: 'app', error: { status: 404, message: 'Trip not found' }, event })).toBeUndefined();
+	expect(handleError({ kind: 'framework', error: { status: 404, message: 'Not found' }, event })).toBeUndefined();
+	const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		expect(handleError({ kind: 'unknown', error: new Error('Private database details'), event }))
+			.toEqual({ message: 'Something went wrong. Please try again.' });
+		expect(log).toHaveBeenCalledOnce();
+	} finally {
+		log.mockRestore();
 	}
 });

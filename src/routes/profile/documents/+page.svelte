@@ -17,6 +17,7 @@
 
 	const typeLabel: Record<string, string> = {
 		passport: 'Passport',
+		national_id: 'National ID card',
 		drivers_license: 'Driver\u2019s license',
 		global_entry: 'Global Entry',
 		visa: 'Visa'

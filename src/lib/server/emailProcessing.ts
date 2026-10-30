@@ -165,7 +165,7 @@ export interface ParsedTravelEmail {
 
 const TYPE_WORDS: [SegmentType, RegExp][] = [
 	['flight', /\b(flight|airline|boarding|airport)\b/i], ['hotel', /\b(hotel|lodging|resort|check-in)\b/i],
-	['train', /\b(train|rail|amtrak)\b/i], ['rental_car', /\b(rental car|car rental|vehicle pickup)\b/i],
+	['train', /\b(train|rail|amtrak)\b/i], ['rental_car', /\b(rental car|car rental|rent-a-car|vehicle pickup)\b/i],
 	['boat', /\b(cruise|ship|sailing)\b/i], ['event', /\b(ticket|tour|activity|reservation)\b/i]
 ];
 
@@ -178,17 +178,28 @@ function firstDate(text: string): Date | null {
 	return null;
 }
 
+function labelledDate(text: string, labels: string): Date | null {
+	const pattern = new RegExp(`\\b(?:${labels})\\b(?:[ \t]+date)?(?:[ \t]*(?:&|and)?[ \t]*time)?[ \t]*[:\\-]?[ \t]*(?:\\r?\\n[ \t]*)*([^\\r\\n]+)`, 'gi');
+	for (const match of text.matchAll(pattern)) {
+		const date = firstDate(match[1]);
+		if (date) return date;
+	}
+	return null;
+}
+
 export function parseTravelEmailLocal(subject: string, text: string): ParsedTravelEmail {
 	const body = `${subject}\n${text}`.slice(0, 100_000);
-	const match = TYPE_WORDS.find(([, pattern]) => pattern.test(body));
-	const date = firstDate(body);
+	const match = TYPE_WORDS.find(([, pattern]) => pattern.test(subject))
+		?? TYPE_WORDS.find(([, pattern]) => pattern.test(body));
+	const date = labelledDate(body, 'pick[- ]?up|departure|check[- ]?in') ?? firstDate(body);
+	const endDate = labelledDate(body, 'return|drop[- ]?off|arrival|check[- ]?out');
 	const confirmation = body.match(/(?:confirmation|reservation|booking|record locator)(?:\s+(?:number|code|#))?\s*[:#-]?\s*([A-Z0-9-]{5,20})/i)?.[1];
 	const destination = body.match(/(?:destination|arriv(?:al|ing)|hotel|location)\s*[:-]\s*([^\n,]{2,80})/i)?.[1]?.trim();
 	return {
 		isTravel: !!match && !!date,
 		tripName: destination ? `${destination} trip` : subject.replace(/\b(confirmation|reservation|booking)\b/gi, '').trim() || 'Imported trip',
 		type: match?.[0] ?? 'note', title: subject || match?.[0] || 'Imported itinerary',
-		startAt: (date ?? new Date()).toISOString(), destination, location: destination,
+		startAt: (date ?? new Date()).toISOString(), endAt: endDate?.toISOString(), destination, location: destination,
 		confirmationNumber: confirmation
 	};
 }

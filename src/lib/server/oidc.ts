@@ -7,7 +7,7 @@ import {
 	randomBytes,
 	timingSafeEqual
 } from 'node:crypto';
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import { getSettings } from './settings';
 import { decrypt } from './crypto';
 import { logAudit } from './audit';

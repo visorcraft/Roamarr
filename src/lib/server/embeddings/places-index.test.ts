@@ -81,9 +81,9 @@ beforeEach(() => {
 	otherUserId = makeUser(db(), { email: `pl-b-${userSeq}@x.c` }).id;
 });
 
-afterEach(() => {
+afterEach(async () => {
 	setTestEmbedFn(null);
-	disableEmbeddings();
+	await disableEmbeddings();
 	setEmbeddingsConfig({ ...DEFAULT_EMBEDDINGS_CONFIG });
 });
 

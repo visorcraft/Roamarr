@@ -3,6 +3,7 @@ import { kit } from './db';
 import { segments } from './db/mongrelSchema';
 import * as tripsRepo from './repositories/tripsRepo';
 import type { Trip } from './repositories/tripsRepo';
+import { effectiveTripStatus, todayForUser } from './tripLifecycle';
 
 export { TRIP_STATUSES } from '../tripStatus';
 import type { TripStatus } from '../tripStatus';
@@ -121,7 +122,23 @@ type TripFilter = 'active' | 'archived' | 'favorites';
 
 export function listViewableTrips(
 	userId: number,
-	options?: { startDateGte?: string; q?: string; tag?: string; sort?: SortField; order?: SortOrder; filter?: TripFilter; status?: TripStatus }
+	options?: {
+		startDateGte?: string;
+		q?: string;
+		tag?: string;
+		sort?: SortField;
+		order?: SortOrder;
+		filter?: TripFilter;
+		status?: TripStatus;
+		/**
+		 * Drop trips whose date-derived status is completed. The trips page uses
+		 * this for the default Active list so past trips are not counted as planned.
+		 * Search, favorites, archived, and an explicit status chip leave it off.
+		 */
+		excludeCompleted?: boolean;
+		/** Freeze "today" (YYYY-MM-DD) for tests. Otherwise the viewer's profile timezone. */
+		today?: string;
+	}
 ): ListedTrip[] {
 	const owned = tripsRepo
 		.listTripsForUser(userId)
@@ -172,6 +189,11 @@ export function listViewableTrips(
 		result = result.filter((t) => tripHasTag(t, tag));
 	}
 
+	// Derive the badge/API status from dates without touching the stored row.
+	// "Active" in the filter below still means "not archived"; completion is separate.
+	const today = options?.today ?? todayForUser(userId);
+	result = result.map((t) => ({ ...t, status: effectiveTripStatus(t, today) }));
+
 	const status = options?.status;
 	if (status) {
 		result = result.filter((t) => t.status === status);
@@ -184,6 +206,10 @@ export function listViewableTrips(
 		result = result.filter((t) => t.favorite);
 	} else {
 		result = result.filter((t) => !t.archived);
+	}
+
+	if (options?.excludeCompleted) {
+		result = result.filter((t) => t.status !== 'completed');
 	}
 
 	const sort: SortField = options?.sort ?? 'startDate';

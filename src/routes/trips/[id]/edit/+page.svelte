@@ -11,7 +11,7 @@
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import type { Visibility } from '$lib/server/repositories/tripsRepo';
 
-	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationAdmin1Code?: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string; defaultVisibility: Visibility }; owner: boolean; user?: { defaultCurrency: string } | null }; form?: { error?: string; errors?: Record<string, string> } } = $props();
+	let { data, form }: { data: { trip: { id: number; name: string; destinationCountryCode: string | null; destinationAdmin1Code?: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string | null; endDate: string | null; notes: string | null; tags: string; status: TripStatus; baseCurrency: string; defaultVisibility: Visibility }; owner: boolean; displayStatus?: TripStatus; user?: { defaultCurrency: string } | null }; form?: { error?: string; errors?: Record<string, string> } } = $props();
 	let submitting = $state(false);
 	let destinationCountryCode = $state('');
 	let destinationAdmin1Code = $state('');
@@ -107,6 +107,9 @@
 				{/each}
 			</select>
 			{#if form?.errors?.status}<p class="field-error">{form.errors.status}</p>{/if}
+			{#if data.displayStatus && data.displayStatus !== data.trip.status}
+				<p class="mt-1 text-sm text-slate-400">Dates in your timezone show this trip as {statusLabel[data.displayStatus]}. The saved status stays {statusLabel[data.trip.status]} unless you change it here.</p>
+			{/if}
 		</div>
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" value={data.trip.notes ?? ''} disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />
 		<TextField name="tags" label="Tags" value={tagString(data.trip.tags)} placeholder="work, summer, family" disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />

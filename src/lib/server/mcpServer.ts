@@ -31,6 +31,7 @@ import {
 	requireConfirm
 } from './mcpHelpers';
 import { getSettings } from './settings';
+import { effectiveTripStatus, todayForUser } from './tripLifecycle';
 
 function hasScope(scopes: Scope[], required: Scope): boolean {
 	return scopes.includes(required);
@@ -49,13 +50,20 @@ function textResult(obj: unknown) {
 	};
 }
 
+function withDerivedStatus<T extends { status?: string | null; startDate?: string | null; endDate?: string | null }>(
+	userId: number,
+	trip: T
+): T & { status: ReturnType<typeof effectiveTripStatus> } {
+	return { ...trip, status: effectiveTripStatus(trip, todayForUser(userId)) };
+}
+
 function safeTripProjection(tripId: number, userId: number, scopes: Scope[]) {
 	const view = loadTripFor(userId, tripId);
 	const includePrivateDetails =
 		getSettings().allowMcpPii && hasScope(scopes, 'private-details:read');
 	if (view.editor) {
 		const projection = viewerProjection(view.trip, view.segments, false);
-		return {
+		return withDerivedStatus(userId, {
 			...projection,
 			...(includePrivateDetails && {
 				notes: view.trip.notes,
@@ -63,10 +71,10 @@ function safeTripProjection(tripId: number, userId: number, scopes: Scope[]) {
 			}),
 			canEdit: true,
 			owner: view.owner
-		};
+		});
 	}
-	if (includePrivateDetails) return { ...view.trip, canEdit: false, owner: false };
-	return {
+	if (includePrivateDetails) return withDerivedStatus(userId, { ...view.trip, canEdit: false, owner: false });
+	return withDerivedStatus(userId, {
 		...view.trip,
 		segments: view.trip.segments.map((segment) => {
 			const safe = { ...segment } as Record<string, unknown>;
@@ -76,7 +84,7 @@ function safeTripProjection(tripId: number, userId: number, scopes: Scope[]) {
 		}),
 		canEdit: false,
 		owner: false
-	};
+	});
 }
 
 function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: false; error: string } {
@@ -542,7 +550,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		tools: [
 			{
 				name: 'roamarr_trip_list',
-				description: 'List all trips for the authenticated user. Cursor-paginated.',
+				description:
+					'List trips you can view, including ones shared with you. Cursor-paginated. status follows dates in your profile timezone: completed after the end date, active while today falls on the trip (the end date still counts as current). A saved planning, booked, active, or completed value is not overwritten.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -2239,7 +2248,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				});
 				if (!updated) return textResult({ error: 'Trip not found' });
 				logAudit(userId, 'mcp_trip_update', 'trip', tripId, {});
-				return textResult({ id: updated.id, name: updated.name, status: updated.status });
+				return textResult({
+					id: updated.id,
+					name: updated.name,
+					status: effectiveTripStatus(updated, todayForUser(userId))
+				});
 			}
 			case 'roamarr_day_plan': {
 				// Segment creation needs segments:write. Goes through addSegment

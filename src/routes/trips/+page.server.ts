@@ -26,7 +26,17 @@ export const load: PageServerLoad = ({ locals, url }) => {
 	const status = TRIP_STATUSES.includes(statusRaw as (typeof TRIP_STATUSES)[number])
 		? (statusRaw as (typeof TRIP_STATUSES)[number])
 		: undefined;
-	return { trips: listViewableTrips(u.id, { q, tag, sort, order, filter, status }), q, tag, sort, order, filter, status };
+	// Default Active view is "what you're planning or on", not "everything unarchived".
+	// Search, tags, favorites, archived, and an explicit status chip (including
+	// Completed) still surface trips whose end date has passed.
+	const hasQuery = Boolean(q?.trim() || tag?.trim());
+	const excludeCompleted = filter === 'active' && !status && !hasQuery;
+	const trips = listViewableTrips(u.id, { q, tag, sort, order, filter, status, excludeCompleted });
+	const completedHidden =
+		excludeCompleted &&
+		trips.length === 0 &&
+		listViewableTrips(u.id, { filter: 'active', status: 'completed' }).length > 0;
+	return { trips, q, tag, sort, order, filter, status, completedHidden };
 };
 
 function selectedIds(formData: FormData): number[] {

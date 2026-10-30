@@ -5,8 +5,30 @@
 	import { parseTags } from '$lib/tags';
 	import { TRIP_STATUSES, type TripStatus } from '$lib/tripStatus';
 
-	let { data, form }: { data: { trips: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus }; form?: { error?: string } } = $props();
+	let { data, form }: { data: { trips: { id: number; name: string; destinationCountryCode: string | null; destinationCityName: string | null; destinationCityLat: number | null; destinationCityLng: number | null; startDate: string; endDate: string; tags: string | string[]; archived?: boolean; favorite?: boolean; defaultVisibility?: string; isShared?: boolean; status: TripStatus }[]; q?: string; tag?: string; sort: string; order: string; filter: string; status?: TripStatus; completedHidden?: boolean }; form?: { error?: string } } = $props();
 	let bulkMode = $state(false);
+
+	const isDefaultList = $derived(data.filter === 'active' && !data.status && !data.q && !data.tag);
+	const emptyMessage = $derived(
+		data.filter === 'archived'
+			? 'No archived trips.'
+			: data.filter === 'favorites'
+				? 'No favorite trips.'
+				: data.status
+					? 'No trips with that status.'
+					: data.completedHidden
+						? 'No current trips. Completed trips are under the Completed status.'
+						: data.q || data.tag
+							? 'No trips match that search.'
+							: 'No trips yet — plan your first one.'
+	);
+	const emptyAction = $derived(
+		isDefaultList && !data.completedHidden
+			? { href: '/trips/new', label: 'Create a trip' }
+			: data.completedHidden
+				? { href: '?status=completed', label: 'View completed' }
+				: null
+	);
 
 	const allTags = $derived(
 		Array.from(
@@ -45,7 +67,7 @@
 	<div>
 		<h1 class="page-title">Trips</h1>
 		<p class="page-subtitle">
-			{data.trips.length} trip{data.trips.length === 1 ? '' : 's'} planned
+			{data.trips.length} trip{data.trips.length === 1 ? '' : 's'}{isDefaultList ? ' planned' : ''}
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
@@ -142,9 +164,9 @@
 	</form>
 {:else}
 	<EmptyState
-		message="No trips yet — plan your first one."
-		actionHref="/trips/new"
-		actionLabel="Create a trip"
+		message={emptyMessage}
+		actionHref={emptyAction?.href}
+		actionLabel={emptyAction?.label}
 	>
 		{#snippet icon()}<Icon name="trips" class="h-6 w-6" />{/snippet}
 	</EmptyState>

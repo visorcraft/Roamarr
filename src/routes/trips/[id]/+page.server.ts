@@ -72,7 +72,7 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const u = requireUser(locals);
 	const tripId = parseTripId(params);
-	return await buildTripDetail(u, tripId, url);
+	return { ...(await buildTripDetail(u, tripId, url)), viewerTimezone: u.timezone };
 };
 
 export const actions: Actions = {

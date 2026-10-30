@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { DateTime } from 'luxon';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -176,6 +177,53 @@ describe('mcpServer', () => {
 		await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00Z' } });
 		const listed: any = await client.callTool({ name: 'roamarr_reminder_list', arguments: {} });
 		expect(JSON.parse(listed.content[0].text).items[0]).toMatchObject({ id: reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00.000Z', refType: 'trip', refId: trip.id });
+	});
+
+	test('trip_list and trip_get derive status from dates and leave the saved status in place', async () => {
+		const zone = 'America/Chicago';
+		ctx.kit.updateTable(users).set({ timezone: zone }).where(kitEq(users.id, BigInt(userId))).executeSync();
+		const today = DateTime.now().setZone(zone).toISODate()!;
+		const yesterday = DateTime.fromISO(today).minus({ days: 1 }).toISODate()!;
+		const tomorrow = DateTime.fromISO(today).plus({ days: 1 }).toISODate()!;
+		const past = makeTrip(ctx.kit, userId, {
+			name: 'Thailand, Aug 2026',
+			startDate: DateTime.fromISO(today).minus({ months: 2 }).toISODate()!,
+			endDate: yesterday,
+			status: 'booked'
+		});
+		const endsToday = makeTrip(ctx.kit, userId, {
+			name: 'Ends today',
+			startDate: yesterday,
+			endDate: today,
+			status: 'booked'
+		});
+		const upcoming = makeTrip(ctx.kit, userId, {
+			name: 'Later',
+			startDate: tomorrow,
+			endDate: DateTime.fromISO(tomorrow).plus({ days: 4 }).toISODate()!,
+			status: 'planning'
+		});
+
+		const { client } = await connect(userId, ['trips:read', 'trips:write']);
+		const listed: any = await client.callTool({ name: 'roamarr_trip_list', arguments: {} });
+		expect(listed.isError).toBeFalsy();
+		const items = JSON.parse(listed.content[0].text).items as Array<{ id: number; status: string }>;
+		const statusById = new Map(items.map((item) => [item.id, item.status]));
+		expect(statusById.get(past.id)).toBe('completed');
+		expect(statusById.get(endsToday.id)).toBe('active');
+		expect(statusById.get(upcoming.id)).toBe('planning');
+
+		const got: any = await client.callTool({ name: 'roamarr_trip_get', arguments: { tripId: past.id } });
+		expect(JSON.parse(got.content[0].text).trip.status).toBe('completed');
+
+		const renamed: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: past.id, name: 'Thailand, Aug 2026 (notes)' }
+		});
+		expect(JSON.parse(renamed.content[0].text).status).toBe('completed');
+		expect(tripsRepo.getTripById(past.id)).toMatchObject({ name: 'Thailand, Aug 2026 (notes)', status: 'booked' });
+		expect(tripsRepo.getTripById(endsToday.id)?.status).toBe('booked');
+		expect(tripsRepo.getTripById(upcoming.id)?.status).toBe('planning');
 	});
 
 	test('trips:write creates a trip owned by the token user', async () => {

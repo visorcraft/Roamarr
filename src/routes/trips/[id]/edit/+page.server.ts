@@ -9,6 +9,7 @@ import { nowIso } from '$lib/server/tz';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
 import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
+import { effectiveTripStatus, todayForUser } from '$lib/server/tripLifecycle';
 import { serializeTags } from '$lib/tags';
 import { resolveCitySelection } from '$lib/server/cities';
 import { setFlash } from '$lib/server/flash';
@@ -18,7 +19,12 @@ export const load: PageServerLoad = ({ locals, params }) => {
 	const u = requireUser(locals);
 	const tripId = parseTripId(params);
 	const trip = requireEditableTrip(u.id, tripId);
-	return { trip, owner: trip.ownerId === u.id };
+	return {
+		trip,
+		owner: trip.ownerId === u.id,
+		// Shown next to the dropdown so a date-derived badge is not saved by accident.
+		displayStatus: effectiveTripStatus(trip, todayForUser(u.id))
+	};
 };
 
 export async function _deleteTrip(userId: number, tripId: number) {

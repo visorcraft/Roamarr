@@ -1,4 +1,5 @@
 import { test, expect, vi } from 'vitest';
+import { DateTime } from 'luxon';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -12,6 +13,7 @@ import { makeUser, makeTrip, makeGroup, makeGroupMember, makeShare } from '../..
 
 
 import { eq } from '@visorcraft/mongreldb-kit';
+import { getTripById } from '$lib/server/repositories/tripsRepo';
 import { createTrip, loadTripFor } from './shared';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';
@@ -138,9 +140,94 @@ test('trip list filters by status', () => {
 	const active = load(event(a, '?status=active')) as any;
 	expect(active.trips.map((t: any) => t.name)).toEqual(['Active Trip']);
 
+	// A trip the user marked completed is not part of the default planned list.
 	const all = load(event(a)) as any;
-	expect(all.trips.map((t: any) => t.name).sort()).toEqual(['Active Trip', 'Booked Trip', 'Completed Trip', 'Planning Trip']);
+	expect(all.trips.map((t: any) => t.name).sort()).toEqual(['Active Trip', 'Booked Trip', 'Planning Trip']);
 	expect(all.status).toBeUndefined();
+
+	const completed = load(event(a, '?status=completed')) as any;
+	expect(completed.trips.map((t: any) => t.name)).toEqual(['Completed Trip']);
+	expect(completed.trips[0].status).toBe('completed');
+});
+
+test('past trips leave the default Active list and show as completed without rewriting the saved status', () => {
+	const zone = 'America/Chicago';
+	const a = makeUser(kit, { email: 'past@x.c', passwordHash: 'x', displayName: 'A', timezone: zone });
+	const today = DateTime.now().setZone(zone).toISODate()!;
+	const yesterday = DateTime.fromISO(today).minus({ days: 1 }).toISODate()!;
+	const tomorrow = DateTime.fromISO(today).plus({ days: 1 }).toISODate()!;
+	const nextMonth = DateTime.fromISO(today).plus({ months: 2 }).toISODate()!;
+
+	const past = makeTrip(kit, a.id, {
+		name: 'Thailand, Aug 2026',
+		destinationCityName: 'Hua Hin',
+		startDate: DateTime.fromISO(today).minus({ months: 2 }).toISODate()!,
+		endDate: yesterday,
+		status: 'booked',
+		favorite: true
+	});
+	const endingToday = makeTrip(kit, a.id, {
+		name: 'Ends Today',
+		startDate: yesterday,
+		endDate: today,
+		status: 'booked'
+	});
+	const upcoming = makeTrip(kit, a.id, {
+		name: 'Bangkok, Thailand, December 2026',
+		startDate: nextMonth,
+		endDate: DateTime.fromISO(nextMonth).plus({ days: 10 }).toISODate()!,
+		status: 'booked'
+	});
+	const inProgress = makeTrip(kit, a.id, {
+		name: 'On the road',
+		startDate: yesterday,
+		endDate: tomorrow,
+		status: 'planning'
+	});
+
+	const planned = load(event(a)) as any;
+	expect(planned.trips.map((t: any) => t.name).sort()).toEqual(
+		['Bangkok, Thailand, December 2026', 'Ends Today', 'On the road'].sort()
+	);
+	expect(planned.trips.find((t: any) => t.name === 'Ends Today').status).toBe('active');
+	expect(planned.trips.find((t: any) => t.name === 'On the road').status).toBe('active');
+	expect(planned.trips.find((t: any) => t.name === 'Bangkok, Thailand, December 2026').status).toBe('booked');
+	expect(planned.completedHidden).toBe(false);
+
+	const completed = load(event(a, '?status=completed')) as any;
+	expect(completed.trips.map((t: any) => t.name)).toEqual(['Thailand, Aug 2026']);
+	expect(completed.trips[0].status).toBe('completed');
+
+	const booked = load(event(a, '?status=booked')) as any;
+	expect(booked.trips.map((t: any) => t.name)).toEqual(['Bangkok, Thailand, December 2026']);
+
+	const byName = load(event(a, '?q=Hua')) as any;
+	expect(byName.trips.map((t: any) => t.name)).toEqual(['Thailand, Aug 2026']);
+	expect(byName.trips[0].status).toBe('completed');
+
+	const favorites = load(event(a, '?filter=favorites')) as any;
+	expect(favorites.trips.map((t: any) => t.name)).toEqual(['Thailand, Aug 2026']);
+	expect(favorites.trips[0].status).toBe('completed');
+
+	expect(getTripById(past.id)?.status).toBe('booked');
+	expect(getTripById(endingToday.id)?.status).toBe('booked');
+	expect(getTripById(upcoming.id)?.status).toBe('booked');
+	expect(getTripById(inProgress.id)?.status).toBe('planning');
+});
+
+test('default Active list points at Completed when every trip has ended', () => {
+	const a = makeUser(kit, { email: 'only-past@x.c', passwordHash: 'x', displayName: 'A', timezone: 'America/Chicago' });
+	const today = DateTime.now().setZone('America/Chicago').toISODate()!;
+	makeTrip(kit, a.id, {
+		name: 'Done',
+		startDate: DateTime.fromISO(today).minus({ days: 10 }).toISODate()!,
+		endDate: DateTime.fromISO(today).minus({ days: 1 }).toISODate()!,
+		status: 'booked'
+	});
+
+	const planned = load(event(a)) as any;
+	expect(planned.trips).toEqual([]);
+	expect(planned.completedHidden).toBe(true);
 });
 
 test('trip list rejects invalid status values', () => {

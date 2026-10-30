@@ -21,7 +21,7 @@
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
 	import { segmentStatusLabel, segmentStatusClass } from '$lib/segmentStatus';
-	import { tripStatusBadge } from '$lib/tripStatus';
+	import { effectiveTripStatus, todayInTimezone, tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
 	import { coalesceTrailing, subscribeLiveEvents } from '$lib/liveEvents';
 	import { onMount, tick } from 'svelte';
@@ -258,14 +258,6 @@
 		const now = DateTime.now().startOf('day');
 		if (!s.isValid || s <= now) return null;
 		return Math.ceil(s.diff(now, 'days').days);
-	}
-
-	function tripStatus(start: string | null | undefined, end: string | null | undefined) {
-		const today = DateTime.now().toISODate()!;
-		if (!start && !end) return 'unknown';
-		if (end && end < today) return 'past';
-		if (start && start > today) return 'upcoming';
-		return 'active';
 	}
 
 	function posterInitials(name: string, cityName: string | null | undefined) {
@@ -518,7 +510,12 @@
 	const dayNotesByDate = $derived(new Map((data.dayNotes ?? []).map((n) => [n.date, n])));
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 	const daysUntil = $derived(daysUntilStart(trip.startDate));
-	const status = $derived(tripStatus(trip.startDate, trip.endDate));
+	const status = $derived(
+		effectiveTripStatus(
+			{ status: trip.status, startDate: trip.startDate, endDate: trip.endDate },
+			todayInTimezone(data.viewerTimezone || 'UTC')
+		)
+	);
 	const destinationLabel = $derived(formatDestination(trip.destinationCityName, trip.destinationCountryCode));
 	const dateRangeText = $derived(formatTripRange(trip.startDate, trip.endDate));
 	const selectedSegment = $derived(

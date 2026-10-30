@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import { DateTime } from 'luxon';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => { const { freshDb } = await import('../../../../../../tests/helpers'); Object.assign(ctx, freshDb()); return ctx; });
@@ -6,7 +7,7 @@ vi.mock('$lib/server/db', async () => { const { freshDb } = await import('../../
 import { GET } from './+server';
 import { validateOAuthUser } from '$lib/server/auth';
 import { makeKitUser } from '../../../../../../tests/kitHelpers';
-import { createShare, createTrip } from '$lib/server/repositories/tripsRepo';
+import { createShare, createTrip, getTripById } from '$lib/server/repositories/tripsRepo';
 import { createSegment } from '$lib/server/repositories/segmentsRepo';
 
 test('native trip detail gives editors metadata while preserving viewer privacy', async () => {
@@ -22,4 +23,19 @@ test('native trip detail gives editors metadata while preserving viewer privacy'
 	expect(body.trip).toMatchObject({ canEdit: false, owner: false });
 	expect(body.trip.notes).toBeUndefined();
 	expect(JSON.stringify(body)).not.toContain('SECRET');
+});
+
+test('trip detail reports a passed end date as completed and keeps the saved status', async () => {
+	const ownerRow = makeKitUser({ email: 'dated@example.com', display_name: 'Owner', timezone: 'America/Chicago' });
+	const owner = validateOAuthUser(Number(ownerRow.id))!;
+	const today = DateTime.now().setZone('America/Chicago').toISODate()!;
+	const trip = createTrip(owner.id, {
+		name: 'Thailand, Aug 2026',
+		startDate: DateTime.fromISO(today).minus({ months: 2 }).toISODate()!,
+		endDate: DateTime.fromISO(today).minus({ days: 1 }).toISODate()!,
+		status: 'booked'
+	});
+	const res = (await GET({ locals: { user: owner }, params: { id: String(trip.id) } } as any)) as Response;
+	expect(await res.json()).toMatchObject({ trip: { status: 'completed' } });
+	expect(getTripById(trip.id)?.status).toBe('booked');
 });

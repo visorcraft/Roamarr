@@ -52,6 +52,8 @@ export type Scope =
 	| 'requirements:write'
 	| 'home-tasks:read'
 	| 'home-tasks:write'
+	| 'mail-holds:read'
+	| 'mail-holds:write'
 	| 'medications:read'
 	| 'medications:write'
 	| 'cards:read'
@@ -123,6 +125,8 @@ export const ALL_SCOPES: Scope[] = [
 	'requirements:write',
 	'home-tasks:read',
 	'home-tasks:write',
+	'mail-holds:read',
+	'mail-holds:write',
 	'medications:read',
 	'medications:write',
 	'cards:read',

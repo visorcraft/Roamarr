@@ -19,6 +19,7 @@ export function _updateProfile(
 		timezone: string;
 		flightCheckinLeadHours: number;
 		documentExpiryLeadDays: number;
+		mailHoldLeadDays?: number;
 		emailNotifications: boolean;
 		webhookNotifications: boolean;
 		ntfyNotifications: boolean;
@@ -34,6 +35,8 @@ export function _updateProfile(
 		throw new Error('Flight check-in lead must be a non-negative integer');
 	if (!nonNegativeInteger(i.documentExpiryLeadDays))
 		throw new Error('Document expiry lead must be a non-negative integer');
+	if (i.mailHoldLeadDays !== undefined && !nonNegativeInteger(i.mailHoldLeadDays))
+		throw new Error('Mail hold lead must be a non-negative integer');
 	if (i.temperatureUnit !== 'c' && i.temperatureUnit !== 'f')
 		throw new Error('Temperature unit must be °C or °F');
 	if (i.timeFormat !== '12h' && i.timeFormat !== '24h')
@@ -45,6 +48,7 @@ export function _updateProfile(
 		timezone: i.timezone,
 		flight_checkin_lead_hours: BigInt(i.flightCheckinLeadHours),
 		document_expiry_lead_days: BigInt(i.documentExpiryLeadDays),
+		...(i.mailHoldLeadDays !== undefined ? { mail_hold_lead_days: BigInt(i.mailHoldLeadDays) } : {}),
 		email_notifications: i.emailNotifications,
 		webhook_notifications: i.webhookNotifications,
 		ntfy_notifications: i.ntfyNotifications,
@@ -64,6 +68,7 @@ export const load: PageServerLoad = ({ locals }) => {
 			timezone: u.timezone,
 			flightCheckinLeadHours: u.flightCheckinLeadHours,
 			documentExpiryLeadDays: u.documentExpiryLeadDays,
+			mailHoldLeadDays: u.mailHoldLeadDays,
 			emailNotifications: u.emailNotifications,
 			webhookNotifications: u.webhookNotifications,
 			ntfyNotifications: u.ntfyNotifications,
@@ -83,6 +88,7 @@ export const actions: Actions = {
 		const timezone = String(f.get('timezone') ?? 'UTC');
 		const flightCheckinLeadHours = Number(f.get('flightCheckinLeadHours') ?? 24);
 		const documentExpiryLeadDays = Number(f.get('documentExpiryLeadDays') ?? 90);
+		const mailHoldLeadDays = Number(f.get('mailHoldLeadDays') ?? 3);
 		const emailNotifications = f.get('emailNotifications') === 'on';
 		const webhookNotifications = f.get('webhookNotifications') === 'on';
 		const ntfyNotifications = f.get('ntfyNotifications') === 'on';
@@ -95,6 +101,7 @@ export const actions: Actions = {
 				timezone,
 				flightCheckinLeadHours,
 				documentExpiryLeadDays,
+				mailHoldLeadDays,
 				emailNotifications,
 				webhookNotifications,
 				ntfyNotifications,

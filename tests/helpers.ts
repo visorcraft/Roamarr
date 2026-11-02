@@ -38,7 +38,7 @@ let userCounter = 0;
 let tripCounter = 0;
 
 // Per-process migrated template databases. Creating a full-schema MongrelDB
-// (67 tables) costs several seconds of engine durability waits per open, and
+// (68 tables) costs several seconds of engine durability waits per open, and
 // the waits serialize across parallel Vitest worker processes — enough to
 // blow the 10s hook timeout when several real-DB test files are scheduled
 // together. Each worker therefore builds one encrypted and one unencrypted

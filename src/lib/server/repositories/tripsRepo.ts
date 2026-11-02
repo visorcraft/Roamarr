@@ -7,7 +7,9 @@ import {
 	tripComments,
 	groups,
 	groupMembers,
-	tripShares
+	tripShares,
+	tripMailHolds,
+	reminders
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { publishSharesChanged, publishTripChanged } from '$lib/server/eventBus';
@@ -290,6 +292,12 @@ export function updateTrip(id: number, patch: UpdateTripInput): Trip | null {
 }
 
 export function deleteTrip(id: number): number {
+	const holds = kit.selectFrom(tripMailHolds).where(kitEq(tripMailHolds.trip_id, kitId(id))).executeSync();
+	for (const hold of holds) {
+		kit.deleteFrom(reminders)
+			.where(kitAnd(kitEq(reminders.ref_type, 'mail_hold'), kitEq(reminders.ref_id, hold.id)))
+			.executeSync();
+	}
 	const deleted = kit.deleteFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
 	if (Number(deleted) > 0) {
 		publishTripChanged(id);

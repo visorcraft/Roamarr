@@ -253,6 +253,22 @@
 						/>
 						</div>
 						<div class="settings-row">
+							<div>
+								<label class="label" for="defaultMailHoldLeadDays">Default mail hold lead (days)</label>
+								<p class="field-help">Default notice before a mail hold ends. New users start with this value.</p>
+							</div>
+						<input
+							id="defaultMailHoldLeadDays"
+							name="defaultMailHoldLeadDays"
+							type="number"
+							min="0"
+							step="1"
+							value={s.defaultMailHoldLeadDays ?? 3}
+							required
+							class="input"
+						/>
+						</div>
+						<div class="settings-row">
 							<div><label class="label" for="emailPollIntervalMinutes">Email polling interval (minutes)</label><p class="field-help">How often enabled user inboxes are checked.</p></div>
 							<input id="emailPollIntervalMinutes" name="emailPollIntervalMinutes" type="number" min="1" max="1440" value={s.emailPollIntervalMinutes} class="input" />
 						</div>

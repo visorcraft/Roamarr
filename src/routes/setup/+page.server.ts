@@ -26,6 +26,7 @@ export function _createAdmin(
 		timezone: i.timezone,
 		flight_checkin_lead_hours: BigInt(s.defaultFlightCheckinLeadHours),
 		document_expiry_lead_days: BigInt(s.defaultDocumentExpiryLeadDays),
+		mail_hold_lead_days: BigInt(s.defaultMailHoldLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
 		theme_id: 'system',

@@ -1509,6 +1509,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						defaultCurrency: { type: 'string' },
 						flightCheckinLeadHours: { type: 'integer' },
 						documentExpiryLeadDays: { type: 'integer' },
+						mailHoldLeadDays: { type: 'integer' },
 						themeId: { type: 'string' },
 						temperatureUnit: { type: 'string', enum: ['c', 'f'] },
 						timeFormat: { type: 'string', enum: ['12h', '24h'] }
@@ -2049,6 +2050,72 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: { taskId: { type: 'number' },
 					confirm: { type: "boolean", description: "Must be true to confirm destructive action" },},
 					required: ['taskId']
+				}
+			},
+			{
+				name: 'roamarr_mail_hold_list',
+				description: 'List mail holds for a trip. Holds show when a home is empty, so they are omitted from public share links and calendar feeds.',
+				inputSchema: {
+					type: 'object',
+					properties: { tripId: { type: 'number' } },
+					required: ['tripId']
+				}
+			},
+			{
+				name: 'roamarr_mail_hold_create',
+				description: 'Create a mail hold for a trip. Carrier defaults to USPS. endDate must be on or after startDate. A USPS hold longer than 30 days is saved and returned with a warning.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						carrier: { type: 'string' },
+						startDate: { type: 'string', description: 'YYYY-MM-DD' },
+						endDate: { type: 'string', description: 'YYYY-MM-DD' },
+						confirmationNumber: { type: 'string' },
+						addressLabel: { type: 'string' },
+						notes: { type: 'string' },
+						status: { type: 'string', enum: ['requested', 'active', 'ended', 'cancelled'] }
+					},
+					required: ['tripId', 'startDate', 'endDate']
+				}
+			},
+			{
+				name: 'roamarr_mail_hold_update',
+				description: 'Update a mail hold. Omitted fields stay as they are. Rescheduling or cancelling replaces the end reminder.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						holdId: { type: 'number' },
+						carrier: { type: 'string' },
+						startDate: { type: 'string' },
+						endDate: { type: 'string' },
+						confirmationNumber: { type: 'string' },
+						addressLabel: { type: 'string' },
+						notes: { type: 'string' },
+						status: { type: 'string', enum: ['requested', 'active', 'ended', 'cancelled'] }
+					},
+					required: ['holdId']
+				}
+			},
+			{
+				name: 'roamarr_mail_hold_delete',
+				description: 'Delete a mail hold and its end reminder.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						holdId: { type: 'number' },
+						confirm: { type: 'boolean', description: 'Must be true to confirm destructive action' }
+					},
+					required: ['holdId']
+				}
+			},
+			{
+				name: 'roamarr_mail_hold_coverage',
+				description: 'Report trip days not covered by a mail hold, each hold renewal date (the day it ends), and a suggested next 30-day window.',
+				inputSchema: {
+					type: 'object',
+					properties: { tripId: { type: 'number' } },
+					required: ['tripId']
 				}
 			},
 			{
@@ -3322,6 +3389,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					defaultCurrency: u.default_currency,
 					flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
 					documentExpiryLeadDays: Number(u.document_expiry_lead_days),
+					mailHoldLeadDays: Number(u.mail_hold_lead_days ?? 3),
 					themeId: u.theme_id,
 					temperatureUnit: u.temperature_unit === 'f' ? 'f' : 'c',
 					timeFormat: u.time_format === '12h' ? '12h' : '24h',
@@ -3357,6 +3425,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					}
 					expiryDays = BigInt(v);
 				}
+				let mailHoldDays: bigint | undefined;
+				if (args.mailHoldLeadDays != null) {
+					const v = Number(args.mailHoldLeadDays);
+					if (!Number.isInteger(v) || v < 0 || v > 3650) {
+						return { content: [{ type: 'text' as const, text: 'mailHoldLeadDays must be an integer 0-3650' }], isError: true };
+					}
+					mailHoldDays = BigInt(v);
+				}
 				if (args.temperatureUnit != null && args.temperatureUnit !== 'c' && args.temperatureUnit !== 'f') {
 					return { content: [{ type: 'text' as const, text: "temperatureUnit must be 'c' or 'f'" }], isError: true };
 				}
@@ -3369,6 +3445,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					default_currency: (args.defaultCurrency as string | undefined) ?? existing.default_currency,
 					flight_checkin_lead_hours: leadHours ?? existing.flight_checkin_lead_hours,
 					document_expiry_lead_days: expiryDays ?? existing.document_expiry_lead_days,
+					mail_hold_lead_days: mailHoldDays ?? existing.mail_hold_lead_days,
 					theme_id: (args.themeId as string | undefined) ?? existing.theme_id,
 					temperature_unit: (args.temperatureUnit as 'c' | 'f' | undefined) ?? existing.temperature_unit,
 					time_format: (args.timeFormat as '12h' | '24h' | undefined) ?? existing.time_format
@@ -3745,6 +3822,63 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				deleteHomeTask(Number(args.taskId));
 				logAudit(userId, 'mcp_home_task_delete', 'trip_home_task', Number(args.taskId), {});
 				return textResult({ ok: true, taskId: Number(args.taskId) });
+			}
+			case 'roamarr_mail_hold_list': {
+				if (!hasScope(scopes, 'mail-holds:read')) return scopeError('mail-holds:read');
+				const { listMailHolds } = await import('./tripMailHolds');
+				const tripId = Number(args.tripId);
+				requireViewableTrip(userId, tripId);
+				return textResult({ tripId, items: listMailHolds(tripId) });
+			}
+			case 'roamarr_mail_hold_create': {
+				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
+				const { addMailHold } = await import('./tripMailHolds');
+				const tripId = Number(args.tripId);
+				const created = addMailHold(userId, tripId, {
+					carrier: args.carrier as string | undefined,
+					startDate: String(args.startDate ?? ''),
+					endDate: String(args.endDate ?? ''),
+					confirmationNumber: (args.confirmationNumber as string) ?? null,
+					addressLabel: (args.addressLabel as string) ?? null,
+					notes: (args.notes as string) ?? null,
+					status: args.status == null ? undefined : String(args.status)
+				});
+				return textResult({ id: created.hold.id, warning: created.warning, hold: created.hold });
+			}
+			case 'roamarr_mail_hold_update': {
+				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
+				const { getMailHoldById } = await import('./repositories/tripMiscRepo');
+				const { updateMailHold } = await import('./tripMailHolds');
+				const existing = getMailHoldById(Number(args.holdId));
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Mail hold not found' }], isError: true };
+				const patch: Record<string, string | null> = {};
+				if (args.carrier !== undefined) patch.carrier = String(args.carrier ?? '');
+				if (args.startDate !== undefined) patch.startDate = String(args.startDate ?? '');
+				if (args.endDate !== undefined) patch.endDate = String(args.endDate ?? '');
+				if (args.confirmationNumber !== undefined) patch.confirmationNumber = args.confirmationNumber == null ? null : String(args.confirmationNumber);
+				if (args.addressLabel !== undefined) patch.addressLabel = args.addressLabel == null ? null : String(args.addressLabel);
+				if (args.notes !== undefined) patch.notes = args.notes == null ? null : String(args.notes);
+				if (args.status !== undefined) patch.status = String(args.status ?? '');
+				const updated = updateMailHold(userId, existing.tripId, existing.id, patch);
+				return textResult({ id: updated.hold.id, warning: updated.warning, hold: updated.hold });
+			}
+			case 'roamarr_mail_hold_delete': {
+				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
+				const confirmErr = requireConfirm(args, 'roamarr_mail_hold_delete');
+				if (confirmErr) return confirmErr;
+				const { getMailHoldById } = await import('./repositories/tripMiscRepo');
+				const { deleteMailHold } = await import('./tripMailHolds');
+				const existing = getMailHoldById(Number(args.holdId));
+				if (!existing) return { content: [{ type: 'text' as const, text: 'Mail hold not found' }], isError: true };
+				deleteMailHold(userId, existing.tripId, existing.id);
+				return textResult({ ok: true, holdId: existing.id });
+			}
+			case 'roamarr_mail_hold_coverage': {
+				if (!hasScope(scopes, 'mail-holds:read')) return scopeError('mail-holds:read');
+				const { listMailHolds, mailHoldCoverageForTrip } = await import('./tripMailHolds');
+				const tripId = Number(args.tripId);
+				const trip = requireViewableTrip(userId, tripId);
+				return textResult(mailHoldCoverageForTrip(trip.startDate, trip.endDate, listMailHolds(tripId)));
 			}
 			case 'roamarr_medication_list': {
 				if (!hasScope(scopes, 'medications:read')) return scopeError('medications:read');

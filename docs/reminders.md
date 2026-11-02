@@ -13,6 +13,7 @@ time.
 | Flight check-in | Flight segment | User's lead hours before start. |
 | Document expiry | Travel document | User's lead days before expiry, at 09:00 in the user's timezone. |
 | Custom | Trip, segment, or integration | Offset before a reference start, or explicit ISO time. |
+| Mail hold | Mail hold | User's mail-hold lead days before the hold end date, at 09:00 in the user's timezone. |
 
 Profile defaults are configured under **Profile → Profile**. Administrators
 set defaults for newly created users under **Configuration → General**.

@@ -17,6 +17,7 @@ import { placeSearchProviderMigration } from './0015_place_search_provider';
 
 import { nationalIdMigration } from './0016_national_id';
 import { cityAlternateNamesMigration } from './0017_city_alternate_names';
+import { mailHoldsMigration } from './0018_mail_holds';
 
 export const migrations: Migration[] = [
 	...initial,
@@ -35,5 +36,6 @@ export const migrations: Migration[] = [
 	unitsNtfyAutoBackupMigration,
 	placeSearchProviderMigration,
 	nationalIdMigration,
-	cityAlternateNamesMigration
+	cityAlternateNamesMigration,
+	mailHoldsMigration
 ];

@@ -8,14 +8,16 @@ vi.mock('./db', async () => {
 });
 
 import { exportTrips, exportTripsJson, exportTripsCsv } from './export';
-import { users, trips, segments } from './db/mongrelSchema';
+import { users, trips, segments, tripMailHolds } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
+import { createMailHold } from './repositories/tripMiscRepo';
 
 beforeEach(() => {
 	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(tripMailHolds).executeSync();
 	kit.deleteFrom(trips).executeSync();
 	kit.deleteFrom(users).executeSync();
 });
@@ -98,4 +100,40 @@ test('exportTripsCsv emits one row per segment and round-trips', () => {
 	const lines = csv.trim().split('\n');
 	expect(lines).toHaveLength(3); // header + 2 segments
 	expect(lines.filter((l) => l.includes('RT'))).toHaveLength(2);
+});
+
+test('exportTrips always includes mail holds and CSV stays segment-only', () => {
+	const owner = makeUser('mh@x.c');
+	const empty = makeTrip(Number(owner.id), 'Empty');
+	const held = makeTrip(Number(owner.id), 'Held', { startDate: '2026-08-01', endDate: '2026-08-20' });
+	createMailHold({
+		tripId: held.id,
+		carrier: 'USPS',
+		startDate: '2026-08-01',
+		endDate: '2026-08-10',
+		confirmationNumber: 'HOLDSECRET',
+		addressLabel: 'HOMEADDR',
+		status: 'requested'
+	});
+
+	const exported = exportTrips(Number(owner.id));
+	const emptyTrip = exported.find((trip) => trip.name === 'Empty');
+	const heldTrip = exported.find((trip) => trip.name === 'Held');
+	expect(emptyTrip?.mailHolds).toEqual([]);
+	expect(heldTrip?.mailHolds).toEqual([
+		{
+			carrier: 'USPS',
+			startDate: '2026-08-01',
+			endDate: '2026-08-10',
+			confirmationNumber: 'HOLDSECRET',
+			addressLabel: 'HOMEADDR',
+			status: 'requested'
+		}
+	]);
+	const json = exportTripsJson(Number(owner.id));
+	expect(json).toContain('HOLDSECRET');
+	const csv = exportTripsCsv(Number(owner.id));
+	expect(csv).not.toContain('HOLDSECRET');
+	expect(csv).not.toContain('HOMEADDR');
+	expect(empty.id).toBeGreaterThan(0);
 });

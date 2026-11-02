@@ -21,8 +21,8 @@ import { compareRows } from '$lib/server/sortUtils';
 export interface ReminderRow {
 	id: number;
 	userId: number;
-	kind: 'flight_checkin' | 'document_expiry' | 'custom';
-	refType: 'segment' | 'document' | 'trip';
+	kind: 'flight_checkin' | 'document_expiry' | 'custom' | 'mail_hold';
+	refType: 'segment' | 'document' | 'trip' | 'mail_hold';
 	refId: number;
 	fireAt: string;
 	status: 'pending' | 'sending' | 'sent';

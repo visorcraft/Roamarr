@@ -68,6 +68,7 @@ operating, securing, integrating, and contributing to the application.
 - [Groups](./groups.md): reusable dynamic sharing groups.
 - [Journal](./journal.md): dated trip entries.
 - [Home tasks](./home-tasks.md): pre-departure tasks.
+- [Mail holds](./mail-holds.md): carrier holds, coverage gaps, and end reminders.
 - [Medications](./medications.md): trip medication lists.
 - [Entry requirements](./entry-requirements.md): visa, vaccination, and other
   destination requirements.

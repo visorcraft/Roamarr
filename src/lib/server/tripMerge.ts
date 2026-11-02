@@ -4,7 +4,7 @@ import { kit } from './db';
 import {
 	auditLogs, fareWatches, insurancePolicies, reminders, segmentAttendees, segments, tripBudgetCategories,
 	tripChecklists, tripChecklistItems, tripComments, tripCompanions, tripDocumentLinks,
-	tripEntryRequirements, tripExpenses, tripHomeTasks, tripImportantItems, tripJournalEntries,
+	tripEntryRequirements, tripExpenses, tripHomeTasks, tripMailHolds, tripImportantItems, tripJournalEntries,
 	tripMedications, tripPollVotes, tripPolls, tripShares, tripTemplates
 } from './db/mongrelSchema';
 import { requireOwnedTrip } from './ownership';
@@ -80,6 +80,7 @@ export function mergeTrips(ownerId: number, donorId: number, recipientId: number
 	kit.updateTable(tripDocumentLinks).set({ trip_id: recipientKey }).where(eq(tripDocumentLinks.trip_id, donorKey)).executeSync();
 	kit.updateTable(tripPolls).set({ trip_id: recipientKey }).where(eq(tripPolls.trip_id, donorKey)).executeSync();
 	kit.updateTable(tripHomeTasks).set({ trip_id: recipientKey }).where(eq(tripHomeTasks.trip_id, donorKey)).executeSync();
+	kit.updateTable(tripMailHolds).set({ trip_id: recipientKey }).where(eq(tripMailHolds.trip_id, donorKey)).executeSync();
 	kit.updateTable(tripMedications).set({ trip_id: recipientKey }).where(eq(tripMedications.trip_id, donorKey)).executeSync();
 	kit.updateTable(tripEntryRequirements).set({ trip_id: recipientKey }).where(eq(tripEntryRequirements.trip_id, donorKey)).executeSync();
 	kit.updateTable(tripImportantItems).set({ trip_id: recipientKey }).where(eq(tripImportantItems.trip_id, donorKey)).executeSync();

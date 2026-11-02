@@ -14,6 +14,7 @@ import {
 	tripJournalEntries,
 	tripDocumentLinks,
 	tripHomeTasks,
+	tripMailHolds,
 	tripMedications,
 	tripEntryRequirements,
 	tripImportantItems,
@@ -494,6 +495,114 @@ export function deleteHomeTask(id: number): number {
 	const deleted = kit
 		.deleteFrom(tripHomeTasks)
 		.where(eq(tripHomeTasks.id, kitId(id)))
+		.executeSync();
+	return Number(deleted);
+}
+
+// ============================================================================
+// Mail holds
+// ============================================================================
+
+export interface MailHold {
+	id: number;
+	tripId: number;
+	carrier: string;
+	startDate: string;
+	endDate: string;
+	confirmationNumber: string | null;
+	addressLabel: string | null;
+	notes: string | null;
+	status: 'requested' | 'active' | 'ended' | 'cancelled';
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface CreateMailHoldInput {
+	tripId: number;
+	carrier: string;
+	startDate: string;
+	endDate: string;
+	confirmationNumber?: string | null;
+	addressLabel?: string | null;
+	notes?: string | null;
+	status?: MailHold['status'];
+}
+
+export type UpdateMailHoldInput = Partial<Omit<CreateMailHoldInput, 'tripId'>>;
+
+function toMailHold(row: Row<typeof tripMailHolds>): MailHold {
+	return {
+		id: num(row.id),
+		tripId: num(row.trip_id),
+		carrier: row.carrier,
+		startDate: row.start_date,
+		endDate: row.end_date,
+		confirmationNumber: nullableText(row.confirmation_number),
+		addressLabel: nullableText(row.address_label),
+		notes: nullableText(row.notes),
+		status: row.status as MailHold['status'],
+		createdAt: row.created_at,
+		updatedAt: row.updated_at
+	};
+}
+
+export function listMailHoldsForTrip(tripId: number): MailHold[] {
+	const rows = kit
+		.selectFrom(tripMailHolds)
+		.where(eq(tripMailHolds.trip_id, kitId(tripId)))
+		.orderBy(asc(tripMailHolds.start_date), asc(tripMailHolds.id))
+		.executeSync();
+	return rows.map(toMailHold);
+}
+
+export function getMailHoldById(id: number): MailHold | null {
+	const rows = kit
+		.selectFrom(tripMailHolds)
+		.where(eq(tripMailHolds.id, kitId(id)))
+		.executeSync();
+	return rows[0] ? toMailHold(rows[0]) : null;
+}
+
+export function createMailHold(input: CreateMailHoldInput): MailHold {
+	const row = kit
+		.insertInto(tripMailHolds)
+		.values({
+			trip_id: kitId(input.tripId),
+			carrier: input.carrier,
+			start_date: input.startDate,
+			end_date: input.endDate,
+			confirmation_number: nullableText(input.confirmationNumber),
+			address_label: nullableText(input.addressLabel),
+			notes: nullableText(input.notes),
+			status: input.status ?? 'requested'
+		} as Insert<typeof tripMailHolds>)
+		.executeSync();
+	return toMailHold(row);
+}
+
+export function updateMailHold(id: number, patch: UpdateMailHoldInput): MailHold | null {
+	const set: Update<typeof tripMailHolds> = {};
+	if (patch.carrier !== undefined) set.carrier = patch.carrier;
+	if (patch.startDate !== undefined) set.start_date = patch.startDate;
+	if (patch.endDate !== undefined) set.end_date = patch.endDate;
+	if (patch.confirmationNumber !== undefined) set.confirmation_number = nullableText(patch.confirmationNumber);
+	if (patch.addressLabel !== undefined) set.address_label = nullableText(patch.addressLabel);
+	if (patch.notes !== undefined) set.notes = nullableText(patch.notes);
+	if (patch.status !== undefined) set.status = patch.status;
+	const updated = kit
+		.updateTable(tripMailHolds)
+		.set(set)
+		.where(eq(tripMailHolds.id, kitId(id)))
+		.executeSync();
+	const row = updated[0];
+	if (!row) return null;
+	return toMailHold(row);
+}
+
+export function deleteMailHold(id: number): number {
+	const deleted = kit
+		.deleteFrom(tripMailHolds)
+		.where(eq(tripMailHolds.id, kitId(id)))
 		.executeSync();
 	return Number(deleted);
 }

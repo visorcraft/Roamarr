@@ -33,6 +33,7 @@
 	import { segmentNotesRows } from '$lib/segmentDetailsDisplay';
 	import TripDocumentsTable from '$lib/components/TripDocumentsTable.svelte';
 	import Gallery from '$lib/components/Gallery.svelte';
+	import MailHoldsPanel from '$lib/components/MailHoldsPanel.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 
@@ -45,8 +46,8 @@
 	type DetailRow = { icon: IconName; label: string; value: string };
 	type TripReminder = {
 		id: number;
-		kind: 'flight_checkin' | 'document_expiry' | 'custom';
-		refType: 'segment' | 'document' | 'trip';
+		kind: 'flight_checkin' | 'document_expiry' | 'custom' | 'mail_hold';
+		refType: 'segment' | 'document' | 'trip' | 'mail_hold';
 		refId: number;
 		fireAt: string;
 		status: 'pending' | 'sending' | 'sent';
@@ -546,7 +547,8 @@
 			(data.homeTasks?.length ?? 0) +
 			(data.medications?.length ?? 0) +
 			(data.entryRequirements?.length ?? 0) +
-			(data.importantItems?.length ?? 0)
+			(data.importantItems?.length ?? 0) +
+			(data.mailHolds?.length ?? 0)
 	);
 	const budgetCapCount = $derived(data.budgets?.filter((b) => b.amount != null).length ?? 0);
 	const moneyItemCount = $derived((data.expenses?.length ?? 0) + budgetCapCount + (data.watches?.length ?? 0));
@@ -807,6 +809,7 @@
 	function reminderKindLabel(kind: TripReminder['kind']) {
 		if (kind === 'flight_checkin') return 'Flight check-in';
 		if (kind === 'document_expiry') return 'Document expiry';
+		if (kind === 'mail_hold') return 'Mail hold';
 		return 'Custom reminder';
 	}
 </script>
@@ -999,6 +1002,9 @@
 			</div>
 		{:else if activeTab === 'prep'}
 			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Prep</h2><span class="badge badge-slate badge-compact">{prepItemCount} item{prepItemCount === 1 ? '' : 's'}</span></div>{#if data.checklist?.items?.length}<div class="trip-modern-list">{#each data.checklist.items as item (item.id)}<div class="trip-modern-list-row"><form method="POST" action="?/toggleChecklistItem" class="flex min-w-0 items-center gap-3"><input type="hidden" name="itemId" value={item.id} /><button class="check-toggle" type="submit"><span class="check-marker {item.packed ? 'check-marker-active' : ''}"><Icon name="check" class="h-3.5 w-3.5" /></span><span class="check-label {item.packed ? 'check-label-done' : ''}">{item.text}</span></button></form>{#if item.assignedToName}<span class="badge badge-slate badge-compact">{item.assignedToName}</span>{/if}</div>{/each}</div>{:else}<p class="trip-modern-empty">No prep items yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addChecklistItem" class="trip-modern-form-inline"><input name="text" class="input flex-1 text-sm" placeholder="Add checklist item" required /><select name="assignedToCompanionId" class="input w-auto text-sm"><option value="">Unassigned</option>{#each data.companions ?? [] as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select><button class="btn btn-primary btn-sm">Add item</button></form>{/if}</section>
+			{#if isEditor && data.mailHoldCoverage}
+				<MailHoldsPanel holds={data.mailHolds ?? []} coverage={data.mailHoldCoverage} />
+			{/if}
 		{:else if activeTab === 'money'}
 			<section class="trip-modern-panel">
 				<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Budget & expenses</h2>{#if data.expenses?.length}<button type="button" class="btn btn-secondary btn-sm" onclick={exportExpensesCsv}>Export CSV</button>{/if}</div>

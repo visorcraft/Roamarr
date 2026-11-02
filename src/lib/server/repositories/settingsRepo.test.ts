@@ -73,12 +73,14 @@ test('nullable lead defaults do not mask explicit zero', () => {
 		.updateTable(settings)
 		.set({
 			default_flight_checkin_lead_hours: null,
-			default_document_expiry_lead_days: null
+			default_document_expiry_lead_days: null,
+			default_mail_hold_lead_days: null
 		})
 		.executeSync();
 	s = getSettings();
 	expect(s.defaultFlightCheckinLeadHours).toBe(24);
 	expect(s.defaultDocumentExpiryLeadDays).toBe(90);
+	expect(s.defaultMailHoldLeadDays).toBe(3);
 });
 
 test('ensureDefaultBenefitTemplates seeds once and is idempotent', () => {

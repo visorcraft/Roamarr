@@ -489,6 +489,7 @@ async function provisionOidcUser(claims: IdTokenClaims, email: string): Promise<
 		timezone: s.defaultTimezone,
 		flight_checkin_lead_hours: BigInt(s.defaultFlightCheckinLeadHours),
 		document_expiry_lead_days: BigInt(s.defaultDocumentExpiryLeadDays),
+		mail_hold_lead_days: BigInt(s.defaultMailHoldLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
 		theme_id: 'system',

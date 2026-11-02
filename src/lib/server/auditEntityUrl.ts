@@ -39,6 +39,7 @@ export function auditEntityUrl(entry: AuditLogEntry): string | null {
 		case 'trip_poll':
 		case 'trip_companion':
 		case 'trip_home_task':
+		case 'trip_mail_hold':
 		case 'trip_checklist':
 		case 'trip_checklist_item':
 		case 'trip_important_item':

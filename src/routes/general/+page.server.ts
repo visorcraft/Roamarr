@@ -51,6 +51,7 @@ export function _saveAdminSettings(
 		defaultDatetimeFormat?: string;
 		defaultFlightCheckinLeadHours?: number;
 		defaultDocumentExpiryLeadDays?: number;
+		defaultMailHoldLeadDays?: number;
 		emailPollIntervalMinutes?: number;
 		smtpHost?: string;
 		smtpPort?: number;
@@ -111,6 +112,8 @@ export function _saveAdminSettings(
 		!nonNegativeInteger(i.defaultDocumentExpiryLeadDays)
 	)
 		throw new Error('Default document expiry lead must be a non-negative integer');
+	if (i.defaultMailHoldLeadDays !== undefined && !nonNegativeInteger(i.defaultMailHoldLeadDays))
+		throw new Error('Default mail hold lead must be a non-negative integer');
 	if (i.emailPollIntervalMinutes !== undefined && (!Number.isInteger(i.emailPollIntervalMinutes) || i.emailPollIntervalMinutes < 1 || i.emailPollIntervalMinutes > 1440))
 		throw new Error('Email poll interval must be between 1 and 1440 minutes');
 	if (i.defaultCurrency !== undefined) {
@@ -160,6 +163,7 @@ export function _saveAdminSettings(
 		patch.defaultFlightCheckinLeadHours = i.defaultFlightCheckinLeadHours;
 	if (i.defaultDocumentExpiryLeadDays !== undefined)
 		patch.defaultDocumentExpiryLeadDays = i.defaultDocumentExpiryLeadDays;
+	if (i.defaultMailHoldLeadDays !== undefined) patch.defaultMailHoldLeadDays = i.defaultMailHoldLeadDays;
 	if (i.emailPollIntervalMinutes !== undefined) patch.emailPollIntervalMinutes = i.emailPollIntervalMinutes;
 	if (i.smtpHost !== undefined) patch.smtpHost = i.smtpHost || null;
 	if (i.smtpPort !== undefined) patch.smtpPort = i.smtpPort ?? null;
@@ -281,6 +285,7 @@ export const actions: Actions = {
 			defaultDatetimeFormat: String(f.get('defaultDatetimeFormat') || 'yyyy-MM-dd h:mm a'),
 			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
+			defaultMailHoldLeadDays: parseLead(f.get('defaultMailHoldLeadDays'), 3),
 			emailPollIntervalMinutes: parseLead(f.get('emailPollIntervalMinutes'), 5),
 			sessionCookieSameSite: sessionCookieSameSite as SessionCookieSameSite
 		});
@@ -564,6 +569,7 @@ export const actions: Actions = {
 			defaultDatetimeFormat: String(f.get('defaultDatetimeFormat') || 'yyyy-MM-dd h:mm a'),
 			defaultFlightCheckinLeadHours: parseLead(f.get('defaultFlightCheckinLeadHours'), 24),
 			defaultDocumentExpiryLeadDays: parseLead(f.get('defaultDocumentExpiryLeadDays'), 90),
+			defaultMailHoldLeadDays: parseLead(f.get('defaultMailHoldLeadDays'), 3),
 			smtpHost: String(f.get('smtpHost') || '') || undefined,
 			smtpPort: f.get('smtpPort') ? Number(f.get('smtpPort')) : undefined,
 			smtpSecurity: String(f.get('smtpSecurity') || '') || undefined,

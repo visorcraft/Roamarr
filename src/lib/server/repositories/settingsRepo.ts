@@ -26,6 +26,7 @@ export type Settings = {
 	defaultDatetimeFormat: string;
 	defaultFlightCheckinLeadHours: number;
 	defaultDocumentExpiryLeadDays: number;
+	defaultMailHoldLeadDays: number;
 	emailPollIntervalMinutes: number;
 	smtpHost: string | null;
 	smtpPort: number | null;
@@ -115,6 +116,7 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 	defaultDatetimeFormat: 'default_datetime_format',
 	defaultFlightCheckinLeadHours: 'default_flight_checkin_lead_hours',
 	defaultDocumentExpiryLeadDays: 'default_document_expiry_lead_days',
+	defaultMailHoldLeadDays: 'default_mail_hold_lead_days',
 	emailPollIntervalMinutes: 'email_poll_interval_minutes',
 	smtpHost: 'smtp_host',
 	smtpPort: 'smtp_port',
@@ -150,6 +152,7 @@ const SETTINGS_KEY_MAP: Record<string, string> = {
 const SETTINGS_INT_FIELDS = new Set([
 	'default_flight_checkin_lead_hours',
 	'default_document_expiry_lead_days',
+	'default_mail_hold_lead_days',
 	'email_poll_interval_minutes',
 	'smtp_port',
 	'backup_interval_hours',
@@ -193,6 +196,8 @@ function toSettingsRow(row: Row<typeof settings>): Settings {
 			row.default_flight_checkin_lead_hours == null ? 24 : Number(row.default_flight_checkin_lead_hours),
 		defaultDocumentExpiryLeadDays:
 			row.default_document_expiry_lead_days == null ? 90 : Number(row.default_document_expiry_lead_days),
+		defaultMailHoldLeadDays:
+			row.default_mail_hold_lead_days == null ? 3 : Number(row.default_mail_hold_lead_days),
 		emailPollIntervalMinutes: Number(row.email_poll_interval_minutes ?? 5n),
 		smtpHost: nullableText(row.smtp_host),
 		smtpPort: row.smtp_port == null || row.smtp_port === 0n ? null : Number(row.smtp_port),
@@ -356,6 +361,7 @@ function rebuildSettingsRow(existing: Record<string, unknown>): void {
 		default_datetime_format: 'yyyy-MM-dd h:mm a',
 		default_flight_checkin_lead_hours: 24n,
 		default_document_expiry_lead_days: 90n,
+		default_mail_hold_lead_days: 3n,
 		email_poll_interval_minutes: 5n,
 		maps_enabled: false,
 		maps_tile_provider: 'openstreetmap',
@@ -429,6 +435,7 @@ export function getSettings(): Settings {
 				default_datetime_format: 'yyyy-MM-dd h:mm a',
 				default_flight_checkin_lead_hours: 24n,
 				default_document_expiry_lead_days: 90n,
+				default_mail_hold_lead_days: 3n,
 				maps_enabled: false,
 				maps_tile_provider: 'openstreetmap',
 				session_cookie_same_site: 'lax',
@@ -506,6 +513,7 @@ export function updateSettings(patch: SettingsPatch): void {
 		default_datetime_format: 'yyyy-MM-dd h:mm a',
 		default_flight_checkin_lead_hours: 24n,
 		default_document_expiry_lead_days: 90n,
+		default_mail_hold_lead_days: 3n,
 		maps_enabled: false,
 		maps_tile_provider: 'openstreetmap',
 		session_cookie_same_site: 'lax',

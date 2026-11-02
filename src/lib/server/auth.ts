@@ -23,6 +23,7 @@ export interface AppUser {
 	timezone: string;
 	flightCheckinLeadHours: number;
 	documentExpiryLeadDays: number;
+	mailHoldLeadDays: number;
 	emailNotifications: boolean;
 	webhookNotifications: boolean;
 	ntfyNotifications: boolean;
@@ -48,6 +49,7 @@ function toAppUser(u: KitUser): AppUser {
 		timezone: u.timezone,
 		flightCheckinLeadHours: Number(u.flight_checkin_lead_hours),
 		documentExpiryLeadDays: Number(u.document_expiry_lead_days),
+		mailHoldLeadDays: Number(u.mail_hold_lead_days ?? 3),
 		emailNotifications: u.email_notifications,
 		webhookNotifications: u.webhook_notifications,
 		ntfyNotifications: u.ntfy_notifications ?? true,

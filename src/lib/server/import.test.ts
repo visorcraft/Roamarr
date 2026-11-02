@@ -10,15 +10,17 @@ vi.mock('./db', async () => {
 
 import { parseJson, parseCsv, importTrips } from './import';
 import { exportTripsCsv } from './export';
-import { users, trips, segments, reminders, auditLogs } from './db/mongrelSchema';
+import { users, trips, segments, reminders, auditLogs, tripMailHolds } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
+import { listMailHoldsForTrip } from './repositories/tripMiscRepo';
 
 beforeEach(() => {
 	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	kit.deleteFrom(reminders).executeSync();
 	kit.deleteFrom(segments).executeSync();
+	kit.deleteFrom(tripMailHolds).executeSync();
 	kit.deleteFrom(trips).executeSync();
 	kit.deleteFrom(auditLogs).executeSync();
 	kit.deleteFrom(users).executeSync();
@@ -281,4 +283,40 @@ test('csv round-trip preserves multi-segment trips', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(2);
 	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()).toHaveLength(2);
+});
+
+test('importTrips keeps the trip when one mail hold is invalid', () => {
+	const u = makeUser('holds@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Away',
+				startDate: '2026-08-01',
+				endDate: '2026-08-20',
+				mailHolds: [
+					{
+						carrier: 'USPS',
+						startDate: '2026-08-01',
+						endDate: '2026-08-10',
+						confirmationNumber: 'HOLDSECRET',
+						addressLabel: 'HOMEADDR',
+						status: 'active'
+					},
+					{ startDate: '2026-08-12', endDate: '2026-08-01' }
+				]
+			}
+		]
+	});
+	expect(result.imported).toBe(1);
+	expect(result.errors.some((error) => error.field === 'mailHold.1' && /endDate/.test(error.message))).toBe(true);
+	const trip = tripsRepo.listTripsForUser(Number(u.id)).find((trip) => trip.name === 'Away');
+	expect(trip).toBeTruthy();
+	const holds = listMailHoldsForTrip(trip!.id);
+	expect(holds).toHaveLength(1);
+	expect(holds[0]).toMatchObject({
+		carrier: 'USPS',
+		confirmationNumber: 'HOLDSECRET',
+		addressLabel: 'HOMEADDR',
+		status: 'active'
+	});
 });

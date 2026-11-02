@@ -113,7 +113,7 @@ Roamarr can:
   read/edit/detail controls and token expiry.
 - Keep traveler context close to the itinerary: companions, documents, loyalty
   programs, payment cards, insurance policies, entry requirements, medications,
-  emergency contacts, important items, and home-preparation tasks.
+  emergency contacts, important items, home-preparation tasks, and mail holds.
 - Coordinate family and group travel with attendee lists, polls, packing
   templates, kid gear, accessibility notes, dietary details, room preferences,
   and emergency itinerary sharing.
@@ -130,8 +130,8 @@ Roamarr can:
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
   codes, and active session review.
-- Connect external clients via OAuth (69 scopes, PKCE, refresh-token
-  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 139 tools, 16
+- Connect external clients via OAuth (71 scopes, PKCE, refresh-token
+  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 144 tools, 16
   prompts, and 9 resource templates — covering trips, segments, file attachments, expenses, polls,
   companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
   templates, and profile preferences. Destructive operations require an explicit

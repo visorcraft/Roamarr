@@ -6,6 +6,7 @@ import { localToUtc } from '$lib/server/tz';
 import { upsertRemindersForSegment } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
 import { createSegment } from '$lib/server/repositories/segmentsRepo';
+import { addMailHold } from '$lib/server/tripMailHolds';
 import { resolveCitySelection } from '$lib/server/cities';
 
 interface ImportSegment {
@@ -31,6 +32,17 @@ interface ImportTrip {
 	notes?: string;
 	defaultVisibility?: string;
 	segments?: ImportSegment[];
+	mailHolds?: ImportMailHold[];
+}
+
+interface ImportMailHold {
+	carrier?: string;
+	startDate?: string;
+	endDate?: string;
+	confirmationNumber?: string;
+	addressLabel?: string;
+	notes?: string;
+	status?: string;
 }
 
 interface ImportError {
@@ -313,6 +325,30 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 			});
 			upsertRemindersForSegment(seg);
 			result.segmentCount++;
+		}
+
+		for (let j = 0; j < (tripInput.mailHolds?.length ?? 0); j++) {
+			const hold = tripInput.mailHolds![j]!;
+			try {
+				addMailHold(userId, trip.id, {
+					carrier: hold.carrier,
+					startDate: hold.startDate,
+					endDate: hold.endDate,
+					confirmationNumber: hold.confirmationNumber,
+					addressLabel: hold.addressLabel,
+					notes: hold.notes,
+					status: hold.status
+				});
+			} catch (e) {
+				const body = typeof e === 'object' && e && 'body' in e ? (e as { body?: { message?: unknown } }).body : undefined;
+				const message =
+					typeof body?.message === 'string' && body.message
+						? body.message
+						: e instanceof Error && e.message
+							? e.message
+							: 'Invalid mail hold';
+				result.errors.push({ row, field: `mailHold.${j}`, message });
+			}
 		}
 	}
 

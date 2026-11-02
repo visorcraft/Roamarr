@@ -25,8 +25,9 @@ const TRIP_STATUSES = ['planning', 'booked', 'active', 'completed'] as const;
 const SHARE_PERMISSIONS = ['read', 'edit'] as const;
 const CARD_NETWORKS = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
 const BENEFIT_TYPES = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
-const REMINDER_KINDS = ['flight_checkin', 'document_expiry', 'custom'] as const;
-const REMINDER_REF_TYPES = ['segment', 'document', 'trip'] as const;
+const REMINDER_KINDS = ['flight_checkin', 'document_expiry', 'custom', 'mail_hold'] as const;
+const REMINDER_REF_TYPES = ['segment', 'document', 'trip', 'mail_hold'] as const;
+const MAIL_HOLD_STATUSES = ['requested', 'active', 'ended', 'cancelled'] as const;
 const REMINDER_STATUSES = ['pending', 'sending', 'sent'] as const;
 const EXPENSE_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
 const WATCH_STATUSES = ['active', 'paused'] as const;
@@ -68,6 +69,7 @@ export {
 	BENEFIT_TYPES,
 	REMINDER_KINDS,
 	REMINDER_REF_TYPES,
+	MAIL_HOLD_STATUSES,
 	REMINDER_STATUSES,
 	EXPENSE_CATEGORIES,
 	WATCH_STATUSES,
@@ -153,7 +155,10 @@ export const users = table('users', {
 			nullable: true,
 			default: staticDefault('24h')
 		}),
-		bool('ntfy_notifications', { nullable: true, default: staticDefault(true) })
+		bool('ntfy_notifications', { nullable: true, default: staticDefault(true) }),
+		// Days before a mail hold ends to notify the trip owner. Nullable so
+		// existing rows skip a NOT NULL backfill; readers coalesce null to 3.
+		int('mail_hold_lead_days', { nullable: true, default: staticDefault(3n) })
 	],
 	primaryKey: 'id',
 	unique: [
@@ -277,7 +282,10 @@ export const settings = table('settings', {
 			nullable: true,
 			default: staticDefault('nominatim')
 		}),
-		text('place_search_google_api_key', { nullable: true })
+		text('place_search_google_api_key', { nullable: true }),
+		// Default mail-hold reminder lead for new users. Nullable; readers
+		// coalesce null to 3. Appended last because column ids are positional.
+		int('default_mail_hold_lead_days', { nullable: true, default: staticDefault(3n) })
 	],
 	primaryKey: 'id'
 });
@@ -1522,6 +1530,27 @@ export const tripTemplates = table('trip_templates', {
 	]
 });
 
+export const tripMailHolds = table('trip_mail_holds', {
+	columns: [
+		int('id', { primaryKey: true, default: sequenceDefault('trip_mail_holds_id_seq') }),
+		int('trip_id'),
+		text('carrier', { default: staticDefault('USPS') }),
+		date('start_date'),
+		date('end_date'),
+		text('confirmation_number', { nullable: true }),
+		text('address_label', { nullable: true }),
+		text('notes', { nullable: true }),
+		text('status', { enumValues: [...MAIL_HOLD_STATUSES], default: staticDefault('requested') }),
+		timestamp('created_at', { default: nowDefault() }),
+		timestamp('updated_at', { generated: 'now' })
+	],
+	primaryKey: 'id',
+	indexes: [index(['trip_id'], { name: 'mail_holds_trip_idx' })],
+	foreignKeys: [
+		foreignKey(['trip_id'], { table: 'trips', columns: ['id'] }, { name: 'fk_trip_mail_holds_trip_id_trips', onDelete: 'cascade' })
+	]
+});
+
 export const tripHomeTasks = table('trip_home_tasks', {
 	columns: [
 		int('id', { primaryKey: true, default: sequenceDefault('trip_home_tasks_id_seq') }),
@@ -1751,5 +1780,6 @@ export const schema = new Schema([
 	oauthClients,
 	oauthCodes,
 	oauthTokens,
-	apiKeys
+	apiKeys,
+	tripMailHolds
 ]);

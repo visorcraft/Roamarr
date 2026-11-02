@@ -46,6 +46,8 @@ export const SCOPE_DESCRIPTIONS: Record<Scope, string> = {
 	'requirements:write': 'Create, update, and delete entry requirements',
 	'home-tasks:read': 'View pre-departure to-dos',
 	'home-tasks:write': 'Create, toggle, and delete home tasks',
+	'mail-holds:read': 'View trip mail holds',
+	'mail-holds:write': 'Create, update, and delete trip mail holds',
 	'medications:read': 'View trip medications',
 	'medications:write': 'Create, update, and delete trip medications',
 	'cards:read': 'View payment cards and benefits (no full PAN)',

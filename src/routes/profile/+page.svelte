@@ -68,6 +68,19 @@
 			/>
 		</div>
 		<div class="field">
+			<label class="label" for="mailHoldLeadDays">Mail hold lead (days)</label>
+			<input
+				id="mailHoldLeadDays"
+				name="mailHoldLeadDays"
+				type="number"
+				min="0"
+				step="1"
+				value={data.user.mailHoldLeadDays}
+				class="input"
+				required
+			/>
+		</div>
+		<div class="field">
 			<label class="label" for="defaultCurrency">Default currency</label>
 			<select id="defaultCurrency" name="defaultCurrency" value={data.user.defaultCurrency} class="input" required>
 				{#each currencyOptions as currency}

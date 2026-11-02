@@ -275,6 +275,8 @@ smallest set.
 | `requirements:write` | Create, update, and delete requirements. |
 | `home-tasks:read` | View home tasks. |
 | `home-tasks:write` | Create, toggle, and delete home tasks. |
+| `mail-holds:read` | View trip mail holds. |
+| `mail-holds:write` | Create, update, and delete trip mail holds. |
 | `medications:read` | View trip medications. |
 | `medications:write` | Create and delete medications. |
 | `cards:read` | View safe card metadata and benefits. |

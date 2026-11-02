@@ -1,5 +1,6 @@
 import * as tripsRepo from './repositories/tripsRepo';
 import { listSegmentsForTrip } from './repositories/segmentsRepo';
+import { listMailHoldsForTrip } from './repositories/tripMiscRepo';
 import { utcToLocal } from './tz';
 import { tripTags } from './sharing';
 import type { SegmentType } from './db/mongrelSchema';
@@ -28,12 +29,24 @@ interface ExportedTrip {
 	tags?: string[];
 	defaultVisibility?: string;
 	segments?: ExportedSegment[];
+	mailHolds?: ExportedMailHold[];
+}
+
+interface ExportedMailHold {
+	carrier: string;
+	startDate: string;
+	endDate: string;
+	confirmationNumber?: string;
+	addressLabel?: string;
+	notes?: string;
+	status: string;
 }
 
 export function exportTrips(userId: number): ExportedTrip[] {
 	const owned = tripsRepo.listTripsForUser(userId);
 	return owned.map((t) => {
 		const segs = listSegmentsForTrip(t.id);
+		const holds = listMailHoldsForTrip(t.id);
 		return {
 			name: t.name,
 			destinationCountryCode: t.destinationCountryCode ?? undefined,
@@ -55,6 +68,15 @@ export function exportTrips(userId: number): ExportedTrip[] {
 				location: s.location ?? undefined,
 				confirmationNumber: s.confirmationNumber ?? undefined,
 				details: s.detailsJson ? (JSON.parse(s.detailsJson) as Record<string, unknown>) : undefined
+			})),
+			mailHolds: holds.map((hold) => ({
+				carrier: hold.carrier,
+				startDate: hold.startDate,
+				endDate: hold.endDate,
+				confirmationNumber: hold.confirmationNumber ?? undefined,
+				addressLabel: hold.addressLabel ?? undefined,
+				notes: hold.notes ?? undefined,
+				status: hold.status
 			}))
 		};
 	});

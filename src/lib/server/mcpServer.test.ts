@@ -143,6 +143,39 @@ describe('mcpServer', () => {
 		expect((await call('roamarr_doc_link_list', { tripId: trip.id })).items[0]).toMatchObject({ label: 'Voucher', notes: 'offline copy' });
 	});
 
+	test('mail hold tools enforce scopes, confirmation, and coverage', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Mail trip', startDate: '2026-09-01', endDate: '2026-09-20' });
+		const denied = await connect(userId, ['trips:read']);
+		const missing: any = await denied.client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(missing.isError).toBe(true);
+		expect(missing.content[0].text).toContain('mail-holds:read');
+
+		const { client } = await connect(userId, ['mail-holds:read', 'mail-holds:write']);
+		const call = async (name: string, arguments_: Record<string, unknown>) => {
+			const result: any = await client.callTool({ name, arguments: arguments_ });
+			expect(result.isError, result.content?.[0]?.text).toBeFalsy();
+			return JSON.parse(result.content[0].text);
+		};
+		const created = await call('roamarr_mail_hold_create', {
+			tripId: trip.id,
+			startDate: '2026-09-01',
+			endDate: '2026-10-15',
+			confirmationNumber: 'HOLDSECRET',
+			addressLabel: 'HOMEADDR'
+		});
+		expect(created.warning).toMatch(/30 days/);
+		expect(created.hold.confirmationNumber).toBe('HOLDSECRET');
+		const listed = await call('roamarr_mail_hold_list', { tripId: trip.id });
+		expect(listed.items[0].addressLabel).toBe('HOMEADDR');
+		const coverage = await call('roamarr_mail_hold_coverage', { tripId: trip.id });
+		expect(coverage.awayDatesKnown).toBe(true);
+		expect(coverage.renewals[0].renewalDate).toBe('2026-10-15');
+		const unconfirmed: any = await client.callTool({ name: 'roamarr_mail_hold_delete', arguments: { holdId: created.id } });
+		expect(unconfirmed.isError).toBe(true);
+		await call('roamarr_mail_hold_delete', { holdId: created.id, confirm: true });
+		expect((await call('roamarr_mail_hold_list', { tripId: trip.id })).items).toHaveLength(0);
+	});
+
 	test('read-only collaborators can load every native planning workflow', async () => {
 		const viewerId = makeUser(ctx.kit).id;
 		const trip = tripsRepo.createTrip(userId, { name: 'Shared planning' });
@@ -2099,7 +2132,7 @@ describe('mcpServer', () => {
 			const { client } = await connect(userId, ['trips:read']);
 			const { tools } = await client.listTools();
 			const names = tools.map((t) => t.name);
-			expect(names).toHaveLength(139);
+			expect(names).toHaveLength(144);
 			expect(names).toEqual(expect.arrayContaining([
 				'roamarr_attachment_upload',
 				'roamarr_attachment_list',

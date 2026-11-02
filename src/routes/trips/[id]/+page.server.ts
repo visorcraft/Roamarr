@@ -32,6 +32,12 @@ import {
 	deleteHomeTaskAction
 } from '$lib/server/tripHomeTasks';
 import {
+	addMailHoldAction,
+	updateMailHoldAction,
+	deleteMailHoldAction,
+	addNextMailHoldAction
+} from '$lib/server/tripMailHolds';
+import {
 	addMedicationAction,
 	deleteMedicationAction
 } from '$lib/server/tripMedications';
@@ -128,6 +134,10 @@ export const actions: Actions = {
 	addHomeTask: addHomeTaskAction,
 	toggleHomeTask: toggleHomeTaskAction,
 	deleteHomeTask: deleteHomeTaskAction,
+	addMailHold: addMailHoldAction,
+	updateMailHold: updateMailHoldAction,
+	deleteMailHold: deleteMailHoldAction,
+	addNextMailHold: addNextMailHoldAction,
 	addMedication: addMedicationAction,
 	deleteMedication: deleteMedicationAction,
 	addEntryRequirement: addEntryRequirementAction,

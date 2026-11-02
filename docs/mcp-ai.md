@@ -110,9 +110,9 @@ Start read-only. Add write scopes only after the read connection works.
 | Trip planner | Read scopes above plus `trips:write`, `segments:write`, `packing:write`, `reminders:write` |
 | Budget assistant | `trips:read`, `budgets:read`, `expenses:read`; add matching write scopes to edit |
 | Travel wallet summary | `cards:read`, `loyalty:read`, `insurance:read`, `travel-docs:read` |
-| Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read` |
+| Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read`, `mail-holds:read` |
 
-Roamarr currently exposes 69 scopes. Trip and segment file tools use the existing
+Roamarr currently exposes 71 scopes. Trip and segment file tools use the existing
 `trips:read` and `trips:write` scopes, the same ones as the mobile documents API.
 Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
@@ -191,7 +191,7 @@ Useful requests to give an AI assistant:
 
 ## Surface
 
-The current server exposes 139 tools, 16 prompts, and 9 resource templates.
+The current server exposes 144 tools, 16 prompts, and 9 resource templates.
 `tools/list` is the complete current tool catalog and includes every JSON input
 schema. Use live list methods because the surface can change between releases,
 and clients see only prompts/resources allowed by their scopes.
@@ -207,6 +207,11 @@ and clients see only prompts/resources allowed by their scopes.
 | `roamarr_day_plan` | `segments:write` | Create an itinerary segment. |
 | `roamarr_upcoming_summary` | `trips:read` | Summarize upcoming trips. |
 | `roamarr_packing_item_add` | `packing:write` | Add one checklist item. |
+| `roamarr_mail_hold_list` | `mail-holds:read` | List a trip's mail holds. |
+| `roamarr_mail_hold_create` | `mail-holds:write` | Add a mail hold. |
+| `roamarr_mail_hold_update` | `mail-holds:write` | Change a mail hold. |
+| `roamarr_mail_hold_delete` | `mail-holds:write` | Delete a mail hold (`confirm: true`). |
+| `roamarr_mail_hold_coverage` | `mail-holds:read` | Show uncovered away days and renewal dates. |
 | `roamarr_packing_list_build` | `packing:write` | Apply a template or list a checklist. |
 | `roamarr_budget_set` | `budgets:write` | Set a trip budget category. |
 | `roamarr_budget_update` | `budgets:read` | View budget and spent amounts. |

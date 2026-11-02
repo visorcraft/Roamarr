@@ -22,6 +22,7 @@ import {
 	listJournalEntriesForTrip,
 	listDocumentLinksForTrip,
 	listHomeTasksForTrip,
+	listMailHoldsForTrip,
 	listMedicationsForTrip,
 	listEntryRequirementsForTrip,
 	listImportantItemsForTrip
@@ -29,6 +30,7 @@ import {
 import { listTripDocuments, listDocumentsBySegment } from './tripDocuments';
 import { listGalleryImages } from './gallery';
 import { listDayNotesForTrip } from './tripDayNotes';
+import { emptyMailHoldCoverage, coverMailHolds } from './mailHoldCoverage';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -114,6 +116,11 @@ export async function buildTripDetail(
 	// for non-editors), unlike the editor-only private modules above.
 	const dayNotes = listDayNotesForTrip(view.trip.id);
 	const homeTasks = view.editor ? listHomeTasksForTrip(view.trip.id) : [];
+	const mailHolds = view.editor ? listMailHoldsForTrip(view.trip.id) : [];
+	const mailHoldCoverage = view.editor
+		? coverMailHolds(view.trip.startDate, view.trip.endDate, mailHolds)
+		: emptyMailHoldCoverage();
+	const mailHoldIds = new Set(mailHolds.map((hold) => hold.id));
 	const medications = view.editor ? listMedicationsForTrip(view.trip.id) : [];
 	const entryRequirements = view.editor ? listEntryRequirementsForTrip(view.trip.id) : [];
 	const importantItems = view.editor ? listImportantItemsForTrip(view.trip.id) : [];
@@ -123,7 +130,8 @@ export async function buildTripDetail(
 		? listRemindersForUser(u.id).filter(
 				(r) =>
 					(r.refType === 'trip' && r.refId === view.trip.id) ||
-					(r.refType === 'segment' && segmentIdSet.has(r.refId))
+					(r.refType === 'segment' && segmentIdSet.has(r.refId)) ||
+					(r.refType === 'mail_hold' && mailHoldIds.has(r.refId))
 		  )
 		: [];
 	const stats = computeTripStats(
@@ -201,6 +209,8 @@ export async function buildTripDetail(
 			tripTemplates,
 			emergencyContacts,
 			homeTasks,
+			mailHolds,
+			mailHoldCoverage,
 			medications,
 			entryRequirements,
 			importantItems,
@@ -230,6 +240,8 @@ export async function buildTripDetail(
 		attendeesBySegment,
 		comments: view.editor ? listComments(view.trip.id) : [],
 		homeTasks,
+		mailHolds,
+		mailHoldCoverage,
 		medications,
 		entryRequirements,
 		importantItems,

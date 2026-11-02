@@ -17,18 +17,23 @@ import {
 import { deliver } from './notify';
 import { error } from '@sveltejs/kit';
 import { nowIso } from './tz';
+import { getMailHoldById } from './repositories/tripMiscRepo';
+import { DEFAULT_MAIL_HOLD_LEAD_DAYS } from './mailHoldCoverage';
 
 type Segment = ReturnType<typeof segmentsRepo.toSegmentRow>;
 type Doc = profileRepo.TravelDocument;
 type Reminder = ReminderRow;
+type ReminderKind = 'flight_checkin' | 'document_expiry' | 'custom' | 'mail_hold';
+type ReminderRef = 'segment' | 'document' | 'trip' | 'mail_hold';
 
 export function computeFireAt(
-	kind: 'flight_checkin' | 'document_expiry' | 'custom',
+	kind: ReminderKind,
 	ref: string,
 	opts: {
 		tz?: string;
 		flightCheckinLeadHours?: number;
 		documentExpiryLeadDays?: number;
+		mailHoldLeadDays?: number;
 		customOffsetMinutes?: number;
 	} = {}
 ): string {
@@ -36,20 +41,21 @@ export function computeFireAt(
 		const offset = opts.customOffsetMinutes ?? 0;
 		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ minutes: offset }).toUTC().toISO()!;
 	}
-	const { tz = 'UTC', flightCheckinLeadHours = 24, documentExpiryLeadDays = 90 } = opts;
+	const { tz = 'UTC', flightCheckinLeadHours = 24, documentExpiryLeadDays = 90, mailHoldLeadDays = DEFAULT_MAIL_HOLD_LEAD_DAYS } = opts;
 	if (kind === 'flight_checkin')
 		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ hours: flightCheckinLeadHours }).toUTC().toISO()!;
+	const leadDays = kind === 'mail_hold' ? mailHoldLeadDays : documentExpiryLeadDays;
 	return DateTime.fromISO(ref, { zone: tz })
 		.set({ hour: 9, minute: 0, second: 0, millisecond: 0 })
-		.minus({ days: documentExpiryLeadDays })
+		.minus({ days: leadDays })
 		.toUTC()
 		.toISO()!;
 }
 
 function arm(
 	userId: number,
-	kind: 'flight_checkin' | 'document_expiry' | 'custom',
-	refType: 'segment' | 'document' | 'trip',
+	kind: ReminderKind,
+	refType: ReminderRef,
 	refId: number,
 	fireAt: string
 ) {
@@ -106,8 +112,28 @@ export function upsertRemindersForDocument(doc: Doc) {
 	);
 }
 
-export function cancelRemindersFor(refType: 'segment' | 'document' | 'trip', refId: number) {
+export function cancelRemindersFor(refType: ReminderRef, refId: number) {
 	deleteRemindersForRef(refType, refId);
+}
+
+export function upsertRemindersForMailHold(
+	userId: number,
+	holdId: number,
+	endDate: string,
+	tz: string,
+	leadDays: number
+) {
+	arm(
+		userId,
+		'mail_hold',
+		'mail_hold',
+		holdId,
+		computeFireAt('mail_hold', endDate, { tz, mailHoldLeadDays: leadDays })
+	);
+}
+
+export function cancelMailHoldReminder(holdId: number) {
+	deleteRemindersForRef('mail_hold', holdId);
 }
 
 export function listRemindersForUser(userId: number) {
@@ -216,6 +242,14 @@ function messageFor(r: Reminder): { title: string; body: string; link: string } 
 			title: 'Document expiring',
 			body: 'A travel document is expiring soon.',
 			link: `/profile/documents`
+		};
+	}
+	if (r.kind === 'mail_hold') {
+		const hold = getMailHoldById(r.refId);
+		return {
+			title: 'Mail hold ending',
+			body: 'A mail hold ends soon. Renew it if you will still be away.',
+			link: hold ? `/trips/${hold.tripId}` : '/trips'
 		};
 	}
 	return {

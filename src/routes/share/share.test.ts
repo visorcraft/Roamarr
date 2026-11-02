@@ -14,6 +14,7 @@ import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
 import { _loadByToken as loadByToken, load } from './[token]/+page.server';
 import { resetRateLimit } from '$lib/server/rateLimit';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
+import { createMailHold } from '$lib/server/repositories/tripMiscRepo';
 
 test('valid token returns projection without sensitive data; bad token 404s', () => {
 	const a = makeUser(kit, { email: 'a@x.c', passwordHash: 'x', displayName: 'A' });
@@ -25,9 +26,19 @@ test('valid token returns projection without sensitive data; bad token 404s', ()
 			startTz: 'UTC',
 			confirmationNumber: 'CONF'
 		});
+	createMailHold({
+		tripId: t.id,
+		carrier: 'USPS',
+		startDate: '2026-07-01',
+		endDate: '2026-07-10',
+		confirmationNumber: 'HOLDSECRET',
+		addressLabel: 'HOMEADDR'
+	});
 	const data = loadByToken('tok123') as { trip: { segments: unknown[] } };
 	expect(JSON.stringify(data)).not.toContain('SECRET');
 	expect(JSON.stringify(data)).not.toContain('CONF');
+	expect(JSON.stringify(data)).not.toContain('HOLDSECRET');
+	expect(JSON.stringify(data)).not.toContain('HOMEADDR');
 	expect(() => loadByToken('nope')).toThrow();
 });
 

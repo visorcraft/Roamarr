@@ -45,6 +45,7 @@ export async function registerUser(emailRaw: string, password: string, displayNa
 		timezone: defaults.defaultTimezone,
 		flight_checkin_lead_hours: BigInt(defaults.defaultFlightCheckinLeadHours),
 		document_expiry_lead_days: BigInt(defaults.defaultDocumentExpiryLeadDays),
+		mail_hold_lead_days: BigInt(defaults.defaultMailHoldLeadDays),
 		email_notifications: true,
 		webhook_notifications: true,
 		theme_id: 'system',
@@ -59,7 +60,8 @@ export async function registerUser(emailRaw: string, password: string, displayNa
 		role: user.role,
 		timezone: user.timezone,
 		flightCheckinLeadHours: Number(user.flight_checkin_lead_hours),
-		documentExpiryLeadDays: Number(user.document_expiry_lead_days)
+		documentExpiryLeadDays: Number(user.document_expiry_lead_days),
+		mailHoldLeadDays: Number(user.mail_hold_lead_days ?? 3)
 	};
 }
 

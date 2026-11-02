@@ -19,7 +19,9 @@ import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
-import { makeUser, makeTrip, makeSegment } from '../../../tests/helpers';
+import { makeUser, makeTrip, makeSegment, makeShare } from '../../../tests/helpers';
+import { MAX_SIZE } from './attachments/attachmentService';
+import { MCP_ATTACHMENT_INLINE_MAX_BYTES } from './mcpHelpers';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { updateSettings } from './settings';
 
@@ -2051,6 +2053,390 @@ describe('mcpServer', () => {
 				arguments: { tripId: foreign.id, date: DAY }
 			});
 			expect(idor.isError).toBe(true);
+		});
+	});
+
+	describe('attachment tools', () => {
+		async function withAttachmentsDir<T>(fn: () => Promise<T>): Promise<T> {
+			const { mkdtempSync, rmSync } = await import('node:fs');
+			const { tmpdir } = await import('node:os');
+			const path = await import('node:path');
+			const original = process.env.ATTACHMENTS_PATH;
+			const dir = mkdtempSync(path.join(tmpdir(), 'roamarr-mcp-attachment-'));
+			process.env.ATTACHMENTS_PATH = dir;
+			try {
+				return await fn();
+			} finally {
+				if (original === undefined) delete process.env.ATTACHMENTS_PATH;
+				else process.env.ATTACHMENTS_PATH = original;
+				rmSync(dir, { recursive: true, force: true });
+			}
+		}
+
+		function pdfBytes(body: string): Buffer {
+			return Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.from(body)]);
+		}
+
+		function pdfBase64(body: string): string {
+			return pdfBytes(body)
+				.toString('base64')
+				.replace(/=+$/, '')
+				.replace(/\+/g, '-')
+				.replace(/\//g, '_');
+		}
+
+		async function call(client: Client, name: string, arguments_: Record<string, unknown>) {
+			const result: any = await client.callTool({ name, arguments: arguments_ });
+			return result;
+		}
+
+		function parse(result: { isError?: boolean; content?: Array<{ text?: string }> }) {
+			if (result.isError) throw new Error(result.content?.[0]?.text ?? 'tool error');
+			return JSON.parse(result.content?.[0]?.text ?? '{}');
+		}
+
+		test('lists the attachment tools', async () => {
+			const { client } = await connect(userId, ['trips:read']);
+			const { tools } = await client.listTools();
+			const names = tools.map((t) => t.name);
+			expect(names).toHaveLength(139);
+			expect(names).toEqual(expect.arrayContaining([
+				'roamarr_attachment_upload',
+				'roamarr_attachment_list',
+				'roamarr_attachment_get',
+				'roamarr_attachment_delete'
+			]));
+			const upload = tools.find((t) => t.name === 'roamarr_attachment_upload');
+			expect(upload?.inputSchema.required).toEqual(['filename', 'mimeType', 'contentBase64']);
+			const remove = tools.find((t) => t.name === 'roamarr_attachment_delete');
+			expect(remove?.inputSchema.required).toEqual(['documentId']);
+		});
+
+		test('read tools require trips:read and write tools require trips:write', async () => {
+			const reader = await connect(userId, ['trips:write']);
+			const listed: any = await call(reader.client, 'roamarr_attachment_list', { tripId: 1 });
+			expect(listed.isError).toBe(true);
+			expect(listed.content[0].text).toContain('trips:read');
+
+			const writer = await connect(userId, ['trips:read']);
+			const uploaded: any = await call(writer.client, 'roamarr_attachment_upload', {
+				tripId: 1,
+				filename: 'voucher.pdf',
+				mimeType: 'application/pdf',
+				contentBase64: pdfBase64('nope')
+			});
+			expect(uploaded.isError).toBe(true);
+			expect(uploaded.content[0].text).toContain('trips:write');
+			const deleted: any = await call(writer.client, 'roamarr_attachment_delete', {
+				documentId: 1,
+				confirm: true
+			});
+			expect(deleted.isError).toBe(true);
+			expect(deleted.content[0].text).toContain('trips:write');
+		});
+
+		test('uploads, lists, fetches, and deletes a trip PDF', async () => {
+			await withAttachmentsDir(async () => {
+				const trip = makeTrip(ctx.kit, userId, { name: 'Voucher trip' });
+				const { client } = await connect(userId, ['trips:read', 'trips:write']);
+				const raw = pdfBytes('shuttle voucher');
+				const uploaded: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'shuttle.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: pdfBase64('shuttle voucher'),
+					label: 'Shuttle voucher',
+					notes: 'gate B'
+				});
+				expect(uploaded.isError, uploaded.content?.[0]?.text).toBeFalsy();
+				const created = parse(uploaded);
+				expect(created).toMatchObject({
+					tripId: trip.id,
+					segmentId: null,
+					label: 'Shuttle voucher',
+					notes: 'gate B',
+					filename: 'shuttle.pdf',
+					contentType: 'application/pdf',
+					sizeBytes: raw.length
+				});
+				expect(created.attachmentId).toBeUndefined();
+				expect(created.storageKey).toBeUndefined();
+
+				const listed = parse(await call(client, 'roamarr_attachment_list', { tripId: trip.id }));
+				expect(listed.items).toHaveLength(1);
+				expect(listed.items[0].id).toBe(created.id);
+				expect(listed.items[0].attachmentId).toBeUndefined();
+
+				const meta = parse(await call(client, 'roamarr_attachment_get', { documentId: created.id }));
+				expect(meta.document.filename).toBe('shuttle.pdf');
+				expect(meta.contentBase64).toBeUndefined();
+
+				const got = parse(
+					await call(client, 'roamarr_attachment_get', { documentId: created.id, includeContent: true })
+				);
+				expect(got.contentIncluded).toBe(true);
+				expect(Buffer.from(got.contentBase64, 'base64').equals(raw)).toBe(true);
+
+				const unconfirmed: any = await call(client, 'roamarr_attachment_delete', { documentId: created.id });
+				expect(unconfirmed.isError).toBe(true);
+				expect(unconfirmed.content[0].text).toContain('confirm: true');
+
+				const removed = parse(
+					await call(client, 'roamarr_attachment_delete', { documentId: created.id, confirm: true })
+				);
+				expect(removed).toEqual({ ok: true, documentId: created.id });
+				const after: any = await call(client, 'roamarr_attachment_get', { documentId: created.id });
+				expect(after.isError).toBe(true);
+				expect((await call(client, 'roamarr_attachment_list', { tripId: trip.id })).content[0].text).toContain(
+					'"items": []'
+				);
+			});
+		});
+
+		test('attaches a file to a segment and filters the list', async () => {
+			await withAttachmentsDir(async () => {
+				const trip = makeTrip(ctx.kit, userId, { name: 'Segment files' });
+				const flight = makeSegment(ctx.kit, trip.id, { title: 'Flight', type: 'flight' });
+				const hotel = makeSegment(ctx.kit, trip.id, { title: 'Hotel', type: 'hotel' });
+				const { client } = await connect(userId, ['trips:read', 'trips:write']);
+				const onSegment = parse(
+					await call(client, 'roamarr_attachment_upload', {
+						segmentId: flight.id,
+						filename: 'boarding-pass.pdf',
+						mimeType: 'Application/PDF',
+						contentBase64: pdfBase64('boarding')
+					})
+				);
+				expect(onSegment.tripId).toBe(trip.id);
+				expect(onSegment.segmentId).toBe(flight.id);
+				expect(onSegment.contentType).toBe('application/pdf');
+
+				const gpx = Buffer.from('<?xml version="1.0"?><gpx version="1.1"><trk></trk></gpx>');
+				const track = parse(
+					await call(client, 'roamarr_attachment_upload', {
+						tripId: trip.id,
+						filename: 'hike.gpx',
+						mimeType: 'application/gpx+xml',
+						contentBase64: gpx.toString('base64')
+					})
+				);
+				expect(track.segmentId).toBeNull();
+				expect(track.contentType).toBe('application/gpx+xml');
+
+				const forFlight = parse(
+					await call(client, 'roamarr_attachment_list', { segmentId: flight.id })
+				);
+				expect(forFlight.tripId).toBe(trip.id);
+				expect(forFlight.items.map((item: { id: number }) => item.id)).toEqual([onSegment.id]);
+
+				const forHotel = parse(
+					await call(client, 'roamarr_attachment_list', { tripId: trip.id, segmentId: hotel.id })
+				);
+				expect(forHotel.items).toEqual([]);
+
+				const all = parse(await call(client, 'roamarr_attachment_list', { tripId: trip.id }));
+				expect(all.items).toHaveLength(2);
+			});
+		});
+
+		test('rejects invalid uploads and files the caller cannot access', async () => {
+			await withAttachmentsDir(async () => {
+				const trip = makeTrip(ctx.kit, userId, { name: 'Guarded' });
+				const segment = makeSegment(ctx.kit, trip.id, { title: 'Leg' });
+				const otherId = makeUser(ctx.kit).id;
+				const foreign = makeTrip(ctx.kit, otherId, { name: 'Foreign' });
+				const foreignSegment = makeSegment(ctx.kit, foreign.id, { title: 'Theirs' });
+				const { client } = await connect(userId, ['trips:read', 'trips:write']);
+
+				const missing: any = await call(client, 'roamarr_attachment_upload', {
+					filename: 'a.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: pdfBase64('x')
+				});
+				expect(missing.isError).toBe(true);
+				expect(missing.content[0].text).toContain('tripId or segmentId is required');
+
+				const pathName: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: '../voucher.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: pdfBase64('x')
+				});
+				expect(pathName.isError).toBe(true);
+				expect(pathName.content[0].text).toContain('path separators');
+
+				const badType: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'notes.txt',
+					mimeType: 'text/plain',
+					contentBase64: Buffer.from('hello').toString('base64')
+				});
+				expect(badType.isError).toBe(true);
+				expect(badType.content[0].text).toContain('Only JPEG, PNG, WebP, PDF, or GPX');
+
+				const badMagic: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'fake.png',
+					mimeType: 'image/png',
+					contentBase64: pdfBase64('not a png')
+				});
+				expect(badMagic.isError).toBe(true);
+				expect(badMagic.content[0].text).toContain('does not match');
+
+				const badB64: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'voucher.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: '!!!!'
+				});
+				expect(badB64.isError).toBe(true);
+				expect(badB64.content[0].text).toContain('not valid base64');
+
+				const tooBig: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'huge.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: Buffer.alloc(MAX_SIZE + 1).toString('base64')
+				});
+				expect(tooBig.isError).toBe(true);
+				expect(tooBig.content[0].text).toContain('10 MB or smaller');
+
+				const wrongSegment: any = await call(client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					segmentId: foreignSegment.id,
+					filename: 'voucher.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: pdfBase64('x')
+				});
+				expect(wrongSegment.isError).toBe(true);
+				expect(wrongSegment.content[0].text).toContain('Segment not found on this trip');
+
+				const created = parse(
+					await call(client, 'roamarr_attachment_upload', {
+						tripId: trip.id,
+						segmentId: segment.id,
+						filename: 'mine.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: pdfBase64('mine')
+					})
+				);
+				const stranger = await connect(otherId, ['trips:read', 'trips:write']);
+				for (const [name, arguments_] of [
+					['roamarr_attachment_list', { tripId: trip.id }],
+					['roamarr_attachment_list', { segmentId: segment.id }],
+					['roamarr_attachment_get', { documentId: created.id, includeContent: true }],
+					['roamarr_attachment_upload', {
+						tripId: trip.id,
+						filename: 'nope.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: pdfBase64('nope')
+					}],
+					['roamarr_attachment_delete', { documentId: created.id, confirm: true }]
+				] as const) {
+					const denied: any = await call(stranger.client, name, arguments_);
+					expect(denied.isError, name).toBe(true);
+				}
+				const stillThere = parse(await call(client, 'roamarr_attachment_list', { tripId: trip.id }));
+				expect(stillThere.items).toHaveLength(1);
+
+				const wrongTrip: any = await call(client, 'roamarr_attachment_get', {
+					documentId: created.id,
+					tripId: foreign.id,
+					includeContent: true
+				});
+				expect(wrongTrip.isError).toBe(true);
+				const wrongDelete: any = await call(client, 'roamarr_attachment_delete', {
+					documentId: created.id,
+					tripId: foreign.id,
+					confirm: true
+				});
+				expect(wrongDelete.isError).toBe(true);
+				expect(
+					parse(await call(client, 'roamarr_attachment_list', { tripId: trip.id })).items
+				).toHaveLength(1);
+			});
+		});
+
+		test('a read share can fetch a file and an edit share can upload one', async () => {
+			await withAttachmentsDir(async () => {
+				const trip = makeTrip(ctx.kit, userId, { name: 'Shared files' });
+				const readerId = makeUser(ctx.kit).id;
+				const editorId = makeUser(ctx.kit).id;
+				makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: readerId, permission: 'read' });
+				makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: editorId, permission: 'edit' });
+				const owner = await connect(userId, ['trips:read', 'trips:write']);
+				const created = parse(
+					await call(owner.client, 'roamarr_attachment_upload', {
+						tripId: trip.id,
+						filename: 'voucher.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: pdfBase64('shared voucher')
+					})
+				);
+
+				const reader = await connect(readerId, ['trips:read', 'trips:write']);
+				const listed = parse(await call(reader.client, 'roamarr_attachment_list', { tripId: trip.id }));
+				expect(listed.items[0].filename).toBe('voucher.pdf');
+				const got = parse(
+					await call(reader.client, 'roamarr_attachment_get', {
+						documentId: created.id,
+						includeContent: true
+					})
+				);
+				expect(Buffer.from(got.contentBase64, 'base64').toString('utf8')).toContain('shared voucher');
+				const readerUpload: any = await call(reader.client, 'roamarr_attachment_upload', {
+					tripId: trip.id,
+					filename: 'extra.pdf',
+					mimeType: 'application/pdf',
+					contentBase64: pdfBase64('extra')
+				});
+				expect(readerUpload.isError).toBe(true);
+				const readerDelete: any = await call(reader.client, 'roamarr_attachment_delete', {
+					documentId: created.id,
+					confirm: true
+				});
+				expect(readerDelete.isError).toBe(true);
+
+				const editor = await connect(editorId, ['trips:write', 'trips:read']);
+				const added = parse(
+					await call(editor.client, 'roamarr_attachment_upload', {
+						tripId: trip.id,
+						filename: 'editor.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: pdfBase64('editor copy')
+					})
+				);
+				expect(added.filename).toBe('editor.pdf');
+				expect(parse(await call(owner.client, 'roamarr_attachment_list', { tripId: trip.id })).items).toHaveLength(
+					2
+				);
+			});
+		});
+
+		test('omits inline bytes above 1 MB and still returns metadata', async () => {
+			await withAttachmentsDir(async () => {
+				const trip = makeTrip(ctx.kit, userId, { name: 'Large voucher' });
+				const { client } = await connect(userId, ['trips:read', 'trips:write']);
+				const bytes = Buffer.alloc(MCP_ATTACHMENT_INLINE_MAX_BYTES + 1);
+				bytes.set(Buffer.from('%PDF-1.4\n'), 0);
+				const uploaded = parse(
+					await call(client, 'roamarr_attachment_upload', {
+						tripId: trip.id,
+						filename: 'long.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: bytes.toString('base64')
+					})
+				);
+				expect(uploaded.sizeBytes).toBe(bytes.length);
+				const got = parse(
+					await call(client, 'roamarr_attachment_get', { documentId: uploaded.id, includeContent: true })
+				);
+				expect(got.contentIncluded).toBe(false);
+				expect(got.contentBase64).toBeNull();
+				expect(got.maxInlineBytes).toBe(MCP_ATTACHMENT_INLINE_MAX_BYTES);
+				expect(got.document.filename).toBe('long.pdf');
+				expect(got.contentOmittedReason).toContain(String(bytes.length));
+			});
 		});
 	});
 });

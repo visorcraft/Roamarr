@@ -63,6 +63,27 @@ PDFs use an `inline` disposition so QR codes and vouchers can open in the
 browser; GPX and any other type is served as an `attachment` download and is
 never rendered inline.
 
+## MCP
+
+The same files are available to an OAuth or API-key client under the existing
+`trips:read` and `trips:write` scopes (there is no separate attachment scope):
+
+- `roamarr_attachment_upload` — `tripId` and/or `segmentId`, `filename`,
+  `mimeType`, and `contentBase64` (standard or URL-safe base64). Optional
+  `label` and `notes`. Maximum 10 MB. The server checks the type and magic
+  bytes, then stores the file through the encrypted attachment service.
+- `roamarr_attachment_list` — pass `tripId`, `segmentId`, or both.
+- `roamarr_attachment_get` — metadata for a `documentId`. Set `includeContent`
+  to `true` to also receive base64 bytes when the file is at most 1 MB.
+- `roamarr_attachment_delete` — requires `confirm: true`.
+
+Upload and delete require edit access. List and get follow the download route:
+anyone who can view the trip, including a read share, can fetch the file.
+A client cannot pass a local filesystem path; the bytes have to be inline
+because the MCP server may be running on another machine.
+
+See [MCP and AI access](./mcp-ai.md).
+
 ## GPX tracks on the map
 
 When Maps are enabled, GPX files attached to the trip (or to a segment) render

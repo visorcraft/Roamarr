@@ -112,7 +112,9 @@ Start read-only. Add write scopes only after the read connection works.
 | Travel wallet summary | `cards:read`, `loyalty:read`, `insurance:read`, `travel-docs:read` |
 | Full pre-trip briefing | `trips:read`, `segments:read`, `packing:read`, `budgets:read`, `expenses:read`, `profile:read`, `travel-docs:read`, `polls:read`, `home-tasks:read`, `medications:read` |
 
-Roamarr currently exposes 69 scopes. Always fetch `scopes_supported` from OAuth
+Roamarr currently exposes 69 scopes. Trip and segment file tools use the existing
+`trips:read` and `trips:write` scopes, the same ones as the mobile documents API.
+Always fetch `scopes_supported` from OAuth
 discovery instead of hard-coding the full list. Scope descriptions shown in the
 MCP Clients UI come from `src/lib/oauthScopes.ts`.
 
@@ -189,7 +191,7 @@ Useful requests to give an AI assistant:
 
 ## Surface
 
-The current server exposes 135 tools, 16 prompts, and 9 resource templates.
+The current server exposes 139 tools, 16 prompts, and 9 resource templates.
 `tools/list` is the complete current tool catalog and includes every JSON input
 schema. Use live list methods because the surface can change between releases,
 and clients see only prompts/resources allowed by their scopes.
@@ -225,15 +227,22 @@ and clients see only prompts/resources allowed by their scopes.
 | `roamarr_gallery_reorder` | `gallery:write` | Reorder a gallery (full id permutation). |
 | `roamarr_gallery_set_caption` | `gallery:write` | Set or clear a photo caption. |
 | `roamarr_gallery_remove` | `gallery:write` | Remove a gallery photo (`confirm`). |
+| `roamarr_attachment_upload` | `trips:write` | Upload a PDF, image, or GPX file (base64, max 10 MB) onto a trip or segment. |
+| `roamarr_attachment_list` | `trips:read` | List files for a trip or segment. |
+| `roamarr_attachment_get` | `trips:read` | Read file metadata. `includeContent` returns base64 up to 1 MB. |
+| `roamarr_attachment_delete` | `trips:write` | Delete a trip or segment file (`confirm`). |
 | `roamarr_reminder_add` | `reminders:write` | Add a trip reminder. |
 
 `tools/list` returns every current tool and its JSON input schema. Treat that
 schema as authoritative, especially for required IDs, enums, pagination,
 amount units, and `confirm`.
 
-Binary file transfer does not exist over MCP: gallery photos, trip documents,
-receipts, and GPX tracks are uploaded in the web UI only. MCP tools manage
-their metadata (list, captions, ordering, removal).
+Gallery photos and expense receipts are still uploaded in the web UI (or the
+mobile upload routes). Trip and segment files — PDF, JPEG, PNG, WebP, and GPX —
+go through `roamarr_attachment_upload` as base64, up to 10 MB, into the same
+encrypted attachment store as the Documents tab. `roamarr_attachment_get`
+returns those bytes only when `includeContent` is true and the file is at most
+1 MB. Larger files return metadata so the client can use the web download.
 
 ### Prompts
 

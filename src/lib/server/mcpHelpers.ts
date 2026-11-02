@@ -125,6 +125,60 @@ export function reqString(value: unknown, fieldName: string, max = 1000): string
 	return s;
 }
 
+/**
+ * Largest plaintext file `roamarr_attachment_get` will return inline.
+ * Uploads still follow the attachment service limit (10 MB). 1 MB keeps an
+ * MCP JSON payload small enough for a remote client to fetch a voucher
+ * without pulling every boarding pass in one response.
+ */
+export const MCP_ATTACHMENT_INLINE_MAX_BYTES = 1024 * 1024;
+
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/** Decode standard or URL-safe base64 (padding optional) into a File for the attachment service. */
+export function fileFromAttachmentBase64(input: {
+	filename: string;
+	mimeType: string;
+	contentBase64: string;
+	maxBytes: number;
+}): File {
+	const compact = input.contentBase64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+	if (compact.length === 0) throw error(400, 'contentBase64 is required');
+	const padLength = compact.length % 4 === 0 ? 0 : 4 - (compact.length % 4);
+	const padded = padLength === 0 ? compact : compact + '='.repeat(padLength);
+	if (!BASE64_RE.test(padded)) throw error(400, 'contentBase64 is not valid base64');
+	// Reject an obvious overrun before allocating the decoded buffer. The
+	// exact byte check below still runs, because this bound is a few bytes loose.
+	const maxChars = Math.ceil(input.maxBytes / 3) * 4 + 4;
+	if (padded.length > maxChars) throw error(400, 'File must be 10 MB or smaller');
+	const bytes = Buffer.from(padded, 'base64');
+	if (bytes.length === 0) throw error(400, 'File is required');
+	if (bytes.length > input.maxBytes) throw error(400, 'File must be 10 MB or smaller');
+	return new File([new Uint8Array(bytes)], input.filename, { type: input.mimeType });
+}
+
+/** Read a decrypt stream into base64, refusing to buffer more than maxBytes. */
+export async function streamToBase64(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<string> {
+	const reader = stream.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (!value?.byteLength) continue;
+			total += value.byteLength;
+			if (total > maxBytes) throw error(400, 'File exceeds the inline content cap');
+			chunks.push(value);
+		}
+	} catch (e) {
+		await reader.cancel().catch(() => {});
+		throw e;
+	}
+	reader.releaseLock();
+	return Buffer.concat(chunks).toString('base64');
+}
+
 // Wrap a body that may throw SvelteKit `error(...)` and convert to an MCP
 // `isError: true` result. Use for any tool body that calls ownership /
 // validation helpers (requireOwnedTrip, requireEditableTrip, etc.) so a

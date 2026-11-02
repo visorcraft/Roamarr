@@ -28,8 +28,14 @@ import {
 	projectInsurance,
 	projectTravelDocument,
 	paginateList,
-	requireConfirm
+	requireConfirm,
+	optString,
+	reqString,
+	fileFromAttachmentBase64,
+	streamToBase64,
+	MCP_ATTACHMENT_INLINE_MAX_BYTES
 } from './mcpHelpers';
+import type { TripDocumentRow } from './repositories/tripDocumentsRepo';
 import { getSettings } from './settings';
 import { effectiveTripStatus, todayForUser } from './tripLifecycle';
 
@@ -528,6 +534,85 @@ function segmentList(trip: Record<string, unknown> | null, type: string): unknow
 // picker), and `resources/templates/list` advertises the URI template so a
 // client can construct a resource URI directly when it already knows the ID.
 // ---------------------------------------------------------------------------
+
+function positiveId(value: unknown, field: string): number {
+	const n =
+		typeof value === 'number'
+			? value
+			: typeof value === 'string' && value.trim() !== ''
+				? Number(value)
+				: Number.NaN;
+	if (!Number.isSafeInteger(n) || n < 1) throw error(400, `${field} must be a positive integer`);
+	return n;
+}
+
+function optionalPositiveId(value: unknown, field: string): number | null {
+	if (value == null || value === '') return null;
+	return positiveId(value, field);
+}
+
+function attachmentFilename(value: unknown): string {
+	const filename = reqString(value, 'filename', 255);
+	if (filename === '.' || filename === '..' || /[\\/\0]/.test(filename)) {
+		throw error(400, 'filename must not contain path separators');
+	}
+	return filename;
+}
+
+function attachmentMimeType(value: unknown): string {
+	const mime = reqString(value, 'mimeType', 127).split(';', 1)[0]!.trim().toLowerCase();
+	if (!mime) throw error(400, 'mimeType is required');
+	return mime;
+}
+
+function boundedOptional(value: unknown, field: string, max: number): string | null {
+	if (value == null) return null;
+	if (typeof value !== 'string') throw error(400, `${field} must be a string`);
+	return optString(value, max);
+}
+
+/** tripId, segmentId, or both. A segment id alone resolves its trip. */
+function resolveAttachmentTarget(args: Record<string, unknown>): { tripId: number; segmentId: number | null } {
+	const tripId = optionalPositiveId(args.tripId, 'tripId');
+	const segmentId = optionalPositiveId(args.segmentId, 'segmentId');
+	if (tripId == null && segmentId == null) throw error(400, 'tripId or segmentId is required');
+	if (tripId == null) {
+		const seg = segmentsRepo.getSegmentById(segmentId!);
+		if (!seg) throw error(404, 'Not found');
+		return { tripId: seg.tripId, segmentId };
+	}
+	return { tripId, segmentId };
+}
+
+function projectTripDocument(row: Omit<TripDocumentRow, 'attachmentId'>) {
+	return {
+		id: row.id,
+		tripId: row.tripId,
+		segmentId: row.segmentId,
+		label: row.label,
+		notes: row.notes,
+		filename: row.filename,
+		contentType: row.contentType,
+		sizeBytes: row.sizeBytes,
+		createdAt: row.createdAt
+	};
+}
+
+/** View-authorized trip document. Optional tripId must match the file's trip. */
+async function loadTripDocumentForView(userId: number, args: Record<string, unknown>) {
+	const documentId = positiveId(args.documentId, 'documentId');
+	const expectedTripId = optionalPositiveId(args.tripId, 'tripId');
+	const { getTripDocumentLinkById } = await import('./repositories/tripDocumentsRepo');
+	const link = getTripDocumentLinkById(documentId);
+	if (!link || (expectedTripId != null && link.tripId !== expectedTripId)) {
+		throw error(404, 'Document not found');
+	}
+	requireViewableTrip(userId, link.tripId);
+	const { listTripDocuments } = await import('./tripDocuments');
+	const row = listTripDocuments(link.tripId).find((item) => item.id === link.id);
+	if (!row) throw error(404, 'Document not found');
+	return { row };
+}
 
 const TRIP_RESOURCE_TEMPLATE = 'trip://{tripId}';
 const TRIP_RESOURCE_URI_RE = /^trip:\/\/(\d+)$/;
@@ -2170,6 +2255,74 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						caption: { type: 'string', description: 'Up to 200 characters; empty clears' }
 					},
 					required: ['imageId', 'caption']
+				}
+			},
+			{
+				name: 'roamarr_attachment_upload',
+				description:
+					'Upload a PDF, JPEG, PNG, WebP, or GPX file onto a trip or one itinerary segment (the trip Documents tab). Pass tripId, segmentId, or both. contentBase64 is the raw file bytes (standard or URL-safe base64). Maximum 10 MB. Optional label (200 characters) and notes (2000). This is not an expense receipt or a gallery photo.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number', description: 'Trip to attach the file to. Optional when segmentId is set.' },
+						segmentId: {
+							type: 'number',
+							description: 'Itinerary segment on that trip. Omit for a whole-trip file.'
+						},
+						filename: { type: 'string', description: 'Original file name, without a directory.' },
+						mimeType: {
+							type: 'string',
+							description: 'image/jpeg, image/png, image/webp, application/pdf, or a GPX type for a .gpx file.'
+						},
+						contentBase64: { type: 'string', description: 'Base64-encoded file bytes.' },
+						label: { type: 'string', description: 'Optional display label, up to 200 characters. Defaults to the filename.' },
+						notes: { type: 'string', description: 'Optional notes, up to 2000 characters.' }
+					},
+					required: ['filename', 'mimeType', 'contentBase64']
+				}
+			},
+			{
+				name: 'roamarr_attachment_list',
+				description:
+					'List files attached to a trip or one segment. Pass tripId, segmentId, or both. Cursor-paginated. Each id is the trip document id used by roamarr_attachment_get and roamarr_attachment_delete.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						tripId: { type: 'number' },
+						segmentId: { type: 'number', description: 'When set, only files on this segment are returned.' },
+						limit: { type: 'integer', description: '1-200, default 50' },
+						cursor: { type: 'string' }
+					}
+				}
+			},
+			{
+				name: 'roamarr_attachment_get',
+				description:
+					'Read one trip or segment file by documentId. Always returns metadata. Set includeContent to true to also return contentBase64 when the file is at most 1 MB (1048576 bytes). Larger files return metadata with contentIncluded false.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						documentId: { type: 'number', description: 'Trip document id from roamarr_attachment_list.' },
+						tripId: { type: 'number', description: 'Optional. When set, the file must belong to this trip.' },
+						includeContent: {
+							type: 'boolean',
+							description: 'When true, include base64 bytes if the file is within the 1 MB inline cap.'
+						}
+					},
+					required: ['documentId']
+				}
+			},
+			{
+				name: 'roamarr_attachment_delete',
+				description: 'Delete a trip or segment file by documentId. Requires confirm: true.',
+				inputSchema: {
+					type: 'object',
+					properties: {
+						documentId: { type: 'number' },
+						tripId: { type: 'number', description: 'Optional. When set, the file must belong to this trip.' },
+						confirm: { type: 'boolean', description: 'Must be true to confirm this destructive action.' }
+					},
+					required: ['documentId']
 				}
 			}
 		]
@@ -4043,6 +4196,105 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const image = setGalleryCaption(userId, Number(args.imageId), String(args.caption ?? ''));
 			return textResult(projectGalleryImage(image));
 		}
+			case 'roamarr_attachment_upload': {
+				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const target = resolveAttachmentTarget(args as Record<string, unknown>);
+				const filename = attachmentFilename(args.filename);
+				const mimeType = attachmentMimeType(args.mimeType);
+				if (typeof args.contentBase64 !== 'string') throw error(400, 'contentBase64 is required');
+				const { MAX_SIZE } = await import('./attachments/attachmentService');
+				const file = fileFromAttachmentBase64({
+					filename,
+					mimeType,
+					contentBase64: args.contentBase64,
+					maxBytes: MAX_SIZE
+				});
+				const { addTripDocument } = await import('./tripDocuments');
+				const { link, attachment } = await addTripDocument(userId, target.tripId, {
+					file,
+					segmentId: target.segmentId,
+					label: boundedOptional(args.label, 'label', 200),
+					notes: boundedOptional(args.notes, 'notes', 2000)
+				});
+				logAudit(userId, 'mcp_attachment_upload', 'trip_document', link.id, {
+					tripId: target.tripId,
+					segmentId: target.segmentId,
+					filename
+				});
+				return textResult(
+					projectTripDocument({
+						id: link.id,
+						tripId: link.tripId,
+						segmentId: link.segmentId,
+						label: link.label,
+						notes: link.notes,
+						filename: attachment.filename,
+						contentType: attachment.contentType,
+						sizeBytes: attachment.sizeBytes,
+						createdAt: link.createdAt
+					})
+				);
+			}
+			case 'roamarr_attachment_list': {
+				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
+				const target = resolveAttachmentTarget(args as Record<string, unknown>);
+				requireViewableTrip(userId, target.tripId);
+				if (target.segmentId != null) {
+					const seg = segmentsRepo.getSegmentById(target.segmentId);
+					if (!seg || seg.tripId !== target.tripId) throw error(400, 'Segment not found on this trip');
+				}
+				const { listTripDocuments, listSegmentDocuments } = await import('./tripDocuments');
+				const rows =
+					target.segmentId != null
+						? listSegmentDocuments(target.segmentId)
+						: listTripDocuments(target.tripId);
+				const page = paginateList(rows, args as { limit?: unknown; cursor?: unknown }, (row) => row.id);
+				return textResult({
+					tripId: target.tripId,
+					segmentId: target.segmentId,
+					items: page.items.map(projectTripDocument),
+					nextCursor: page.nextCursor
+				});
+			}
+			case 'roamarr_attachment_get': {
+				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
+				const loaded = await loadTripDocumentForView(userId, args as Record<string, unknown>);
+				const document = projectTripDocument(loaded.row);
+				if (args.includeContent !== true) return textResult({ document });
+				const { readTripDocument } = await import('./tripDocuments');
+				const { stream, record } = await readTripDocument(userId, loaded.row.id);
+				if (record.sizeBytes > MCP_ATTACHMENT_INLINE_MAX_BYTES) {
+					await stream.cancel();
+					return textResult({
+						document,
+						contentIncluded: false,
+						contentBase64: null,
+						maxInlineBytes: MCP_ATTACHMENT_INLINE_MAX_BYTES,
+						contentOmittedReason: `File is ${record.sizeBytes} bytes; inline content is limited to ${MCP_ATTACHMENT_INLINE_MAX_BYTES} bytes`
+					});
+				}
+				const contentBase64 = await streamToBase64(stream, MCP_ATTACHMENT_INLINE_MAX_BYTES);
+				return textResult({
+					document,
+					contentIncluded: true,
+					contentBase64,
+					maxInlineBytes: MCP_ATTACHMENT_INLINE_MAX_BYTES
+				});
+			}
+			case 'roamarr_attachment_delete': {
+				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const confirmErr = requireConfirm(args as Record<string, unknown>, 'roamarr_attachment_delete');
+				if (confirmErr) return confirmErr;
+				const loaded = await loadTripDocumentForView(userId, args as Record<string, unknown>);
+				const { deleteTripDocument } = await import('./tripDocuments');
+				await deleteTripDocument(userId, loaded.row.id);
+				logAudit(userId, 'mcp_attachment_delete', 'trip_document', loaded.row.id, {
+					tripId: loaded.row.tripId,
+					segmentId: loaded.row.segmentId,
+					filename: loaded.row.filename
+				});
+				return textResult({ ok: true, documentId: loaded.row.id });
+			}
 		default:
 				return {
 					content: [{ type: 'text' as const, text: `Unknown tool: ${name}` }],

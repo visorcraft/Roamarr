@@ -48,8 +48,8 @@ MCP tools:
   `roamarr_mail_hold_delete` (`mail-holds:write`);
 - `roamarr_mail_hold_coverage` (`mail-holds:read`).
 
-Delete requires `confirm: true`. List and coverage accept a viewable trip.
-Writes require edit access.
+Delete requires `confirm: true`. List, coverage, and writes all require edit
+access to the trip. A read-only collaborator cannot load holds.
 
 Mail holds are omitted from public share links and calendar feeds because they
 show when a home is empty. JSON trip export and import include them with the

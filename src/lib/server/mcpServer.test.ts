@@ -170,6 +170,18 @@ describe('mcpServer', () => {
 		const coverage = await call('roamarr_mail_hold_coverage', { tripId: trip.id });
 		expect(coverage.awayDatesKnown).toBe(true);
 		expect(coverage.renewals[0].renewalDate).toBe('2026-10-15');
+
+		const viewerId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read' });
+		const viewer = await connect(viewerId, ['mail-holds:read', 'mail-holds:write']);
+		const hidden: any = await viewer.client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(hidden.isError).toBe(true);
+		expect(hidden.content[0].text).not.toContain('HOMEADDR');
+		expect(hidden.content[0].text).not.toContain('HOLDSECRET');
+		const hiddenCoverage: any = await viewer.client.callTool({ name: 'roamarr_mail_hold_coverage', arguments: { tripId: trip.id } });
+		expect(hiddenCoverage.isError).toBe(true);
+		expect(hiddenCoverage.content[0].text).not.toContain('2026-10-15');
+
 		const unconfirmed: any = await client.callTool({ name: 'roamarr_mail_hold_delete', arguments: { holdId: created.id } });
 		expect(unconfirmed.isError).toBe(true);
 		await call('roamarr_mail_hold_delete', { holdId: created.id, confirm: true });

@@ -2054,7 +2054,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_mail_hold_list',
-				description: 'List mail holds for a trip. Holds show when a home is empty, so they are omitted from public share links and calendar feeds.',
+				description: 'List mail holds for a trip the caller can edit. Holds show when a home is empty, so read-only collaborators, public share links, and calendar feeds do not receive them.',
 				inputSchema: {
 					type: 'object',
 					properties: { tripId: { type: 'number' } },
@@ -2111,7 +2111,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_mail_hold_coverage',
-				description: 'Report trip days not covered by a mail hold, each hold renewal date (the day it ends), and a suggested next 30-day window.',
+				description: 'Report uncovered away days, each hold renewal date, and a suggested next 30-day window. Requires edit access to the trip.',
 				inputSchema: {
 					type: 'object',
 					properties: { tripId: { type: 'number' } },
@@ -3827,7 +3827,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'mail-holds:read')) return scopeError('mail-holds:read');
 				const { listMailHolds } = await import('./tripMailHolds');
 				const tripId = Number(args.tripId);
-				requireViewableTrip(userId, tripId);
+				requireEditableTrip(userId, tripId);
 				return textResult({ tripId, items: listMailHolds(tripId) });
 			}
 			case 'roamarr_mail_hold_create': {
@@ -3877,7 +3877,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'mail-holds:read')) return scopeError('mail-holds:read');
 				const { listMailHolds, mailHoldCoverageForTrip } = await import('./tripMailHolds');
 				const tripId = Number(args.tripId);
-				const trip = requireViewableTrip(userId, tripId);
+				const trip = requireEditableTrip(userId, tripId);
 				return textResult(mailHoldCoverageForTrip(trip.startDate, trip.endDate, listMailHolds(tripId)));
 			}
 			case 'roamarr_medication_list': {

@@ -5,21 +5,23 @@ import {
 	commitAttachment,
 	abortAttachment,
 	readEncryptedAttachmentStream,
-	deleteEncryptedAttachment,
-	AttachmentSizeLimitError
+	deleteEncryptedAttachment
 } from './attachmentStorage';
 import * as repo from './attachmentRepo';
 import { logAudit } from '../audit';
 
 /**
  * SECURITY NOTE: This module performs NO authorization checks. It validates
- * input format/size and stores/retrieves ciphertext. Callers (e.g.
+ * input format and stores/retrieves ciphertext. Callers (e.g.
  * tripExpenseAttachments) are responsible for enforcing context-specific
  * authorization before calling these functions.
  */
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-export const MAX_SIZE = 10 * 1024 * 1024;
+// Attachments have no application size cap: content is streamed through the
+// chunked encryptor to disk, so the only limits are disk space and whatever
+// request-body limit the deployment (adapter-node BODY_SIZE_LIMIT, reverse
+// proxy) imposes in front of the app.
 
 /** Canonical stored type for GPS tracks; downloads always use this, never text/xml. */
 export const GPX_CONTENT_TYPE = 'application/gpx+xml';
@@ -80,9 +82,6 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	if (!gpx && !ALLOWED_TYPES.includes(file.type)) {
 		throw error(400, 'Only JPEG, PNG, WebP, PDF, or GPX files are allowed');
 	}
-	if (file.size > MAX_SIZE) {
-		throw error(400, 'File must be 10 MB or smaller');
-	}
 	if (gpx) {
 		await validateGpxContent(file);
 	} else {
@@ -93,15 +92,7 @@ export async function createAttachment(input: CreateAttachmentInput) {
 	const contentType = gpx ? GPX_CONTENT_TYPE : file.type;
 
 	const baseDir = getAttachmentsPath();
-	let stageResult: Awaited<ReturnType<typeof stageEncryptedAttachment>>;
-	try {
-		stageResult = await stageEncryptedAttachment(file.stream(), baseDir, { maxBytes: MAX_SIZE });
-	} catch (e) {
-		if (e instanceof AttachmentSizeLimitError) {
-			throw error(400, 'File must be 10 MB or smaller');
-		}
-		throw e;
-	}
+	const stageResult = await stageEncryptedAttachment(file.stream(), baseDir);
 
 	let row: repo.AttachmentRecord;
 	try {

@@ -85,7 +85,7 @@ See [Sharing](./sharing.md) for the exact data matrix.
 ## Poster image
 
 An owner or editor can click the poster area to upload or replace a JPEG, PNG,
-or WebP image up to 10 MB. Roamarr validates the file, stores it as an encrypted
+or WebP image of any size. Roamarr validates the file, stores it as an encrypted
 attachment, and attempts to remove the replaced image. Signed-in users who can
 view the trip can load the poster. Public links and calendar feeds do not
 expose the poster file.

@@ -125,58 +125,85 @@ export function reqString(value: unknown, fieldName: string, max = 1000): string
 	return s;
 }
 
-/**
- * Largest plaintext file `roamarr_attachment_get` will return inline.
- * Uploads still follow the attachment service limit (10 MB). 1 MB keeps an
- * MCP JSON payload small enough for a remote client to fetch a voucher
- * without pulling every boarding pass in one response.
- */
-export const MCP_ATTACHMENT_INLINE_MAX_BYTES = 1024 * 1024;
-
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
-/** Decode standard or URL-safe base64 (padding optional) into a File for the attachment service. */
+/**
+ * Decode standard or URL-safe base64 (padding optional) into a File for the
+ * attachment service. There is no size cap: attachments of any size are
+ * accepted, bounded only by the deployment's request-body limit.
+ */
 export function fileFromAttachmentBase64(input: {
 	filename: string;
 	mimeType: string;
 	contentBase64: string;
-	maxBytes: number;
 }): File {
 	const compact = input.contentBase64.replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
 	if (compact.length === 0) throw error(400, 'contentBase64 is required');
 	const padLength = compact.length % 4 === 0 ? 0 : 4 - (compact.length % 4);
 	const padded = padLength === 0 ? compact : compact + '='.repeat(padLength);
 	if (!BASE64_RE.test(padded)) throw error(400, 'contentBase64 is not valid base64');
-	// Reject an obvious overrun before allocating the decoded buffer. The
-	// exact byte check below still runs, because this bound is a few bytes loose.
-	const maxChars = Math.ceil(input.maxBytes / 3) * 4 + 4;
-	if (padded.length > maxChars) throw error(400, 'File must be 10 MB or smaller');
 	const bytes = Buffer.from(padded, 'base64');
 	if (bytes.length === 0) throw error(400, 'File is required');
-	if (bytes.length > input.maxBytes) throw error(400, 'File must be 10 MB or smaller');
 	return new File([new Uint8Array(bytes)], input.filename, { type: input.mimeType });
 }
 
-/** Read a decrypt stream into base64, refusing to buffer more than maxBytes. */
-export async function streamToBase64(stream: ReadableStream<Uint8Array>, maxBytes: number): Promise<string> {
+export interface AttachmentByteRange {
+	/** First byte to return (0-based). */
+	offset: number;
+	/** Maximum number of bytes to return; null reads through the end of the file. */
+	length: number | null;
+}
+
+/**
+ * Parse optional `offset` / `length` tool arguments for a ranged attachment
+ * read. Both default to the whole file, so a plain call returns every byte.
+ */
+export function parseAttachmentByteRange(args: Record<string, unknown>): AttachmentByteRange {
+	const offset = args.offset == null ? 0 : Number(args.offset);
+	if (!Number.isSafeInteger(offset) || offset < 0) throw error(400, 'offset must be a non-negative integer');
+	const length = args.length == null ? null : Number(args.length);
+	if (length !== null && (!Number.isSafeInteger(length) || length < 1)) {
+		throw error(400, 'length must be a positive integer');
+	}
+	return { offset, length };
+}
+
+/**
+ * Read a decrypt stream into base64. With no range the whole file is returned;
+ * with a range only bytes [offset, offset + length) are kept, and the rest of
+ * the stream is cancelled once the range is filled.
+ */
+export async function streamToBase64(
+	stream: ReadableStream<Uint8Array>,
+	range: AttachmentByteRange = { offset: 0, length: null }
+): Promise<{ contentBase64: string; bytes: number }> {
 	const reader = stream.getReader();
 	const chunks: Uint8Array[] = [];
-	let total = 0;
+	const start = range.offset;
+	const end = range.length === null ? Number.POSITIVE_INFINITY : start + range.length;
+	let position = 0;
+	let kept = 0;
 	try {
-		for (;;) {
+		while (position < end) {
 			const { done, value } = await reader.read();
 			if (done) break;
 			if (!value?.byteLength) continue;
-			total += value.byteLength;
-			if (total > maxBytes) throw error(400, 'File exceeds the inline content cap');
-			chunks.push(value);
+			const chunkStart = position;
+			position += value.byteLength;
+			if (position <= start) continue;
+			const from = Math.max(0, start - chunkStart);
+			const to = Math.min(value.byteLength, end - chunkStart);
+			const piece = from === 0 && to === value.byteLength ? value : value.subarray(from, to);
+			chunks.push(piece);
+			kept += piece.byteLength;
 		}
+		if (position >= end) await reader.cancel().catch(() => {});
 	} catch (e) {
 		await reader.cancel().catch(() => {});
 		throw e;
 	}
 	reader.releaseLock();
-	return Buffer.concat(chunks).toString('base64');
+	return { contentBase64: Buffer.concat(chunks, kept).toString('base64'), bytes: kept };
 }
 
 // Wrap a body that may throw SvelteKit `error(...)` and convert to an MCP

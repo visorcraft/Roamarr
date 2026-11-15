@@ -45,7 +45,7 @@ Supported content:
 - PNG;
 - WebP;
 - PDF;
-- maximum 10 MB per attachment.
+- no size limit per attachment.
 
 Roamarr validates content signatures, encrypts attachment chunks with
 AES-256-GCM, and stores them under `ATTACHMENTS_PATH`. A renamed unsupported

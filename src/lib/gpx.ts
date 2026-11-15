@@ -5,13 +5,11 @@ import type { Feature, FeatureCollection, LineString, MultiLineString, Point, Po
  *
  * Client-safe and dependency-free: it relies on the platform DOMParser
  * (browser, or jsdom in tests). DOMParser never fetches external entities or
- * DTDs, so XXE-style payloads cannot read local files or make network calls;
- * combined with the input size cap below, billion-laughs-style documents are
- * rejected or harmlessly fail to parse.
+ * DTDs, so XXE-style payloads cannot read local files or make network calls,
+ * and platform parsers bound entity expansion, so billion-laughs-style
+ * documents are rejected or harmlessly fail to parse. There is no input size
+ * cap: a track of any size the user uploaded is parsed in their own browser.
  */
-
-/** Matches the attachment upload cap (10 MB); GPX text larger than this is rejected. */
-export const GPX_MAX_BYTES = 10 * 1024 * 1024;
 
 export interface GpxBounds {
 	minLat: number;
@@ -78,11 +76,6 @@ export function parseGpx(text: string): GpxParseResult {
 	if (typeof DOMParser === 'undefined') {
 		throw new Error('GPX parsing requires a DOMParser (browser or jsdom environment)');
 	}
-	// JS string length <= UTF-8 byte length, so this also bounds the byte size.
-	if (text.length > GPX_MAX_BYTES) {
-		throw new Error('GPX file is too large (10 MB maximum)');
-	}
-
 	const doc = new DOMParser().parseFromString(text, 'application/xml');
 	// Both browsers and jsdom report malformed XML via a parsererror document.
 	if (

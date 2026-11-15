@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { test, expect, describe } from 'vitest';
 import type { MultiLineString } from 'geojson';
-import { parseGpx, GPX_MAX_BYTES } from './gpx';
+import { parseGpx } from './gpx';
 
 const TRACK = `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
@@ -105,9 +105,10 @@ describe('parseGpx', () => {
 		expect(() => parseGpx('<kml xmlns="http://www.opengis.net/kml/2.2" />')).toThrow(/not <gpx>/);
 	});
 
-	test('rejects oversized input', () => {
-		const big = `<gpx>${' '.repeat(GPX_MAX_BYTES)}</gpx>`;
-		expect(() => parseGpx(big)).toThrow(/too large/);
+	test('parses input larger than the old 10 MB cap', () => {
+		const pad = ' '.repeat(10 * 1024 * 1024 + 1);
+		const big = `<gpx><wpt lat="1" lon="2"><name>Big</name></wpt>${pad}</gpx>`;
+		expect(parseGpx(big).stats.points).toBe(1);
 	});
 
 	test('XXE-style payloads are never resolved', () => {

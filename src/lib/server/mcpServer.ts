@@ -32,8 +32,8 @@ import {
 	optString,
 	reqString,
 	fileFromAttachmentBase64,
-	streamToBase64,
-	MCP_ATTACHMENT_INLINE_MAX_BYTES
+	parseAttachmentByteRange,
+	streamToBase64
 } from './mcpHelpers';
 import type { TripDocumentRow } from './repositories/tripDocumentsRepo';
 import { getSettings } from './settings';
@@ -2327,7 +2327,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			{
 				name: 'roamarr_attachment_upload',
 				description:
-					'Upload a PDF, JPEG, PNG, WebP, or GPX file onto a trip or one itinerary segment (the trip Documents tab). Pass tripId, segmentId, or both. contentBase64 is the raw file bytes (standard or URL-safe base64). Maximum 10 MB. Optional label (200 characters) and notes (2000). This is not an expense receipt or a gallery photo.',
+					'Upload a PDF, JPEG, PNG, WebP, or GPX file onto a trip or one itinerary segment (the trip Documents tab). Pass tripId, segmentId, or both. contentBase64 is the raw file bytes (standard or URL-safe base64). No size limit. Optional label (200 characters) and notes (2000). This is not an expense receipt or a gallery photo.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -2365,7 +2365,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			{
 				name: 'roamarr_attachment_get',
 				description:
-					'Read one trip or segment file by documentId. Always returns metadata. Set includeContent to true to also return contentBase64 when the file is at most 1 MB (1048576 bytes). Larger files return metadata with contentIncluded false.',
+					'Read one trip or segment file by documentId. Always returns metadata. Set includeContent to true to also return the full file as contentBase64, whatever its size. Optional offset and length (bytes) return just that slice for clients that prefer chunked reads; the result reports totalBytes, contentOffset, contentBytes, complete, and nextOffset.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -2373,7 +2373,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						tripId: { type: 'number', description: 'Optional. When set, the file must belong to this trip.' },
 						includeContent: {
 							type: 'boolean',
-							description: 'When true, include base64 bytes if the file is within the 1 MB inline cap.'
+							description: 'When true, include the file bytes as base64. The whole file is returned unless offset/length are set.'
+						},
+						offset: {
+							type: 'integer',
+							description: 'Optional first byte to return (0-based). Default 0. Only used with includeContent.'
+						},
+						length: {
+							type: 'integer',
+							description: 'Optional maximum number of bytes to return from offset. Default: through the end of the file.'
 						}
 					},
 					required: ['documentId']
@@ -4336,12 +4344,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const filename = attachmentFilename(args.filename);
 				const mimeType = attachmentMimeType(args.mimeType);
 				if (typeof args.contentBase64 !== 'string') throw error(400, 'contentBase64 is required');
-				const { MAX_SIZE } = await import('./attachments/attachmentService');
 				const file = fileFromAttachmentBase64({
 					filename,
 					mimeType,
-					contentBase64: args.contentBase64,
-					maxBytes: MAX_SIZE
+					contentBase64: args.contentBase64
 				});
 				const { addTripDocument } = await import('./tripDocuments');
 				const { link, attachment } = await addTripDocument(userId, target.tripId, {
@@ -4396,23 +4402,25 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const document = projectTripDocument(loaded.row);
 				if (args.includeContent !== true) return textResult({ document });
 				const { readTripDocument } = await import('./tripDocuments');
+				const range = parseAttachmentByteRange(args as Record<string, unknown>);
 				const { stream, record } = await readTripDocument(userId, loaded.row.id);
-				if (record.sizeBytes > MCP_ATTACHMENT_INLINE_MAX_BYTES) {
+				const totalBytes = record.sizeBytes;
+				if (range.offset > totalBytes) {
 					await stream.cancel();
-					return textResult({
-						document,
-						contentIncluded: false,
-						contentBase64: null,
-						maxInlineBytes: MCP_ATTACHMENT_INLINE_MAX_BYTES,
-						contentOmittedReason: `File is ${record.sizeBytes} bytes; inline content is limited to ${MCP_ATTACHMENT_INLINE_MAX_BYTES} bytes`
-					});
+					throw error(400, `offset ${range.offset} is past the end of the file (${totalBytes} bytes)`);
 				}
-				const contentBase64 = await streamToBase64(stream, MCP_ATTACHMENT_INLINE_MAX_BYTES);
+				const { contentBase64, bytes } = await streamToBase64(stream, range);
+				const nextByte = range.offset + bytes;
+				const complete = nextByte >= totalBytes;
 				return textResult({
 					document,
 					contentIncluded: true,
 					contentBase64,
-					maxInlineBytes: MCP_ATTACHMENT_INLINE_MAX_BYTES
+					totalBytes,
+					contentOffset: range.offset,
+					contentBytes: bytes,
+					complete,
+					nextOffset: complete ? null : nextByte
 				});
 			}
 			case 'roamarr_attachment_delete': {

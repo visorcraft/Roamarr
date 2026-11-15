@@ -70,7 +70,7 @@ deleted with the place.
 
 ## GPX tracks
 
-Each place can carry one GPX track (`.gpx`, up to 10 MB). Use the upload
+Each place can carry one GPX track (`.gpx`, any size). Use the upload
 button on a place row to attach a track; attaching a new one replaces the
 old file. The download button saves the track, and the remove button
 detaches and deletes it. Deleting a place also deletes its track.

@@ -20,8 +20,6 @@ import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare } from '../../../tests/helpers';
-import { MAX_SIZE } from './attachments/attachmentService';
-import { MCP_ATTACHMENT_INLINE_MAX_BYTES } from './mcpHelpers';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { updateSettings } from './settings';
 
@@ -2337,14 +2335,6 @@ describe('mcpServer', () => {
 				expect(badB64.isError).toBe(true);
 				expect(badB64.content[0].text).toContain('not valid base64');
 
-				const tooBig: any = await call(client, 'roamarr_attachment_upload', {
-					tripId: trip.id,
-					filename: 'huge.pdf',
-					mimeType: 'application/pdf',
-					contentBase64: Buffer.alloc(MAX_SIZE + 1).toString('base64')
-				});
-				expect(tooBig.isError).toBe(true);
-				expect(tooBig.content[0].text).toContain('10 MB or smaller');
 
 				const wrongSegment: any = await call(client, 'roamarr_attachment_upload', {
 					tripId: trip.id,
@@ -2458,11 +2448,12 @@ describe('mcpServer', () => {
 			});
 		});
 
-		test('omits inline bytes above 1 MB and still returns metadata', async () => {
+		test('returns the full content of large files and supports ranged reads', async () => {
 			await withAttachmentsDir(async () => {
 				const trip = makeTrip(ctx.kit, userId, { name: 'Large voucher' });
 				const { client } = await connect(userId, ['trips:read', 'trips:write']);
-				const bytes = Buffer.alloc(MCP_ATTACHMENT_INLINE_MAX_BYTES + 1);
+				const bytes = Buffer.alloc(12 * 1024 * 1024 + 3);
+				for (let i = 0; i < bytes.length; i += 4093) bytes[i] = i % 251;
 				bytes.set(Buffer.from('%PDF-1.4\n'), 0);
 				const uploaded = parse(
 					await call(client, 'roamarr_attachment_upload', {
@@ -2473,14 +2464,50 @@ describe('mcpServer', () => {
 					})
 				);
 				expect(uploaded.sizeBytes).toBe(bytes.length);
+
 				const got = parse(
 					await call(client, 'roamarr_attachment_get', { documentId: uploaded.id, includeContent: true })
 				);
-				expect(got.contentIncluded).toBe(false);
-				expect(got.contentBase64).toBeNull();
-				expect(got.maxInlineBytes).toBe(MCP_ATTACHMENT_INLINE_MAX_BYTES);
+				expect(got.contentIncluded).toBe(true);
+				expect(got.complete).toBe(true);
+				expect(got.nextOffset).toBeNull();
+				expect(got.totalBytes).toBe(bytes.length);
+				expect(got.contentBytes).toBe(bytes.length);
 				expect(got.document.filename).toBe('long.pdf');
-				expect(got.contentOmittedReason).toContain(String(bytes.length));
+				expect(Buffer.from(got.contentBase64, 'base64').equals(bytes)).toBe(true);
+
+				// Chunked read across encryption chunk boundaries reassembles the same bytes.
+				const parts: Buffer[] = [];
+				let offset: number | null = 0;
+				const chunk = 5 * 1024 * 1024 + 11;
+				while (offset !== null) {
+					const part = parse(
+						await call(client, 'roamarr_attachment_get', {
+							documentId: uploaded.id,
+							includeContent: true,
+							offset,
+							length: chunk
+						})
+					);
+					expect(part.contentOffset).toBe(offset);
+					parts.push(Buffer.from(part.contentBase64, 'base64'));
+					offset = part.nextOffset;
+				}
+				expect(parts).toHaveLength(3);
+				expect(Buffer.concat(parts).equals(bytes)).toBe(true);
+
+				const past: any = await call(client, 'roamarr_attachment_get', {
+					documentId: uploaded.id,
+					includeContent: true,
+					offset: bytes.length + 1
+				});
+				expect(past.isError).toBe(true);
+				const badLength: any = await call(client, 'roamarr_attachment_get', {
+					documentId: uploaded.id,
+					includeContent: true,
+					length: 0
+				});
+				expect(badLength.isError).toBe(true);
 			});
 		});
 	});

@@ -127,7 +127,7 @@ enabling it on a multi-user instance.
 
 Receipt and document uploads:
 
-- maximum 10 MB;
+- no application size cap (adapter and reverse-proxy body limits apply);
 - JPEG, PNG, WebP, PDF, or GPX (`.gpx` only, sniffed for a `<gpx>` root);
 - content-signature validation;
 - randomized storage name;

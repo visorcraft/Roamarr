@@ -174,7 +174,7 @@
 					onchange={(e) => e.currentTarget.form?.requestSubmit()}
 				/>
 			</label>
-			<p class="field-help mt-1">JPEG, PNG, or WebP. Up to 10 MB each, 50 photos per gallery.</p>
+			<p class="field-help mt-1">JPEG, PNG, or WebP. Up to 50 photos per gallery.</p>
 		</form>
 	{/if}
 </div>

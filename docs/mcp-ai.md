@@ -232,9 +232,9 @@ and clients see only prompts/resources allowed by their scopes.
 | `roamarr_gallery_reorder` | `gallery:write` | Reorder a gallery (full id permutation). |
 | `roamarr_gallery_set_caption` | `gallery:write` | Set or clear a photo caption. |
 | `roamarr_gallery_remove` | `gallery:write` | Remove a gallery photo (`confirm`). |
-| `roamarr_attachment_upload` | `trips:write` | Upload a PDF, image, or GPX file (base64, max 10 MB) onto a trip or segment. |
+| `roamarr_attachment_upload` | `trips:write` | Upload a PDF, image, or GPX file (base64, no size limit) onto a trip or segment. |
 | `roamarr_attachment_list` | `trips:read` | List files for a trip or segment. |
-| `roamarr_attachment_get` | `trips:read` | Read file metadata. `includeContent` returns base64 up to 1 MB. |
+| `roamarr_attachment_get` | `trips:read` | Read file metadata. `includeContent` returns the full file as base64; optional `offset`/`length` read a slice. |
 | `roamarr_attachment_delete` | `trips:write` | Delete a trip or segment file (`confirm`). |
 | `roamarr_reminder_add` | `reminders:write` | Add a trip reminder. |
 
@@ -244,10 +244,12 @@ amount units, and `confirm`.
 
 Gallery photos and expense receipts are still uploaded in the web UI (or the
 mobile upload routes). Trip and segment files — PDF, JPEG, PNG, WebP, and GPX —
-go through `roamarr_attachment_upload` as base64, up to 10 MB, into the same
-encrypted attachment store as the Documents tab. `roamarr_attachment_get`
-returns those bytes only when `includeContent` is true and the file is at most
-1 MB. Larger files return metadata so the client can use the web download.
+go through `roamarr_attachment_upload` as base64, with no size limit, into the
+same encrypted attachment store as the Documents tab. `roamarr_attachment_get`
+returns the whole file as base64 when `includeContent` is true, whatever its
+size. Clients that prefer smaller responses can pass `offset` and `length`
+(bytes) and follow `nextOffset` until `complete` is true; every result reports
+`totalBytes`, `contentOffset`, and `contentBytes`.
 
 ### Prompts
 

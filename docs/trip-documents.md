@@ -17,7 +17,8 @@ Allowed types (same rules as expense receipts):
 - PDF
 - GPX tracks (`.gpx`)
 
-Maximum size: **10 MB** per file. Content is checked against magic bytes so the
+There is no file-size limit; only the deployment's request-body limit
+(`BODY_SIZE_LIMIT`, reverse proxy) applies. Content is checked against magic bytes so the
 declared type must match the payload. GPX files are sniffed for a `<gpx>` root
 element and are always stored and served as `application/gpx+xml`.
 
@@ -70,11 +71,13 @@ The same files are available to an OAuth or API-key client under the existing
 
 - `roamarr_attachment_upload` — `tripId` and/or `segmentId`, `filename`,
   `mimeType`, and `contentBase64` (standard or URL-safe base64). Optional
-  `label` and `notes`. Maximum 10 MB. The server checks the type and magic
+  `label` and `notes`. No size limit. The server checks the type and magic
   bytes, then stores the file through the encrypted attachment service.
 - `roamarr_attachment_list` — pass `tripId`, `segmentId`, or both.
 - `roamarr_attachment_get` — metadata for a `documentId`. Set `includeContent`
-  to `true` to also receive base64 bytes when the file is at most 1 MB.
+  to `true` to also receive the whole file as base64, whatever its size.
+  Optional `offset` and `length` (bytes) return one slice; follow `nextOffset`
+  until `complete` is true.
 - `roamarr_attachment_delete` — requires `confirm: true`.
 
 Upload and delete require edit access. List and get follow the download route:

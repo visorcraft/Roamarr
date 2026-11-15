@@ -13,7 +13,7 @@ button to manage its gallery. On a trip, the gallery lives on the
 - JPEG, PNG, or WebP images only — unlike [trip documents](./trip-documents.md),
   galleries reject PDF and GPX files even though the attachment store accepts
   them.
-- Up to **10 MB** per image and **50 images** per place or trip.
+- No per-image size limit; up to **50 images** per place or trip.
 - Content is checked against magic bytes, so the declared type must match the
   payload.
 

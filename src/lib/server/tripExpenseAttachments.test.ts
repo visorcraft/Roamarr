@@ -90,10 +90,11 @@ test('addAttachment rejects disallowed content types', async () => {
 	await expect(addAttachment(u.id, e.id, file)).rejects.toMatchObject({ status: 400 });
 });
 
-test('addAttachment rejects oversized files', async () => {
+test('addAttachment accepts receipts larger than the old 10 MB cap', async () => {
 	const { u, e } = seed();
 	const file = fileFromString('x'.repeat(10 * 1024 * 1024 + 1), 'big.png');
-	await expect(addAttachment(u.id, e.id, file)).rejects.toMatchObject({ status: 400 });
+	const { attachment } = await addAttachment(u.id, e.id, file);
+	expect(attachment.sizeBytes).toBe(file.size);
 });
 
 test('listAttachments returns rows ordered by creation time', async () => {

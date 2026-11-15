@@ -105,9 +105,16 @@ describe('attachmentService', () => {
 		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
 	});
 
-	test('rejects oversized files', async () => {
-		const file = fileFromString('x'.repeat(10 * 1024 * 1024 + 1), 'x.png', 'image/png');
-		await expect(createAttachment({ ownerId: userId, file, context: {} })).rejects.toMatchObject({ status: 400 });
+	test('accepts files larger than the old 10 MB cap and round-trips every byte', async () => {
+		const body = Buffer.alloc(25 * 1024 * 1024 + 7, 0x78);
+		const file = fileFromString(body as unknown as string, 'big.pdf', 'application/pdf');
+		const row = await createAttachment({ ownerId: userId, file, context: {} });
+		expect(row.sizeBytes).toBe(file.size);
+		const { stream } = await readAttachmentStream(row.id);
+		const back = await streamToBuffer(stream);
+		expect(back.length).toBe(file.size);
+		expect(back.subarray(0, 4).toString('latin1')).toBe('%PDF');
+		expect(back.subarray(-16).equals(body.subarray(-16))).toBe(true);
 	});
 
 	test('readAttachmentStream returns 404 for missing attachment', async () => {
@@ -241,17 +248,22 @@ describe('attachmentService', () => {
 
 	test('cleans up temp ciphertext when encryption fails', async () => {
 		const file = fileFromString('x', 'big.png', 'image/png');
-		const largeStream = new ReadableStream<Uint8Array<ArrayBuffer>>({
+		let sent = false;
+		const failingStream = new ReadableStream<Uint8Array<ArrayBuffer>>({
 			pull(controller) {
-				controller.enqueue(new Uint8Array(Buffer.alloc(11 * 1024 * 1024, 0x78)));
-				controller.close();
+				if (!sent) {
+					sent = true;
+					controller.enqueue(new Uint8Array(Buffer.alloc(3 * 64 * 1024, 0x78)));
+					return;
+				}
+				controller.error(new Error('upload interrupted'));
 			}
 		});
-		file.stream = () => largeStream;
+		file.stream = () => failingStream;
 
 		await expect(
 			createAttachment({ ownerId: userId, file, context: {} })
-		).rejects.toMatchObject({ status: 400 });
+		).rejects.toThrow('upload interrupted');
 
 		expect(countFilesRecursively(baseDir)).toBe(0);
 	});

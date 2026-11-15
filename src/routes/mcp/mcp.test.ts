@@ -337,6 +337,80 @@ describe('mcp route', () => {
 		expect(res.headers.get('mcp-session-id')).toBeTruthy();
 	});
 
+	test('accepts tool calls above the SDK default 4 MiB body cap and returns large files in full', async () => {
+		const { mkdtempSync, rmSync } = await import('node:fs');
+		const { tmpdir } = await import('node:os');
+		const path = await import('node:path');
+		const original = process.env.ATTACHMENTS_PATH;
+		const dir = mkdtempSync(path.join(tmpdir(), 'roamarr-mcp-route-'));
+		process.env.ATTACHMENTS_PATH = dir;
+		try {
+			accessToken = await getAccessToken(userId, ['trips:read', 'trips:write']);
+			const trip = makeTrip(ctx.kit, userId, { name: 'Big upload' });
+			const init = await mcpPost({
+				request: initRequest(accessToken, {
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'initialize',
+					params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'test', version: '1.0.0' } }
+				}),
+				getClientAddress: () => '127.0.0.1'
+			} as any);
+			const sessionId = init.headers.get('mcp-session-id')!;
+			const sessionPost = (body: unknown) =>
+				mcpPost({
+					request: new Request('http://localhost/mcp', {
+						method: 'POST',
+						body: JSON.stringify(body),
+						headers: {
+							'Authorization': `Bearer ${accessToken}`,
+							'Content-Type': 'application/json',
+							'Accept': 'application/json, text/event-stream',
+							'mcp-session-id': sessionId
+						}
+					}),
+					getClientAddress: () => '127.0.0.1'
+				} as any);
+
+			const bytes = randomBytes(6 * 1024 * 1024);
+			bytes.set(Buffer.from('%PDF-1.4\n'), 0);
+			const upload = await sessionPost({
+				jsonrpc: '2.0',
+				id: 2,
+				method: 'tools/call',
+				params: {
+					name: 'roamarr_attachment_upload',
+					arguments: {
+						tripId: trip.id,
+						filename: 'big.pdf',
+						mimeType: 'application/pdf',
+						contentBase64: bytes.toString('base64')
+					}
+				}
+			});
+			expect(upload.status).toBe(200);
+			const uploadBody = await upload.json();
+			expect(uploadBody.result.isError).toBeFalsy();
+			const created = JSON.parse(uploadBody.result.content[0].text);
+			expect(created.sizeBytes).toBe(bytes.length);
+
+			const get = await sessionPost({
+				jsonrpc: '2.0',
+				id: 3,
+				method: 'tools/call',
+				params: { name: 'roamarr_attachment_get', arguments: { documentId: created.id, includeContent: true } }
+			});
+			expect(get.status).toBe(200);
+			const got = JSON.parse((await get.json()).result.content[0].text);
+			expect(got.complete).toBe(true);
+			expect(Buffer.from(got.contentBase64, 'base64').equals(bytes)).toBe(true);
+		} finally {
+			if (original === undefined) delete process.env.ATTACHMENTS_PATH;
+			else process.env.ATTACHMENTS_PATH = original;
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
 	test('an invalid API key is rejected with 401', async () => {
 		const res = await mcpPost({
 			request: initRequest('rk_' + '0'.repeat(64), {

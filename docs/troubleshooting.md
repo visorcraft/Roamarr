@@ -54,7 +54,8 @@ read-only integrity check.
 
 The default adapter-node request limit is `512K`. Attachments (receipts, trip
 documents, gallery photos, posters, GPX tracks, and MCP base64 uploads) have no
-application size cap, and neither do restore archives by default (set
+application size cap (the `/mcp` endpoint also lifts the MCP SDK's 4 MiB
+request default), and neither do restore archives by default (set
 `ROAMARR_MAX_RESTORE_BYTES` to impose one).
 
 Set `BODY_SIZE_LIMIT` to the required size and configure the reverse proxy with

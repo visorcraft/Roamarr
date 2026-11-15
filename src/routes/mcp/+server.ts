@@ -9,6 +9,14 @@ import type { RequestHandler } from '@sveltejs/kit';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { deleteTransport, getTransport, registerTransport } from './transport';
 
+/**
+ * The MCP SDK caps request bodies at 4 MiB by default, which silently capped
+ * base64 attachment uploads. Attachments have no size limit, so lift it to the
+ * largest value the SDK accepts; adapter-node `BODY_SIZE_LIMIT` and any reverse
+ * proxy still apply in front of the app.
+ */
+const MCP_MAX_REQUEST_BODY_BYTES = Number.MAX_SAFE_INTEGER;
+
 function randomSessionId(): string {
 	return randomBytes(16).toString('base64url');
 }
@@ -101,6 +109,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		// Return direct JSON responses for POST requests; GET remains available
 		// for clients that prefer an SSE stream.
 		enableJsonResponse: true,
+		maxRequestBodySize: MCP_MAX_REQUEST_BODY_BYTES,
 		// Store the transport by session ID once initialization completes so
 		// subsequent POST/GET/DELETE requests can reuse it.
 		onsessioninitialized: (sid) => {

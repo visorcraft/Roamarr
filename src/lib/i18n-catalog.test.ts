@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from 'vitest';
-import * as m from '$lib/paraglide/messages';
+// Same import shape as the components (`import { m }`), so the test covers the namespace the app uses.
+import { m } from '$lib/paraglide/messages';
 
 // Guards against an empty or incomplete compiled catalog (for example a plugin that failed to
 // load), and against keys added to messages/en.json that never reach the compiled output.

@@ -319,28 +319,31 @@ const appHandle: Handle = async ({ event, resolve }) => {
 	}
 };
 
-// Runs appHandle in the request's locale context and fills <html lang>, keeping any
-// transformPageChunk that appHandle passes. The middleware gets a body-less copy with the
-// original URL, method and headers, because it clones and tees the request body (which would
-// break backup restore). This wiring ignores the middleware's `request` argument and keeps
-// using the original event; that is only correct while the strategies are
-// ['preferredLanguage', 'baseLocale']. Revisit it if the `url` strategy is ever enabled,
-// because that strategy relies on the de-localized request the middleware passes in.
+type Resolve = Parameters<Handle>[0]['resolve'];
+
+// Wraps `resolve` so the rendered page gets <html lang="{locale}">. Any transformPageChunk the
+// caller passes still runs first (composed, not replaced).
+export const localizedResolve =
+	(resolve: Resolve, locale: string): Resolve =>
+	(ev, opts) =>
+		resolve(ev, {
+			...opts,
+			transformPageChunk: async (chunk) => {
+				const html = (await opts?.transformPageChunk?.(chunk)) ?? chunk.html;
+				return html.replace('lang="%lang%"', `lang="${locale}"`);
+			}
+		});
+
+// Runs appHandle in the request's locale context and fills <html lang>. The middleware gets a
+// body-less copy with the original URL, method and headers, because it clones and tees the
+// request body (which would break backup restore). This wiring ignores the middleware's
+// `request` argument and keeps using the original event; that is only correct while the
+// strategies are ['preferredLanguage', 'baseLocale']. Revisit it if the `url` strategy is ever
+// enabled, because that strategy relies on the de-localized request the middleware passes in.
 export const handle: Handle = ({ event, resolve }) =>
 	paraglideMiddleware(
 		new Request(event.request.url, { method: event.request.method, headers: event.request.headers }),
-		({ locale }) =>
-			appHandle({
-				event,
-				resolve: (ev, opts) =>
-					resolve(ev, {
-						...opts,
-						transformPageChunk: async (chunk) => {
-							const html = (await opts?.transformPageChunk?.(chunk)) ?? chunk.html;
-							return html.replace('lang="%lang%"', `lang="${locale}"`);
-						}
-					})
-			})
+		({ locale }) => appHandle({ event, resolve: localizedResolve(resolve, locale) })
 	);
 
 // Log unexpected errors server-side without exposing details to the client.

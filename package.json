@@ -14,8 +14,9 @@
 		"preview": "node --env-file-if-exists=.env ./node_modules/vite/bin/vite.js preview",
 		"postinstall": "patch-package",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
+		"check": "npm run i18n:compile && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+		"check:watch": "npm run i18n:compile && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
+		"i18n:compile": "paraglide-js compile --project ./project.inlang",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:e2e": "node tests/e2e/prepare.mjs && playwright test",
@@ -27,6 +28,7 @@
 		"db:compat-fixture": "node --experimental-strip-types --import ./scripts/seed-alias-loader.mjs scripts/generate-compat-fixture.mjs"
 	},
 	"devDependencies": {
+		"@inlang/paraglide-js": "3.2.2",
 		"@playwright/test": "^1.65.1",
 		"@sveltejs/adapter-node": "^6.0.2",
 		"@sveltejs/kit": "^3.2.0",

@@ -9,6 +9,7 @@ import { isSetupComplete } from '$lib/server/settings';
 import { bootApp, isMissingSecret, getBootError } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
 import type { ToastVariant } from '$lib/toast';
+import { paraglideMiddleware } from '$lib/paraglide/server';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
 // start. A failed migration or missing ROAMARR_SECRET is recorded so the setup page
@@ -182,7 +183,7 @@ function redirectResponse(e: Redirect) {
 	return new Response(null, { status: e.status, headers: { location: e.location } });
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const appHandle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
 		if (!dev && isForbiddenCrossSiteForm(event.request, event.url)) {
@@ -317,6 +318,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw e;
 	}
 };
+
+// Runs appHandle in the request's locale context and fills <html lang>. The middleware gets a
+// body-less copy (it reads only URL and headers) because it clones and tees the request body.
+export const handle: Handle = ({ event, resolve }) =>
+	paraglideMiddleware(new Request(event.request.url, { headers: event.request.headers }), ({ locale }) =>
+		appHandle({
+			event,
+			resolve: (ev, opts) =>
+				resolve(ev, { ...opts, transformPageChunk: ({ html }) => html.replace('lang="%lang%"', `lang="${locale}"`) })
+		})
+	);
 
 // Log unexpected errors server-side without exposing details to the client.
 // SvelteKit renders src/error.svelte with the status + a safe message.

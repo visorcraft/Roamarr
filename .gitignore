@@ -70,3 +70,6 @@ roamarr.db
 
 # Local migration/alter notes (do not commit)
 ALTER_DB.md
+
+# inlang plugin cache (Paraglide compile)
+project.inlang/cache/

@@ -528,3 +528,37 @@ test('error hook preserves safe app errors and hides unexpected error details', 
 		log.mockRestore();
 	}
 });
+
+test.each([[undefined], ['de-DE,de;q=0.9']])('fills <html lang> with "en" (Accept-Language: %s)', async (acceptLanguage) => {
+	updateSettings({ setupComplete: true });
+	const event = ev('/login');
+	if (acceptLanguage) event.request = new Request(event.url, { headers: { 'accept-language': acceptLanguage } });
+	let transform: ((input: { html: string; done: boolean }) => unknown) | undefined;
+	await handle({
+		event: event as any,
+		resolve: async (_ev: unknown, opts?: { transformPageChunk?: typeof transform }) => {
+			transform = opts?.transformPageChunk;
+			return new Response('ok');
+		}
+	} as any);
+	expect(transform).toBeDefined();
+	expect(await transform!({ html: '<html lang="%lang%">', done: true })).toBe('<html lang="en">');
+});
+
+test('passes the original request on without cloning (teeing) its body', async () => {
+	updateSettings({ setupComplete: true });
+	const event = ev('/login');
+	event.request = new Request(event.url, { method: 'POST', body: 'email=a%40x.c', headers: { origin: 'http://x', 'content-type': 'application/x-www-form-urlencoded' } });
+	const clone = vi.spyOn(event.request, 'clone');
+	let seen: Request | undefined;
+	await handle({
+		event: event as any,
+		resolve: async (e: { request: Request }) => {
+			seen = e.request;
+			return new Response('ok');
+		}
+	} as any);
+	expect(clone).not.toHaveBeenCalled();
+	expect(seen).toBe(event.request);
+	expect(await seen!.text()).toBe('email=a%40x.c');
+});

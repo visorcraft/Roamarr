@@ -184,9 +184,10 @@ locale URL prefixes or cookies.
   options are in `project.inlang/paraglide.config.js`.
 - MCP tool descriptions, JSON API error messages and seeded default data stay
   English: clients and agents read them, not people.
-- Compiling loads the inlang message-format plugin from the pinned
-  `cdn.jsdelivr.net` URL in `project.inlang/settings.json`, so a fresh clone
-  needs network access for its first compile.
+- Compiling loads the inlang message-format plugin from `node_modules`
+  (`@inlang/plugin-message-format`, an exact-pinned devDependency referenced in
+  `project.inlang/settings.json`), so it is covered by the lockfile and works
+  offline. Upgrade it like any other dependency.
 
 ## Dependency Policy
 

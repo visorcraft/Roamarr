@@ -11,15 +11,18 @@ test('renders the login copy from the English message catalog', () => {
 			form: null
 		} as any
 	});
-	for (const text of [
-		'Sign in',
-		'Welcome back to your travel HQ.',
-		'Forgot password?',
-		'Sign in with a passkey',
-		'Sign in with Keycloak',
-		'Need an account?',
-		'Create one'
+	// Assert on whole elements: a bare 'Sign in' would also match the passkey and SSO buttons.
+	for (const html of [
+		'<h1 class="auth-title">Sign in</h1>',
+		'<p class="page-subtitle">Welcome back to your travel HQ.</p>',
+		'<label class="label" for="email">Email</label>',
+		'<label class="label" for="password">Password</label>',
+		'<a href="/forgot-password" class="text-sm link">Forgot password?</a>',
+		'<button type="submit" class="btn btn-primary">Sign in</button>',
+		'<button class="btn btn-primary w-full">Sign in with a passkey</button>',
+		'<a href="/auth/oidc/start" class="btn btn-primary w-full text-center">Sign in with Keycloak</a>',
+		'Need an account? <a href="/register" class="link">Create one</a>'
 	]) {
-		expect(body).toContain(text);
+		expect(body).toContain(html);
 	}
 });

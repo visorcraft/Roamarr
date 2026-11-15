@@ -29,6 +29,7 @@
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "3.2.2",
+		"@inlang/plugin-message-format": "4.6.0",
 		"@playwright/test": "^1.65.1",
 		"@sveltejs/adapter-node": "^6.0.2",
 		"@sveltejs/kit": "^3.2.0",

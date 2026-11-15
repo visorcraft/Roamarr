@@ -319,15 +319,28 @@ const appHandle: Handle = async ({ event, resolve }) => {
 	}
 };
 
-// Runs appHandle in the request's locale context and fills <html lang>. The middleware gets a
-// body-less copy (it reads only URL and headers) because it clones and tees the request body.
+// Runs appHandle in the request's locale context and fills <html lang>, keeping any
+// transformPageChunk that appHandle passes. The middleware gets a body-less copy with the
+// original URL, method and headers, because it clones and tees the request body (which would
+// break backup restore). This wiring ignores the middleware's `request` argument and keeps
+// using the original event; that is only correct while the strategies are
+// ['preferredLanguage', 'baseLocale']. Revisit it if the `url` strategy is ever enabled,
+// because that strategy relies on the de-localized request the middleware passes in.
 export const handle: Handle = ({ event, resolve }) =>
-	paraglideMiddleware(new Request(event.request.url, { headers: event.request.headers }), ({ locale }) =>
-		appHandle({
-			event,
-			resolve: (ev, opts) =>
-				resolve(ev, { ...opts, transformPageChunk: ({ html }) => html.replace('lang="%lang%"', `lang="${locale}"`) })
-		})
+	paraglideMiddleware(
+		new Request(event.request.url, { method: event.request.method, headers: event.request.headers }),
+		({ locale }) =>
+			appHandle({
+				event,
+				resolve: (ev, opts) =>
+					resolve(ev, {
+						...opts,
+						transformPageChunk: async (chunk) => {
+							const html = (await opts?.transformPageChunk?.(chunk)) ?? chunk.html;
+							return html.replace('lang="%lang%"', `lang="${locale}"`);
+						}
+					})
+			})
 	);
 
 // Log unexpected errors server-side without exposing details to the client.

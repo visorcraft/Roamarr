@@ -8,7 +8,7 @@ const page = vi.hoisted(() => ({
 	data: {} as Record<string, unknown>,
 	params: {},
 	status: 200,
-	error: null,
+	error: null as { message: string } | null,
 	form: null
 }));
 
@@ -47,6 +47,7 @@ function titles(instanceName: string | null | undefined, routeId: string | null,
 beforeEach(() => {
 	page.route.id = '/trips';
 	page.data = {};
+	page.error = null;
 });
 
 test('a listed route gets "Page name · instance name" as its only title', () => {
@@ -70,16 +71,26 @@ test('trip pages lead with the trip name from the page data', () => {
 	const trip = { trip: { name: 'Lisbon 2027' } };
 	expect(titles('Family Trips', '/trips/[id]', trip)).toEqual(['Lisbon 2027 · Family Trips']);
 	expect(titles('Family Trips', '/share/[token]', trip)).toEqual(['Lisbon 2027 · Family Trips']);
-	expect(titles('Family Trips', '/trips/[id]/print', trip)).toEqual([
-		'Lisbon 2027 — Printable Itinerary · Family Trips'
-	]);
 });
 
 test('trip pages fall back to a generic name when the trip has no usable name', () => {
 	expect(titles('Family Trips', '/trips/[id]', {})).toEqual(['Trip · Family Trips']);
 	expect(titles('Family Trips', '/trips/[id]', { trip: { name: '  ' } })).toEqual(['Trip · Family Trips']);
 	expect(titles('Family Trips', '/share/[token]', {})).toEqual(['Shared trip · Family Trips']);
-	expect(titles('Family Trips', '/trips/[id]/print', {})).toEqual(['Printable Itinerary · Family Trips']);
+});
+
+test('the print page title is the page name alone (the default "Save as PDF" filename)', () => {
+	expect(titles('Family Trips', '/trips/[id]/print', { trip: { name: 'Lisbon 2027' } })).toEqual([
+		'Lisbon 2027 — Printable Itinerary'
+	]);
+	expect(titles('Family Trips', '/trips/[id]/print', {})).toEqual(['Printable Itinerary']);
+});
+
+test('a load error on a listed route gets the bare instance name, not the route title', () => {
+	page.error = { message: 'Not Found' };
+	expect(titles('Family Trips', '/share/[token]')).toEqual(['Family Trips']);
+	expect(titles('Family Trips', '/trips/[id]/print')).toEqual(['Family Trips']);
+	expect(titles(undefined, '/trips')).toEqual(['Roamarr']);
 });
 
 test('/general names the configuration tab it shows (legacy ?tab= links)', () => {

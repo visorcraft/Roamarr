@@ -124,9 +124,25 @@ export const PAGE_TITLES: Record<string, PageName> = {
 	'/users/new': () => m.page_title_user_new()
 };
 
-/** The tab title: `Page name · instanceName`, or the bare instance name for unlisted routes. */
-export function pageTitle(routeId: string | null, data: PageData, instanceName: string | null | undefined): string {
+/**
+ * Routes whose page name is the whole title, without ` · instanceName`. The printable itinerary's
+ * title is the browser's default "Save as PDF" filename, so it stays the trip name alone.
+ */
+export const STANDALONE_TITLES: ReadonlySet<string> = new Set(['/trips/[id]/print']);
+
+/**
+ * The tab title: `Page name · instanceName`, or the bare instance name for unlisted routes. When
+ * the page failed to load (`page.error` is set), `page.route.id` still names the route but the
+ * error page is what renders, so the title is the bare instance name as well.
+ */
+export function pageTitle(
+	routeId: string | null,
+	data: PageData,
+	instanceName: string | null | undefined,
+	error: unknown = null
+): string {
 	const instance = instanceName || 'Roamarr';
-	const name = routeId ? PAGE_TITLES[routeId]?.(data) : undefined;
-	return name ? m.page_title({ page: name, instance }) : instance;
+	const name = routeId && !error ? PAGE_TITLES[routeId]?.(data) : undefined;
+	if (!name) return instance;
+	return STANDALONE_TITLES.has(routeId!) ? name : m.page_title({ page: name, instance });
 }

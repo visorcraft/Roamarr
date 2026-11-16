@@ -4,10 +4,6 @@
 	let code = $state('');
 </script>
 
-<svelte:head>
-	<title>Two-factor verification — Roamarr</title>
-</svelte:head>
-
 <div class="mx-auto mt-20 max-w-sm">
 	<h1 class="page-title mb-2 text-center">Verification required</h1>
 	<p class="page-subtitle mb-6 text-center">

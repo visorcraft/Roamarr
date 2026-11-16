@@ -1,0 +1,15 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"login_title": "Sign in",
+	"login_subtitle": "Welcome back to your travel HQ.",
+	"login_email_label": "Email",
+	"login_password_label": "Password",
+	"login_forgot_password": "Forgot password?",
+	"login_submit": "Sign in",
+	"login_passkey_waiting": "Waiting…",
+	"login_passkey_button": "Sign in with a passkey",
+	"login_passkey_failed": "Passkey sign-in failed",
+	"login_sso_button": "Sign in with {provider}",
+	"login_need_account": "Need an account?",
+	"login_create_account": "Create one"
+}

@@ -8,6 +8,7 @@ const outputPath = path.join(root, 'src/lib/server/licenseData.generated.json');
 const PROJECT_LICENSE_NAMES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING', 'COPYING.md'];
 const PACKAGE_LICENSE_RE = /^(licen[cs]e|copying|copyright|notice)(\..*)?$/i;
 const KNOWN_PACKAGE_LICENSES = {
+	'@inlang/plugin-message-format': 'MIT',
 	'@visorcraft/mongreldb': 'MIT OR Apache-2.0',
 	'@visorcraft/mongreldb-kit': 'MIT OR Apache-2.0'
 };

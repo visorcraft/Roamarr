@@ -9,6 +9,7 @@ import { isSetupComplete } from '$lib/server/settings';
 import { bootApp, isMissingSecret, getBootError } from '$lib/server/boot';
 import { tileCspOrigins } from '$lib/server/mapTiles';
 import type { ToastVariant } from '$lib/toast';
+import { paraglideMiddleware } from '$lib/paraglide/server';
 
 // Run one-time boot (secret guard → migrations → settings row → scheduler) at process
 // start. A failed migration or missing ROAMARR_SECRET is recorded so the setup page
@@ -182,7 +183,7 @@ function redirectResponse(e: Redirect) {
 	return new Response(null, { status: e.status, headers: { location: e.location } });
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const appHandle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
 		if (!dev && isForbiddenCrossSiteForm(event.request, event.url)) {
@@ -317,6 +318,33 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw e;
 	}
 };
+
+type Resolve = Parameters<Handle>[0]['resolve'];
+
+// Wraps `resolve` so the rendered page gets <html lang="{locale}">. Any transformPageChunk the
+// caller passes still runs first (composed, not replaced).
+export const localizedResolve =
+	(resolve: Resolve, locale: string): Resolve =>
+	(ev, opts) =>
+		resolve(ev, {
+			...opts,
+			transformPageChunk: async (chunk) => {
+				const html = (await opts?.transformPageChunk?.(chunk)) ?? chunk.html;
+				return html.replace('lang="%lang%"', `lang="${locale}"`);
+			}
+		});
+
+// Runs appHandle in the request's locale context and fills <html lang>. The middleware gets a
+// body-less copy with the original URL, method and headers, because it clones and tees the
+// request body (which would break backup restore). This wiring ignores the middleware's
+// `request` argument and keeps using the original event; that is only correct while the
+// strategies are ['preferredLanguage', 'baseLocale']. Revisit it if the `url` strategy is ever
+// enabled, because that strategy relies on the de-localized request the middleware passes in.
+export const handle: Handle = ({ event, resolve }) =>
+	paraglideMiddleware(
+		new Request(event.request.url, { method: event.request.method, headers: event.request.headers }),
+		({ locale }) => appHandle({ event, resolve: localizedResolve(resolve, locale) })
+	);
 
 // Log unexpected errors server-side without exposing details to the client.
 // SvelteKit renders src/error.svelte with the status + a safe message.

@@ -12,6 +12,7 @@
 	import type { ToastVariant } from '$lib/toast';
 	import { provideDateFormat } from '$lib/dateFormatContext.svelte';
 	import { isActive as routeIsActive, activeChildHref, activeItemHref } from '$lib/navActive';
+	import { pageTitle } from '$lib/pageTitles';
 
 	let { data, children } = $props();
 
@@ -455,12 +456,10 @@
 
 <svelte:head>
 	<meta name="theme-color" content={data.themeColor} />
-	<!-- Default tab title. A page's own <title> overrides it (it renders later). Re-keyed per
-	     route because Svelte sets document.title without restoring it when a page unmounts:
-	     without the key, a page title would stick after navigating to a page that has none. -->
-	{#key page.route.id}
-		<title>{data.instanceName || 'Roamarr'}</title>
-	{/key}
+	<!-- The only <title> in the app: `Page name · instanceName` (see $lib/pageTitles). Pages must
+	     not render their own: Svelte sets document.title without restoring it on unmount, and a
+	     second, reactive title here would overwrite a page's whenever the instance name changes. -->
+	<title>{pageTitle(page.route.id, page.data, data.instanceName)}</title>
 </svelte:head>
 
 <svelte:window onkeydown={handleGlobalKeydown} />

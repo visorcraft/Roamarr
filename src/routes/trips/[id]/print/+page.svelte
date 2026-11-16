@@ -70,10 +70,6 @@
 	const days = $derived(tripDays(trip.startDate, trip.endDate));
 </script>
 
-<svelte:head>
-	<title>{trip.name} — Printable Itinerary</title>
-</svelte:head>
-
 <div class="print-itinerary mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
 	<header class="print-header border-b border-white/10 pb-6" style="border-color: var(--theme-line)">
 		<div class="print-actions print-hidden mb-4 flex flex-wrap items-center justify-between gap-2">

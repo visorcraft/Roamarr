@@ -52,3 +52,12 @@ test.each([
 	expect(themed.length).toBeGreaterThan(0);
 	for (const d of themed) expect(d).toMatch(new RegExp(`^var\\(--theme-${override}, `));
 });
+
+test('the actions menu inside the map hero resets the hero\'s white text and shadow', () => {
+	// .trip-hero--map pins --trip-readable to white (with a shadow) for text over the map image;
+	// the menu panel is a solid theme colour, so it must go back to the theme's trip colour.
+	const rule = code.match(/\.trip-hero--map \.app-user-menu-panel \{([^}]*)\}/)?.[1] ?? '';
+	expect(rule).toMatch(/--trip-readable: var\(--theme-trip-readable, /);
+	expect(rule).toMatch(/--trip-readable-strong: var\(--theme-trip-readable, /);
+	expect(rule).toMatch(/text-shadow: none;/);
+});

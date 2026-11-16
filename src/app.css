@@ -1592,6 +1592,13 @@ button.card:hover,
 		--trip-readable-strong: #fff;
 		text-shadow: 0 1px 2px rgba(3, 7, 18, 0.55);
 	}
+	/* The actions menu opens inside the map hero but on a solid theme panel, not over the map:
+	   undo the hero's white text and shadow there, back to the theme's trip text colour. */
+	.trip-hero--map .app-user-menu-panel {
+		--trip-readable: var(--theme-trip-readable, #ffffff);
+		--trip-readable-strong: var(--theme-trip-readable, #ffffff);
+		text-shadow: none;
+	}
 	.trip-hero--map .trip-hero-content :where(.back-link, .app-user-menu, .trip-poster-form) {
 		pointer-events: auto;
 	}

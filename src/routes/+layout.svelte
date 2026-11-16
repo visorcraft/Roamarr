@@ -455,6 +455,12 @@
 
 <svelte:head>
 	<meta name="theme-color" content={data.themeColor} />
+	<!-- Default tab title. A page's own <title> overrides it (it renders later). Re-keyed per
+	     route because Svelte sets document.title without restoring it when a page unmounts:
+	     without the key, a page title would stick after navigating to a page that has none. -->
+	{#key page.route.id}
+		<title>{data.instanceName || 'Roamarr'}</title>
+	{/key}
 </svelte:head>
 
 <svelte:window onkeydown={handleGlobalKeydown} />

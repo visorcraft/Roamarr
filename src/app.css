@@ -108,6 +108,8 @@
 		--theme-danger-text: #ffffff;
 		--theme-warning-text: var(--color-amber-800);
 		--theme-success-text: var(--color-emerald-800);
+		--theme-danger-readable: var(--theme-danger-bottom);
+		--theme-trip-readable: #111111;
 		--theme-wash: transparent;
 	}
 	@media (prefers-color-scheme: light) {
@@ -134,6 +136,8 @@
 		--theme-danger-text: #ffffff;
 		--theme-warning-text: var(--color-amber-800);
 		--theme-success-text: var(--color-emerald-800);
+		--theme-danger-readable: var(--theme-danger-bottom);
+		--theme-trip-readable: #111111;
 			--theme-wash: transparent;
 		}
 	}
@@ -423,9 +427,11 @@
 		--theme-menu-hover: var(--theme-active-strong);
 		--theme-option-hover: var(--theme-active-strong);
 		--theme-option-selected: var(--theme-active-strong);
-		--theme-readable-danger: light-dark(var(--theme-danger-bottom), var(--theme-danger-border));
-		/* Notice text: the 300 shades suit the dark themes; a light theme sets --theme-warning-text /
-		   --theme-success-text (300 is ~1.2:1 on light). noticeContrast.test.ts checks every theme. */
+		--theme-readable-danger: var(--theme-danger-readable, var(--theme-danger-border));
+		/* Readable text colours default to the dark-theme value; a light theme block overrides them
+		   (--theme-danger-readable, --theme-warning-text, --theme-success-text, --theme-trip-readable).
+		   Not light-dark(): Lightning CSS polyfills it from the OS preference, not the selected theme.
+		   themeScheme.test.ts and noticeContrast.test.ts check every theme. */
 		--theme-readable-warning: var(--theme-warning-text, var(--color-amber-300));
 		--theme-readable-success: var(--theme-success-text, var(--color-emerald-300));
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 70%, var(--theme-ink));
@@ -2109,11 +2115,11 @@ button.card:hover,
 	}
 
 	.trip-detail {
-		--trip-readable: light-dark(#111111, #ffffff);
-		--trip-readable-strong: light-dark(#111111, #ffffff);
-		--trip-readable-danger: light-dark(#111111, #ffffff);
-		--trip-readable-warning: light-dark(#111111, #ffffff);
-		--trip-readable-success: light-dark(#111111, #ffffff);
+		--trip-readable: var(--theme-trip-readable, #ffffff);
+		--trip-readable-strong: var(--theme-trip-readable, #ffffff);
+		--trip-readable-danger: var(--theme-trip-readable, #ffffff);
+		--trip-readable-warning: var(--theme-trip-readable, #ffffff);
+		--trip-readable-success: var(--theme-trip-readable, #ffffff);
 	}
 
 	.trip-detail :where(.text-white, .text-slate-100, .text-slate-200, .text-slate-300) {

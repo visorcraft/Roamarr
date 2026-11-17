@@ -59,7 +59,7 @@ function setup() {
 		data: {} as Record<string, unknown>,
 		params: {},
 		status: 200,
-		error: null,
+		error: null as { message: string } | null,
 		form: null
 	});
 	page.current = state;
@@ -81,10 +81,22 @@ test('document.title follows client-side navigation, including back to an untitl
 	expect(document.title).toBe('Trips · Family Trips');
 
 	navigate(state, '/trips/[id]/print', { trip: { name: 'Lisbon 2027' } });
-	expect(document.title).toBe('Lisbon 2027 — Printable Itinerary · Family Trips');
+	expect(document.title).toBe('Lisbon 2027 — Printable Itinerary');
 
 	navigate(state, '/no-such-route');
 	expect(document.title).toBe('Family Trips');
+});
+
+test('a failed navigation to a listed route shows the bare instance name, and recovers', () => {
+	const { state } = setup();
+	// On a load error the client router keeps the target route id and sets page.error.
+	state.error = { message: 'Not Found' };
+	navigate(state, '/share/[token]');
+	expect(document.title).toBe('Family Trips');
+
+	state.error = null;
+	navigate(state, '/share/[token]', { trip: { name: 'Lisbon 2027' } });
+	expect(document.title).toBe('Lisbon 2027 · Family Trips');
 });
 
 test('the title follows a data change on the same route (another trip, same route id)', () => {

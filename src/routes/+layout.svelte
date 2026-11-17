@@ -459,7 +459,7 @@
 	<!-- The only <title> in the app: `Page name · instanceName` (see $lib/pageTitles). Pages must
 	     not render their own: Svelte sets document.title without restoring it on unmount, and a
 	     second, reactive title here would overwrite a page's whenever the instance name changes. -->
-	<title>{pageTitle(page.route.id, page.data, data.instanceName)}</title>
+	<title>{pageTitle(page.route.id, page.data, data.instanceName, page.error)}</title>
 </svelte:head>
 
 <svelte:window onkeydown={handleGlobalKeydown} />

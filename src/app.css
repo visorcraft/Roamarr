@@ -106,6 +106,8 @@
 		--theme-danger-shadow: #7f1d1d;
 		--theme-danger-border: #fca5a5;
 		--theme-danger-text: #ffffff;
+		--theme-warning-text: var(--color-amber-800);
+		--theme-success-text: var(--color-emerald-800);
 		--theme-wash: transparent;
 	}
 	@media (prefers-color-scheme: light) {
@@ -130,6 +132,8 @@
 		--theme-danger-shadow: #7f1d1d;
 		--theme-danger-border: #fca5a5;
 		--theme-danger-text: #ffffff;
+		--theme-warning-text: var(--color-amber-800);
+		--theme-success-text: var(--color-emerald-800);
 			--theme-wash: transparent;
 		}
 	}
@@ -420,6 +424,10 @@
 		--theme-option-hover: var(--theme-active-strong);
 		--theme-option-selected: var(--theme-active-strong);
 		--theme-readable-danger: light-dark(var(--theme-danger-bottom), var(--theme-danger-border));
+		/* Notice text: the 300 shades suit the dark themes; a light theme sets --theme-warning-text /
+		   --theme-success-text (300 is ~1.2:1 on light). noticeContrast.test.ts checks every theme. */
+		--theme-readable-warning: var(--theme-warning-text, var(--color-amber-300));
+		--theme-readable-success: var(--theme-success-text, var(--color-emerald-300));
 		--theme-readable-muted: color-mix(in oklab, var(--theme-muted) 70%, var(--theme-ink));
 		--theme-readable-faint: color-mix(in oklab, var(--theme-muted) 55%, var(--theme-ink));
 		min-height: 100dvh;
@@ -1407,10 +1415,12 @@ button.card:hover,
 		color: var(--theme-readable-danger);
 	}
 	.notice-success {
-		@apply bg-emerald-500/10 text-emerald-300 ring-emerald-400/30;
+		@apply bg-emerald-500/10 ring-emerald-400/30;
+		color: var(--theme-readable-success);
 	}
 	.notice-warning {
-		@apply bg-amber-500/10 text-amber-300 ring-amber-400/30;
+		@apply bg-amber-500/10 ring-amber-400/30;
+		color: var(--theme-readable-warning);
 	}
 	.notice-info {
 		@apply bg-indigo-500/10 text-indigo-300 ring-indigo-400/30;

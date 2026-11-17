@@ -11,7 +11,11 @@ import { THEMES } from './themes';
 const css = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
 const code = css.replace(/\/\*[\s\S]*?\*\//g, '');
 
-const LIGHT_OVERRIDES = ['danger-readable', 'warning-text', 'success-text', 'trip-readable'];
+// The trip header over a map image: the one rule that sets --trip-readable to a fixed white.
+const MAP_HERO_RULE = /\.trip-hero--map \.trip-hero-content \{([^}]*)\}/;
+const WHITE = /^(#fff|#ffffff|white)$/i;
+
+const LIGHT_OVERRIDES =['danger-readable', 'warning-text', 'success-text', 'trip-readable'];
 
 const themeBlocks = [...code.matchAll(/([^{}]*)\{([^{}]*--theme-color-scheme:[^{}]*)\}/g)].map(([, selector, body]) => ({
 	ids: [...selector.matchAll(/data-theme='([\w-]+)'/g)].map((m) => m[1]),
@@ -45,12 +49,19 @@ test.each([
 	['--trip-readable-warning', 'trip-readable'],
 	['--trip-readable-success', 'trip-readable']
 ])('%s defaults to its dark value behind var(--theme-%s, …)', (variable, override) => {
-	const defs = [...code.matchAll(new RegExp(`${variable}:\\s*([^;]+);`, 'g'))].map((m) => m[1].trim());
-	// .trip-hero--map pins its own text to white over the map image; every other definition must
-	// go through the theme override.
-	const themed = defs.filter((d) => d !== '#fff');
+	// The map hero's own rule is the one allowed exception (see the next test). It is left out by
+	// selector, not by value, so the spelling of its white does not matter and a fixed colour in any
+	// other rule still fails.
+	const themed = [...code.replace(MAP_HERO_RULE, '').matchAll(new RegExp(`${variable}:\\s*([^;]+);`, 'g'))].map((m) => m[1].trim());
 	expect(themed.length).toBeGreaterThan(0);
 	for (const d of themed) expect(d).toMatch(new RegExp(`^var\\(--theme-${override}, `));
+});
+
+test('the map hero pins its text to white over the map image, in every theme', () => {
+	// The hero text sits on the map picture, not on a theme colour, so it stays white with a shadow.
+	const rule = code.match(MAP_HERO_RULE)?.[1] ?? '';
+	expect(rule.match(/--trip-readable:\s*([^;]+);/)?.[1].trim()).toMatch(WHITE);
+	expect(rule.match(/--trip-readable-strong:\s*([^;]+);/)?.[1].trim()).toMatch(WHITE);
 });
 
 test('the actions menu inside the map hero resets the hero\'s white text and shadow', () => {

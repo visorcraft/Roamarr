@@ -3193,8 +3193,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
 				editDocumentLink(userId, existing.tripId, id, {
 					label: String(args.label ?? existing.label),
-					url: String(args.url ?? ''),
-					notes: (args.notes as string) ?? existing.notes ?? null
+					url: String(args.url ?? existing.url),
+					notes: args.notes === undefined ? (existing.notes ?? null) : args.notes === null ? null : String(args.notes)
 				});
 				logAudit(userId, 'mcp_doc_link_update', 'trip_document_link', id, {});
 				return textResult({ ok: true, linkId: id });

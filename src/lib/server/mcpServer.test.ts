@@ -1244,6 +1244,96 @@ describe('mcpServer', () => {
 		expect(after.companionId).toBe(companion.id);
 	});
 
+	test('doc_link_update with only a label preserves the stored url and notes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Doc link trip' });
+		const { client } = await connect(userId, ['doc-links:read', 'doc-links:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_doc_link_create',
+			arguments: { tripId: trip.id, label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' }
+		});
+		expect(created.isError).toBeFalsy();
+		const linkId = JSON.parse(created.content[0].text).id;
+		const res: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, label: 'Boarding passes' }
+		});
+		expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+		const { getDocumentLinkById } = await import('./repositories/tripMiscRepo');
+		const after = getDocumentLinkById(linkId)!;
+		expect(after).toMatchObject({ label: 'Boarding passes', url: 'https://example.com/voucher', notes: 'offline copy' });
+	});
+
+	test('doc_link_update with only linkId is a no-op and still validates label and url', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Doc link trip' });
+		const { client } = await connect(userId, ['doc-links:read', 'doc-links:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_doc_link_create',
+			arguments: { tripId: trip.id, label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' }
+		});
+		expect(created.isError).toBeFalsy();
+		const linkId = JSON.parse(created.content[0].text).id;
+		const { getDocumentLinkById } = await import('./repositories/tripMiscRepo');
+
+		const noop: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId }
+		});
+		expect(noop.isError, noop.content?.[0]?.text).toBeFalsy();
+		expect(getDocumentLinkById(linkId)).toMatchObject({ label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' });
+
+		const badUrl: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, url: 'not-a-url' }
+		});
+		expect(badUrl.isError).toBe(true);
+		expect(badUrl.content[0].text).toContain('URL must be a valid http or https URL');
+		expect(getDocumentLinkById(linkId)).toMatchObject({ label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' });
+
+		const badLabel: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, label: '' }
+		});
+		expect(badLabel.isError).toBe(true);
+		expect(badLabel.content[0].text).toContain('Label is required');
+		expect(getDocumentLinkById(linkId)).toMatchObject({ label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' });
+	});
+
+	test('doc_link_update updates or clears notes without touching label or url', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Doc link trip' });
+		const { client } = await connect(userId, ['doc-links:read', 'doc-links:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_doc_link_create',
+			arguments: { tripId: trip.id, label: 'Voucher', url: 'https://example.com/voucher', notes: 'offline copy' }
+		});
+		expect(created.isError).toBeFalsy();
+		const linkId = JSON.parse(created.content[0].text).id;
+		const { getDocumentLinkById } = await import('./repositories/tripMiscRepo');
+
+		const updated: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, notes: 'updated copy' }
+		});
+		expect(updated.isError, updated.content?.[0]?.text).toBeFalsy();
+		expect(getDocumentLinkById(linkId)).toMatchObject({ label: 'Voucher', url: 'https://example.com/voucher', notes: 'updated copy' });
+
+		const numeric: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, notes: 42 }
+		});
+		expect(numeric.isError, numeric.content?.[0]?.text).toBeFalsy();
+		expect(getDocumentLinkById(linkId)).toMatchObject({ label: 'Voucher', url: 'https://example.com/voucher', notes: '42' });
+
+		const cleared: any = await client.callTool({
+			name: 'roamarr_doc_link_update',
+			arguments: { linkId, notes: null }
+		});
+		expect(cleared.isError, cleared.content?.[0]?.text).toBeFalsy();
+		const after = getDocumentLinkById(linkId)!;
+		expect(after.notes).toBeNull();
+		expect(after.label).toBe('Voucher');
+		expect(after.url).toBe('https://example.com/voucher');
+	});
+
 	test('contact_update preserves relationship, email, and primary flag on partial update', async () => {
 		const { createEmergencyContact, getEmergencyContactById } = await import('./repositories/profileRepo');
 		const c = createEmergencyContact(userId, {

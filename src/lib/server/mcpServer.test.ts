@@ -3315,4 +3315,229 @@ describe('mcpServer', () => {
 			]);
 		});
 	});
+	describe('share tools', () => {
+		let shareCounter = 0;
+
+		function setupShare(permission: 'read' | 'edit' = 'read', showDetails = false) {
+			const n = ++shareCounter;
+			const ownerId = makeUser(ctx.kit, { email: `share-owner-${n}@x.c` }).id;
+			const otherId = makeUser(ctx.kit, { email: `share-other-${n}@x.c` }).id;
+			const trip = tripsRepo.createTrip(ownerId, { name: `Share-${n}` });
+			const share = tripsRepo.createShare({
+				tripId: trip.id,
+				sharedWithUserId: otherId,
+				permission,
+				showDetails
+			});
+			return { ownerId, otherId, trip, share };
+		}
+
+		describe('roamarr_share_update', () => {
+			test('applies a permission change and leaves showDetails unchanged', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_update',
+					arguments: { shareId: share.id, permission: 'edit' }
+				});
+				expect(res.isError).toBeFalsy();
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.permission).toBe('edit');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('toggles showDetails only, then back', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_update',
+					arguments: { shareId: share.id, showDetails: true }
+				});
+				expect(res.isError).toBeFalsy();
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.showDetails).toBe(true);
+				expect(after.permission).toBe('read');
+
+				const res2: any = await client.callTool({
+					name: 'roamarr_share_update',
+					arguments: { shareId: share.id, showDetails: false }
+				});
+				expect(res2.isError).toBeFalsy();
+				expect(tripsRepo.getShareById(share.id)!.showDetails).toBe(false);
+			});
+
+			test('rejects a call with neither key provided', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				for (const args of [{ shareId: share.id }, { shareId: share.id, permission: null, showDetails: null }]) {
+					const res: any = await client.callTool({ name: 'roamarr_share_update', arguments: args });
+					expect(res.isError).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('permission or showDetails');
+				}
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.permission).toBe('read');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('rejects invalid permission values', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				for (const permission of ['owner', 'EDIT', '', 7, true, ['edit']]) {
+					const res: any = await client.callTool({
+						name: 'roamarr_share_update',
+						arguments: { shareId: share.id, permission }
+					});
+					expect(res.isError, JSON.stringify(permission)).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('permission');
+				}
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.permission).toBe('read');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('rejects non-boolean showDetails values', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				for (const showDetails of ['false', 'true', 0, 1, '', {}]) {
+					const res: any = await client.callTool({
+						name: 'roamarr_share_update',
+						arguments: { shareId: share.id, showDetails }
+					});
+					expect(res.isError, JSON.stringify(showDetails)).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('showDetails');
+				}
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.showDetails).toBe(false);
+				expect(after.permission).toBe('read');
+			});
+
+			test('rejects invalid shareId values', async () => {
+				const { ownerId, share } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				for (const shareId of ['1', true, 0, 1.5]) {
+					const res: any = await client.callTool({
+						name: 'roamarr_share_update',
+						arguments: { shareId, permission: 'edit' }
+					});
+					expect(res.isError, JSON.stringify(shareId)).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('shareId');
+				}
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.permission).toBe('read');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('rejects a non-owner even with sharing:write', async () => {
+				const { otherId, share } = setupShare('read', false);
+				const { client } = await connect(otherId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_update',
+					arguments: { shareId: share.id, permission: 'edit', showDetails: true }
+				});
+				expect(res.isError).toBe(true);
+				const after = tripsRepo.getShareById(share.id)!;
+				expect(after.permission).toBe('read');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('returns Share not found for an unknown shareId', async () => {
+				const { ownerId } = setupShare('read', false);
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_update',
+					arguments: { shareId: 999999, permission: 'edit' }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Share not found');
+			});
+		});
+
+		describe('roamarr_share_create', () => {
+			test('creates a user share with an explicit permission', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const other = makeUser(ctx.kit);
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_create',
+					arguments: { tripId: trip.id, kind: 'user', email: other.email, permission: 'edit' }
+				});
+				expect(res.isError).toBeFalsy();
+				const after = tripsRepo.getDirectShareForTrip(trip.id, other.id)!;
+				expect(after.permission).toBe('edit');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('rejects an invalid permission and creates no row', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const other = makeUser(ctx.kit);
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_create',
+					arguments: { tripId: trip.id, kind: 'user', email: other.email, permission: 'owner' }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('permission');
+				expect(tripsRepo.getDirectShareForTrip(trip.id, other.id)).toBeNull();
+			});
+
+			test('rejects non-boolean showDetails values and creates no row', async () => {
+				for (const showDetails of ['false', 1]) {
+					const ownerId = makeUser(ctx.kit).id;
+					const other = makeUser(ctx.kit);
+					const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+					const { client } = await connect(ownerId, ['sharing:write']);
+					const res: any = await client.callTool({
+						name: 'roamarr_share_create',
+						arguments: { tripId: trip.id, kind: 'user', email: other.email, showDetails }
+					});
+					expect(res.isError, JSON.stringify(showDetails)).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('showDetails');
+					expect(tripsRepo.getDirectShareForTrip(trip.id, other.id)).toBeNull();
+				}
+			});
+
+			test('creates a share with showDetails true', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const other = makeUser(ctx.kit);
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_create',
+					arguments: { tripId: trip.id, kind: 'user', email: other.email, showDetails: true }
+				});
+				expect(res.isError).toBeFalsy();
+				expect(tripsRepo.getDirectShareForTrip(trip.id, other.id)!.showDetails).toBe(true);
+			});
+
+			test('defaults to read and showDetails false when keys are absent', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const other = makeUser(ctx.kit);
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_create',
+					arguments: { tripId: trip.id, kind: 'user', email: other.email }
+				});
+				expect(res.isError).toBeFalsy();
+				const after = tripsRepo.getDirectShareForTrip(trip.id, other.id)!;
+				expect(after.permission).toBe('read');
+				expect(after.showDetails).toBe(false);
+			});
+
+			test('rejects non-boolean showDetails for a public share and leaves the token unset', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Create trip' });
+				const { client } = await connect(ownerId, ['sharing:write']);
+				const res: any = await client.callTool({
+					name: 'roamarr_share_create',
+					arguments: { tripId: trip.id, kind: 'public', showDetails: 'false' }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('showDetails');
+				expect(tripsRepo.getTripById(trip.id)?.publicToken).toBeNull();
+			});
+		});
+	});
 });

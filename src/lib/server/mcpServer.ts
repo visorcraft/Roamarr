@@ -11,6 +11,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
+import type { SharePermission } from './repositories/tripsRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { requireOwnedTrip, requireEditableTrip, requireViewableTrip, requireOwnedGroup } from './ownership';
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
@@ -105,6 +106,29 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 	if (v.ok()) return { ok: true };
 	const messages = Object.values(v.errors);
 	return { ok: false, error: messages.join('; ') };
+}
+
+type ShareArgsResult =
+	| { ok: true; permission: SharePermission | undefined; showDetails: boolean | undefined }
+	| { ok: false; error: string };
+
+// Strict parsers for the share tools. MCP clients sometimes send "false" or 0
+// for booleans, and Boolean("false") is true, which would silently turn on
+// private-detail visibility for a share. Only real booleans are accepted.
+function parseShareArgs(args: Record<string, unknown>): ShareArgsResult {
+	const permission = args.permission;
+	if (permission != null && permission !== 'read' && permission !== 'edit') {
+		return { ok: false, error: 'permission must be one of: read, edit' };
+	}
+	const showDetails = args.showDetails;
+	if (showDetails != null && typeof showDetails !== 'boolean') {
+		return { ok: false, error: 'showDetails must be a boolean' };
+	}
+	return {
+		ok: true,
+		permission: (permission as SharePermission | undefined) ?? undefined,
+		showDetails: (showDetails as boolean | undefined) ?? undefined
+	};
 }
 
 function destinationCityPatch(
@@ -3231,6 +3255,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { normalizeEmail } = await import('./users');
 				const tripId = Number(args.tripId);
 				requireOwnedTrip(userId, tripId);
+				const parsed = parseShareArgs(args);
+				if (!parsed.ok) return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
 				const kind = String(args.kind);
 				let sharedWithUserId: number | null = null;
 				let sharedWithGroupId: number | null = null;
@@ -3247,7 +3273,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					// Public share mints a per-trip public token via the
 					// existing helper. The web UI does the same.
 					const { _mintPublicToken } = await import('../../routes/trips/[id]/share/+page.server');
-					const publicShowDetails = args.showDetails != null ? Boolean(args.showDetails) : false;
+					const publicShowDetails = parsed.showDetails ?? false;
 					const token = _mintPublicToken(userId, tripId, publicShowDetails, null);
 					logAudit(userId, 'mcp_share_create', 'trip', tripId, { kind: 'public' });
 					return textResult({ kind: 'public', tripId, publicToken: token });
@@ -3258,8 +3284,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					tripId,
 					sharedWithUserId,
 					sharedWithGroupId,
-					permission: (args.permission as any) ?? 'read',
-					showDetails: args.showDetails != null ? Boolean(args.showDetails) : false
+					permission: parsed.permission ?? 'read',
+					showDetails: parsed.showDetails ?? false
 				});
 				logAudit(userId, 'mcp_share_create', 'trip_share', share.id, { tripId });
 				return textResult({ id: share.id, tripId });
@@ -3267,14 +3293,23 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_share_update': {
 				if (!hasScope(scopes, 'sharing:write')) return scopeError('sharing:write');
 				const { updateShare, getShareById } = await import('./repositories/tripsRepo');
-				const id = Number(args.shareId);
+				if (typeof args.shareId !== 'number' || !Number.isSafeInteger(args.shareId) || args.shareId < 1) {
+					return { content: [{ type: 'text' as const, text: 'shareId must be a positive integer' }], isError: true };
+				}
+				const id = args.shareId;
 				const existing = getShareById(id);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Share not found' }], isError: true };
 				requireOwnedTrip(userId, existing.tripId);
-				updateShare(id, {
-					permission: (args.permission as any) ?? undefined,
-					showDetails: args.showDetails != null ? Boolean(args.showDetails) : undefined
-				});
+				const parsed = parseShareArgs(args);
+				if (!parsed.ok) return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
+				if (parsed.permission === undefined && parsed.showDetails === undefined) {
+					return { content: [{ type: 'text' as const, text: 'provide permission or showDetails to update' }], isError: true };
+				}
+				const patch: { permission?: SharePermission; showDetails?: boolean } = {};
+				if (parsed.permission !== undefined) patch.permission = parsed.permission;
+				if (parsed.showDetails !== undefined) patch.showDetails = parsed.showDetails;
+				const updated = updateShare(id, patch);
+				if (!updated) return { content: [{ type: 'text' as const, text: 'Share not found' }], isError: true };
 				logAudit(userId, 'mcp_share_update', 'trip_share', id, {});
 				return textResult({ ok: true, shareId: id });
 			}

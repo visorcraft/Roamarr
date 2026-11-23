@@ -739,7 +739,15 @@ export function updateGroup(id: number, patch: UpdateGroupInput): Group | null {
 }
 
 export function deleteGroup(id: number): number {
-	return Number(kit.deleteFrom(groups).where(kitEq(groups.id, kitId(id))).executeSync());
+	const memberIds = kit
+		.selectFrom(groupMembers)
+		.where(kitEq(groupMembers.group_id, kitId(id)))
+		.executeSync()
+		.map((m) => num(m.user_id));
+	const deleted = Number(kit.deleteFrom(groups).where(kitEq(groups.id, kitId(id))).executeSync());
+	// Cascaded membership/share removal must be invalidated so open streams recompute.
+	if (deleted > 0) publishSharesChanged(memberIds);
+	return deleted;
 }
 
 // Group members

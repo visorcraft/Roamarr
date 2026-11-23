@@ -11,6 +11,8 @@ vi.mock('$lib/server/db', async () => {
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as tripsRepo from './tripsRepo';
 import * as usersRepo from './usersRepo';
+import { subscribeUser } from '../eventBus';
+import { canView } from '$lib/server/sharing';
 import {
 	users,
 	trips,
@@ -147,6 +149,70 @@ test('groups and members persist', () => {
 	tripsRepo.deleteGroup(g.id);
 	expect(tripsRepo.getGroupById(g.id)).toBeNull();
 	expect(kit.selectFrom(groups).where(eq(groups.id, BigInt(g.id))).executeSync()[0]).toBeUndefined();
+});
+
+test('deleteGroup publishes a shares change to every former member', () => {
+	const kit = kitDb();
+	const owner = makeUser('owner@x.c');
+	const member1 = makeUser('member1@x.c');
+	const member2 = makeUser('member2@x.c');
+	const t = makeTrip(owner.id, 'Shared');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
+	tripsRepo.addGroupMember(g.id, member1.id);
+	tripsRepo.addGroupMember(g.id, member2.id);
+	tripsRepo.createShare({ tripId: t.id, sharedWithGroupId: g.id, permission: 'read' });
+	expect(canView(member1.id, t)).toBe(true);
+
+	const events1: Array<{ type: string; kind: string }> = [];
+	const events2: Array<{ type: string; kind: string }> = [];
+	const unsubscribe1 = subscribeUser(member1.id, (e) => events1.push(e as never));
+	const unsubscribe2 = subscribeUser(member2.id, (e) => events2.push(e as never));
+
+	const deleted = tripsRepo.deleteGroup(g.id);
+	expect(deleted).toBe(1);
+	expect(events1).toContainEqual({ type: 'user', kind: 'shares' });
+	expect(events2).toContainEqual({ type: 'user', kind: 'shares' });
+	expect(
+		kit.selectFrom(groupMembers).where(eq(groupMembers.group_id, BigInt(g.id))).executeSync()
+	).toHaveLength(0);
+	expect(canView(member1.id, t)).toBe(false);
+	unsubscribe1!();
+	unsubscribe2!();
+});
+
+test('deleteGroup publishes nothing for non-members or a missing group', () => {
+	const owner = makeUser('owner@x.c');
+	const member = makeUser('member@x.c');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
+	tripsRepo.addGroupMember(g.id, member.id);
+
+	const ownerEvents: Array<{ type: string; kind: string }> = [];
+	const memberEvents: Array<{ type: string; kind: string }> = [];
+	const unsubscribeOwner = subscribeUser(owner.id, (e) => ownerEvents.push(e as never));
+	const unsubscribeMember = subscribeUser(member.id, (e) => memberEvents.push(e as never));
+
+	expect(tripsRepo.deleteGroup(g.id)).toBe(1);
+	expect(ownerEvents).toHaveLength(0);
+	expect(memberEvents).toHaveLength(1);
+
+	expect(tripsRepo.deleteGroup(999999)).toBe(0);
+	expect(ownerEvents).toHaveLength(0);
+	expect(memberEvents).toHaveLength(1);
+	unsubscribeOwner!();
+	unsubscribeMember!();
+});
+
+test('deleteGroup publishes nothing for a group with no members', () => {
+	const owner = makeUser('owner@x.c');
+	const unrelated = makeUser('unrelated@x.c');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'empty' });
+
+	const events: Array<{ type: string; kind: string }> = [];
+	const unsubscribe = subscribeUser(unrelated.id, (e) => events.push(e as never));
+
+	expect(tripsRepo.deleteGroup(g.id)).toBe(1);
+	expect(events).toHaveLength(0);
+	unsubscribe!();
 });
 
 test('comments and public/calendar tokens', () => {

@@ -18,7 +18,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, auditLogs } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
@@ -1008,6 +1008,122 @@ describe('mcpServer', () => {
 		const text = res.content[0].text;
 		expect(text).toContain('status must be one of');
 		expect(text).not.toContain('cancelled');
+	});
+
+	test('trip_delete requires confirm: true', async () => {
+		const trip = makeTrip(ctx.kit, userId, { name: 'DeleteMe' });
+		const { client } = await connect(userId, ['trips:write']);
+
+		const omitted: any = await client.callTool({
+			name: 'roamarr_trip_delete',
+			arguments: { tripId: trip.id }
+		});
+		expect(omitted.isError).toBe(true);
+		expect(String(omitted.content?.[0]?.text ?? '')).toContain('confirm');
+		expect(tripsRepo.getTripById(trip.id)).toBeTruthy();
+
+		for (const confirm of [false, 'true', 1]) {
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_delete',
+				arguments: { tripId: trip.id, confirm }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toContain('confirm');
+			expect(tripsRepo.getTripById(trip.id)).toBeTruthy();
+		}
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(trip.id)))
+			.executeSync();
+		expect(auditRows.filter((r: any) => r.action === 'mcp_trip_delete')).toHaveLength(0);
+	});
+
+	test('trip_delete rejects an invalid tripId before deleting anything', async () => {
+		const trip = makeTrip(ctx.kit, userId, { name: 'DeleteMe' });
+		const { client } = await connect(userId, ['trips:write']);
+
+		const invalidArgs: Array<Record<string, unknown>> = [
+			{},
+			{ tripId: 'abc' },
+			{ tripId: 0 },
+			{ tripId: -1 },
+			{ tripId: 1.5 },
+			{ tripId: null },
+			{ tripId: true },
+			{ tripId: [7] }
+		];
+		for (const extra of invalidArgs) {
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_delete',
+				arguments: { confirm: true, ...extra }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toContain('tripId');
+			expect(tripsRepo.getTripById(trip.id)).toBeTruthy();
+		}
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(trip.id)))
+			.executeSync();
+		expect(auditRows.filter((r: any) => r.action === 'mcp_trip_delete')).toHaveLength(0);
+	});
+
+	test('trip_delete rejects another user’s trip (IDOR)', async () => {
+		const other = makeUser(ctx.kit).id;
+		const otherTrip = makeTrip(ctx.kit, other, { name: 'Theirs' });
+		const { client } = await connect(userId, ['trips:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_delete',
+			arguments: { tripId: otherTrip.id, confirm: true }
+		});
+		expect(res.isError).toBe(true);
+		expect(String(res.content?.[0]?.text ?? '')).toMatch(/not found/i);
+		expect(tripsRepo.getTripById(otherTrip.id)).toBeTruthy();
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(otherTrip.id)))
+			.executeSync();
+		expect(
+			auditRows.filter((r: any) => r.action === 'mcp_trip_delete' && Number(r.user_id) === userId)
+		).toHaveLength(0);
+	});
+
+	test('trip_delete requires the trips:write scope', async () => {
+		const trip = makeTrip(ctx.kit, userId, { name: 'DeleteMe' });
+		const { client } = await connect(userId, ['trips:read']);
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_delete',
+			arguments: { tripId: trip.id, confirm: true }
+		});
+		expect(res.isError).toBe(true);
+		expect(String(res.content?.[0]?.text ?? '')).toContain('trips:write');
+		expect(tripsRepo.getTripById(trip.id)).toBeTruthy();
+	});
+
+	test('trip_delete removes the trip and writes an audit row', async () => {
+		const trip = makeTrip(ctx.kit, userId, { name: 'DeleteMe' });
+		const { client } = await connect(userId, ['trips:write']);
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_delete',
+			arguments: { tripId: trip.id, confirm: true }
+		});
+		expect(res.isError).toBeFalsy();
+		const body = JSON.parse(res.content[0].text);
+		expect(body.ok).toBe(true);
+		expect(body.deleted).toBe(true);
+		expect(tripsRepo.getTripById(trip.id)).toBeFalsy();
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(trip.id)))
+			.executeSync();
+		const mcpRows = auditRows.filter(
+			(r: any) => r.action === 'mcp_trip_delete' && Number(r.user_id) === userId
+		);
+		expect(mcpRows).toHaveLength(1);
 	});
 
 	test('places_mark records ai source and ISO-3166-2 state codes', async () => {

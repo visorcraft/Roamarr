@@ -2779,10 +2779,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_delete': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
-				if (args.confirm !== true) {
-					return { content: [{ type: 'text' as const, text: 'confirm: true is required to delete a trip' }], isError: true };
+				const confirmErr = requireConfirm(args, 'roamarr_trip_delete');
+				if (confirmErr) return confirmErr;
+				const raw = args.tripId;
+				const tripId = Number(raw);
+				if (typeof raw !== 'number' || !Number.isSafeInteger(tripId) || tripId <= 0) {
+					return { content: [{ type: 'text' as const, text: 'tripId must be a positive integer' }], isError: true };
 				}
-				const tripId = Number(args.tripId);
 				// Use the same helper as the web UI: cancels trip + segment
 				// reminders, then deletes, then logs trip_delete. MCP logs
 				// its own mcp_trip_delete on top for traceability.

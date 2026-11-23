@@ -20,7 +20,7 @@
 			<Icon name="empty" class="h-6 w-6" />
 		{/if}
 	</div>
-	<p class="text-slate-300">{message}</p>
+	<p class="text-[var(--theme-ink)]">{message}</p>
 	{#if actionHref && actionLabel}
 		<a href={actionHref} class="btn btn-primary mt-1">{actionLabel}</a>
 	{/if}

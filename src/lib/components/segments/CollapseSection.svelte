@@ -22,7 +22,7 @@
 		aria-controls={panelId}
 		onclick={() => (open = !open)}
 	>
-		<span class="font-medium text-slate-200">{title}</span>
+		<span class="font-medium text-[var(--theme-ink)]">{title}</span>
 		<span class="link text-sm no-underline">{open ? 'Show less' : 'Show more'}</span>
 	</button>
 	{#if open}

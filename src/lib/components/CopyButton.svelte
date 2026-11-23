@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import { onDestroy } from 'svelte';
+	import { m } from '$lib/paraglide/messages';
 	import { copyToClipboard } from '$lib/copy';
 	import Icon from './Icon.svelte';
 	import type { IconName } from '$lib/icons';
@@ -14,8 +15,8 @@
 
 	let {
 		text,
-		label = 'Copy',
-		copiedLabel = 'Copied!',
+		label = m.common_copy(),
+		copiedLabel = m.common_copied(),
 		icon,
 		class: className = 'btn btn-ghost',
 		...rest

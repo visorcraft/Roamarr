@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { HTMLButtonAttributes } from 'svelte/elements';
+	import { m } from '$lib/paraglide/messages';
 	import Modal from './Modal.svelte';
 
 	interface Props extends HTMLButtonAttributes {
@@ -13,8 +14,8 @@
 	let {
 		message,
 		children,
-		title = 'Are you sure?',
-		confirmLabel = 'Confirm',
+		title = m.common_confirm_title(),
+		confirmLabel = m.common_confirm(),
 		type = 'submit',
 		class: className = 'btn btn-ghost',
 		...rest
@@ -30,7 +31,7 @@
 <Modal {open} {title} onclose={() => (open = false)}>
 	<p style="color: var(--theme-readable-muted);">{message}</p>
 	{#snippet actions()}
-		<button type="button" class="btn btn-ghost" onclick={() => (open = false)}>Cancel</button>
+		<button type="button" class="btn btn-ghost" onclick={() => (open = false)}>{m.common_cancel()}</button>
 		<button {type} class="btn btn-danger" onclick={() => (open = false)}>{confirmLabel}</button>
 	{/snippet}
 </Modal>

@@ -103,5 +103,14 @@
 	"page_title_trip_new": "New trip",
 	"page_title_users": "Users",
 	"page_title_user_edit": "Edit user",
-	"page_title_user_new": "Create user"
+	"page_title_user_new": "Create user",
+	"common_cancel": "Cancel",
+	"common_confirm": "Confirm",
+	"common_confirm_title": "Are you sure?",
+	"common_copy": "Copy",
+	"common_copied": "Copied!",
+	"common_discard_title": "Discard changes?",
+	"common_discard_message": "Any unsaved changes will be lost.",
+	"common_discard_confirm": "Discard changes",
+	"common_discard_cancel": "Keep editing"
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { m } from '$lib/paraglide/messages';
 	import Modal from './Modal.svelte';
 
 	interface Props {
@@ -17,10 +18,10 @@
 		onConfirm,
 		children,
 		class: className = 'btn btn-ghost',
-		message = 'Any unsaved changes will be lost.',
-		confirmLabel = 'Discard changes',
-		cancelLabel = 'Keep editing',
-		title = 'Discard changes?',
+		message = m.common_discard_message(),
+		confirmLabel = m.common_discard_confirm(),
+		cancelLabel = m.common_discard_cancel(),
+		title = m.common_discard_title(),
 		dirty = true
 	}: Props = $props();
 

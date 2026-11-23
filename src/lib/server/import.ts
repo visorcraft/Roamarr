@@ -110,8 +110,29 @@ function parseCsvLine(line: string): string[] {
 	return result;
 }
 
+function splitCsvRecords(text: string): string[] {
+	const records: string[] = [];
+	let current = '';
+	let inQuotes = false;
+	for (let i = 0; i < text.length; i++) {
+		const c = text[i]!;
+		if (c === '"') {
+			inQuotes = !inQuotes;
+			current += c;
+		} else if (c === '\n' && !inQuotes) {
+			if (current.endsWith('\r')) current = current.slice(0, -1);
+			records.push(current);
+			current = '';
+		} else {
+			current += c;
+		}
+	}
+	records.push(current);
+	return records;
+}
+
 export function parseCsv(text: string): { trips: ImportTrip[] } {
-	const lines = text.split(/\r?\n/).filter((l) => l.trim());
+	const lines = splitCsvRecords(text).filter((l) => l.trim());
 	if (lines.length < 2) throw new Error('CSV must have a header and at least one data row');
 	const headers = parseCsvLine(lines[0]!);
 	const groups = new Map<string, ImportTrip>();

@@ -271,6 +271,38 @@ test('parseCsv groups multi-segment rows into one trip', () => {
 	expect(parsed.trips[0].segments![1].type).toBe('hotel');
 });
 
+test('parseCsv keeps quoted line breaks inside a field', () => {
+	const csv = [
+		'name,notes,segmentType,segmentTitle',
+		'"Multi',
+		'line","Line one',
+		'Line two",flight,Out'
+	].join('\n');
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.name).toBe('Multi\nline');
+	expect(parsed.trips[0]!.notes).toBe('Line one\nLine two');
+	expect(parsed.trips[0]!.segments).toHaveLength(1);
+	expect(parsed.trips[0]!.segments![0]!.type).toBe('flight');
+	expect(parsed.trips[0]!.segments![0]!.title).toBe('Out');
+});
+
+test('parseCsv accepts CRLF records and preserves CRLF inside quotes', () => {
+	const csv = 'name,notes,startDate\r\n"Trip","a\r\nb",2026-08-01\r\n';
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.notes).toBe('a\r\nb');
+	expect(parsed.trips[0]!.startDate).toBe('2026-08-01');
+});
+
+test('parseCsv keeps doubled quotes and a lone carriage return intact', () => {
+	const csv = 'name,notes\n"Say ""hi""","a\rb"';
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.name).toBe('Say "hi"');
+	expect(parsed.trips[0]!.notes).toBe('a\rb');
+});
+
 test('csv round-trip preserves multi-segment trips', () => {
 	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
 	const u = makeUser('round@x.c');
@@ -283,6 +315,41 @@ test('csv round-trip preserves multi-segment trips', () => {
 	expect(result.imported).toBe(1);
 	expect(result.segmentCount).toBe(2);
 	expect(kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(u.id))).executeSync()).toHaveLength(2);
+});
+
+test('csv round-trip preserves multi-line notes and segment fields', () => {
+	const kit = (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
+	const owner = makeUser('round-owner@x.c');
+	const other = makeUser('round-other@x.c');
+	const trip = tripsRepo.createTrip(Number(owner.id), {
+		name: 'Notes',
+		startDate: '2026-08-01',
+		endDate: '2026-08-10',
+		notes: 'Line one\nLine two'
+	});
+	segmentsRepo.createSegment({
+		trip_id: BigInt(trip.id),
+		type: 'flight',
+		title: 'Out',
+		start_at: '2026-08-01T10:00:00Z',
+		start_tz: 'UTC',
+		location: 'Gate\n4B'
+	});
+
+	const csv = exportTripsCsv(Number(owner.id));
+	const result = importTrips(Number(other.id), parseCsv(csv));
+	expect(result.imported).toBe(1);
+	expect(result.segmentCount).toBe(1);
+	expect(result.errors).toEqual([]);
+	const importedTrips = kit.selectFrom(trips).where(eq(trips.owner_id, BigInt(other.id))).executeSync();
+	expect(importedTrips).toHaveLength(1);
+	expect(importedTrips[0]!.notes).toBe('Line one\nLine two');
+	const importedSegments = kit
+		.selectFrom(segments)
+		.where(eq(segments.trip_id, importedTrips[0]!.id))
+		.executeSync();
+	expect(importedSegments).toHaveLength(1);
+	expect(importedSegments[0]!.location).toBe('Gate\n4B');
 });
 
 test('importTrips keeps the trip when one mail hold is invalid', () => {

@@ -9,6 +9,10 @@ import { createSegment } from '$lib/server/repositories/segmentsRepo';
 import { addMailHold } from '$lib/server/tripMailHolds';
 import { resolveCitySelection } from '$lib/server/cities';
 
+function isObjectLike(value: unknown): boolean {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 interface ImportSegment {
 	type: SegmentType;
 	title: string;
@@ -185,7 +189,12 @@ interface ResolvedImportDestination {
 
 function validateTrip(
 	input: ImportTrip
-): { errors: ImportError[]; destination: ResolvedImportDestination } {
+): {
+	errors: ImportError[];
+	destination: ResolvedImportDestination;
+	startDate: string | undefined;
+	endDate: string | undefined;
+} {
 	const v = new Validator();
 	v.requiredString(input.name, 'name', { max: 200 });
 	const countryCode = input.destinationCountryCode
@@ -242,7 +251,9 @@ function validateTrip(
 			destinationCityName,
 			destinationCityLat,
 			destinationCityLng
-		}
+		},
+		startDate,
+		endDate
 	};
 }
 
@@ -269,7 +280,11 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 	for (let i = 0; i < input.trips.length; i++) {
 		const tripInput = input.trips[i]!;
 		const row = i + 1;
-		const { errors: tripErrorsRaw, destination } = validateTrip(tripInput);
+		if (!isObjectLike(tripInput)) {
+			result.errors.push({ row, field: 'trip', message: 'Trip must be an object' });
+			continue;
+		}
+		const { errors: tripErrorsRaw, destination, startDate, endDate } = validateTrip(tripInput);
 		const tripErrors = tripErrorsRaw.map((e) => ({ ...e, row }));
 		if (tripErrors.length) {
 			result.errors.push(...tripErrors);
@@ -281,6 +296,10 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 		if (tripInput.segments) {
 			for (let j = 0; j < tripInput.segments.length; j++) {
 				const segInput = tripInput.segments[j]!;
+				if (!isObjectLike(segInput)) {
+					result.errors.push({ row, field: `segment.${j}`, message: 'Segment must be an object' });
+					continue;
+				}
 				const segErrors = validateSegment(segInput, j).map((e) => ({ ...e, row }));
 				if (segErrors.length) {
 					result.errors.push(...segErrors);
@@ -298,8 +317,8 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 				destinationCityName: destination.destinationCityName,
 				destinationCityLat: destination.destinationCityLat ?? undefined,
 				destinationCityLng: destination.destinationCityLng ?? undefined,
-				startDate: tripInput.startDate,
-				endDate: tripInput.endDate,
+				startDate,
+				endDate,
 				segments: validSegments.map((s) => ({
 					type: s.type,
 					title: s.title.trim(),
@@ -323,8 +342,8 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 			destinationCityName: destination.destinationCityName ?? null,
 			destinationCityLat: destination.destinationCityLat ?? null,
 			destinationCityLng: destination.destinationCityLng ?? null,
-			startDate: tripInput.startDate,
-			endDate: tripInput.endDate,
+			startDate,
+			endDate,
 			notes: tripInput.notes,
 			defaultVisibility: (tripInput.defaultVisibility || 'private') as 'private' | 'groups' | 'public',
 			publicToken
@@ -350,6 +369,10 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 
 		for (let j = 0; j < (tripInput.mailHolds?.length ?? 0); j++) {
 			const hold = tripInput.mailHolds![j]!;
+			if (!isObjectLike(hold)) {
+				result.errors.push({ row, field: `mailHold.${j}`, message: 'Invalid mail hold' });
+				continue;
+			}
 			try {
 				addMailHold(userId, trip.id, {
 					carrier: hold.carrier,

@@ -387,3 +387,100 @@ test('importTrips keeps the trip when one mail hold is invalid', () => {
 		status: 'active'
 	});
 });
+
+test('importTrips reports non-object trip entries and keeps importing', () => {
+	const u = makeUser('nonobj-trip@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{ name: 'A', startDate: '2026-08-01' },
+			null,
+			'oops',
+			{ name: 'B', startDate: '2026-08-01' }
+		] as any
+	});
+	expect(result.imported).toBe(2);
+	expect(result.segmentCount).toBe(0);
+	expect(result.errors).toEqual([
+		{ row: 2, field: 'trip', message: 'Trip must be an object' },
+		{ row: 3, field: 'trip', message: 'Trip must be an object' }
+	]);
+	const stored = tripsRepo.listTripsForUser(Number(u.id));
+	expect(stored.map((t) => t.name).sort()).toEqual(['A', 'B']);
+});
+
+test('importTrips reports non-object segment entries and keeps valid segments', () => {
+	const u = makeUser('nonobj-seg@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Mixed',
+				segments: [
+					{ type: 'flight', title: 'Out', localStart: '2026-08-01T10:00', startTz: 'UTC' },
+					null,
+					'flight'
+				] as any
+			}
+		]
+	});
+	expect(result.imported).toBe(1);
+	expect(result.segmentCount).toBe(1);
+	expect(result.errors).toEqual([
+		{ row: 1, field: 'segment.1', message: 'Segment must be an object' },
+		{ row: 1, field: 'segment.2', message: 'Segment must be an object' }
+	]);
+	const trip = tripsRepo.listTripsForUser(Number(u.id))[0];
+	const segs = segmentsRepo.listSegmentsForTrip(trip!.id);
+	expect(segs).toHaveLength(1);
+	expect(segs[0]!.title).toBe('Out');
+});
+
+test('importTrips reports a non-object mail hold without an internal message', () => {
+	const u = makeUser('nonobj-hold@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Away',
+				startDate: '2026-08-01',
+				mailHolds: [null] as any
+			}
+		]
+	});
+	expect(result.imported).toBe(1);
+	expect(result.errors).toEqual([{ row: 1, field: 'mailHold.0', message: 'Invalid mail hold' }]);
+	expect(result.errors[0]!.message).not.toMatch(/Cannot read properties/);
+	const trip = tripsRepo.listTripsForUser(Number(u.id))[0];
+	expect(listMailHoldsForTrip(trip!.id)).toEqual([]);
+});
+
+test('importTrips dry run reports non-object entries without writing', () => {
+	const u = makeUser('nonobj-dry@x.c');
+	const result = importTrips(Number(u.id), { trips: [null] as any }, true);
+	expect(result.imported).toBe(0);
+	expect(result.preview).toEqual([]);
+	expect(result.errors).toEqual([{ row: 1, field: 'trip', message: 'Trip must be an object' }]);
+	expect(tripsRepo.listTripsForUser(Number(u.id))).toHaveLength(0);
+});
+
+test('importTrips stores normalized trip dates from JSON', () => {
+	const u = makeUser('norm-dates@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{ name: 'Padded', startDate: ' 2026-08-01 ', endDate: '2026-08-10' },
+			{ name: 'Empty', startDate: '' }
+		]
+	});
+	expect(result.imported).toBe(2);
+	expect(result.errors).toEqual([]);
+	const stored = tripsRepo.listTripsForUser(Number(u.id));
+	const padded = stored.find((t) => t.name === 'Padded');
+	const empty = stored.find((t) => t.name === 'Empty');
+	expect(padded?.startDate).toBe('2026-08-01');
+	expect(padded?.endDate).toBe('2026-08-10');
+	expect(empty?.startDate).toBeNull();
+	const dry = importTrips(
+		Number(u.id),
+		{ trips: [{ name: 'Padded', startDate: ' 2026-08-01 ', endDate: '2026-08-10' }] },
+		true
+	);
+	expect(dry.preview![0]!.startDate).toBe('2026-08-01');
+});

@@ -4676,7 +4676,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const { getFareWatchById } = await import('./repositories/travelDataRepo');
 			const w = getFareWatchById(Number(fareMatch[1]));
 			if (!w) throw new Error('Fare watch not found');
-			requireViewableTrip(userId, w.tripId);
+			requireOwnedTrip(userId, w.tripId);
 			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ fareWatch: w }) }] };
 		}
 		throw new Error(`Unknown resource URI: ${uri}`);

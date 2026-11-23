@@ -1494,6 +1494,70 @@ describe('mcpServer', () => {
 		});
 	});
 
+	describe('resources/read fare-watch://', () => {
+		async function makeOwnedWatch() {
+			const ownerId = makeUser(ctx.kit).id;
+			const trip = tripsRepo.createTrip(ownerId, { name: 'Fare trip' });
+			const { createProvider, toggleWatch } = await import('./fareproviders');
+			const provider = createProvider(ownerId, 'stub', 'Work', 'SECRET-KEY', true);
+			const watch = toggleWatch(ownerId, trip.id, provider.id);
+			return { ownerId, trip, watch };
+		}
+
+		test('read-only viewer (showDetails: false) is rejected', async () => {
+			const { trip, watch } = await makeOwnedWatch();
+			const viewerId = makeUser(ctx.kit).id;
+			tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read', showDetails: false });
+			const { client } = await connect(viewerId, ['fares:read']);
+			await expect(client.readResource({ uri: `fare-watch://${watch.id}` })).rejects.toThrow();
+		});
+
+		test('read-only viewer with showDetails: true is still rejected', async () => {
+			const { trip, watch } = await makeOwnedWatch();
+			const viewerId = makeUser(ctx.kit).id;
+			tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read', showDetails: true });
+			const { client } = await connect(viewerId, ['fares:read']);
+			await expect(client.readResource({ uri: `fare-watch://${watch.id}` })).rejects.toThrow();
+		});
+
+		test('editor is rejected', async () => {
+			const { trip, watch } = await makeOwnedWatch();
+			const editorId = makeUser(ctx.kit).id;
+			tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit' });
+			const { client } = await connect(editorId, ['fares:read']);
+			await expect(client.readResource({ uri: `fare-watch://${watch.id}` })).rejects.toThrow();
+		});
+
+		test('unrelated user is rejected', async () => {
+			const { watch } = await makeOwnedWatch();
+			const strangerId = makeUser(ctx.kit).id;
+			const { client } = await connect(strangerId, ['fares:read']);
+			await expect(client.readResource({ uri: `fare-watch://${watch.id}` })).rejects.toThrow();
+		});
+
+		test('owner without fares:read scope is rejected', async () => {
+			const { ownerId, watch } = await makeOwnedWatch();
+			const { client } = await connect(ownerId, ['trips:read']);
+			await expect(client.readResource({ uri: `fare-watch://${watch.id}` })).rejects.toThrow();
+		});
+
+		test('non-existent id throws Fare watch not found', async () => {
+			const { client } = await connect(userId, ['fares:read']);
+			await expect(client.readResource({ uri: 'fare-watch://999999999' })).rejects.toThrow('Fare watch not found');
+		});
+
+		test('owner with fares:read reads the watch', async () => {
+			const { ownerId, trip, watch } = await makeOwnedWatch();
+			const { client } = await connect(ownerId, ['fares:read']);
+			const res = await client.readResource({ uri: `fare-watch://${watch.id}` });
+			const text = resourceText(res);
+			const parsed = JSON.parse(text);
+			expect(parsed.fareWatch.id).toBe(watch.id);
+			expect(parsed.fareWatch.tripId).toBe(trip.id);
+			expect(parsed.fareWatch).toHaveProperty('lastResultJson');
+		});
+	});
+
 	describe('saved places tools', () => {
 		beforeEach(() => {
 			ctx.kit.deleteFrom(placeLinks).executeSync();

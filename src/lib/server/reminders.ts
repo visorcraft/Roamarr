@@ -38,20 +38,28 @@ export function computeFireAt(
 		mailHoldLeadDays?: number;
 		customOffsetMinutes?: number;
 	} = {}
-): string {
+): string | null {
 	if (kind === 'custom') {
 		const offset = opts.customOffsetMinutes ?? 0;
-		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ minutes: offset }).toUTC().toISO()!;
+		const base = DateTime.fromISO(ref, { zone: 'utc' });
+		if (!base.isValid) return null;
+		const fire = base.minus({ minutes: offset });
+		return fire.isValid ? fire.toUTC().toISO() : null;
 	}
 	const { tz = 'UTC', flightCheckinLeadHours = 24, documentExpiryLeadDays = 90, mailHoldLeadDays = DEFAULT_MAIL_HOLD_LEAD_DAYS } = opts;
-	if (kind === 'flight_checkin')
-		return DateTime.fromISO(ref, { zone: 'utc' }).minus({ hours: flightCheckinLeadHours }).toUTC().toISO()!;
+	if (kind === 'flight_checkin') {
+		const base = DateTime.fromISO(ref, { zone: 'utc' });
+		if (!base.isValid) return null;
+		const fire = base.minus({ hours: flightCheckinLeadHours });
+		return fire.isValid ? fire.toUTC().toISO() : null;
+	}
+	const base = DateTime.fromISO(ref, { zone: tz });
+	if (!base.isValid) return null;
 	const leadDays = kind === 'mail_hold' ? mailHoldLeadDays : documentExpiryLeadDays;
-	return DateTime.fromISO(ref, { zone: tz })
+	const fire = base
 		.set({ hour: 9, minute: 0, second: 0, millisecond: 0 })
-		.minus({ days: leadDays })
-		.toUTC()
-		.toISO()!;
+		.minus({ days: leadDays });
+	return fire.isValid ? fire.toUTC().toISO() : null;
 }
 
 function arm(
@@ -59,8 +67,9 @@ function arm(
 	kind: ReminderKind,
 	refType: ReminderRef,
 	refId: number,
-	fireAt: string
+	fireAt: string | null
 ) {
+	if (fireAt == null) return;
 	const now = nowIso();
 	const status = fireAt > now ? 'pending' : 'sent';
 	upsertReminderBySource({ userId, kind, refType, refId, fireAt, status, attempts: 0, sentAt: null });

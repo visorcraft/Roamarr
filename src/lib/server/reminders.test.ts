@@ -224,3 +224,50 @@ test('delivered notification copy is generic and links to documents for expiry',
 	expect(delivered[0].m.body).toBe('A travel document is expiring soon.');
 	expect(delivered[0].m.link).toBe('/profile/documents');
 });
+
+test('a flight segment with an unparseable startAt arms no reminder', () => {
+	const seg = makeSegment(kit, trip.id, {
+		type: 'flight',
+		title: 'UA1',
+		startAt: 'not-a-date',
+		startTz: 'UTC'
+	});
+	upsertRemindersForSegment(seg as any);
+	const list = listRemindersForUser(owner.id);
+	expect(list.filter((r) => r.refType === 'segment' && r.refId === seg.id)).toHaveLength(0);
+	expect(list.every((r) => r.fireAt != null && r.status !== 'sent')).toBe(true);
+});
+
+test('a travel document with an unparseable expiresOn arms no reminder', () => {
+	const doc = makeTravelDocument(kit, owner.id, {
+		type: 'passport',
+		expiresOn: '2026-02-30'
+	});
+	upsertRemindersForDocument(doc as any);
+	const list = listRemindersForUser(owner.id);
+	expect(list.filter((r) => r.refType === 'document' && r.refId === doc.id)).toHaveLength(0);
+});
+
+test('an existing reminder survives a re-arm with an unparseable reference', () => {
+	const seg = makeSegment(kit, trip.id, {
+		type: 'flight',
+		title: 'UA1',
+		startAt: '2099-01-02T00:00:00.000Z',
+		startTz: 'UTC'
+	});
+	upsertRemindersForSegment(seg as any);
+	const before = listRemindersForUser(owner.id).filter(
+		(r) => r.refType === 'segment' && r.refId === seg.id
+	);
+	expect(before).toHaveLength(1);
+	expect(before[0].fireAt).not.toBeNull();
+	expect(before[0].status).toBe('pending');
+
+	upsertRemindersForSegment({ ...seg, startAt: '' } as any);
+	const after = listRemindersForUser(owner.id).filter(
+		(r) => r.refType === 'segment' && r.refId === seg.id
+	);
+	expect(after).toHaveLength(1);
+	expect(after[0].fireAt).toBe(before[0].fireAt);
+	expect(after[0].status).toBe(before[0].status);
+});

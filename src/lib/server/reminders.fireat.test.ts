@@ -44,3 +44,29 @@ test('localToUtc ignores numeric offsets the same way', () => {
 	expect(localToUtc('2026-12-01T22:50:00-06:00', 'America/Chicago')).toBe('2026-12-02T04:50:00.000Z');
 	expect(localToUtc('2026-08-01T15:00:00+07:00', 'Asia/Bangkok')).toBe('2026-08-01T08:00:00.000Z');
 });
+
+test('flight_checkin returns null for an unparseable reference', () => {
+	expect(computeFireAt('flight_checkin', 'not-a-date')).toBeNull();
+});
+
+test('custom returns null for an empty reference', () => {
+	expect(computeFireAt('custom', '', { customOffsetMinutes: 30 })).toBeNull();
+});
+
+test('document_expiry returns null for an out-of-range date', () => {
+	expect(computeFireAt('document_expiry', '2026-02-30', { tz: 'America/New_York' })).toBeNull();
+});
+
+test('document_expiry returns null for an unsupported zone', () => {
+	expect(computeFireAt('document_expiry', '2026-12-30', { tz: 'Not/AZone' })).toBeNull();
+});
+
+test('mail_hold returns null for a non-ISO end date', () => {
+	expect(computeFireAt('mail_hold', '12/30/2026', { tz: 'UTC' })).toBeNull();
+});
+
+test('mail_hold happy path: 09:00 local minus lead days', () => {
+	expect(computeFireAt('mail_hold', '2026-12-30', { tz: 'America/New_York', mailHoldLeadDays: 7 })).toBe(
+		'2026-12-23T14:00:00.000Z'
+	);
+});

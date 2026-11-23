@@ -55,6 +55,7 @@
 	let open = $state(false);
 	let activeIndex = $state(-1);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
 	function optionId(i: number): string {
@@ -66,7 +67,17 @@
 		activeIndex = open && suggestions.length > 0 ? 0 : -1;
 	});
 
+	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
+	function cancelPendingLookup() {
+		if (timer) {
+			clearTimeout(timer);
+			timer = null;
+		}
+		requestSeq++;
+	}
+
 	function selectCity(city: CitySuggestion) {
+		cancelPendingLookup();
 		overrideName = city.name;
 		overrideLat = String(city.lat);
 		overrideLng = String(city.lng);
@@ -75,7 +86,7 @@
 		activeIndex = -1;
 	}
 
-	async function fetchSuggestions(query: string) {
+	async function fetchSuggestions(query: string, seq: number) {
 		if (typeof window === 'undefined') return;
 		if (!countryCode || query.length < 2) {
 			suggestions = [];
@@ -91,9 +102,11 @@
 			const res = await fetch(`/api/cities?${params}`);
 			if (!res.ok) return;
 			const data = await res.json();
+			if (seq !== requestSeq) return;
 			suggestions = (data.cities ?? []) as CitySuggestion[];
 			open = suggestions.length > 0;
 		} catch {
+			if (seq !== requestSeq) return;
 			suggestions = [];
 			open = false;
 		}
@@ -105,7 +118,8 @@
 		overrideLat = '';
 		overrideLng = '';
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => fetchSuggestions(next), 150);
+		const seq = ++requestSeq;
+		timer = setTimeout(() => fetchSuggestions(next, seq), 150);
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -163,6 +177,7 @@
 	}
 
 	function onBlur() {
+		cancelPendingLookup();
 		setTimeout(() => {
 			open = false;
 		}, 150);

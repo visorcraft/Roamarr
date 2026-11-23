@@ -47,6 +47,7 @@
 	let open = $state(false);
 	let activeIndex = $state(-1);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
 	function optionId(i: number): string {
@@ -57,7 +58,17 @@
 		activeIndex = open && suggestions.length > 0 ? 0 : -1;
 	});
 
+	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
+	function cancelPendingLookup() {
+		if (timer) {
+			clearTimeout(timer);
+			timer = null;
+		}
+		requestSeq++;
+	}
+
 	function selectOption(s: AutocompleteSuggestion) {
+		cancelPendingLookup();
 		inputValue = s.label;
 		selectedId = String(s.id);
 		selectedLabel = s.label;
@@ -68,6 +79,7 @@
 	}
 
 	function clearSelection() {
+		cancelPendingLookup();
 		inputValue = '';
 		selectedId = '';
 		selectedLabel = '';
@@ -76,7 +88,7 @@
 		onselect?.(null);
 	}
 
-	async function runFetch(query: string) {
+	async function runFetch(query: string, seq: number) {
 		if (typeof window === 'undefined') return;
 		if (query.trim().length < 1) {
 			suggestions = [];
@@ -85,9 +97,11 @@
 		}
 		try {
 			const rows = await fetchSuggestions(query);
+			if (seq !== requestSeq) return;
 			suggestions = rows;
 			open = rows.length > 0;
 		} catch {
+			if (seq !== requestSeq) return;
 			suggestions = [];
 			open = false;
 		}
@@ -99,7 +113,8 @@
 		selectedLabel = '';
 		onselect?.(null);
 		if (timer) clearTimeout(timer);
-		timer = setTimeout(() => runFetch(next), 150);
+		const seq = ++requestSeq;
+		timer = setTimeout(() => runFetch(next, seq), 150);
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -155,6 +170,7 @@
 	}
 
 	function onBlur() {
+		cancelPendingLookup();
 		setTimeout(() => {
 			open = false;
 		}, 150);

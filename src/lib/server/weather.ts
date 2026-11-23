@@ -522,12 +522,21 @@ export async function tripWeatherOverview(
 	// Days past the forecast horizon fall back to typical (climatological)
 	// weather, capped so long trips don't fan out unbounded archive requests.
 	const climateEnd = maxDate.plus({ days: CLIMATE_MAX_DAYS });
-	const tripEnd = trip.endDate ? DateTime.fromISO(trip.endDate).endOf('day') : maxDate;
+	// A missing or unparseable end date leaves the horizon unknown, so it uses
+	// the default forecast window. An invalid DateTime compares false against
+	// everything, so without the isValid guard a malformed end date would
+	// silently widen the range to the climate cap.
+	const parsedEnd = trip.endDate ? DateTime.fromISO(trip.endDate) : null;
+	const tripEnd = parsedEnd?.isValid ? parsedEnd.endOf('day') : maxDate;
 	const lastDay = tripEnd < climateEnd ? tripEnd : climateEnd;
 
-	let cursor = DateTime.fromISO(trip.startDate).startOf('day');
-	if (cursor < today) cursor = today;
-	if (cursor > lastDay)
+	// An unparseable start date has no day to iterate from. Report no
+	// forecastable dates rather than falling through the loop to the
+	// "Forecast unavailable" result, which signals a provider failure.
+	const parsedStart = DateTime.fromISO(trip.startDate);
+	let cursor = parsedStart.isValid ? parsedStart.startOf('day') : null;
+	if (cursor && cursor < today) cursor = today;
+	if (!cursor || cursor > lastDay)
 		return {
 			headline: 'No forecastable dates in range.',
 			days: [],

@@ -420,6 +420,138 @@ describe('weather', () => {
 		expect(w!.headline).toBe('No forecastable dates in range.');
 	});
 
+	test('tripWeatherOverview keeps the default window when the trip end date is unparseable', async () => {
+		const u = makeUser(ctx.kit);
+		const today = DateTime.now().toISODate()!;
+		fetchMock.mockImplementation(async (url: string) =>
+			String(url).includes('archive')
+				? { ok: true, json: async () => ({ daily: { time: [], temperature_2m_max: [], temperature_2m_min: [] } }) }
+				: { ok: true, json: async () => mockForecastResponse([]) }
+		);
+		const control = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: today,
+			endDate: null,
+			status: 'booked'
+		});
+		const malformed = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: today,
+			endDate: 'not-a-date',
+			status: 'booked'
+		});
+		const controlWeather = await tripWeatherOverview(control.id, u.id);
+		expect(controlWeather).not.toBeNull();
+		const controlDates = controlWeather!.days.map((d) => d.date);
+
+		fetchMock.mockClear();
+		const malformedWeather = await tripWeatherOverview(malformed.id, u.id);
+		expect(malformedWeather).not.toBeNull();
+		expect(malformedWeather!.days.map((d) => d.date)).toEqual(controlDates);
+		expect(malformedWeather!.days.every((d) => !d.typical)).toBe(true);
+		expect(malformedWeather!.days.length).toBeLessThanOrEqual(14);
+		expect(fetchMock.mock.calls.some(([url]) => String(url).includes('archive'))).toBe(false);
+
+		const malformedMonth = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: today,
+			endDate: '2026-13-45',
+			status: 'booked'
+		});
+		const malformedMonthWeather = await tripWeatherOverview(malformedMonth.id, u.id);
+		expect(malformedMonthWeather).not.toBeNull();
+		expect(malformedMonthWeather!.days.map((d) => d.date)).toEqual(controlDates);
+	});
+
+	test('tripWeatherOverview reports no forecastable dates when the trip start date is unparseable', async () => {
+		const u = makeUser(ctx.kit);
+		const end = DateTime.now().plus({ days: 5 }).toISODate()!;
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => mockForecastResponse([])
+		});
+		const t = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: 'not-a-date',
+			endDate: end,
+			status: 'booked'
+		});
+		const w = await tripWeatherOverview(t.id, u.id);
+		expect(w).not.toBeNull();
+		expect(w!.headline).toBe('No forecastable dates in range.');
+		expect(w!.days).toEqual([]);
+		expect(w!.advisory).toBeNull();
+		expect(w!.degraded).toBe(false);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	test('tripWeatherOverview treats an unparseable end date as missing beyond the forecast horizon', async () => {
+		const u = makeUser(ctx.kit);
+		const start = DateTime.now().plus({ days: 20 });
+		const end = DateTime.now().plus({ days: 22 });
+		const times: string[] = [];
+		for (let d = 0; d <= 2; d++) {
+			const day = start.plus({ days: d });
+			for (let y = 1; y <= 5; y++) times.push(day.minus({ years: y }).toISODate()!);
+		}
+		fetchMock.mockImplementation(async (url: string) => {
+			if (String(url).includes('archive')) {
+				return {
+					ok: true,
+					json: async () => ({
+						daily: {
+							time: times,
+							temperature_2m_max: times.map(() => 25),
+							temperature_2m_min: times.map(() => 15)
+						}
+					})
+				};
+			}
+			return { ok: true, json: async () => mockForecastResponse([]) };
+		});
+		const valid = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: start.toISODate()!,
+			endDate: end.toISODate()!,
+			status: 'booked'
+		});
+		const w = await tripWeatherOverview(valid.id, u.id);
+		expect(w).not.toBeNull();
+		expect(w!.days.length).toBe(3);
+		expect(w!.days.every((d) => d.typical)).toBe(true);
+
+		const missingEnd = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: start.toISODate()!,
+			endDate: null,
+			status: 'booked'
+		});
+		const missingEndWeather = await tripWeatherOverview(missingEnd.id, u.id);
+		expect(missingEndWeather).not.toBeNull();
+		expect(missingEndWeather!.headline).toBe('No forecastable dates in range.');
+		expect(missingEndWeather!.days).toEqual([]);
+
+		const malformedEnd = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			startDate: start.toISODate()!,
+			endDate: 'not-a-date',
+			status: 'booked'
+		});
+		const malformedEndWeather = await tripWeatherOverview(malformedEnd.id, u.id);
+		expect(malformedEndWeather).not.toBeNull();
+		expect(malformedEndWeather!.headline).toBe('No forecastable dates in range.');
+		expect(malformedEndWeather!.days).toEqual([]);
+		expect(malformedEndWeather!.headline).toBe(missingEndWeather!.headline);
+		expect(malformedEndWeather!.days).toEqual(missingEndWeather!.days);
+	});
+
 	test('tripWeatherOverview marks degraded when stale cache is used', async () => {
 		const u = makeUser(ctx.kit);
 		const today = new Date().toISOString().slice(0, 10);

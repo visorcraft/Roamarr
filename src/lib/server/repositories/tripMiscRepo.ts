@@ -21,6 +21,7 @@ import {
 	tripCompanions
 } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
+import { publishTripChanged } from '$lib/server/eventBus';
 
 // ============================================================================
 // Helpers
@@ -283,7 +284,9 @@ export function createJournalEntry(input: CreateJournalEntryInput): JournalEntry
 			body: input.body
 		} as Insert<typeof tripJournalEntries>)
 		.executeSync();
-	return toJournalEntry(row);
+	const entry = toJournalEntry(row);
+	publishTripChanged(entry.tripId);
+	return entry;
 }
 
 export function updateJournalEntry(
@@ -302,14 +305,18 @@ export function updateJournalEntry(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toJournalEntry(row);
+	const entry = toJournalEntry(row);
+	publishTripChanged(entry.tripId);
+	return entry;
 }
 
 export function deleteJournalEntry(id: number): number {
+	const existing = getJournalEntryById(id);
 	const deleted = kit
 		.deleteFrom(tripJournalEntries)
 		.where(eq(tripJournalEntries.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 

@@ -15,6 +15,7 @@ import {
 	tripJournalEntries
 } from '$lib/server/db/mongrelSchema';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../../tests/helpers';
+import { currentTripRev, subscribeUser } from '../eventBus';
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -125,4 +126,109 @@ test('listJournalEntriesForTrip orders by entry date descending', () => {
 
 	const entries = repo.listJournalEntriesForTrip(t.id);
 	expect(entries.map((e) => e.title)).toEqual(['Newer', 'Older']);
+});
+
+test('createJournalEntry publishes one trip-changed event', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'jrnl-pub-create@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+	const before = currentTripRev(t.id);
+
+	const entry = repo.createJournalEntry({
+		tripId: t.id,
+		entryDate: '2026-06-15',
+		title: 'Day one',
+		body: 'Arrived safely.'
+	});
+
+	expect(currentTripRev(t.id) - before).toBe(1);
+	expect(events).toHaveLength(1);
+	expect(events[0]).toMatchObject({ type: 'trip', id: t.id });
+	unsubscribe!();
+});
+
+test('updateJournalEntry publishes one trip-changed event', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'jrnl-pub-update@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const entry = repo.createJournalEntry({
+		tripId: t.id,
+		entryDate: '2026-06-15',
+		title: 'Before',
+		body: 'Body'
+	});
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+	const before = currentTripRev(t.id);
+
+	const updated = repo.updateJournalEntry(entry.id, { title: 'After' });
+
+	expect(updated?.title).toBe('After');
+	expect(currentTripRev(t.id) - before).toBe(1);
+	expect(events).toHaveLength(1);
+	expect(events[0]).toMatchObject({ type: 'trip', id: t.id });
+	unsubscribe!();
+});
+
+test('updateJournalEntry on a missing id returns null and publishes nothing', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'jrnl-pub-missing@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+	const before = currentTripRev(t.id);
+
+	const result = repo.updateJournalEntry(999999, { title: 'X' });
+
+	expect(result).toBeNull();
+	expect(currentTripRev(t.id) - before).toBe(0);
+	expect(events).toHaveLength(0);
+	unsubscribe!();
+});
+
+test('deleteJournalEntry publishes one trip-changed event and removes the entry', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'jrnl-pub-delete@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const entry = repo.createJournalEntry({
+		tripId: t.id,
+		entryDate: '2026-06-15',
+		title: 'To delete',
+		body: 'Body'
+	});
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+	const before = currentTripRev(t.id);
+
+	const deleted = repo.deleteJournalEntry(entry.id);
+
+	expect(deleted).toBe(1);
+	expect(repo.getJournalEntryById(entry.id)).toBeNull();
+	expect(currentTripRev(t.id) - before).toBe(1);
+	expect(events).toHaveLength(1);
+	expect(events[0]).toMatchObject({ type: 'trip', id: t.id });
+	unsubscribe!();
+});
+
+test('deleteJournalEntry on a missing id returns 0 and publishes nothing', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'jrnl-pub-missing-del@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+	const before = currentTripRev(t.id);
+
+	const deleted = repo.deleteJournalEntry(999999);
+
+	expect(deleted).toBe(0);
+	expect(currentTripRev(t.id) - before).toBe(0);
+	expect(events).toHaveLength(0);
+	unsubscribe!();
 });

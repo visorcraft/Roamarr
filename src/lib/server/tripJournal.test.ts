@@ -21,6 +21,7 @@ import { and, eq } from '@visorcraft/mongreldb-kit';
 import { DateTime } from 'luxon';
 import type { RequestEvent } from '@sveltejs/kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+import { currentTripRev, subscribeUser } from './eventBus';
 
 function getKit() {
 	return (ctx as { kit: import('@visorcraft/mongreldb-kit').KitDatabase }).kit;
@@ -252,4 +253,64 @@ test('deleteJournalEntry action deletes and redirects', async () => {
 	const event = makeEvent(u, { id: String(t.id) }, { entryId: String(entry.id) });
 	await expect(deleteJournalEntry(event)).rejects.toMatchObject({ status: 303, location: `/trips/${t.id}` });
 	expect(listJournalEntries(t.id)).toHaveLength(0);
+});
+
+test('journal service mutations publish exactly once', () => {
+	const kit = getKit();
+	const owner = makeSyncedUser(kit, { email: 'j-pub-owner@x.c' });
+	const viewer = makeSyncedUser(kit, { email: 'j-pub-viewer@x.c' });
+	const stranger = makeSyncedUser(kit, { email: 'j-pub-stranger@x.c' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
+	kit.insertInto(tripShares).values({
+		trip_id: BigInt(t.id),
+		shared_with_user_id: BigInt(viewer.id),
+		permission: 'read'
+	} as never).executeSync();
+
+	const events: Array<{ type: string; id: number }> = [];
+	const unsubscribe = subscribeUser(owner.id, (e) => events.push(e as never));
+	expect(unsubscribe).toBeTypeOf('function');
+
+	let before = currentTripRev(t.id);
+	const entry = createJournalEntry(owner.id, t.id, {
+		entryDate: '2026-06-15',
+		title: 'X',
+		body: 'Y'
+	});
+	expect(currentTripRev(t.id) - before).toBe(1);
+
+	before = currentTripRev(t.id);
+	modifyJournalEntry(owner.id, entry.id, { title: 'Updated' });
+	expect(currentTripRev(t.id) - before).toBe(1);
+
+	before = currentTripRev(t.id);
+	removeJournalEntry(owner.id, entry.id);
+	expect(currentTripRev(t.id) - before).toBe(1);
+
+	before = currentTripRev(t.id);
+	createJournalEntry(owner.id, t.id, {
+		entryDate: '2026-06-16',
+		title: 'Second',
+		body: 'Body'
+	});
+	expect(currentTripRev(t.id) - before).toBe(1);
+
+	const entry2 = createJournalEntry(owner.id, t.id, {
+		entryDate: '2026-06-17',
+		title: 'Third',
+		body: 'Body'
+	});
+	before = currentTripRev(t.id);
+	expect(() =>
+		createJournalEntry(viewer.id, t.id, { entryDate: '2026-06-17', title: 'X', body: 'Y' })
+	).toThrow();
+	expect(() => modifyJournalEntry(viewer.id, entry2.id, { title: 'Hacked' })).toThrow();
+	expect(() => removeJournalEntry(viewer.id, entry2.id)).toThrow();
+	expect(() =>
+		createJournalEntry(stranger.id, t.id, { entryDate: '2026-06-17', title: 'X', body: 'Y' })
+	).toThrow();
+	expect(currentTripRev(t.id) - before).toBe(0);
+
+	expect(events.filter((e) => e.type === 'trip' && e.id === t.id)).toHaveLength(5);
+	unsubscribe!();
 });

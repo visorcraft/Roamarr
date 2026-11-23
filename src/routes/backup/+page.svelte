@@ -8,7 +8,7 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Download backup</h2>
-	<p class="mt-1 text-sm text-slate-400">
+	<p class="mt-1 text-sm text-[var(--theme-readable-muted)]">
 		Point-in-time archive of the MongrelDB database directory and attachments.
 		The GeoNames city catalog is omitted (re-import under Database settings if needed).
 		Maps under <code>/data/maps</code> are not included. Size is dominated by the
@@ -23,13 +23,13 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Automatic backups</h2>
-	<p class="mt-1 text-sm text-slate-400">
+	<p class="mt-1 text-sm text-[var(--theme-readable-muted)]">
 		When enabled, the scheduler writes <code>auto-*.mongreldb.tar.gz</code> archives to
 		<code>{data.autoBackup.directory}</code> on the configured interval and keeps the newest
 		archives up to the retention count. Files without the <code>auto-</code> prefix are never
 		pruned.
 	</p>
-	<p class="mt-2 text-sm text-slate-400">
+	<p class="mt-2 text-sm text-[var(--theme-readable-muted)]">
 		Status:
 		{#if data.autoBackup.enabled}
 			enabled — {data.autoBackup.storedCount} stored,
@@ -83,7 +83,7 @@
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title">Restore from backup</h2>
-	<p class="mt-1 text-sm text-slate-400">
+	<p class="mt-1 text-sm text-[var(--theme-readable-muted)]">
 		Upload a previously downloaded <code>.mongreldb.tar.gz</code> file. The current database directory will be replaced and the app must be restarted.
 	</p>
 

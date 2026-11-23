@@ -12,11 +12,11 @@
 		</p>
 
 		<div class="mt-5 space-y-2">
-			<p class="text-sm font-medium text-slate-300">This will allow the application to:</p>
+			<p class="text-sm font-medium text-[var(--theme-ink)]">This will allow the application to:</p>
 			<ul class="space-y-1.5">
 				{#each data.scopes as scope (scope)}
-					<li class="flex items-start gap-2 text-sm text-slate-400">
-						<span class="mt-0.5 text-indigo-400">›</span>
+					<li class="flex items-start gap-2 text-sm text-[var(--theme-readable-muted)]">
+						<span class="mt-0.5 text-[var(--theme-readable-muted)]" aria-hidden="true">›</span>
 						<span>{SCOPE_DESCRIPTIONS[scope] ?? scope}</span>
 					</li>
 				{/each}

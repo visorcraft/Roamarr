@@ -22,3 +22,9 @@ test.each(keys)('message %s is compiled to a function returning a non-empty stri
 	expect(typeof text).toBe('string');
 	expect((text as string).length).toBeGreaterThan(0);
 });
+
+test('the English catalog source declares each key exactly once', () => {
+	const raw = readFileSync(new URL('../../messages/en.json', import.meta.url), 'utf8');
+	const sourceKeys = [...raw.matchAll(/^\t"([^"]+)":/gm)].map(([, key]) => key).filter((key) => key !== '$schema');
+	expect(sourceKeys).toEqual(keys);
+});

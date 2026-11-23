@@ -16,6 +16,7 @@ import {
 	getAutoBackupDir,
 	listAutoBackups,
 	pruneAutoBackups,
+	removeStaleAutoBackupTempFiles,
 	runAutoBackupIfDue
 } from './autoBackup';
 import { getSettings, updateSettings } from './settings';
@@ -131,4 +132,88 @@ test('autoBackupStatus reports due immediately when enabled but never run', () =
 	const status = autoBackupStatus(now, dbDir);
 	expect(status.lastRunAt).toBeNull();
 	expect(status.nextDueAt).toBe(now.toISOString());
+});
+
+test('removeStaleAutoBackupTempFiles removes only orphaned auto- temp files', () => {
+	const dir = join(testRoot, 'backups');
+	mkdirSync(dir, { recursive: true });
+	const kept = [
+		'auto-roamarr-backup-2026-07-30T00-00-00.mongreldb.tar.gz',
+		'roamarr-backup-2026-07-01T00-00-00.mongreldb.tar.gz.tmp',
+		'auto-roamarr-backup-2026-07-29T00-00-00.mongreldb.tar.gz.tmp.bak',
+		'notes.txt'
+	];
+	writeFileSync(join(dir, 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp'), 'x');
+	for (const name of kept) writeFileSync(join(dir, name), 'x');
+
+	const removed = removeStaleAutoBackupTempFiles(dir);
+	expect(removed).toEqual(['auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp']);
+	expect(readdirSync(dir).sort()).toEqual(kept.sort());
+
+	expect(removeStaleAutoBackupTempFiles(join(testRoot, 'missing'))).toEqual([]);
+});
+
+test('a .tmp left by a killed run is removed by the next due run', async () => {
+	const dir = getAutoBackupDir(dbDir);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp'), 'x');
+	updateSettings({ backupAutoEnabled: true });
+
+	const result = await runAutoBackupIfDue(new Date('2026-08-01T06:00:00Z'), dbDir);
+	expect(result.ran).toBe(true);
+	expect(readdirSync(dir).sort()).toEqual(['auto-roamarr-backup-2026-08-01T06-00-00.mongreldb.tar.gz']);
+});
+
+test('orphan cleanup does not run when disabled or not due', async () => {
+	const dir = getAutoBackupDir(dbDir);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp'), 'x');
+	const orphan = 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp';
+
+	// Disabled: no-op, orphan untouched.
+	const disabled = await runAutoBackupIfDue(new Date('2026-08-01T06:00:00Z'), dbDir);
+	expect(disabled).toEqual({ ran: false, reason: 'disabled' });
+	expect(existsSync(join(dir, orphan))).toBe(true);
+
+	// Enabled but not due: orphan untouched.
+	updateSettings({ backupAutoEnabled: true, backupLastAutoAt: '2026-08-01T05:00:00.000Z' });
+	const notDue = await runAutoBackupIfDue(new Date('2026-08-01T06:00:00Z'), dbDir);
+	expect(notDue).toEqual({ ran: false, reason: 'not-due' });
+	expect(existsSync(join(dir, orphan))).toBe(true);
+});
+
+test('a future-dated last-run stamp is treated as due', async () => {
+	updateSettings({
+		backupAutoEnabled: true,
+		backupLastAutoAt: '2026-08-10T00:00:00.000Z'
+	});
+	const now = new Date('2026-08-01T06:00:00Z');
+	const result = await runAutoBackupIfDue(now, dbDir);
+	expect(result.ran).toBe(true);
+	expect(getSettings().backupLastAutoAt).toBe(now.toISOString());
+});
+
+test('an unparseable last-run stamp still runs', async () => {
+	updateSettings({ backupAutoEnabled: true, backupLastAutoAt: 'not-a-date' });
+	const result = await runAutoBackupIfDue(new Date('2026-08-01T06:00:00Z'), dbDir);
+	expect(result.ran).toBe(true);
+});
+
+test('autoBackupStatus reports due-now for a future-dated or unparseable stamp', () => {
+	const now = new Date('2026-08-01T06:00:00Z');
+	for (const stamp of ['2026-08-10T00:00:00.000Z', 'not-a-date']) {
+		updateSettings({ backupAutoEnabled: true, backupIntervalHours: 24, backupLastAutoAt: stamp });
+		expect(() => autoBackupStatus(now, dbDir)).not.toThrow();
+		expect(autoBackupStatus(now, dbDir).nextDueAt).toBe(now.toISOString());
+	}
+});
+
+test('a run exactly one interval after the last one is due', async () => {
+	updateSettings({ backupAutoEnabled: true, backupIntervalHours: 24 });
+	const first = new Date('2026-08-01T06:00:00Z');
+	await runAutoBackupIfDue(first, dbDir);
+
+	const second = new Date('2026-08-02T06:00:00Z');
+	const result = await runAutoBackupIfDue(second, dbDir);
+	expect(result.ran).toBe(true);
 });

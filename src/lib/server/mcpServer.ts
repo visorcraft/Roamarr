@@ -4668,11 +4668,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			const { getCompanionTripId } = await import('./tripCompanions');
 			const tripId = getCompanionTripId(Number(companionMatch[1]));
 			if (tripId == null) throw new Error('Companion not found');
-			requireViewableTrip(userId, tripId);
+			const trip = requireViewableTrip(userId, tripId);
 			const { listTripCompanions } = await import('./tripCompanions');
 			const c = listTripCompanions(tripId).find((x) => x.id === Number(companionMatch[1]));
 			if (!c) throw new Error('Companion not found');
-			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ companion: c }) }] };
+			return { contents: [{ uri, mimeType: 'application/json', text: JSON.stringify({ companion: canEdit(userId, trip) ? c : companionViewerProjection(c) }) }] };
 		}
 		const cardMatch = CARD_URI_RE.exec(uri);
 		if (cardMatch) {

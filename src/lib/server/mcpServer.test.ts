@@ -1575,6 +1575,47 @@ describe('mcpServer', () => {
 			expect(text).toContain('Visible');
 		});
 
+		test('viewer reading companion:// gets private fields redacted (matches roamarr_companion_list)', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const c = insertTripCompanion(ownerId, trip.id, {
+				name: 'Visible',
+				medicalNotes: 'penicillin',
+				allergies: 'peanut',
+				dietary: 'vegetarian'
+			});
+			const { client } = await connect(otherId, ['companions:read']);
+			const res = await client.readResource({ uri: `companion://${c.id}` });
+			const text = (res.contents[0] as { text?: string })?.text ?? '';
+			const companion = JSON.parse(text).companion;
+			expect(companion.name).toBe('Visible');
+			for (const field of COMPANION_PRIVATE_FIELDS) {
+				expect(companion[field]).toBeNull();
+			}
+			expect(text).not.toContain('penicillin');
+			expect(text).not.toContain('peanut');
+			expect(text).not.toContain('vegetarian');
+		});
+
+		test('editor reading companion:// still gets the full row', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('edit');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const c = insertTripCompanion(ownerId, trip.id, {
+				name: 'Visible',
+				medicalNotes: 'penicillin',
+				allergies: 'peanut',
+				dietary: 'vegetarian'
+			});
+			const { client } = await connect(otherId, ['companions:read']);
+			const res = await client.readResource({ uri: `companion://${c.id}` });
+			const text = (res.contents[0] as { text?: string })?.text ?? '';
+			const companion = JSON.parse(text).companion;
+			expect(companion.name).toBe('Visible');
+			expect(companion.medicalNotes).toBe('penicillin');
+			expect(companion.allergies).toBe('peanut');
+			expect(companion.dietary).toBe('vegetarian');
+		});
+
 		test('editor can trip_update shared trip metadata (matches web UI)', async () => {
 			const { otherId, trip } = setupSharedTrip('edit');
 			const { client } = await connect(otherId, ['trips:write']);

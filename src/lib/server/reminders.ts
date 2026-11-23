@@ -222,14 +222,24 @@ export function safeUpdateReminderFields(
 ) {
 	const r = getReminderById(reminderId);
 	if (!r || r.userId !== userId) throw error(404, 'Not found');
-	if (patch.name !== undefined && String(patch.name).length > 200) {
+	if (patch.name !== undefined && (typeof patch.name !== 'string' || patch.name.length > 200)) {
 		throw error(400, 'name must be a string up to 200 chars');
 	}
-	if (patch.description !== undefined && String(patch.description).length > 1000) {
+	if (patch.description !== undefined && (typeof patch.description !== 'string' || patch.description.length > 1000)) {
 		throw error(400, 'description must be a string up to 1000 chars');
 	}
-	if (patch.fireAt !== undefined && !Number.isFinite(Date.parse(String(patch.fireAt)))) {
-		throw error(400, 'fireAt must be a valid ISO date and time');
+	let normalizedFireAt: string | undefined;
+	if (patch.fireAt !== undefined) {
+		if (typeof patch.fireAt !== 'string') {
+			throw error(400, 'fireAt must be a valid ISO date and time');
+		}
+		const trimmedFireAt = patch.fireAt.trim();
+		const parsedFireAt = trimmedFireAt ? DateTime.fromISO(trimmedFireAt, { zone: 'utc' }) : null;
+		const iso = parsedFireAt?.isValid ? parsedFireAt.toUTC().toISO() : null;
+		if (!iso) {
+			throw error(400, 'fireAt must be a valid ISO date and time');
+		}
+		normalizedFireAt = iso;
 	}
 	if (patch.refId !== undefined && r.kind === 'custom') {
 		const n = patch.refId;
@@ -249,9 +259,9 @@ export function safeUpdateReminderFields(
 		}
 	}
 	updateReminderUserFields(reminderId, {
-		name: patch.name == null ? r.name : String(patch.name).trim() || null,
-		description: patch.description == null ? r.description : String(patch.description).trim() || null,
-		fireAt: patch.fireAt == null ? r.fireAt : new Date(String(patch.fireAt)).toISOString(),
+		name: patch.name == null ? r.name : patch.name.trim() || null,
+		description: patch.description == null ? r.description : patch.description.trim() || null,
+		fireAt: normalizedFireAt ?? r.fireAt,
 		refId: r.kind === 'custom' ? (patch.refId == null ? r.refId : patch.refId) : r.refId
 	});
 }

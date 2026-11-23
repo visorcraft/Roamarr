@@ -89,15 +89,21 @@ export function patchEntryRequirement(
 	const v = new Validator();
 	if (input.status !== undefined)
 		v.enumValue(input.status, ENTRY_REQUIREMENT_STATUSES as readonly string[], 'status');
-	if (input.dueDate !== undefined) v.date(input.dueDate, 'dueDate');
+	if (input.dueDate !== undefined && input.dueDate !== null) {
+		if (typeof input.dueDate !== 'string') {
+			v.addError('dueDate', 'dueDate must be a string');
+		} else {
+			v.date(input.dueDate, 'dueDate');
+		}
+	}
 	if (input.notes !== undefined) v.optionalString(input.notes, 'notes', { max: 2000 });
 	if (!v.ok()) throw error(400, v.failMessage());
 	const existing = getEntryRequirementById(requirementId);
 	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	const patch: { status?: string; dueDate?: string | null; notes?: string | null } = {};
 	if (input.status !== undefined) patch.status = input.status.trim();
-	if (input.dueDate !== undefined) patch.dueDate = input.dueDate?.trim() || null;
-	if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+	if (input.dueDate !== undefined) patch.dueDate = typeof input.dueDate === 'string' ? input.dueDate.trim() || null : null;
+	if (input.notes !== undefined) patch.notes = typeof input.notes === 'string' ? input.notes.trim() || null : null;
 	const updated = repoUpdateEntryRequirement(requirementId, patch as any);
 	if (!updated) throw error(404, 'Not found');
 	logAudit(userId, 'update', 'trip_entry_requirement', requirementId, { tripId });

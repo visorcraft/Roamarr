@@ -20,6 +20,7 @@ import {
 	upsertRemindersForSegment,
 	upsertRemindersForDocument,
 	upsertCustomReminder,
+	safeUpdateReminderFields,
 	cancelRemindersFor,
 	listRemindersForUser,
 	cancelReminder,
@@ -270,4 +271,29 @@ test('an existing reminder survives a re-arm with an unparseable reference', () 
 	expect(after).toHaveLength(1);
 	expect(after[0].fireAt).toBe(before[0].fireAt);
 	expect(after[0].status).toBe(before[0].status);
+});
+
+test('safeUpdateReminderFields rejects rollover ISO dates, non-ISO fireAt, and non-string text', () => {
+	const r = makeReminder(kit, {
+		userId: owner.id,
+		kind: 'custom',
+		refType: 'trip',
+		refId: trip.id,
+		fireAt: '2026-06-01T12:00:00.000Z'
+	});
+	expect(() => safeUpdateReminderFields(owner.id, r.id, { fireAt: '2026-02-31' })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	expect(() => safeUpdateReminderFields(owner.id, r.id, { fireAt: '1' })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	expect(() => safeUpdateReminderFields(owner.id, r.id, { name: {} as any })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	expect(() => safeUpdateReminderFields(owner.id, r.id, { refId: NaN })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	safeUpdateReminderFields(owner.id, r.id, { fireAt: '2026-07-01T10:30:00+02:00' });
+	const updated = listRemindersForUser(owner.id).find((x) => x.id === r.id);
+	expect(updated?.fireAt).toBe('2026-07-01T08:30:00.000Z');
 });

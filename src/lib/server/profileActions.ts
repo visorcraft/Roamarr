@@ -65,7 +65,10 @@ function validateCalendarExpiry(expiresAt: unknown): string | null {
 	if (!CALENDAR_EXPIRY_SHAPE.test(trimmed)) {
 		throw new CalendarExpiryError('Calendar feed expiry must be a valid date.');
 	}
-	const instant = DateTime.fromISO(trimmed);
+	// Match ECMAScript Date parsing used by isExpired(): date-only strings are UTC midnight.
+	const instant = trimmed.includes('T')
+		? DateTime.fromISO(trimmed)
+		: DateTime.fromISO(trimmed, { zone: 'utc' });
 	if (!instant.isValid) {
 		throw new CalendarExpiryError('Calendar feed expiry must be a valid date.');
 	}

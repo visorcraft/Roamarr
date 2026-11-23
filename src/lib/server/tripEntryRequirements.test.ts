@@ -11,6 +11,7 @@ import {
 	addEntryRequirement,
 	deleteEntryRequirement,
 	listEntryRequirements,
+	patchEntryRequirement,
 	updateEntryRequirementStatus
 } from './tripEntryRequirements';
 import { tripEntryRequirements, trips, users } from './db/mongrelSchema';
@@ -98,4 +99,21 @@ test('non-editor cannot mutate entry requirements', () => {
 	expect(() => addEntryRequirement(other.id, t.id, { country: 'A', requirementType: 'other' })).toThrow();
 	expect(() => updateEntryRequirementStatus(other.id, t.id, req.id, { status: 'complete' })).toThrow();
 	expect(() => deleteEntryRequirement(other.id, t.id, req.id)).toThrow();
+});
+
+test('patchEntryRequirement rejects non-string dueDate with 400 and allows clearing with null or empty string', () => {
+	const { u, t } = seed();
+	const req = addEntryRequirement(u.id, t.id, {
+		country: 'Japan',
+		requirementType: 'visa',
+		dueDate: '2026-08-01'
+	});
+	expect(() => patchEntryRequirement(u.id, t.id, req.id, { dueDate: 12345 as any })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	expect(() => patchEntryRequirement(u.id, t.id, req.id, { dueDate: true as any })).toThrowError(
+		expect.objectContaining({ status: 400 })
+	);
+	const cleared = patchEntryRequirement(u.id, t.id, req.id, { dueDate: null });
+	expect(cleared.dueDate).toBeNull();
 });

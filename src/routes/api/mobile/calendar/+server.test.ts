@@ -49,3 +49,19 @@ test('mobile calendar POST accepts a valid expiry', async () => {
 	expect(body.expiresAt).toBe('2030-01-01T00:00:00Z');
 	expect(getUserById(Number(row.id))?.calendar_token_expires_at).toBe('2030-01-01T00:00:00Z');
 });
+
+test('mobile calendar POST validates date-only expiry against UTC midnight to match isExpired', async () => {
+	const row = makeKitUser({ email: 'cal-utc@example.com', calendar_token: 'old-token-utc' });
+	const user = validateOAuthUser(Number(row.id));
+	vi.useFakeTimers();
+	try {
+		// 2026-11-24T02:00:00Z is already past 2026-11-24T00:00:00Z even on UTC-negative servers.
+		vi.setSystemTime(new Date('2026-11-24T02:00:00Z'));
+		const res = await post(user, { expiresAt: '2026-11-24' });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: 'Calendar feed expiry must be in the future.' });
+		expect(getUserById(Number(row.id))?.calendar_token).toBe('old-token-utc');
+	} finally {
+		vi.useRealTimers();
+	}
+});

@@ -2916,28 +2916,32 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_reminder_update': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
+				const id = Number(args.reminderId);
+				if (!Number.isSafeInteger(id) || id <= 0) {
+					return { content: [{ type: 'text' as const, text: 'reminderId must be a positive integer' }], isError: true };
+				}
 				if (args.fireAt != null || args.name != null || args.description != null || args.refId != null) {
 					const { getReminderById } = await import('./repositories/remindersRepo');
-					const id = Number(args.reminderId), reminder = getReminderById(id);
+					const reminder = getReminderById(id);
 					if (!reminder || reminder.userId !== userId) return { content: [{ type: 'text' as const, text: 'Reminder not found' }], isError: true };
 					const { safeUpdateReminderFields } = await import('./reminders');
 					safeUpdateReminderFields(userId, id, {
-						name: args.name == null ? undefined : String(args.name),
-						description: args.description == null ? undefined : String(args.description),
-						fireAt: args.fireAt == null ? undefined : String(args.fireAt),
-						refId: args.refId == null ? undefined : Number(args.refId)
+						name: args.name == null ? undefined : (args.name as string),
+						description: args.description == null ? undefined : (args.description as string),
+						fireAt: args.fireAt == null ? undefined : (args.fireAt as string),
+						refId: args.refId == null ? undefined : typeof args.refId === 'boolean' ? NaN : Number(args.refId)
 					});
 					logAudit(userId, 'mcp_reminder_update', 'reminder', id, {});
 					return textResult({ ok: true, reminderId: id });
 				}
 				const { safeUpdateCustomReminder } = await import('./reminders');
-				safeUpdateCustomReminder(userId, Number(args.reminderId), {
+				safeUpdateCustomReminder(userId, id, {
 					title: args.title as string | undefined,
 					customNote: args.customNote as string | undefined,
 					offsetMinutes: args.offsetMinutes != null ? Number(args.offsetMinutes) : undefined
 				});
-				logAudit(userId, 'mcp_reminder_update', 'reminder', Number(args.reminderId), {});
-				return textResult({ ok: true, reminderId: Number(args.reminderId) });
+				logAudit(userId, 'mcp_reminder_update', 'reminder', id, {});
+				return textResult({ ok: true, reminderId: id });
 			}
 			case 'roamarr_reminder_delete': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
@@ -3189,6 +3193,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { editDocumentLink } = await import('./tripDocumentLinks');
 				const { getDocumentLinkById } = await import('./repositories/tripMiscRepo');
 				const id = Number(args.linkId);
+				if (!Number.isSafeInteger(id) || id <= 0) {
+					return { content: [{ type: 'text' as const, text: 'linkId must be a positive integer' }], isError: true };
+				}
 				const existing = getDocumentLinkById(id);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
 				editDocumentLink(userId, existing.tripId, id, {

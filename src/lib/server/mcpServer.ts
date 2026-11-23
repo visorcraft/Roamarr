@@ -2917,14 +2917,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_reminder_update': {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
 				if (args.fireAt != null || args.name != null || args.description != null || args.refId != null) {
-					const { getReminderById, updateReminderUserFields } = await import('./repositories/remindersRepo');
+					const { getReminderById } = await import('./repositories/remindersRepo');
 					const id = Number(args.reminderId), reminder = getReminderById(id);
 					if (!reminder || reminder.userId !== userId) return { content: [{ type: 'text' as const, text: 'Reminder not found' }], isError: true };
-					if (args.fireAt != null && !Number.isFinite(Date.parse(String(args.fireAt)))) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
-					const refId = args.refId == null ? reminder.refId : Number(args.refId);
-					if (reminder.kind === 'custom' && reminder.refType === 'trip' && refId) requireViewableTrip(userId, refId);
-					if (reminder.kind === 'custom' && reminder.refType === 'document' && refId) { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
-					updateReminderUserFields(id, { name: args.name == null ? reminder.name : String(args.name).trim() || null, description: args.description == null ? reminder.description : String(args.description).trim() || null, fireAt: args.fireAt == null ? reminder.fireAt : new Date(String(args.fireAt)).toISOString(), refId: reminder.kind === 'custom' ? refId : reminder.refId });
+					const { safeUpdateReminderFields } = await import('./reminders');
+					safeUpdateReminderFields(userId, id, {
+						name: args.name == null ? undefined : String(args.name),
+						description: args.description == null ? undefined : String(args.description),
+						fireAt: args.fireAt == null ? undefined : String(args.fireAt),
+						refId: args.refId == null ? undefined : Number(args.refId)
+					});
 					logAudit(userId, 'mcp_reminder_update', 'reminder', id, {});
 					return textResult({ ok: true, reminderId: id });
 				}

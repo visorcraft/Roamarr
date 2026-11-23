@@ -19,7 +19,9 @@ import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
-import { makeUser, makeTrip, makeSegment, makeShare } from '../../../tests/helpers';
+import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
+import { upsertCustomReminder } from './reminders';
+import { getReminderBySource, getReminderById, createReminder } from './repositories/remindersRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { updateSettings } from './settings';
 
@@ -373,6 +375,137 @@ describe('mcpServer', () => {
 		await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00Z' } });
 		const listed: any = await client.callTool({ name: 'roamarr_reminder_list', arguments: {} });
 		expect(JSON.parse(listed.content[0].text).items[0]).toMatchObject({ id: reminderId, name: 'Leave now', description: 'Take all passports', fireAt: '2026-08-01T13:00:00.000Z', refType: 'trip', refId: trip.id });
+	});
+
+	test('reminder_update validates refId shape and authorization', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bPrivateTrip = tripsRepo.createTrip(bId, { name: 'B private trip' });
+		const sharedTrip = tripsRepo.createTrip(bId, { name: 'Shared trip' });
+		tripsRepo.createShare({ tripId: sharedTrip.id, sharedWithUserId: userId, permission: 'read' });
+		const aTrip = tripsRepo.createTrip(userId, { name: 'A trip' });
+		upsertCustomReminder(userId, 'trip', aTrip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', aTrip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+
+		for (const bad of ['abc', '', 0, -1, 1.5]) {
+			const before = getReminderById(reminder.id)!;
+			const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: bad } });
+			expect(res.isError, `refId ${JSON.stringify(bad)}`).toBe(true);
+			const after = getReminderById(reminder.id)!;
+			expect(after.refId).toBe(before.refId);
+			expect(after.name).toBe(before.name);
+			expect(after.description).toBe(before.description);
+		}
+
+		const before = getReminderById(reminder.id)!;
+		const privateRes: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: bPrivateTrip.id } });
+		expect(privateRes.isError).toBe(true);
+		const afterPrivate = getReminderById(reminder.id)!;
+		expect(afterPrivate.refId).toBe(before.refId);
+		expect(afterPrivate.name).toBe(before.name);
+		expect(afterPrivate.description).toBe(before.description);
+
+		const sharedRes: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: sharedTrip.id } });
+		expect(sharedRes.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.refId).toBe(sharedTrip.id);
+	});
+
+	test('reminder_update validates segment-scoped refId authorization', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bPrivateTrip = tripsRepo.createTrip(bId, { name: 'B private trip' });
+		const bSegment = makeSegment(ctx.kit, bPrivateTrip.id, { title: 'B segment' });
+		const aTrip = tripsRepo.createTrip(userId, { name: 'A trip' });
+		const aSeg = makeSegment(ctx.kit, aTrip.id, { title: 'A segment' });
+		upsertCustomReminder(userId, 'segment', aSeg.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'segment', aSeg.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+
+		const before = getReminderById(reminder.id)!;
+		const foreign: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: bSegment.id } });
+		expect(foreign.isError).toBe(true);
+		const afterForeign = getReminderById(reminder.id)!;
+		expect(afterForeign.refId).toBe(before.refId);
+		expect(afterForeign.name).toBe(before.name);
+		expect(afterForeign.description).toBe(before.description);
+
+		const missing: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: 999999 } });
+		expect(missing.isError).toBe(true);
+		const afterMissing = getReminderById(reminder.id)!;
+		expect(afterMissing.refId).toBe(before.refId);
+		expect(afterMissing.name).toBe(before.name);
+		expect(afterMissing.description).toBe(before.description);
+
+		const own: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: aSeg.id } });
+		expect(own.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.refId).toBe(aSeg.id);
+	});
+
+	test('reminder_update rejects a foreign document-scoped refId', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bDoc = makeTravelDocument(ctx.kit, bId, { type: 'passport' });
+		const aDoc = makeTravelDocument(ctx.kit, userId, { type: 'passport' });
+		const reminder = createReminder({ userId, kind: 'custom', refType: 'document', refId: aDoc.id, fireAt: '2026-09-01T12:00:00Z', name: 'Doc reminder' });
+		const { client } = await connect(userId, ['reminders:write']);
+
+		const before = getReminderById(reminder.id)!;
+		const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, refId: bDoc.id } });
+		expect(res.isError).toBe(true);
+		const after = getReminderById(reminder.id)!;
+		expect(after.refId).toBe(before.refId);
+		expect(after.name).toBe(before.name);
+		expect(after.description).toBe(before.description);
+	});
+
+	test('reminder_update enforces name and description length caps', async () => {
+		const aTrip = tripsRepo.createTrip(userId, { name: 'A trip' });
+		upsertCustomReminder(userId, 'trip', aTrip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', aTrip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+
+		const before = getReminderById(reminder.id)!;
+		const longName: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, name: 'x'.repeat(201) } });
+		expect(longName.isError).toBe(true);
+		const afterLongName = getReminderById(reminder.id)!;
+		expect(afterLongName.refId).toBe(before.refId);
+		expect(afterLongName.name).toBe(before.name);
+		expect(afterLongName.description).toBe(before.description);
+
+		const longNote: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, description: 'y'.repeat(1001) } });
+		expect(longNote.isError).toBe(true);
+		const afterLongNote = getReminderById(reminder.id)!;
+		expect(afterLongNote.refId).toBe(before.refId);
+		expect(afterLongNote.name).toBe(before.name);
+		expect(afterLongNote.description).toBe(before.description);
+
+		const okName: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, name: 'n'.repeat(200) } });
+		expect(okName.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.name).toBe('n'.repeat(200));
+	});
+
+	test('reminder_update returns not found for a foreign reminder', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bTrip = tripsRepo.createTrip(bId, { name: 'B trip' });
+		upsertCustomReminder(bId, 'trip', bTrip.id, '2026-09-01T09:00:00Z', 60);
+		const bReminder = getReminderBySource('custom', 'trip', bTrip.id)!;
+		const before = getReminderById(bReminder.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+		const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: bReminder.id, name: 'Hijacked' } });
+		expect(res.isError).toBe(true);
+		expect(res.content[0].text).toContain('Reminder not found');
+		const after = getReminderById(bReminder.id)!;
+		expect(after.name).toBe(before.name);
+		expect(after.description).toBe(before.description);
+		expect(after.refId).toBe(before.refId);
+	});
+
+	test('reminder_update stores a fireAt-only change', async () => {
+		const aTrip = tripsRepo.createTrip(userId, { name: 'A trip' });
+		upsertCustomReminder(userId, 'trip', aTrip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', aTrip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+		const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, fireAt: '2026-10-02T15:30:00Z' } });
+		expect(res.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.fireAt).toBe(new Date('2026-10-02T15:30:00Z').toISOString());
 	});
 
 	test('trip_list and trip_get derive status from dates and leave the saved status in place', async () => {

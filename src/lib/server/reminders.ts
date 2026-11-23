@@ -10,10 +10,12 @@ import {
 	listPendingRemindersBefore,
 	markReminderSent,
 	updateReminder,
+	updateReminderUserFields,
 	getReminderById,
 	listRemindersForUser as listRemindersForUserFromRepo,
 	type ReminderRow
 } from './repositories/remindersRepo';
+import { requireViewableTrip } from './ownership';
 import { deliver } from './notify';
 import { error } from '@sveltejs/kit';
 import { nowIso } from './tz';
@@ -191,6 +193,58 @@ export function safeUpdateCustomReminder(
 			arm(userId, 'custom', 'trip', r.refId, computeFireAt('custom', startAt, { customOffsetMinutes: newOffset }));
 		}
 	}
+}
+
+// Raw-field reminder update for MCP clients. Validates the shape of
+// name/description/fireAt/refId and authorizes refId against the stored
+// refType before writing; absent keys leave the stored value in place.
+// Scheduler-internal fields (status, attempts, kind, refType) are never
+// touched — the same raw repo write the MCP handler used directly, gated
+// behind every check.
+export function safeUpdateReminderFields(
+	userId: number,
+	reminderId: number,
+	patch: {
+		name?: string;
+		description?: string;
+		fireAt?: string;
+		refId?: number;
+	}
+) {
+	const r = getReminderById(reminderId);
+	if (!r || r.userId !== userId) throw error(404, 'Not found');
+	if (patch.name !== undefined && String(patch.name).length > 200) {
+		throw error(400, 'name must be a string up to 200 chars');
+	}
+	if (patch.description !== undefined && String(patch.description).length > 1000) {
+		throw error(400, 'description must be a string up to 1000 chars');
+	}
+	if (patch.fireAt !== undefined && !Number.isFinite(Date.parse(String(patch.fireAt)))) {
+		throw error(400, 'fireAt must be a valid ISO date and time');
+	}
+	if (patch.refId !== undefined && r.kind === 'custom') {
+		const n = patch.refId;
+		if (!Number.isSafeInteger(n) || n <= 0) {
+			throw error(400, 'refId must be a positive integer');
+		}
+		if (r.refType === 'trip') {
+			requireViewableTrip(userId, n);
+		} else if (r.refType === 'segment') {
+			const segment = segmentsRepo.getSegmentById(n);
+			if (!segment) throw error(404, 'Not found');
+			requireViewableTrip(userId, segment.tripId);
+		} else if (r.refType === 'document') {
+			if (!profileRepo.getTravelDocumentById(n, userId)) throw error(404, 'Not found');
+		} else {
+			throw error(400, 'refId cannot be changed for this reminder type');
+		}
+	}
+	updateReminderUserFields(reminderId, {
+		name: patch.name == null ? r.name : String(patch.name).trim() || null,
+		description: patch.description == null ? r.description : String(patch.description).trim() || null,
+		fireAt: patch.fireAt == null ? r.fireAt : new Date(String(patch.fireAt)).toISOString(),
+		refId: r.kind === 'custom' ? (patch.refId == null ? r.refId : patch.refId) : r.refId
+	});
 }
 
 export function cancelReminder(userId: number, reminderId: number) {

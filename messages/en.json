@@ -129,5 +129,18 @@
 	"gallery_upload_help": "JPEG, PNG, or WebP. Up to 50 photos per gallery.",
 	"gallery_close_viewer": "Close viewer",
 	"gallery_previous_photo": "Previous photo",
-	"gallery_next_photo": "Next photo"
+	"gallery_next_photo": "Next photo",
+	"trip_documents_empty": "No files uploaded yet.",
+	"trip_documents_whole_trip": "Whole trip",
+	"trip_documents_segment_fallback": "Segment #{id}",
+	"trip_documents_file_fallback": "File",
+	"trip_documents_col_name": "Name",
+	"trip_documents_col_scope": "Scope",
+	"trip_documents_col_type": "Type",
+	"trip_documents_col_size": "Size",
+	"trip_documents_action_open": "Open",
+	"trip_documents_action_delete": "Delete",
+	"trip_documents_delete_title": "Delete file",
+	"trip_documents_delete_confirm": "Delete “{name}”? This cannot be undone.",
+	"trip_documents_unnamed_file": "this file"
 }

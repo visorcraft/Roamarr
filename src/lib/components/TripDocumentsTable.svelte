@@ -5,6 +5,7 @@
 	import GridTable, { type FetchOpts } from '$lib/components/GridTable.svelte';
 	import { formatFileSize } from '$lib/fileSize';
 	import { escapeHtml } from '$lib/escapeHtml';
+	import { m } from '$lib/paraglide/messages';
 
 	export interface TripDocumentRow {
 		id: number;
@@ -26,7 +27,7 @@
 		/** Name + Size only (e.g. selected-segment sidebar). */
 		compact = false,
 		segmentTitles = {},
-		emptyMessage = 'No files uploaded yet.'
+		emptyMessage = m.trip_documents_empty()
 	}: {
 		tripId: number;
 		documents?: TripDocumentRow[];
@@ -42,8 +43,8 @@
 	let grid: { reload: () => void } | undefined = $state();
 
 	function scopeLabel(segmentId: number | null | undefined): string {
-		if (segmentId == null) return 'Whole trip';
-		return segmentTitles[segmentId] ?? `Segment #${segmentId}`;
+		if (segmentId == null) return m.trip_documents_whole_trip();
+		return segmentTitles[segmentId] ?? m.trip_documents_segment_fallback({ id: segmentId });
 	}
 
 	function compareValue(row: Record<string, unknown>, key: string): string {
@@ -56,11 +57,11 @@
 	const columns = $derived([
 		{
 			id: 'name',
-			name: 'Name',
+			name: m.trip_documents_col_name(),
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) => {
 				const id = Number(row.id);
-				const label = escapeHtml(String(row.label || row.filename || 'File'));
+				const label = escapeHtml(String(row.label || row.filename || m.trip_documents_file_fallback()));
 				return html(
 					`<a href="/trips/${tripId}/documents/${id}" target="_blank" rel="noopener noreferrer" class="link">${label}</a>`
 				);
@@ -70,7 +71,7 @@
 			? [
 					{
 						id: 'scope',
-						name: 'Scope',
+						name: m.trip_documents_col_scope(),
 						sort: true,
 						formatter: (_cell: unknown, row: Record<string, unknown>) =>
 							html(
@@ -83,7 +84,7 @@
 			? [
 					{
 						id: 'contentType',
-						name: 'Type',
+						name: m.trip_documents_col_type(),
 						sort: true,
 						formatter: (_cell: unknown, row: Record<string, unknown>) =>
 							html(
@@ -94,7 +95,7 @@
 			: []),
 		{
 			id: 'sizeBytes',
-			name: 'Size',
+			name: m.trip_documents_col_size(),
 			sort: true,
 			formatter: (_cell: unknown, row: Record<string, unknown>) =>
 				html(
@@ -111,23 +112,23 @@
 				? [
 						{
 							id: 'open',
-							label: 'Open'
+							label: m.trip_documents_action_open()
 						},
 						{
 							id: 'delete',
-							label: 'Delete',
+							label: m.trip_documents_action_delete(),
 							variant: 'danger' as const,
 							confirm: true,
-							confirmTitle: 'Delete file',
+							confirmTitle: m.trip_documents_delete_title(),
 							confirmMessage: (row: Record<string, unknown>) =>
-								`Delete “${String(row.label || row.filename || 'this file')}”? This cannot be undone.`,
-							confirmLabel: 'Delete'
+								m.trip_documents_delete_confirm({ name: String(row.label || row.filename || m.trip_documents_unnamed_file()) }),
+							confirmLabel: m.trip_documents_action_delete()
 						}
 					]
 				: [
 						{
 							id: 'open',
-							label: 'Open'
+							label: m.trip_documents_action_open()
 						}
 					]
 	);

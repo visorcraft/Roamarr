@@ -444,16 +444,31 @@ function loadSegmentLocations(tripId: number): SegmentLocation[] {
 	}));
 }
 
+// A day resolves to the closed segment containing it, else to the open-ended
+// segment with the latest start on or before the day, else null so the caller
+// falls back to the trip destination. Malformed instants are skipped.
 function findSegmentForDate(segments: SegmentLocation[], dateStr: string): SegmentLocation | null {
-	const target = DateTime.fromISO(dateStr).toMillis();
+	const targetDateTime = DateTime.fromISO(dateStr);
+	if (!targetDateTime.isValid) return null;
+	const target = targetDateTime.toMillis();
 	let best: SegmentLocation | null = null;
+	let bestStart = -Infinity;
 	for (const s of segments) {
 		if (s.lat == null || s.lng == null) continue;
-		const start = s.startAt ? DateTime.fromISO(s.startAt).toMillis() : null;
-		const end = s.endAt ? DateTime.fromISO(s.endAt).toMillis() : null;
-		if (start != null && end != null && target >= start && target <= end) return s;
-		if (start != null && end == null && target >= start) {
-			if (!best) best = s;
+		if (!s.startAt) continue;
+		const startDateTime = DateTime.fromISO(s.startAt);
+		if (!startDateTime.isValid) continue;
+		const start = startDateTime.toMillis();
+		let end: number | null = null;
+		if (s.endAt) {
+			const endDateTime = DateTime.fromISO(s.endAt);
+			if (!endDateTime.isValid) continue;
+			end = endDateTime.toMillis();
+		}
+		if (end != null && target >= start && target <= end) return s;
+		if (end == null && target >= start && start > bestStart) {
+			best = s;
+			bestStart = start;
 		}
 	}
 	return best;

@@ -202,6 +202,122 @@ describe('weather', () => {
 		expect(w!.days[0].locationLabel).toBe('New York');
 	});
 
+	test('tripWeatherOverview prefers the latest started open-ended segment', async () => {
+		const u = makeUser(ctx.kit);
+		const today = DateTime.now().toISODate()!;
+		const day0 = today;
+		const day1 = DateTime.fromISO(today).plus({ days: 1 }).toISODate()!;
+		const day2 = DateTime.fromISO(today).plus({ days: 2 }).toISODate()!;
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => mockForecastResponse([day0, day1, day2])
+		});
+		const t = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			destinationCityName: 'Paris',
+			startDate: today,
+			endDate: day2,
+			status: 'booked'
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 48.86,
+			cityLng: 2.35,
+			cityName: 'Paris',
+			startAt: DateTime.fromISO(day0).startOf('day').toUTC().toISO()!
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 41.9,
+			cityLng: 12.5,
+			cityName: 'Rome',
+			startAt: DateTime.fromISO(day1).startOf('day').toUTC().toISO()!
+		});
+		const w = await tripWeatherOverview(t.id, u.id);
+		expect(w).not.toBeNull();
+		expect(w!.days[0].locationLabel).toBe('Paris');
+		expect(w!.days[1].locationLabel).toBe('Rome');
+		expect(w!.days[2].locationLabel).toBe('Rome');
+	});
+
+	test('tripWeatherOverview segment choice does not depend on row order', async () => {
+		const u = makeUser(ctx.kit);
+		const today = DateTime.now().toISODate()!;
+		const day0 = today;
+		const day1 = DateTime.fromISO(today).plus({ days: 1 }).toISODate()!;
+		const day2 = DateTime.fromISO(today).plus({ days: 2 }).toISODate()!;
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => mockForecastResponse([day0, day1, day2])
+		});
+		const t = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			destinationCityName: 'Paris',
+			startDate: today,
+			endDate: day2,
+			status: 'booked'
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 41.9,
+			cityLng: 12.5,
+			cityName: 'Rome',
+			startAt: DateTime.fromISO(day1).startOf('day').toUTC().toISO()!
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 48.86,
+			cityLng: 2.35,
+			cityName: 'Paris',
+			startAt: DateTime.fromISO(day0).startOf('day').toUTC().toISO()!
+		});
+		const w = await tripWeatherOverview(t.id, u.id);
+		expect(w).not.toBeNull();
+		expect(w!.days[0].locationLabel).toBe('Paris');
+		expect(w!.days[1].locationLabel).toBe('Rome');
+		expect(w!.days[2].locationLabel).toBe('Rome');
+	});
+
+	test('tripWeatherOverview ignores segments with malformed instants', async () => {
+		const u = makeUser(ctx.kit);
+		const today = DateTime.now().toISODate()!;
+		const day0 = today;
+		const day1 = DateTime.fromISO(today).plus({ days: 1 }).toISODate()!;
+		const day2 = DateTime.fromISO(today).plus({ days: 2 }).toISODate()!;
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => mockForecastResponse([day0, day1, day2])
+		});
+		const t = makeTrip(ctx.kit, u.id, {
+			destinationCityLat: 48.86,
+			destinationCityLng: 2.35,
+			destinationCityName: 'Paris',
+			startDate: today,
+			endDate: day2,
+			status: 'booked'
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 1,
+			cityLng: 1,
+			cityName: 'Broken',
+			startAt: 'not-a-date'
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 2,
+			cityLng: 2,
+			cityName: 'BrokenEnd',
+			startAt: DateTime.fromISO(day0).startOf('day').toUTC().toISO()!,
+			endAt: 'garbage'
+		});
+		makeSegment(ctx.kit, t.id, {
+			cityLat: 48.86,
+			cityLng: 2.35,
+			cityName: 'Paris',
+			startAt: DateTime.fromISO(day0).startOf('day').toUTC().toISO()!
+		});
+		const w = await tripWeatherOverview(t.id, u.id);
+		expect(w).not.toBeNull();
+		expect(w!.days.map((d) => d.locationLabel)).toEqual(['Paris', 'Paris', 'Paris']);
+	});
+
 	test('tripWeatherOverview labels days beyond the forecast horizon as typical', async () => {
 		const u = makeUser(ctx.kit);
 		const start = DateTime.now().plus({ days: 20 });

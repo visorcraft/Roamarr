@@ -12,6 +12,7 @@
 		type SegmentCityDefaults
 	} from '../segmentCityDefaults';
 	import Admin1Select from '$lib/components/Admin1Select.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	const tripDefaults = getContext<SegmentCityDefaults | undefined>(SEGMENT_CITY_DEFAULTS_KEY);
 
@@ -23,7 +24,7 @@
 		cityLat = tripDefaults?.cityLat ?? null,
 		cityLng = tripDefaults?.cityLng ?? null,
 		venue = '',
-		venueLabel = 'Venue'
+		venueLabel = m.event_venue_label()
 	}: {
 		errors?: Record<string, string>;
 		countryCode?: string;
@@ -41,19 +42,19 @@
 	let bookingOpen = $state(true);
 </script>
 
-<TextField name="title" label="Event name" placeholder="Enter event name" required class="sm:col-span-2" {errors} />
+<TextField name="title" label={m.event_name_label()} placeholder={m.event_name_placeholder()} required class="sm:col-span-2" {errors} />
 
 <DateTimeRangeFields {errors} idPrefix="event" />
 
 <div class="field">
-	<label class="label" for="countryCode">Country</label>
+	<label class="label" for="countryCode">{m.event_country_label()}</label>
 	<select
 		id="countryCode"
 		name="countryCode"
 		class="input {errors.countryCode ? 'input-error' : ''}"
 		bind:value={countryCode}
 	>
-		<option value="">Select country</option>
+		<option value="">{m.event_country_placeholder()}</option>
 		{#each COUNTRIES as c (c.code)}
 			<option value={c.code}>{c.name}</option>
 		{/each}
@@ -75,31 +76,31 @@
 	{errors}
 />
 
-<TextField name="venue" label={venueLabel} placeholder="Enter venue" value={venue} class="sm:col-span-2" {errors} />
-<TextField name="detail_phone" label="Phone" type="tel" placeholder="Enter phone" class="sm:col-span-2" />
-<TextField name="detail_website" label="Website" type="url" placeholder="Enter website" class="sm:col-span-2" />
-<TextField name="detail_email" label="Email" type="email" placeholder="Enter email" class="sm:col-span-2" />
+<TextField name="venue" label={venueLabel} placeholder={m.event_venue_placeholder()} value={venue} class="sm:col-span-2" {errors} />
+<TextField name="detail_phone" label={m.event_phone_label()} type="tel" placeholder={m.event_phone_placeholder()} class="sm:col-span-2" />
+<TextField name="detail_website" label={m.event_website_label()} type="url" placeholder={m.event_website_placeholder()} class="sm:col-span-2" />
+<TextField name="detail_email" label={m.event_email_label()} type="email" placeholder={m.event_email_placeholder()} class="sm:col-span-2" />
 
 <BookedRow {errors} />
 
-<TextAreaField name="detail_notes" label="Notes" rows={3} placeholder="Enter note e.g. Don't forget your charger!" class="sm:col-span-2" />
+<TextAreaField name="detail_notes" label={m.event_notes_label()} rows={3} placeholder={m.event_notes_placeholder()} class="sm:col-span-2" />
 
-<CollapseSection title="More details" bind:open={moreOpen}>
-	<TextField name="detail_category" label="Category" placeholder="Concert, conference, etc." class="sm:col-span-2" />
-	<TextField name="detail_dressCode" label="Dress code" placeholder="Optional dress code" class="sm:col-span-2" />
+<CollapseSection title={m.event_more_details_section()} bind:open={moreOpen}>
+	<TextField name="detail_category" label={m.event_category_label()} placeholder={m.event_category_placeholder()} class="sm:col-span-2" />
+	<TextField name="detail_dressCode" label={m.event_dress_code_label()} placeholder={m.event_dress_code_placeholder()} class="sm:col-span-2" />
 </CollapseSection>
 
-<CollapseSection title="Attendees" bind:open={attendeesOpen}>
-	<TextAreaField name="detail_attendees" label="Attendees" rows={3} placeholder="Who is attending?" class="sm:col-span-2" />
+<CollapseSection title={m.event_attendees_section()} bind:open={attendeesOpen}>
+	<TextAreaField name="detail_attendees" label={m.event_attendees_label()} rows={3} placeholder={m.event_attendees_placeholder()} class="sm:col-span-2" />
 </CollapseSection>
 
-<CollapseSection title="Booking info" bind:open={bookingOpen}>
-	<TextField name="booking_site" label="Booking site" placeholder="Enter booking site" class="sm:col-span-2" />
-	<TextField name="booking_reference" label="Booking reference" placeholder="Enter booking reference" class="sm:col-span-2" />
-	<TextField name="booking_website" label="Booking website" placeholder="Enter booking website" class="sm:col-span-2" />
-	<TextField name="booking_phone" label="Booking phone" placeholder="Enter booking phone" class="sm:col-span-2" />
-	<TextField name="booking_date" label="Booking date" type="date" class="sm:col-span-2" />
-	<TextField name="booking_rate" label="Booking rate" placeholder="Enter booking rate" class="sm:col-span-2" />
-	<TextField name="booking_totalCost" label="Total cost" placeholder="Enter total cost" class="sm:col-span-2" />
-	<TextAreaField name="booking_restrictions" label="Restrictions" rows={3} placeholder="Enter restrictions" class="sm:col-span-2" />
+<CollapseSection title={m.event_booking_section()} bind:open={bookingOpen}>
+	<TextField name="booking_site" label={m.event_booking_site_label()} placeholder={m.event_booking_site_placeholder()} class="sm:col-span-2" />
+	<TextField name="booking_reference" label={m.event_booking_reference_label()} placeholder={m.event_booking_reference_placeholder()} class="sm:col-span-2" />
+	<TextField name="booking_website" label={m.event_booking_website_label()} placeholder={m.event_booking_website_placeholder()} class="sm:col-span-2" />
+	<TextField name="booking_phone" label={m.event_booking_phone_label()} placeholder={m.event_booking_phone_placeholder()} class="sm:col-span-2" />
+	<TextField name="booking_date" label={m.event_booking_date_label()} type="date" class="sm:col-span-2" />
+	<TextField name="booking_rate" label={m.event_booking_rate_label()} placeholder={m.event_booking_rate_placeholder()} class="sm:col-span-2" />
+	<TextField name="booking_totalCost" label={m.event_total_cost_label()} placeholder={m.event_total_cost_placeholder()} class="sm:col-span-2" />
+	<TextAreaField name="booking_restrictions" label={m.event_restrictions_label()} rows={3} placeholder={m.event_restrictions_placeholder()} class="sm:col-span-2" />
 </CollapseSection>

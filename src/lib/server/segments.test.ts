@@ -192,14 +192,14 @@ test('addSegment stores endTz and defaults to startTz', () => {
 	const withEndTz = addSegment(u.id, t.id, {
 		type: 'flight',
 		title: 'Outbound',
-		localStart: '2026-09-01T08:00:00',
+		localStart: '2026-09-01T02:00:00',
 		startTz: 'America/New_York',
 		endAt: '2026-09-01T16:00:00',
 		endTz: 'Asia/Tokyo'
 	});
 	expect(withEndTz.startTz).toBe('America/New_York');
 	expect(withEndTz.endTz).toBe('Asia/Tokyo');
-	expect(withEndTz.startAt).toBe('2026-09-01T12:00:00.000Z');
+	expect(withEndTz.startAt).toBe('2026-09-01T06:00:00.000Z');
 	expect(withEndTz.endAt).toBe('2026-09-01T07:00:00.000Z');
 
 	const withoutEndTz = addSegment(u.id, t.id, {
@@ -429,4 +429,137 @@ test('updateSegment updates city fields and clears venue when omitted', () => {
 	expect(updated.countryCode).toBe('JP');
 	expect(updated.cityName).toBe('Tokyo');
 	expect(updated.venue).toBeNull();
+});
+
+test('addSegment rejects an end before the start and writes no row', () => {
+	const u = makeUser(kit, { email: 'end-before@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+
+	try {
+		addSegment(u.id, t.id, {
+			type: 'flight',
+			title: 'Backwards',
+			localStart: '2026-09-01T15:00:00',
+			startTz: 'UTC',
+			endAt: '2026-09-01T14:00:00'
+		});
+		expect.unreachable('expected end-before-start error');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+	const rows = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync();
+	expect(rows).toHaveLength(0);
+});
+
+test('addSegment accepts a zero-duration end and a cross-zone end that is earlier on the clock', () => {
+	const u = makeUser(kit, { email: 'zero-dur@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+
+	const zero = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'Zero duration',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'UTC',
+		endAt: '2026-09-01T10:00:00'
+	});
+	expect(zero.endAt).toBe('2026-09-01T10:00:00.000Z');
+	expect(zero.endAt).toBe(zero.startAt);
+
+	const cross = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'Cross zone',
+		localStart: '2026-12-01T23:30',
+		startTz: 'America/New_York',
+		endAt: '2026-12-01T22:30',
+		endTz: 'America/Los_Angeles'
+	});
+	expect(cross.startAt).toBe('2026-12-02T04:30:00.000Z');
+	expect(cross.endAt).toBe('2026-12-02T06:30:00.000Z');
+});
+
+test('updateSegment rejects an end before the start and leaves the row unchanged', () => {
+	const u = makeUser(kit, { email: 'update-end@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = addSegment(u.id, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		localStart: '2026-09-01T10:00:00',
+		startTz: 'UTC',
+		endAt: '2026-09-01T12:00:00'
+	});
+
+	try {
+		updateSegment(u.id, t.id, s.id, {
+			title: 'UA1',
+			localStart: '2026-09-01T10:00:00',
+			startTz: 'UTC',
+			endAt: '2026-09-01T09:00:00'
+		});
+		expect.unreachable('expected end-before-start error');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.end_at).toBe('2026-09-01T12:00:00.000Z');
+	expect(row.title).toBe('UA1');
+});
+
+test('patchSegment rejects an endAt earlier than the stored start', () => {
+	const u = makeUser(kit, { email: 'patch-end@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		endAt: '2026-01-01T12:00:00Z'
+	});
+
+	try {
+		patchSegment(u.id, s.id, { endAt: '2026-01-01T09:00:00Z' });
+		expect.unreachable('expected end-before-start error');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.end_at).toBe('2026-01-01T12:00:00Z');
+});
+
+test('patchSegment rejects a startAt later than the stored end', () => {
+	const u = makeUser(kit, { email: 'patch-start@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		endAt: '2026-01-01T12:00:00Z'
+	});
+
+	try {
+		patchSegment(u.id, s.id, { startAt: '2026-01-01T13:00:00Z' });
+		expect.unreachable('expected start-after-end error');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.start_at).toBe('2026-01-01T10:00:00Z');
+	expect(row.end_at).toBe('2026-01-01T12:00:00Z');
+});
+
+test('patchSegment still renames a legacy inverted segment', () => {
+	const u = makeUser(kit, { email: 'patch-rename@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Old',
+		startAt: '2026-01-01T12:00:00Z',
+		startTz: 'UTC',
+		endAt: '2026-01-01T10:00:00Z'
+	});
+
+	const updated = patchSegment(u.id, s.id, { title: 'New' });
+	expect(updated.title).toBe('New');
+	expect(updated.startAt).toBe('2026-01-01T12:00:00Z');
+	expect(updated.endAt).toBe('2026-01-01T10:00:00Z');
 });

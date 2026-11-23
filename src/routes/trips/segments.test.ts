@@ -209,7 +209,7 @@ test('add action stores endTz and converts endAt to UTC', async () => {
 	const t = makeTrip(kit, a.id, { name: 'T' });
 	const form = makeFormData({
 		title: 'UA1',
-		localStart: '2026-07-01T08:00',
+		localStart: '2026-07-01T02:00',
 		startTz: 'America/New_York',
 		endDate: '2026-07-01',
 		endTime: '16:00',
@@ -220,7 +220,7 @@ test('add action stores endTz and converts endAt to UTC', async () => {
 		location: `/trips/${t.id}`
 	});
 	const seg = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(t.id))).executeSync()[0]!;
-	expect(seg.start_at).toBe('2026-07-01T12:00:00.000Z');
+	expect(seg.start_at).toBe('2026-07-01T06:00:00.000Z');
 	expect(seg.start_tz).toBe('America/New_York');
 	expect(seg.end_at).toBe('2026-07-01T07:00:00.000Z');
 	expect(seg.end_tz).toBe('Asia/Tokyo');

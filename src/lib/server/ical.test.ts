@@ -253,3 +253,31 @@ test('keeps the aggregate feed valid', () => {
 	expect(ics).toContain('DTEND;VALUE=DATE:20260804');
 	expect(ics).not.toContain('UID:roamarr-trip-1@roamarr');
 });
+
+test('omits DTEND when a segment ends before it starts', () => {
+	const ics = buildCalendar(
+		{ id: 12, name: 'Trip' },
+		[
+			{
+				type: 'flight' as const,
+				title: 'Backwards',
+				startAt: '2026-12-02T10:00:00.000Z',
+				endAt: '2026-12-02T09:00:00.000Z'
+			},
+			{
+				type: 'flight' as const,
+				title: 'Normal',
+				startAt: '2026-12-02T11:00:00.000Z',
+				endAt: '2026-12-02T13:00:00.000Z'
+			}
+		]
+	);
+	const events = ics.split('BEGIN:VEVENT').slice(1);
+	const backwards = events.find((e) => e.includes('Backwards'));
+	const normal = events.find((e) => e.includes('Normal'));
+	expect(backwards).toBeDefined();
+	expect(backwards).toContain('DTSTART:20261202T100000Z');
+	expect(backwards).not.toContain('DTEND');
+	expect(normal).toBeDefined();
+	expect(normal).toContain('DTEND:20261202T130000Z');
+});

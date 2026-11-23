@@ -89,7 +89,12 @@ function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number,
 	lines.push(`SUMMARY:${escapeText(summary)}`);
 	lines.push(`DTSTART:${formatUtcDateTime(segment.startAt)}`);
 	if (segment.endAt) {
-		lines.push(`DTEND:${formatUtcDateTime(segment.endAt)}`);
+		const start = DateTime.fromISO(segment.startAt, { zone: 'utc' });
+		const end = DateTime.fromISO(segment.endAt, { zone: 'utc' });
+		const endIsBeforeStart = start.isValid && end.isValid && end.toMillis() < start.toMillis();
+		if (!endIsBeforeStart) {
+			lines.push(`DTEND:${formatUtcDateTime(segment.endAt)}`);
+		}
 	}
 	if (segment.location) {
 		lines.push(`LOCATION:${escapeText(segment.location)}`);

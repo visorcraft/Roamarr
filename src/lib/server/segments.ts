@@ -16,6 +16,16 @@ import {
 import { SEGMENT_STATUSES, SEGMENT_PAYMENT_STATUSES, type SegmentType, type SegmentStatus } from '$lib/server/db/mongrelSchema';
 import { findCity } from '$lib/server/cities';
 
+function assertEndNotBeforeStart(startAtUtc: string, endAtUtc: string | null | undefined): void {
+	if (!endAtUtc) return;
+	const start = DateTime.fromISO(startAtUtc, { zone: 'utc' });
+	const end = DateTime.fromISO(endAtUtc, { zone: 'utc' });
+	if (!start.isValid || !end.isValid) return;
+	if (end.toMillis() < start.toMillis()) {
+		throw error(400, 'End time must not be before the start time');
+	}
+}
+
 function normalizeMeetingAt(i: {
 	meetingAt?: string;
 	meetingPoint?: string;
@@ -64,15 +74,18 @@ export function addSegment(
 	requireEditableTrip(userId, tripId);
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
+	const startAtUtc = localToUtc(i.localStart, i.startTz);
+	const endAtUtc = i.endAt ? localToUtc(i.endAt, endTz) : null;
+	assertEndNotBeforeStart(startAtUtc, endAtUtc);
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const paymentStatus = normalizePaymentStatus(i.paymentStatus);
 	const seg = createSegment({
 		trip_id: BigInt(tripId),
 		type: i.type,
 		title: i.title,
-		start_at: localToUtc(i.localStart, i.startTz),
+		start_at: startAtUtc,
 		start_tz: i.startTz,
-		end_at: i.endAt ? localToUtc(i.endAt, endTz) : null,
+		end_at: endAtUtc,
 		end_tz: endTz,
 		location: i.location ?? null,
 		country_code: i.countryCode ?? null,
@@ -189,6 +202,7 @@ export function updateSegment(
 	if (paymentStatus) {
 		patch.payment_status = paymentStatus;
 	}
+	assertEndNotBeforeStart(patch.start_at as string, patch.end_at);
 	const seg = updateSegmentRepo(segId, patch);
 	if (!seg) throw error(404, 'Not found');
 	upsertRemindersForSegment(seg);
@@ -377,6 +391,11 @@ export function patchSegment(
 		});
 	}
 	if (patch.paymentStatus !== undefined) repoPatch.payment_status = normalizePaymentStatus(patch.paymentStatus);
+	if (patch.startAt !== undefined || patch.endAt !== undefined) {
+		const effectiveStart = repoPatch.start_at !== undefined ? repoPatch.start_at : verified.startAt;
+		const effectiveEnd = patch.endAt !== undefined ? repoPatch.end_at : verified.endAt;
+		assertEndNotBeforeStart(effectiveStart as string, effectiveEnd as string | null | undefined);
+	}
 	const updated = updateSegmentRepo(verified.id, repoPatch);
 	if (!updated) throw error(404, 'Segment not found');
 	// Refresh reminders so flight_checkin arms against the new startAt

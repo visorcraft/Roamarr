@@ -1940,6 +1940,159 @@ describe('mcpServer', () => {
 			expect(catDeleted.ok).toBe(true);
 		});
 
+		test('place category update recolors without renaming', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+
+			const category = await call('roamarr_place_category_create', { name: 'Museums', color: '#2f9e44' });
+			const updated = await call('roamarr_place_category_update', {
+				categoryId: category.id,
+				color: '#e64980'
+			});
+			expect(updated.name).toBe('Museums');
+			expect(updated.color).toBe('#e64980');
+		});
+
+		test('place category update renames without recoloring', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+
+			const category = await call('roamarr_place_category_create', { name: 'Museums', color: '#2f9e44' });
+			const updated = await call('roamarr_place_category_update', {
+				categoryId: category.id,
+				name: 'Galleries'
+			});
+			expect(updated.name).toBe('Galleries');
+			expect(updated.color).toBe('#2f9e44');
+		});
+
+		test('place category update rejects an explicit blank name and leaves the row unchanged', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const created: any = await client.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: 'Museums', color: '#2f9e44' }
+			});
+			const category = JSON.parse(created.content[0].text);
+			const before = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+
+			const res: any = await client.callTool({
+				name: 'roamarr_place_category_update',
+				arguments: { categoryId: category.id, name: '   ' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('Category name is required');
+
+			const after = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+			expect(after).toEqual(before);
+		});
+
+		test('place category update rejects a non-hex color and leaves the row unchanged', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const created: any = await client.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: 'Museums', color: '#2f9e44' }
+			});
+			const category = JSON.parse(created.content[0].text);
+			const before = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+
+			const res: any = await client.callTool({
+				name: 'roamarr_place_category_update',
+				arguments: { categoryId: category.id, color: 'red' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('Category color must be a hex color like #2f9e44');
+
+			const after = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+			expect(after).toEqual(before);
+		});
+
+		test('place category update rejects non-string name and color without changing the row', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const created: any = await client.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: 'Museums', color: '#2f9e44' }
+			});
+			const category = JSON.parse(created.content[0].text);
+			const before = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+
+			const badName: any = await client.callTool({
+				name: 'roamarr_place_category_update',
+				arguments: { categoryId: category.id, name: 42 }
+			});
+			expect(badName.isError).toBe(true);
+			expect(badName.content[0].text).toContain('name must be a string');
+
+			const badColor: any = await client.callTool({
+				name: 'roamarr_place_category_update',
+				arguments: { categoryId: category.id, color: 255 }
+			});
+			expect(badColor.isError).toBe(true);
+			expect(badColor.content[0].text).toContain('color must be a string');
+
+			const after = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(category.id))).executeSync()[0];
+			expect(after).toEqual(before);
+		});
+
+		test('place category create rejects non-string name and color without inserting a row', async () => {
+			const { client } = await connect(userId, ['saved-places:write']);
+			const before = ctx.kit.selectFrom(placeCategories).executeSync().length;
+
+			const badName: any = await client.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: {} }
+			});
+			expect(badName.isError).toBe(true);
+			expect(badName.content[0].text).toContain('name must be a string');
+
+			const badColor: any = await client.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: 'Museums', color: 255 }
+			});
+			expect(badColor.isError).toBe(true);
+			expect(badColor.content[0].text).toContain('color must be a string');
+
+			const after = ctx.kit.selectFrom(placeCategories).executeSync().length;
+			expect(after).toBe(before);
+		});
+
+		test('place category update rejects another user\'s category with no update', async () => {
+			const other = makeUser(ctx.kit).id;
+			const { client: otherClient } = await connect(other, ['saved-places:write']);
+			const created: any = await otherClient.callTool({
+				name: 'roamarr_place_category_create',
+				arguments: { name: 'Other', color: '#2f9e44' }
+			});
+			const categoryId = JSON.parse(created.content[0].text).id;
+
+			const { client } = await connect(userId, ['saved-places:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_place_category_update',
+				arguments: { categoryId, name: 'Hijack' }
+			});
+			expect(res.isError).toBe(true);
+			expect(res.content[0].text).toContain('Category not found');
+
+			const row = ctx.kit.selectFrom(placeCategories).where(kitEq(placeCategories.id, BigInt(categoryId))).executeSync()[0];
+			expect(row.name).toBe('Other');
+			expect(row.color).toBe('#2f9e44');
+		});
+
+		test('place category update schema requires only categoryId', async () => {
+			const { client } = await connect(userId, ['saved-places:read']);
+			const { tools } = await client.listTools();
+			const update = tools.find((t) => t.name === 'roamarr_place_category_update');
+			expect(update?.inputSchema.required).toEqual(['categoryId']);
+			expect(tools).toHaveLength(144);
+		});
+
 		test('places IDOR: another user\'s place is not visible or mutable', async () => {
 			const other = makeUser(ctx.kit).id;
 			const { client: otherClient } = await connect(other, ['saved-places:write']);

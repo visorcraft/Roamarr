@@ -1672,11 +1672,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_place_category_update',
-				description: 'Rename or recolor a saved-place category.',
+				description: 'Rename and/or recolor a saved-place category. Omitted fields keep their current value.',
 				inputSchema: {
 					type: 'object',
 					properties: { categoryId: { type: 'number' }, name: { type: 'string' }, color: { type: 'string' } },
-					required: ['categoryId', 'name']
+					required: ['categoryId']
 				}
 			},
 			{
@@ -4130,9 +4130,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		case 'roamarr_place_category_create': {
 			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
 			const { createPlaceCategory, projectPlaceCategory } = await import('./places');
+			if (typeof args.name !== 'string') throw error(400, 'name must be a string');
+			if (args.color != null && typeof args.color !== 'string') throw error(400, 'color must be a string');
 			const category = createPlaceCategory(userId, {
-				name: String(args.name ?? ''),
-				color: (args.color as string) ?? null
+				name: args.name,
+				color: args.color == null ? null : args.color
 			});
 			logAudit(userId, 'mcp_place_category_create', 'place_category', category.id, {});
 			return textResult(projectPlaceCategory(category));
@@ -4141,11 +4143,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
 			const { getPlaceCategoryById, updatePlaceCategory, projectPlaceCategory } = await import('./places');
 			const id = Number(args.categoryId);
-			if (!getPlaceCategoryById(id, userId)) return { content: [{ type: 'text' as const, text: 'Category not found' }], isError: true };
-			const category = updatePlaceCategory(id, userId, {
-				name: String(args.name ?? ''),
-				color: (args.color as string) ?? null
-			});
+			if (!Number.isSafeInteger(id) || id < 1) throw error(400, 'categoryId must be a positive integer');
+			const existing = getPlaceCategoryById(id, userId);
+			if (!existing) return { content: [{ type: 'text' as const, text: 'Category not found' }], isError: true };
+			if (args.name !== undefined && typeof args.name !== 'string') throw error(400, 'name must be a string');
+			if (args.color != null && typeof args.color !== 'string') throw error(400, 'color must be a string');
+			const name = args.name === undefined ? existing.name : args.name;
+			const color = typeof args.color === 'string' && args.color.trim() ? args.color : existing.color;
+			const category = updatePlaceCategory(id, userId, { name, color });
 			logAudit(userId, 'mcp_place_category_update', 'place_category', id, {});
 			return textResult(category ? projectPlaceCategory(category) : { ok: false });
 		}

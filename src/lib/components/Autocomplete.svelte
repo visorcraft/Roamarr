@@ -195,6 +195,8 @@
 		aria-expanded={open ? 'true' : 'false'}
 		aria-controls={listboxId}
 		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+		aria-invalid={errors[name] ? 'true' : undefined}
+		aria-describedby={errors[name] ? `${name}-error` : undefined}
 		{disabled}
 		{required}
 		{placeholder}
@@ -218,7 +220,7 @@
 			id={listboxId}
 			role="listbox"
 			aria-label={label}
-			class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md bg-surface shadow-lg ring-1 ring-white/10"
+			class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md bg-surface shadow-lg ring-1 ring-[var(--theme-line)]"
 		>
 			{#if suggestions.length === 0}
 				<li class="px-3 py-2 text-sm text-muted">{noResultsText}</li>

@@ -41,10 +41,10 @@ describe('Autocomplete', () => {
 		return d.promise;
 	}
 
-	function mountAutocomplete() {
+	function mountAutocomplete(extra: Record<string, unknown> = {}) {
 		const app = mount(Autocomplete, {
 			target: document.body,
-			props: { name: 'city', label: 'City', value: '', valueId: null, fetchSuggestions }
+			props: { name: 'city', label: 'City', value: '', valueId: null, fetchSuggestions, ...extra }
 		});
 		flushSync();
 		mounted.push(app);
@@ -170,5 +170,41 @@ describe('Autocomplete', () => {
 		calls[1].d.resolve([{ id: 3, label: 'Palermo' }]);
 		await flushLookup();
 		expect(listbox()).toBeNull();
+	});
+
+	it('wires aria-invalid and describedby when the field has an error', () => {
+		mountAutocomplete({ errors: { city: 'Pick a city from the list.' } });
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBe('true');
+		expect(input.getAttribute('aria-describedby')).toBe('city-error');
+		expect(document.getElementById('city-error')?.textContent).toContain('Pick a city from the list.');
+	});
+
+	it('omits invalid/describedby without an error', () => {
+		mountAutocomplete();
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBeNull();
+		expect(input.getAttribute('aria-describedby')).toBeNull();
+	});
+
+	it('an empty-string error renders no message or aria attributes', () => {
+		mountAutocomplete({ errors: { city: '' } });
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBeNull();
+		expect(input.getAttribute('aria-describedby')).toBeNull();
+		expect(document.getElementById('city-error')).toBeNull();
+	});
+
+	it('listbox uses the theme line token', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([{ id: 2, label: 'Paris' }]);
+		await flushLookup();
+		const box = listbox();
+		expect(box).not.toBeNull();
+		expect(box!.className).toContain('ring-[var(--theme-line)]');
+		expect(box!.className).not.toContain('ring-white');
 	});
 });

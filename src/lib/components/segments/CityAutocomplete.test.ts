@@ -46,10 +46,10 @@ describe('CityAutocomplete', () => {
 		document.body.innerHTML = '';
 	});
 
-	function mountAutocomplete() {
+	function mountAutocomplete(extra: Record<string, unknown> = {}) {
 		const app = mount(CityAutocomplete, {
 			target: document.body,
-			props: { countryCode: 'FR', name: 'city', value: '', latName: 'lat', lngName: 'lng' }
+			props: { countryCode: 'FR', name: 'city', value: '', latName: 'lat', lngName: 'lng', ...extra }
 		});
 		flushSync();
 		mounted.push(app);
@@ -162,5 +162,41 @@ describe('CityAutocomplete', () => {
 		calls[1].d.resolve(resolveWith([{ name: 'Palermo', lat: 38.12, lng: 13.36 }]));
 		await flushLookup();
 		expect(listbox()).toBeNull();
+	});
+
+	it('wires aria-invalid and describedby when the field has an error', () => {
+		mountAutocomplete({ errors: { city: 'Enter a city.' } });
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBe('true');
+		expect(input.getAttribute('aria-describedby')).toBe('city-error');
+		expect(document.getElementById('city-error')?.textContent).toContain('Enter a city.');
+	});
+
+	it('omits invalid/describedby without an error', () => {
+		mountAutocomplete();
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBeNull();
+		expect(input.getAttribute('aria-describedby')).toBeNull();
+	});
+
+	it('an empty-string error renders no message or aria attributes', () => {
+		mountAutocomplete({ errors: { city: '' } });
+		const input = getInput();
+		expect(input.getAttribute('aria-invalid')).toBeNull();
+		expect(input.getAttribute('aria-describedby')).toBeNull();
+		expect(document.getElementById('city-error')).toBeNull();
+	});
+
+	it('listbox uses the theme line token', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve(resolveWith([{ name: 'Paris', lat: 48.85, lng: 2.35 }]));
+		await flushLookup();
+		const box = listbox();
+		expect(box).not.toBeNull();
+		expect(box!.className).toContain('ring-[var(--theme-line)]');
+		expect(box!.className).not.toContain('ring-white');
 	});
 });

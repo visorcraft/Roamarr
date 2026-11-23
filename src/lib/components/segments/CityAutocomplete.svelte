@@ -197,6 +197,8 @@
 		aria-expanded={open ? 'true' : 'false'}
 		aria-controls={listboxId}
 		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+		aria-invalid={errors[name] ? 'true' : undefined}
+		aria-describedby={errors[name] ? `${name}-error` : undefined}
 		{disabled}
 		value={inputValue}
 		oninput={(e) => onInput(e.currentTarget.value)}
@@ -211,7 +213,7 @@
 			id={listboxId}
 			role="listbox"
 			aria-label="City suggestions"
-			class="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-md bg-surface shadow-lg ring-1 ring-white/10"
+			class="absolute z-20 mt-1 max-h-48 w-full overflow-auto rounded-md bg-surface shadow-lg ring-1 ring-[var(--theme-line)]"
 		>
 			{#each suggestions as city, i (city.name + city.lat + city.lng)}
 				<li

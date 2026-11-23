@@ -2418,20 +2418,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				// UI. The previous impl used listTripsForUser (owner-only),
 				// which silently hid trips shared with the calling user.
 				const tripIds = tripsRepo.listViewableTripIdsForUser(userId);
-				const trips = tripIds.map((id) => safeTripProjection(id, userId, scopes));
-				const page = paginateList(
-					trips,
-					args,
-					(t) => t.id
-				);
+				const page = paginateList(tripIds, args, (id) => id);
 				return textResult({
-					items: page.items.map((t) => ({
-						id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
-						destinationCountryCode: t.destinationCountryCode,
-						destinationAdmin1Code: 'destinationAdmin1Code' in t ? t.destinationAdmin1Code : null,
-						destinationCityName: t.destinationCityName,
-						startDate: t.startDate, endDate: t.endDate, status: t.status
-					})),
+					items: page.items.map((id) => {
+						const t = safeTripProjection(id, userId, scopes);
+						return {
+							id: t.id, name: t.name, destination: 'destination' in t ? t.destination : null,
+							destinationCountryCode: t.destinationCountryCode,
+							destinationAdmin1Code: 'destinationAdmin1Code' in t ? t.destinationAdmin1Code : null,
+							destinationCityName: t.destinationCityName,
+							startDate: t.startDate, endDate: t.endDate, status: t.status
+						};
+					}),
 					nextCursor: page.nextCursor,
 				});
 			}

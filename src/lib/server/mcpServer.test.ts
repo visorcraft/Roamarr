@@ -15,6 +15,7 @@ import { createMcpServer } from './mcpServer';
 import { createApiKey, verifyApiKey } from './apiKeys';
 import type { Scope } from './oauth';
 import * as tripsRepo from './repositories/tripsRepo';
+import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
 import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks } from './db/mongrelSchema';
@@ -3256,6 +3257,62 @@ describe('mcpServer', () => {
 				});
 				expect(badLength.isError).toBe(true);
 			});
+		});
+	});
+
+	describe('roamarr_trip_list pagination', () => {
+		test('loads only the requested page of trips', async () => {
+			for (let i = 0; i < 5; i++) makeTrip(ctx.kit, userId, { name: `Page trip ${i}` });
+			const { client } = await connect(userId, ['trips:read']);
+			const loadSpy = vi.spyOn(tripsShared, 'loadTripFor');
+			try {
+				const res: any = await client.callTool({ name: 'roamarr_trip_list', arguments: { limit: 2 } });
+				expect(res.isError).toBeFalsy();
+				const data = JSON.parse(res.content[0].text);
+				expect(data.items).toHaveLength(2);
+				expect(loadSpy).toHaveBeenCalledTimes(2);
+			} finally {
+				loadSpy.mockRestore();
+			}
+		});
+
+		test('walks every viewable trip in list order with stable cursors', async () => {
+			for (let i = 0; i < 5; i++) makeTrip(ctx.kit, userId, { name: `Order trip ${i}` });
+			const { client } = await connect(userId, ['trips:read']);
+			const ids: number[] = [];
+			let cursor: string | null = null;
+			let finalNextCursor: string | null = 'unset';
+			let pageCount = 0;
+			for (;;) {
+				const args: Record<string, unknown> = { limit: 2 };
+				if (cursor != null) args.cursor = cursor;
+				const res: any = await client.callTool({ name: 'roamarr_trip_list', arguments: args });
+				expect(res.isError).toBeFalsy();
+				const data = JSON.parse(res.content[0].text);
+				expect(data.items.length).toBeLessThanOrEqual(2);
+				ids.push(...data.items.map((t: any) => Number(t.id)));
+				pageCount += 1;
+				expect(pageCount).toBeLessThan(20);
+				finalNextCursor = data.nextCursor ?? null;
+				if (data.nextCursor == null) break;
+				cursor = data.nextCursor;
+			}
+			expect(finalNextCursor).toBeNull();
+			expect(ids).toEqual(tripsRepo.listViewableTripIdsForUser(userId).map(Number));
+		});
+
+		test('item shape is unchanged', async () => {
+			for (let i = 0; i < 3; i++) makeTrip(ctx.kit, userId, { name: `Shape trip ${i}` });
+			const { client } = await connect(userId, ['trips:read']);
+			const res: any = await client.callTool({ name: 'roamarr_trip_list', arguments: { limit: 1 } });
+			expect(res.isError).toBeFalsy();
+			const data = JSON.parse(res.content[0].text);
+			expect(data.items).toHaveLength(1);
+			expect(data.nextCursor).not.toBeNull();
+			expect(Object.keys(data.items[0])).toEqual([
+				'id', 'name', 'destination', 'destinationCountryCode', 'destinationAdmin1Code',
+				'destinationCityName', 'startDate', 'endDate', 'status'
+			]);
 		});
 	});
 });

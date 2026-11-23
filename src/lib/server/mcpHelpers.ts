@@ -48,6 +48,8 @@ export function clampLimit(value: unknown, fallback = 50, max = 200): number {
  * slice plus the next cursor (or null when the page exhausts the list).
  *
  * `getKey(item)` should return the primary key used as the cursor token.
+ *
+ * The cursor is the key of the last row on the page; the next call resumes after it.
  */
 export function paginateList<T>(
 	rows: readonly T[],
@@ -63,7 +65,7 @@ export function paginateList<T>(
 	}
 	const slice = rows.slice(start, start + limit);
 	const hasMoreInWindow = start + limit < rows.length;
-	const nextKey = hasMoreInWindow ? getKey(rows[start + limit]) : null;
+	const nextKey = hasMoreInWindow ? getKey(rows[start + limit - 1]) : null;
 	return {
 		items: slice,
 		nextCursor: nextKey != null ? encodeCursor(String(nextKey)) : null

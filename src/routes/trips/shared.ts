@@ -61,8 +61,7 @@ export function revokeCalendarToken(ownerId: number, tripId: number) {
 }
 
 export function duplicateTrip(ownerId: number, tripId: number) {
-	const t = tripsRepo.getTripById(tripId);
-	if (!t || t.ownerId !== ownerId) throw error(403, 'Not allowed');
+	const t = requireOwnedTrip(ownerId, tripId);
 	const segs = listSegmentsForTrip(tripId);
 	const copy = tripsRepo.createTrip(ownerId, {
 		name: `Copy of ${t.name}`,
@@ -104,6 +103,21 @@ export function loadTripFor(userId: number, tripId: number): TripView {
 	if (!t || !canView(userId, t)) throw error(404, 'Not found');
 	const segs = listSegmentsForTrip(t.id);
 	const editable = canEdit(userId, t);
-	if (editable) return { owner: t.ownerId === userId, editor: true, trip: t, segments: segs };
+	if (editable) {
+		if (t.ownerId === userId) return { owner: true, editor: true, trip: t, segments: segs };
+		// Non-owner editors never see owner-only secrets. Notes and segment
+		// details are withheld unless the share grants details.
+		const trip = { ...t, publicToken: null, calendarToken: null, calendarTokenExpiresAt: null };
+		if (!canViewDetails(userId, t)) {
+			trip.notes = null;
+			return {
+				owner: false,
+				editor: true,
+				trip,
+				segments: segs.map((s) => ({ ...s, confirmationNumber: null, detailsJson: null }))
+			};
+		}
+		return { owner: false, editor: true, trip, segments: segs };
+	}
 	return { owner: false, editor: false, trip: viewerProjection(t, segs, canViewDetails(userId, t)) };
 }

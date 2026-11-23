@@ -9,15 +9,19 @@ vi.mock('$lib/server/db', async () => {
 });
 import { kit } from '$lib/server/db';
 
-import { makeUser, makeTrip, makeGroup, makeGroupMember, makeShare } from '../../../tests/helpers';
+import { makeUser, makeTrip, makeSegment, makeGroup, makeGroupMember, makeShare } from '../../../tests/helpers';
 
 
 import { eq } from '@visorcraft/mongreldb-kit';
 import { getTripById } from '$lib/server/repositories/tripsRepo';
-import { createTrip, loadTripFor } from './shared';
+import { getSegmentById } from '$lib/server/repositories/segmentsRepo';
+import { updateSegment } from '$lib/server/segments';
+import { createTrip, loadTripFor, duplicateTrip } from './shared';
+import { actions as tripEditActions } from './[id]/edit/+page.server';
+import { makeLocals, makeFormData } from '../../../tests/eventHelpers';
 import { load, actions } from './+page.server';
 import { upsertCustomReminder } from '$lib/server/reminders';
-import { trips, reminders } from '$lib/server/db/mongrelSchema';
+import { trips, segments, reminders } from '$lib/server/db/mongrelSchema';
 import { makeGetEvent } from '../../../tests/eventHelpers';
 
 function event(user: { id: number; email: string }, search = '') {
@@ -297,4 +301,237 @@ test('bulk delete removes trip-level and segment reminders', async () => {
 	await expect(actions.delete(makeEvent(a, body))).rejects.toMatchObject({ status: 303, location: '/trips' });
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
 	expect(kit.selectFrom(reminders).where(eq(reminders.ref_type, 'trip')).executeSync()).toHaveLength(0);
+});
+
+
+function seedPrivateTrip(ownerId: number) {
+	const t = makeTrip(kit, ownerId, {
+		name: 'Private Trip',
+		notes: 'OWNER NOTES',
+		calendarToken: 'cal-secret-1',
+		calendarTokenExpiresAt: '2027-01-01T00:00:00.000Z',
+		publicToken: 'pub-secret-1'
+	});
+	const seg = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'UA1',
+		startAt: '2026-07-01T12:00:00Z',
+		confirmationNumber: 'CONF123',
+		detailsJson: '{"seat":"12A"}'
+	});
+	return { t, seg };
+}
+
+test('edit share without details withholds tokens and details from the editor', () => {
+	const a = makeUser(kit, { email: 'ed-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'ed-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'edit', showDetails: false });
+
+	const view = loadTripFor(b.id, t.id) as {
+		owner: false;
+		editor: true;
+		trip: { name: string; notes: string | null; calendarToken: string | null; calendarTokenExpiresAt: string | null; publicToken: string | null };
+		segments: Array<{ title: string; startAt: string; confirmationNumber: string | null; detailsJson: string | null }>;
+	};
+	expect(view.owner).toBe(false);
+	expect(view.editor).toBe(true);
+	expect(view.trip.name).toBe('Private Trip');
+	expect(view.trip.notes).toBeNull();
+	expect(view.trip.calendarToken).toBeNull();
+	expect(view.trip.calendarTokenExpiresAt).toBeNull();
+	expect(view.trip.publicToken).toBeNull();
+	expect(view.segments).toHaveLength(1);
+	expect(view.segments[0].title).toBe('UA1');
+	expect(view.segments[0].startAt).toBe('2026-07-01T12:00:00Z');
+	expect(view.segments[0].confirmationNumber).toBeNull();
+	expect(view.segments[0].detailsJson).toBeNull();
+});
+
+test('edit share with details keeps notes and segment details but still withholds tokens', () => {
+	const a = makeUser(kit, { email: 'ed-o2@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'ed-b2@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'edit', showDetails: true });
+
+	const view = loadTripFor(b.id, t.id) as {
+		owner: false;
+		editor: true;
+		trip: { notes: string | null; calendarToken: string | null; calendarTokenExpiresAt: string | null; publicToken: string | null };
+		segments: Array<{ confirmationNumber: string | null; detailsJson: string | null }>;
+	};
+	expect(view.owner).toBe(false);
+	expect(view.editor).toBe(true);
+	expect(view.trip.notes).toBe('OWNER NOTES');
+	expect(view.trip.calendarToken).toBeNull();
+	expect(view.trip.calendarTokenExpiresAt).toBeNull();
+	expect(view.trip.publicToken).toBeNull();
+	expect(view.segments[0].confirmationNumber).toBe('CONF123');
+	expect(view.segments[0].detailsJson).toBe('{"seat":"12A"}');
+});
+
+test('group edit share without details strips the same fields', () => {
+	const a = makeUser(kit, { email: 'g-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'g-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t } = seedPrivateTrip(a.id);
+	const g = makeGroup(kit, a.id, 'fam');
+	makeGroupMember(kit, g.id, b.id);
+	makeShare(kit, { tripId: t.id, sharedWithGroupId: g.id, permission: 'edit', showDetails: false });
+
+	const view = loadTripFor(b.id, t.id) as {
+		owner: false;
+		editor: true;
+		trip: { notes: string | null; calendarToken: string | null; calendarTokenExpiresAt: string | null; publicToken: string | null };
+		segments: Array<{ confirmationNumber: string | null; detailsJson: string | null }>;
+	};
+	expect(view.owner).toBe(false);
+	expect(view.editor).toBe(true);
+	expect(view.trip.notes).toBeNull();
+	expect(view.trip.calendarToken).toBeNull();
+	expect(view.trip.calendarTokenExpiresAt).toBeNull();
+	expect(view.trip.publicToken).toBeNull();
+	expect(view.segments[0].confirmationNumber).toBeNull();
+	expect(view.segments[0].detailsJson).toBeNull();
+});
+
+test('owner sees the full trip including tokens and details', () => {
+	const a = makeUser(kit, { email: 'o-a@x.c', passwordHash: 'x', displayName: 'A' });
+	const { t } = seedPrivateTrip(a.id);
+
+	const view = loadTripFor(a.id, t.id) as {
+		owner: true;
+		editor: true;
+		trip: { notes: string | null; calendarToken: string | null; calendarTokenExpiresAt: string | null; publicToken: string | null };
+		segments: Array<{ confirmationNumber: string | null; detailsJson: string | null }>;
+	};
+	expect(view.owner).toBe(true);
+	expect(view.editor).toBe(true);
+	expect(view.trip.notes).toBe('OWNER NOTES');
+	expect(view.trip.calendarToken).toBe('cal-secret-1');
+	expect(view.trip.calendarTokenExpiresAt).toBe('2027-01-01T00:00:00.000Z');
+	expect(view.trip.publicToken).toBe('pub-secret-1');
+	expect(view.segments[0].confirmationNumber).toBe('CONF123');
+	expect(view.segments[0].detailsJson).toBe('{"seat":"12A"}');
+});
+
+test('view-only share without details keeps the stripped projection (regression guard)', () => {
+	const a = makeUser(kit, { email: 'v-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'v-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'read', showDetails: false });
+
+	const view = loadTripFor(b.id, t.id) as { owner: false; editor: false; trip: Record<string, any> };
+	expect(view.owner).toBe(false);
+	expect(view.editor).toBe(false);
+	const json = JSON.stringify(view.trip);
+	expect(json).not.toContain('CONF123');
+	expect(json).not.toContain('12A');
+	expect(json).not.toContain('cal-secret-1');
+	expect(json).not.toContain('pub-secret-1');
+	expect(json).not.toContain('OWNER NOTES');
+});
+
+test('stripping is non-destructive: stored rows keep notes, tokens, and segment details', () => {
+	const a = makeUser(kit, { email: 'n-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'n-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t, seg } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'edit', showDetails: false });
+	loadTripFor(b.id, t.id);
+
+	const stored = getTripById(t.id)!;
+	expect(stored.notes).toBe('OWNER NOTES');
+	expect(stored.calendarToken).toBe('cal-secret-1');
+	expect(stored.calendarTokenExpiresAt).toBe('2027-01-01T00:00:00.000Z');
+	expect(stored.publicToken).toBe('pub-secret-1');
+	const storedSeg = getSegmentById(seg.id)!;
+	expect(storedSeg.confirmationNumber).toBe('CONF123');
+	expect(storedSeg.detailsJson).toBe('{"seat":"12A"}');
+
+	const g = makeGroup(kit, a.id, 'group-no-details');
+	makeGroupMember(kit, g.id, b.id);
+	makeShare(kit, { tripId: t.id, sharedWithGroupId: g.id, permission: 'edit', showDetails: false });
+	loadTripFor(b.id, t.id);
+	expect(getTripById(t.id)!.notes).toBe('OWNER NOTES');
+	expect(getSegmentById(seg.id)!.confirmationNumber).toBe('CONF123');
+});
+
+test('editor without details keeps stored notes and segment details on update', async () => {
+	const a = makeUser(kit, { email: 'u-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'u-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t, seg } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'edit', showDetails: false });
+
+	const form = makeFormData({ name: 'Updated Trip', notes: '' });
+	const event = {
+		request: new Request(`http://localhost/trips/${t.id}/edit`, { method: 'POST', body: form }),
+		params: { id: String(t.id) },
+		locals: makeLocals({ id: b.id }),
+		cookies: { set: vi.fn() },
+		url: new URL(`http://localhost/trips/${t.id}/edit`)
+	} as any;
+	await expect(tripEditActions.save(event)).rejects.toMatchObject({ status: 303 });
+	expect(getTripById(t.id)!.notes).toBe('OWNER NOTES');
+	expect(getTripById(t.id)!.name).toBe('Updated Trip');
+
+	updateSegment(b.id, t.id, seg.id, {
+		title: 'UA1 Renamed',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC'
+	});
+	const storedSeg = getSegmentById(seg.id)!;
+	expect(storedSeg.title).toBe('UA1 Renamed');
+	expect(storedSeg.confirmationNumber).toBe('CONF123');
+	expect(storedSeg.detailsJson).toBe('{"seat":"12A"}');
+});
+
+test('owner can still overwrite notes and segment details on update', async () => {
+	const a = makeUser(kit, { email: 'own-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const { t, seg } = seedPrivateTrip(a.id);
+
+	const form = makeFormData({ name: 'Updated Trip', notes: 'new notes' });
+	const event = {
+		request: new Request(`http://localhost/trips/${t.id}/edit`, { method: 'POST', body: form }),
+		params: { id: String(t.id) },
+		locals: makeLocals({ id: a.id }),
+		cookies: { set: vi.fn() },
+		url: new URL(`http://localhost/trips/${t.id}/edit`)
+	} as any;
+	await expect(tripEditActions.save(event)).rejects.toMatchObject({ status: 303 });
+	expect(getTripById(t.id)!.notes).toBe('new notes');
+
+	updateSegment(a.id, t.id, seg.id, {
+		title: 'UA1 Renamed',
+		localStart: '2026-07-01T15:00:00',
+		startTz: 'UTC',
+		confirmationNumber: 'NEWCONF',
+		details: { seat: '14C' }
+	});
+	const storedSeg = getSegmentById(seg.id)!;
+	expect(storedSeg.confirmationNumber).toBe('NEWCONF');
+	expect(storedSeg.detailsJson).toBe('{"seat":"14C"}');
+});
+
+test('duplicateTrip 404s for non-owner and copies details for the owner', () => {
+	const a = makeUser(kit, { email: 'd-o@x.c', passwordHash: 'x', displayName: 'A' });
+	const b = makeUser(kit, { email: 'd-b@x.c', passwordHash: 'x', displayName: 'B' });
+	const { t } = seedPrivateTrip(a.id);
+	makeShare(kit, { tripId: t.id, sharedWithUserId: b.id, permission: 'edit', showDetails: true });
+
+	const tripCountBefore = kit.selectFrom(trips).executeSync().length;
+	let err: any;
+	try {
+		duplicateTrip(b.id, t.id);
+	} catch (e) {
+		err = e;
+	}
+	expect(err?.status).toBe(404);
+	expect(kit.selectFrom(trips).executeSync().length).toBe(tripCountBefore);
+
+	const copy = duplicateTrip(a.id, t.id);
+	expect(copy.id).not.toBe(t.id);
+	expect(copy.notes).toBe('OWNER NOTES');
+	const copySegs = kit.selectFrom(segments).where(eq(segments.trip_id, BigInt(copy.id))).executeSync();
+	expect(copySegs).toHaveLength(1);
+	expect(copySegs[0]!.confirmation_number).toBe('CONF123');
+	expect(copySegs[0]!.details_json).toBe('{"seat":"12A"}');
 });

@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
 import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
+import { canViewDetails } from '$lib/server/sharing';
 import { localToUtc, nowIso } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
 import { logAudit } from '$lib/server/audit';
@@ -156,11 +157,15 @@ export function updateSegment(
 		paymentDueDate?: string | null;
 	}
 ) {
-	requireSegmentOnTrip(userId, tripId, segId);
+	const trip = requireEditableTrip(userId, tripId);
+	const existing = getSegmentById(segId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const paymentStatus = i.paymentStatus ? normalizePaymentStatus(i.paymentStatus) : undefined;
+	// Editors without details must not blank out stored confirmation/details.
+	const showDetails = canViewDetails(userId, trip);
 	const patch: Parameters<typeof updateSegmentRepo>[1] = {
 		title: i.title,
 		start_at: localToUtc(i.localStart, i.startTz),
@@ -174,9 +179,9 @@ export function updateSegment(
 		city_lat: i.cityLat ?? null,
 		city_lng: i.cityLng ?? null,
 		venue: i.venue ?? null,
-		confirmation_number: i.confirmationNumber ?? null,
+		confirmation_number: showDetails ? (i.confirmationNumber ?? null) : existing.confirmationNumber,
 		card_id: i.cardId != null ? BigInt(i.cardId) : null,
-		details_json: i.details ? JSON.stringify(i.details) : null,
+		details_json: showDetails ? (i.details ? JSON.stringify(i.details) : null) : existing.detailsJson,
 		meeting_point: meetingPoint,
 		meeting_at: meetingAt,
 		payment_due_date: i.paymentDueDate

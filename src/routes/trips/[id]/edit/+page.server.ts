@@ -8,7 +8,7 @@ import { listSegmentsForTrip } from '$lib/server/repositories/segmentsRepo';
 import { nowIso } from '$lib/server/tz';
 import { parseTripId } from '$lib/server/params';
 import { Validator } from '$lib/server/validation';
-import { TRIP_STATUSES, VISIBILITIES } from '$lib/server/sharing';
+import { TRIP_STATUSES, VISIBILITIES, canViewDetails } from '$lib/server/sharing';
 import { effectiveTripStatus, todayForUser } from '$lib/server/tripLifecycle';
 import { serializeTags } from '$lib/tags';
 import { resolveCitySelection } from '$lib/server/cities';
@@ -44,7 +44,7 @@ export const actions: Actions = {
 	save: async ({ request, locals, params, cookies }) => {
 		const u = requireUser(locals);
 		const tripId = parseTripId(params);
-		requireEditableTrip(u.id, tripId);
+		const existingTrip = requireEditableTrip(u.id, tripId);
 		const f = await request.formData();
 		const v = new Validator();
 
@@ -125,6 +125,8 @@ export const actions: Actions = {
 
 		if (!v.ok()) return fail(400, { error: v.failMessage(), errors: v.errors });
 
+		// Editors without details must not blank out the stored private notes.
+		const notesToSave = canViewDetails(u.id, existingTrip) ? notes : existingTrip.notes;
 		tripsRepo.updateTrip(tripId, {
 			name: name!,
 			destination: null,
@@ -135,7 +137,7 @@ export const actions: Actions = {
 			destinationCityLng: resolvedLng,
 			startDate,
 			endDate,
-			notes,
+			notes: notesToSave,
 			tags: serializeTags(tags),
 			baseCurrency: baseCurrencyRaw,
 			...(status && { status }),

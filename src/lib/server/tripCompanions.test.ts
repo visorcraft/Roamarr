@@ -17,7 +17,7 @@ import {
 	addCompanion,
 	updateCompanion
 } from './tripCompanions';
-import { trips, tripCompanions, tripShares, tripInvitations, auditLogs } from '$lib/server/db/mongrelSchema';
+import { trips, tripCompanions, tripShares, tripInvitations, auditLogs, type CompanionCategory } from '$lib/server/db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
@@ -327,4 +327,83 @@ test('companion notes are rejected above max length', async () => {
 
 	const rows = kit.selectFrom(tripCompanions).where(eq(tripCompanions.trip_id, BigInt(t.id))).executeSync();
 	expect(rows).toHaveLength(0);
+});
+
+function expectHttpError(fn: () => void, status: number, pattern: RegExp) {
+	let caught: unknown;
+	try {
+		fn();
+	} catch (e) {
+		caught = e;
+	}
+	expect(caught).toBeDefined();
+	const e = caught as { status?: number; body?: { message?: string }; message?: string };
+	expect(e.status).toBe(status);
+	expect(e.body?.message ?? e.message ?? '').toMatch(pattern);
+}
+
+test('patchTripCompanion validates category, flags, and name before writing', () => {
+	const kit = getKit();
+	const u = makeUser(kit, { email: 'validate@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const c = insertTripCompanion(u.id, t.id, { name: 'Pat', category: 'adult', notes: 'keep me' });
+	const before = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!.updated_at;
+
+	expectHttpError(
+		() => patchTripCompanion(u.id, t.id, c.id, { category: 'robot' as CompanionCategory }),
+		400,
+		/category/
+	);
+	expectHttpError(
+		() => patchTripCompanion(u.id, t.id, c.id, { needsCrib: 'yes' as unknown as boolean }),
+		400,
+		/needsCrib/
+	);
+	expectHttpError(() => patchTripCompanion(u.id, t.id, c.id, { name: '   ' }), 400, /name/);
+
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
+	expect(row.category).toBe('adult');
+	expect(row.needs_crib).toBe(false);
+	expect(row.name).toBe('Pat');
+	expect(row.notes).toBe('keep me');
+	const after = kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]!.updated_at;
+	expect(after).toBe(before);
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
+	expect(logs.filter((l: Record<string, unknown>) => l.action === 'update')).toHaveLength(0);
+});
+
+test('patchTripCompanion applies a valid partial patch', () => {
+	const kit = getKit();
+	const u = makeUser(kit, { email: 'positive@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const c = insertTripCompanion(u.id, t.id, { name: 'Pat', category: 'adult' });
+
+	const patched = patchTripCompanion(u.id, t.id, c.id, { name: '  Patricia  ', needsCrib: true });
+	expect(patched.name).toBe('Patricia');
+	expect(patched.needsCrib).toBe(true);
+	expect(patched.category).toBe('adult');
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
+	expect(row.name).toBe('Patricia');
+	expect(row.needs_crib).toBe(true);
+	expect(row.category).toBe('adult');
+});
+
+test('patchTripCompanion rejects a foreign user with 403/404, not 400', () => {
+	const kit = getKit();
+	const owner = makeUser(kit, { email: 'owner2@x.c', passwordHash: 'x', displayName: 'O' });
+	const other = makeUser(kit, { email: 'other2@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const c = insertTripCompanion(owner.id, t.id, { name: 'Mallory', category: 'adult' });
+
+	let caught: unknown;
+	try {
+		patchTripCompanion(other.id, t.id, c.id, { category: 'robot' as CompanionCategory });
+	} catch (e) {
+		caught = e;
+	}
+	expect(caught).toBeDefined();
+	const status = (caught as { status?: number }).status;
+	expect(status === 403 || status === 404).toBe(true);
+	const row = kit.selectFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(c.id))).executeSync()[0]!;
+	expect(row.category).toBe('adult');
 });

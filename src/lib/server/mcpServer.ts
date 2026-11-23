@@ -3613,11 +3613,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const tripId = Number(args.tripId);
 				requireEditableTrip(userId, tripId);
 				const c = insertTripCompanion(userId, tripId, {
-					name: String(args.name ?? ''),
-					category: (args.category as CompanionCategory) ?? 'adult',
+					name: args.name as string | undefined,
+					category: (args.category === undefined ? 'adult' : args.category) as CompanionCategory,
 					dietary: (args.dietary as string) ?? undefined, allergies: (args.allergies as string) ?? undefined,
-					medicalNotes: (args.medicalNotes as string) ?? undefined, needsCarSeat: Boolean(args.needsCarSeat),
-					needsStroller: Boolean(args.needsStroller), needsCrib: Boolean(args.needsCrib), needsKidsMeal: Boolean(args.needsKidsMeal),
+					medicalNotes: (args.medicalNotes as string) ?? undefined,
+					needsCarSeat: args.needsCarSeat === undefined ? false : (args.needsCarSeat as boolean),
+					needsStroller: args.needsStroller === undefined ? false : (args.needsStroller as boolean),
+					needsCrib: args.needsCrib === undefined ? false : (args.needsCrib as boolean),
+					needsKidsMeal: args.needsKidsMeal === undefined ? false : (args.needsKidsMeal as boolean),
 					childTicketDiscount: (args.childTicketDiscount as string) ?? undefined, seatPreference: (args.seatPreference as string) ?? undefined,
 					bedPreference: (args.bedPreference as string) ?? undefined, accessibilityNeeds: (args.accessibilityNeeds as string) ?? undefined,
 					roomNotes: (args.roomNotes as string) ?? undefined, notes: (args.notes as string) ?? undefined
@@ -3637,8 +3640,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					category: (args.category as CompanionCategory) ?? undefined,
 					dietary: (args.dietary as string) ?? undefined, allergies: (args.allergies as string) ?? undefined,
 					medicalNotes: (args.medicalNotes as string) ?? undefined,
-					needsCarSeat: args.needsCarSeat as boolean | undefined, needsStroller: args.needsStroller as boolean | undefined,
-					needsCrib: args.needsCrib as boolean | undefined, needsKidsMeal: args.needsKidsMeal as boolean | undefined,
+					needsCarSeat: (args.needsCarSeat ?? undefined) as boolean | undefined, needsStroller: (args.needsStroller ?? undefined) as boolean | undefined,
+					needsCrib: (args.needsCrib ?? undefined) as boolean | undefined, needsKidsMeal: (args.needsKidsMeal ?? undefined) as boolean | undefined,
 					childTicketDiscount: (args.childTicketDiscount as string) ?? undefined, seatPreference: (args.seatPreference as string) ?? undefined,
 					bedPreference: (args.bedPreference as string) ?? undefined, accessibilityNeeds: (args.accessibilityNeeds as string) ?? undefined,
 					roomNotes: (args.roomNotes as string) ?? undefined, notes: (args.notes as string) ?? undefined

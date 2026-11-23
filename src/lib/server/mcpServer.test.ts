@@ -111,6 +111,98 @@ describe('mcpServer', () => {
 		expect(JSON.parse(listed.content[0].text).items[0].category).toBe('driver');
 	});
 
+	test('companion update rejects an unknown category', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Pat', category: 'adult' });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const res: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, category: 'robot' } });
+		expect(res.isError).toBe(true);
+		expect(res.content[0].text).toContain('category');
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items[0].category).toBe('adult');
+	});
+
+	test('companion update rejects a non-boolean flag', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Pat', needsCarSeat: true });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const res: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, needsCarSeat: 'false' } });
+		expect(res.isError).toBe(true);
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items[0].needsCarSeat).toBe(true);
+	});
+
+	test('companion update rejects an empty or non-string name', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Pat' });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const emptyRes: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, name: '' } });
+		expect(emptyRes.isError).toBe(true);
+		const numRes: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, name: 123 } });
+		expect(numRes.isError).toBe(true);
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items[0].name).toBe('Pat');
+	});
+
+	test('companion update with only a category leaves every other field untouched', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Pat', category: 'adult', dietary: 'vegan', needsCarSeat: true, notes: 'keep me' });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const res: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, category: 'child' } });
+		expect(res.isError).toBeFalsy();
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		const row = JSON.parse(listed.content[0].text).items[0];
+		expect(row.category).toBe('child');
+		expect(row.name).toBe('Pat');
+		expect(row.dietary).toBe('vegan');
+		expect(row.needsCarSeat).toBe(true);
+		expect(row.notes).toBe('keep me');
+	});
+
+	test('companion update with an explicit null flag leaves the stored flag unchanged', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip' });
+		const { insertTripCompanion } = await import('./tripCompanions');
+		const companion = insertTripCompanion(userId, trip.id, { name: 'Pat', needsCarSeat: true });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const res: any = await client.callTool({ name: 'roamarr_companion_update', arguments: { companionId: companion.id, needsCarSeat: null } });
+		expect(res.isError).toBeFalsy();
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items[0].needsCarSeat).toBe(true);
+	});
+
+	test('companion create rejects a non-boolean flag and stores exact values', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Create trip' });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const bad: any = await client.callTool({ name: 'roamarr_companion_create', arguments: { tripId: trip.id, name: 'Pat', needsCarSeat: 'false' } });
+		expect(bad.isError).toBe(true);
+		const before: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(before.content[0].text).items).toHaveLength(0);
+		const good: any = await client.callTool({ name: 'roamarr_companion_create', arguments: { tripId: trip.id, name: 'Pat', needsCarSeat: false, needsStroller: true } });
+		expect(good.isError).toBeFalsy();
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		const rows = JSON.parse(listed.content[0].text).items;
+		expect(rows).toHaveLength(1);
+		expect(rows[0].needsCarSeat).toBe(false);
+		expect(rows[0].needsStroller).toBe(true);
+	});
+
+	test('companion create rejects an unknown category and defaults to adult', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Default category trip' });
+		const { client } = await connect(userId, ['companions:read', 'companions:write']);
+		const bad: any = await client.callTool({ name: 'roamarr_companion_create', arguments: { tripId: trip.id, name: 'Pat', category: 'robot' } });
+		expect(bad.isError).toBe(true);
+		const good: any = await client.callTool({ name: 'roamarr_companion_create', arguments: { tripId: trip.id, name: 'Pat' } });
+		expect(good.isError).toBeFalsy();
+		const listed: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+		const rows = JSON.parse(listed.content[0].text).items;
+		expect(rows).toHaveLength(1);
+		expect(rows[0].category).toBe('adult');
+	});
+
 	test('mobile trip workflows preserve full user-entered fields', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Complete mobile trip' });
 		const { client } = await connect(userId, [

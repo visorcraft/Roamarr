@@ -95,7 +95,7 @@ function requireCompanion(tripId: number, companionId: number) {
 }
 
 interface CompanionInput {
-	name: string;
+	name?: string;
 	category?: CompanionCategory;
 	notes?: string;
 	dietary?: string;
@@ -198,16 +198,21 @@ function validateCompanionInput(form: FormData): CompanionInput & { errors?: Rec
 
 function buildCompanionValues(input: CompanionInput): Record<string, unknown> {
 	return {
-		name: input.name,
-		category: input.category ?? 'adult',
+		name: validateCompanionName(input.name),
+		category:
+			input.category === undefined ? 'adult' : validateCompanionCategory(input.category),
 		notes: input.notes ?? null,
 		dietary: input.dietary ?? null,
 		allergies: input.allergies ?? null,
 		medical_notes: input.medicalNotes ?? null,
-		needs_car_seat: input.needsCarSeat ?? false,
-		needs_stroller: input.needsStroller ?? false,
-		needs_crib: input.needsCrib ?? false,
-		needs_kids_meal: input.needsKidsMeal ?? false,
+		needs_car_seat:
+			input.needsCarSeat === undefined ? false : validateCompanionFlag(input.needsCarSeat, 'needsCarSeat'),
+		needs_stroller:
+			input.needsStroller === undefined ? false : validateCompanionFlag(input.needsStroller, 'needsStroller'),
+		needs_crib:
+			input.needsCrib === undefined ? false : validateCompanionFlag(input.needsCrib, 'needsCrib'),
+		needs_kids_meal:
+			input.needsKidsMeal === undefined ? false : validateCompanionFlag(input.needsKidsMeal, 'needsKidsMeal'),
 		child_ticket_discount: input.childTicketDiscount ?? null,
 		seat_preference: input.seatPreference ?? null,
 		bed_preference: input.bedPreference ?? null,
@@ -267,6 +272,29 @@ function nullablePatchField(value: string | undefined): string | null | undefine
 	return value === undefined ? undefined : (value ?? null);
 }
 
+const COMPANION_NAME_MAX = 255;
+
+function validateCompanionName(value: unknown): string {
+	if (typeof value !== 'string') throw error(400, 'name must be a string');
+	const trimmed = value.trim();
+	if (!trimmed) throw error(400, 'name is required');
+	if (trimmed.length > COMPANION_NAME_MAX)
+		throw error(400, `name must be at most ${COMPANION_NAME_MAX} characters`);
+	return trimmed;
+}
+
+function validateCompanionCategory(value: unknown): CompanionCategory {
+	if (typeof value !== 'string' || !(COMPANION_CATEGORIES as readonly string[]).includes(value)) {
+		throw error(400, `category must be one of: ${COMPANION_CATEGORIES.join(', ')}`);
+	}
+	return value as CompanionCategory;
+}
+
+function validateCompanionFlag(value: unknown, field: string): boolean {
+	if (typeof value !== 'boolean') throw error(400, `${field} must be a boolean`);
+	return value;
+}
+
 export function patchTripCompanion(
 	userId: number,
 	tripId: number,
@@ -276,16 +304,19 @@ export function patchTripCompanion(
 	requireEditableTrip(userId, tripId);
 	requireCompanion(tripId, companionId);
 	const set: Record<string, unknown> = {};
-	if (input.name !== undefined) set.name = input.name;
-	if (input.category !== undefined) set.category = input.category;
+	if (input.name !== undefined) set.name = validateCompanionName(input.name);
+	if (input.category !== undefined) set.category = validateCompanionCategory(input.category);
 	if (input.notes !== undefined) set.notes = nullablePatchField(input.notes);
 	if (input.dietary !== undefined) set.dietary = nullablePatchField(input.dietary);
 	if (input.allergies !== undefined) set.allergies = nullablePatchField(input.allergies);
 	if (input.medicalNotes !== undefined) set.medical_notes = nullablePatchField(input.medicalNotes);
-	if (input.needsCarSeat !== undefined) set.needs_car_seat = input.needsCarSeat;
-	if (input.needsStroller !== undefined) set.needs_stroller = input.needsStroller;
-	if (input.needsCrib !== undefined) set.needs_crib = input.needsCrib;
-	if (input.needsKidsMeal !== undefined) set.needs_kids_meal = input.needsKidsMeal;
+	if (input.needsCarSeat !== undefined)
+		set.needs_car_seat = validateCompanionFlag(input.needsCarSeat, 'needsCarSeat');
+	if (input.needsStroller !== undefined)
+		set.needs_stroller = validateCompanionFlag(input.needsStroller, 'needsStroller');
+	if (input.needsCrib !== undefined) set.needs_crib = validateCompanionFlag(input.needsCrib, 'needsCrib');
+	if (input.needsKidsMeal !== undefined)
+		set.needs_kids_meal = validateCompanionFlag(input.needsKidsMeal, 'needsKidsMeal');
 	if (input.childTicketDiscount !== undefined)
 		set.child_ticket_discount = nullablePatchField(input.childTicketDiscount);
 	if (input.seatPreference !== undefined) set.seat_preference = input.seatPreference;

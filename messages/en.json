@@ -112,5 +112,22 @@
 	"common_discard_title": "Discard changes?",
 	"common_discard_message": "Any unsaved changes will be lost.",
 	"common_discard_confirm": "Discard changes",
-	"common_discard_cancel": "Keep editing"
+	"common_discard_cancel": "Keep editing",
+	"gallery_empty": "No photos yet.",
+	"gallery_view_photo": "View photo {name}",
+	"gallery_move_earlier": "Move earlier",
+	"gallery_move_earlier_named": "Move {filename} earlier",
+	"gallery_move_later": "Move later",
+	"gallery_move_later_named": "Move {filename} later",
+	"gallery_delete_photo": "Delete photo",
+	"gallery_delete_photo_confirm": "Delete {name}? This cannot be undone.",
+	"gallery_caption_placeholder": "Caption",
+	"gallery_caption_for": "Caption for {filename}",
+	"gallery_save_caption": "Save caption",
+	"gallery_save_caption_for": "Save caption for {filename}",
+	"gallery_add_photos": "Add photos",
+	"gallery_upload_help": "JPEG, PNG, or WebP. Up to 50 photos per gallery.",
+	"gallery_close_viewer": "Close viewer",
+	"gallery_previous_photo": "Previous photo",
+	"gallery_next_photo": "Next photo"
 }

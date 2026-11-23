@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import Icon from '$lib/components/Icon.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 
@@ -17,7 +18,7 @@
 		moveAction,
 		captionAction,
 		hiddenFields = {},
-		emptyMessage = 'No photos yet.'
+		emptyMessage = m.gallery_empty()
 	}: {
 		images: GalleryImageItem[];
 		canEdit?: boolean;
@@ -74,7 +75,7 @@
 						type="button"
 						class="gallery-thumb"
 						onclick={() => openLightbox(index)}
-						aria-label={`View photo ${image.caption || image.filename}`}
+						aria-label={m.gallery_view_photo({ name: image.caption || image.filename })}
 					>
 						<img src={image.url} alt={image.caption || image.filename} loading="lazy" />
 					</button>
@@ -91,8 +92,8 @@
 									<button
 										type="submit"
 										class="btn btn-ghost btn-sm"
-										title="Move earlier"
-										aria-label={`Move ${image.filename} earlier`}
+										title={m.gallery_move_earlier()}
+										aria-label={m.gallery_move_earlier_named({ filename: image.filename })}
 										disabled={index === 0}
 									>
 										<Icon name="back" class="h-3.5 w-3.5" />
@@ -107,8 +108,8 @@
 									<button
 										type="submit"
 										class="btn btn-ghost btn-sm"
-										title="Move later"
-										aria-label={`Move ${image.filename} later`}
+										title={m.gallery_move_later()}
+										aria-label={m.gallery_move_later_named({ filename: image.filename })}
 										disabled={index === images.length - 1}
 									>
 										<Icon name="arrow-right" class="h-3.5 w-3.5" />
@@ -123,8 +124,8 @@
 									<input type="hidden" name="imageId" value={image.id} />
 									<ConfirmButton
 										class="btn btn-ghost btn-sm"
-										title="Delete photo"
-										message={`Delete ${image.caption || image.filename}? This cannot be undone.`}
+										title={m.gallery_delete_photo()}
+										message={m.gallery_delete_photo_confirm({ name: image.caption || image.filename })}
 										confirmLabel="Delete"
 									>
 										<Icon name="close" class="h-3.5 w-3.5" />
@@ -143,11 +144,11 @@
 									name="caption"
 									class="input text-xs"
 									value={image.caption ?? ''}
-									placeholder="Caption"
+									placeholder={m.gallery_caption_placeholder()}
 									maxlength="200"
-									aria-label={`Caption for ${image.filename}`}
+									aria-label={m.gallery_caption_for({ filename: image.filename })}
 								/>
-								<button type="submit" class="btn btn-ghost btn-sm" title="Save caption" aria-label={`Save caption for ${image.filename}`}>
+								<button type="submit" class="btn btn-ghost btn-sm" title={m.gallery_save_caption()} aria-label={m.gallery_save_caption_for({ filename: image.filename })}>
 									<Icon name="check" class="h-3.5 w-3.5" />
 								</button>
 							</form>
@@ -164,7 +165,7 @@
 				<input type="hidden" {name} {value} />
 			{/each}
 			<label class="btn btn-secondary btn-sm cursor-pointer">
-				<Icon name="upload" class="h-4 w-4" />Add photos
+				<Icon name="upload" class="h-4 w-4" />{m.gallery_add_photos()}
 				<input
 					type="file"
 					name="images"
@@ -174,7 +175,7 @@
 					onchange={(e) => e.currentTarget.form?.requestSubmit()}
 				/>
 			</label>
-			<p class="field-help mt-1">JPEG, PNG, or WebP. Up to 50 photos per gallery.</p>
+			<p class="field-help mt-1">{m.gallery_upload_help()}</p>
 		</form>
 	{/if}
 </div>
@@ -186,7 +187,7 @@
 		aria-modal="true"
 		aria-label={lightboxImage.caption || lightboxImage.filename}
 	>
-		<button type="button" class="gallery-lightbox-backdrop" onclick={closeLightbox} aria-label="Close viewer"></button>
+		<button type="button" class="gallery-lightbox-backdrop" onclick={closeLightbox} aria-label={m.gallery_close_viewer()}></button>
 		<figure class="gallery-lightbox-figure">
 			<img src={lightboxImage.url} alt={lightboxImage.caption || lightboxImage.filename} />
 			{#if lightboxImage.caption}
@@ -197,7 +198,7 @@
 			type="button"
 			class="gallery-lightbox-nav gallery-lightbox-prev"
 			onclick={() => stepLightbox(-1)}
-			aria-label="Previous photo"
+			aria-label={m.gallery_previous_photo()}
 			disabled={images.length < 2}
 		>
 			<Icon name="back" class="h-6 w-6" />
@@ -206,12 +207,12 @@
 			type="button"
 			class="gallery-lightbox-nav gallery-lightbox-next"
 			onclick={() => stepLightbox(1)}
-			aria-label="Next photo"
+			aria-label={m.gallery_next_photo()}
 			disabled={images.length < 2}
 		>
 			<Icon name="arrow-right" class="h-6 w-6" />
 		</button>
-		<button type="button" class="gallery-lightbox-close" onclick={closeLightbox} aria-label="Close viewer">
+		<button type="button" class="gallery-lightbox-close" onclick={closeLightbox} aria-label={m.gallery_close_viewer()}>
 			<Icon name="close" class="h-6 w-6" />
 		</button>
 	</div>

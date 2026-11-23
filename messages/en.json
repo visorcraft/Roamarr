@@ -275,5 +275,16 @@
 	"event_total_cost_label": "Total cost",
 	"event_total_cost_placeholder": "Enter total cost",
 	"event_restrictions_label": "Restrictions",
-	"event_restrictions_placeholder": "Enter restrictions"
+	"event_restrictions_placeholder": "Enter restrictions",
+	"hotel_name_label": "Hotel name",
+	"hotel_name_placeholder": "Grand Hotel",
+	"hotel_address_label": "Address",
+	"hotel_address_placeholder": "Enter address",
+	"hotel_checkin_date_label": "Check-in date",
+	"hotel_checkin_time_label": "Check-in time",
+	"hotel_checkout_date_label": "Check-out date",
+	"hotel_checkout_time_label": "Check-out time",
+	"hotel_checkout_timezone_label": "Check-out timezone",
+	"hotel_phone_label": "Phone",
+	"hotel_phone_placeholder": "Hotel phone"
 }

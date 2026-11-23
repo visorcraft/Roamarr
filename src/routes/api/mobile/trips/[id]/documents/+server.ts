@@ -2,6 +2,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireUser } from '$lib/server/auth';
 import { requireViewableTrip } from '$lib/server/ownership';
+import { canViewDetails } from '$lib/server/sharing';
 import {
 	addTripDocument,
 	listTripDocuments
@@ -16,7 +17,8 @@ const tripIdParam = (value: string | undefined) => {
 export const GET: RequestHandler = ({ params, locals, url }) => {
 	const user = requireUser(locals);
 	const tripId = tripIdParam(params.id);
-	requireViewableTrip(user.id, tripId);
+	const trip = requireViewableTrip(user.id, tripId);
+	const showNotes = canViewDetails(user.id, trip);
 
 	const segmentRaw = url.searchParams.get('segmentId');
 	let rows = listTripDocuments(tripId);
@@ -32,7 +34,7 @@ export const GET: RequestHandler = ({ params, locals, url }) => {
 			tripId: row.tripId,
 			segmentId: row.segmentId,
 			label: row.label,
-			notes: row.notes,
+			notes: showNotes ? row.notes : null,
 			filename: row.filename,
 			contentType: row.contentType,
 			sizeBytes: row.sizeBytes,

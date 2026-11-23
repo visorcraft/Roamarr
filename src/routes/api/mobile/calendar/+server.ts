@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireUser } from '$lib/server/auth';
-import { _regenerateUserCalendarToken } from '$lib/server/profileActions';
+import { _regenerateUserCalendarToken, CalendarExpiryError } from '$lib/server/profileActions';
 import { getUserById } from '$lib/server/repositories/usersRepo';
 
 const result = (user: ReturnType<typeof requireUser>, origin: string) => ({
@@ -14,7 +14,14 @@ export const GET: RequestHandler = ({ locals, url }) => json(result(requireUser(
 export const POST: RequestHandler = async ({ locals, request, url }) => {
 	const user = requireUser(locals);
 	const body = await request.json().catch(() => ({})) as { expiresAt?: unknown };
-	_regenerateUserCalendarToken(user.id, typeof body.expiresAt === 'string' && body.expiresAt ? body.expiresAt : null);
+	try {
+		_regenerateUserCalendarToken(user.id, body.expiresAt);
+	} catch (err) {
+		if (err instanceof CalendarExpiryError) {
+			return json({ error: err.message }, { status: 400 });
+		}
+		throw err;
+	}
 	const updated = getUserById(user.id)!;
 	return json({
 		feedUrl: updated.calendar_token ? `${url.origin}/calendar/feed?token=${encodeURIComponent(updated.calendar_token)}` : null,

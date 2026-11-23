@@ -386,6 +386,93 @@ test('regenerateCalendarToken action sets a flash cookie and redirects', async (
 	expect(row.calendar_token_expires_at).toBe('2030-01-01T00:00:00Z');
 });
 
+test('regenerate user calendar token rejects a malformed expiry', () => {
+	const u = makeUser(kit, { email: 'cal-bad@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+
+	expect(() => _regenerateUserCalendarToken(u.id, 'banana')).toThrow(
+		'Calendar feed expiry must be a valid date.'
+	);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe('old-token');
+	expect(row.calendar_token_expires_at).toBeNull();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
+	expect(logs).toHaveLength(0);
+});
+
+test('regenerate user calendar token rejects impossible dates and bare years', () => {
+	const u = makeUser(kit, { email: 'cal-impossible@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+
+	expect(() => _regenerateUserCalendarToken(u.id, '2030-02-30')).toThrow(
+		'Calendar feed expiry must be a valid date.'
+	);
+	expect(() => _regenerateUserCalendarToken(u.id, '2030')).toThrow(
+		'Calendar feed expiry must be a valid date.'
+	);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe('old-token');
+});
+
+test('regenerate user calendar token rejects a past expiry', () => {
+	const u = makeUser(kit, { email: 'cal-past@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+
+	expect(() => _regenerateUserCalendarToken(u.id, '2000-01-01')).toThrow(
+		'Calendar feed expiry must be in the future.'
+	);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe('old-token');
+	expect(row.calendar_token_expires_at).toBeNull();
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.user_id, BigInt(u.id))).executeSync();
+	expect(logs).toHaveLength(0);
+});
+
+test('regenerate user calendar token rejects a non-string expiry', () => {
+	const u = makeUser(kit, { email: 'cal-nonstring@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+
+	expect(() => _regenerateUserCalendarToken(u.id, 123 as any)).toThrow(
+		'Calendar feed expiry must be a valid date.'
+	);
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe('old-token');
+});
+
+test('regenerate user calendar token stores valid expiries verbatim', () => {
+	const u = makeUser(kit, { email: 'cal-valid@x.c', passwordHash: 'x', displayName: 'Cal' });
+
+	const token1 = _regenerateUserCalendarToken(u.id, '2030-01-01');
+	let row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe(token1);
+	expect(row.calendar_token_expires_at).toBe('2030-01-01');
+
+	const token2 = _regenerateUserCalendarToken(u.id, '2030-01-01T00:00:00+02:00');
+	row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe(token2);
+	expect(row.calendar_token_expires_at).toBe('2030-01-01T00:00:00+02:00');
+
+	const token3 = _regenerateUserCalendarToken(u.id, '  2030-01-01T00:00:00Z  ');
+	row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe(token3);
+	expect(row.calendar_token_expires_at).toBe('2030-01-01T00:00:00Z');
+});
+
+test('regenerateCalendarToken action rejects a malformed expiry', async () => {
+	const u = makeUser(kit, { email: 'cal-action-bad@x.c', passwordHash: 'x', displayName: 'Cal', calendarToken: 'old-token' });
+	const cookies = { set: vi.fn(), get: vi.fn() };
+	const request = new Request('http://x/profile/calendar', {
+		method: 'POST',
+		body: new URLSearchParams({ calendarExpiresAt: 'banana' })
+	});
+	const locals = { user: u } as App.Locals;
+	const result = (await calendarActions.regenerateCalendarToken({ request, locals, cookies } as any)) as {
+		status: number;
+		data: { error: string };
+	};
+	expect(result.status).toBe(400);
+	expect(result.data.error).toBe('Calendar feed expiry must be a valid date.');
+	expect(cookies.set).not.toHaveBeenCalled();
+	const row = kit.selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
+	expect(row.calendar_token).toBe('old-token');
+});
+
 test('change email requires current password and updates the email', async () => {
 	const initialHash = await hashPassword('oldsecret');
 	const u = makeUser(kit, { email: 'old@x.c', passwordHash: initialHash, displayName: 'U', timezone: 'UTC' });

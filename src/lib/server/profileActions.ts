@@ -4,6 +4,7 @@ import * as usersRepo from './repositories/usersRepo';
 import { logAudit } from './audit';
 import { normalizeEmail } from './users';
 import { randomBytes } from 'node:crypto';
+import { DateTime } from 'luxon';
 import { isThemeId } from '$lib/themes';
 
 export function _updateTheme(userId: number, themeId: string) {
@@ -50,12 +51,37 @@ export async function _changeEmail(
 	logAudit(userId, 'email_change', 'user', userId, { oldEmail });
 }
 
-export function _regenerateUserCalendarToken(userId: number, expiresAt?: string | null) {
+export class CalendarExpiryError extends Error {}
+
+const CALENDAR_EXPIRY_SHAPE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
+
+function validateCalendarExpiry(expiresAt: unknown): string | null {
+	if (expiresAt === undefined || expiresAt === null) return null;
+	if (typeof expiresAt !== 'string') {
+		throw new CalendarExpiryError('Calendar feed expiry must be a valid date.');
+	}
+	const trimmed = expiresAt.trim();
+	if (!trimmed) return null;
+	if (!CALENDAR_EXPIRY_SHAPE.test(trimmed)) {
+		throw new CalendarExpiryError('Calendar feed expiry must be a valid date.');
+	}
+	const instant = DateTime.fromISO(trimmed);
+	if (!instant.isValid) {
+		throw new CalendarExpiryError('Calendar feed expiry must be a valid date.');
+	}
+	if (instant <= DateTime.now()) {
+		throw new CalendarExpiryError('Calendar feed expiry must be in the future.');
+	}
+	return trimmed;
+}
+
+export function _regenerateUserCalendarToken(userId: number, expiresAt?: unknown) {
 	requireOwnedUser(userId);
+	const validated = validateCalendarExpiry(expiresAt);
 	const token = randomBytes(24).toString('base64url');
-	usersRepo.updateUser(userId, { calendar_token: token, calendar_token_expires_at: expiresAt ?? null });
+	usersRepo.updateUser(userId, { calendar_token: token, calendar_token_expires_at: validated });
 	logAudit(userId, 'calendar_token_regenerate', 'user', userId, {
-		expiresAt: expiresAt ?? null
+		expiresAt: validated
 	});
 	return token;
 }

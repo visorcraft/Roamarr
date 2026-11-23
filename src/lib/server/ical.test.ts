@@ -160,3 +160,96 @@ test('buildAggregateCalendar works for an empty trip list', () => {
 	expect(ics).toContain('X-WR-CALNAME:Empty');
 	expect(ics).not.toContain('BEGIN:VEVENT');
 });
+
+test('omits DTEND when the trip end date is malformed', () => {
+	const ics = buildCalendar({ id: 6, name: 'Trip', startDate: '2026-07-01', endDate: 'not-a-date' }, []);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260701');
+	expect(ics).not.toContain('DTEND;VALUE=DATE');
+
+	const blank = buildCalendar({ id: 6, name: 'Trip', startDate: '2026-07-01', endDate: '   ' }, []);
+	expect(blank).not.toContain('Invalid DateTime');
+	expect(blank).toContain('DTSTART;VALUE=DATE:20260701');
+	expect(blank).not.toContain('DTEND;VALUE=DATE');
+});
+
+test('skips the trip-bounds event when the start date is unparseable', () => {
+	const segments = [
+		{ type: 'flight' as const, title: 'UA123', startAt: '2026-07-01T10:00:00Z' }
+	];
+	const ics = buildCalendar(
+		{ id: 7, name: 'Trip', startDate: '2026-13-45', endDate: '2026-07-10' },
+		segments
+	);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).not.toContain('UID:roamarr-trip-7@roamarr');
+	expect(ics).toContain('UID:roamarr-trip-7-segment-1@roamarr');
+
+	const impossible = buildCalendar(
+		{ id: 7, name: 'Trip', startDate: '2026-02-30', endDate: '2026-07-10' },
+		segments
+	);
+	expect(impossible).not.toContain('Invalid DateTime');
+	expect(impossible).not.toContain('UID:roamarr-trip-7@roamarr');
+	expect(impossible).toContain('UID:roamarr-trip-7-segment-1@roamarr');
+});
+
+test('rejects impossible end dates', () => {
+	const ics = buildCalendar(
+		{ id: 8, name: 'Trip', startDate: '2026-07-01', endDate: '2026-02-30' },
+		[]
+	);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260701');
+	expect(ics).not.toContain('DTEND;VALUE=DATE');
+});
+
+test('uses only the leading calendar date of trip bounds', () => {
+	const ics = buildCalendar(
+		{ id: 9, name: 'Trip', startDate: '2026-07-01T00:00:00Z', endDate: '2026-07-10T23:30:00-05:00' },
+		[]
+	);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260701');
+	expect(ics).toContain('DTEND;VALUE=DATE:20260711');
+});
+
+test('keeps same-day trips as one-day events', () => {
+	const ics = buildCalendar(
+		{ id: 10, name: 'Trip', startDate: '2026-07-10', endDate: '2026-07-10' },
+		[]
+	);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
+	expect(ics).toContain('DTEND;VALUE=DATE:20260711');
+});
+
+test('omits DTEND when the trip ends before it starts', () => {
+	const ics = buildCalendar(
+		{ id: 11, name: 'Trip', startDate: '2026-07-10', endDate: '2026-07-04' },
+		[]
+	);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('DTSTART;VALUE=DATE:20260710');
+	expect(ics).not.toContain('DTEND;VALUE=DATE');
+});
+
+test('keeps the aggregate feed valid', () => {
+	const ics = buildAggregateCalendar('All Trips', [
+		{
+			trip: { id: 1, name: 'Bad', startDate: 'nope', endDate: 'nope' },
+			segments: [
+				{ type: 'flight' as const, title: 'AA1', startAt: '2026-07-01T10:00:00Z' }
+			]
+		},
+		{
+			trip: { id: 2, name: 'Good', startDate: '2026-08-01', endDate: '2026-08-03' },
+			segments: []
+		}
+	]);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('UID:roamarr-trip-1-segment-1@roamarr');
+	expect(ics).toContain('UID:roamarr-trip-2@roamarr');
+	expect(ics).toContain('DTEND;VALUE=DATE:20260804');
+	expect(ics).not.toContain('UID:roamarr-trip-1@roamarr');
+});

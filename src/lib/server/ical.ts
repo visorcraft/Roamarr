@@ -77,12 +77,6 @@ function formatUtcDateTime(iso: string): string {
 	return dt.toFormat("yyyyMMdd'T'HHmmss'Z'");
 }
 
-function formatDate(iso: string): string {
-	const dt = DateTime.fromISO(iso, { zone: 'utc' });
-	if (!dt.isValid) throw new Error(`invalid date: ${iso}`);
-	return dt.toFormat('yyyyMMdd');
-}
-
 function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number, stamp: string): string {
 	const uid = `roamarr-trip-${trip.id}-segment-${index + 1}@roamarr`;
 	const label = SEGMENT_LABELS[segment.type] ?? segment.type;
@@ -109,8 +103,24 @@ function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number,
 	return lines.map(foldLine).join('\r\n');
 }
 
+/**
+ * Trip bounds are calendar dates: only the leading YYYY-MM-DD counts, so a
+ * trailing clock or offset (`2026-07-10T23:30:00-05:00`) cannot shift the
+ * all-day event by a day. Returns null for anything that is not a real date.
+ */
+function parseTripDate(value: string): DateTime | null {
+	const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+	if (!match) return null;
+	const dt = DateTime.fromObject(
+		{ year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) },
+		{ zone: 'utc' }
+	);
+	return dt.isValid ? dt : null;
+}
+
 function buildTripEvent(trip: CalendarTrip, stamp: string): string | null {
-	if (!trip.startDate) return null;
+	const start = trip.startDate ? parseTripDate(trip.startDate) : null;
+	if (!start) return null;
 	const uid = `roamarr-trip-${trip.id}@roamarr`;
 	const lines: string[] = [];
 	const destinationLabel = formatDestination(trip.destinationCityName, trip.destinationCountryCode);
@@ -118,10 +128,15 @@ function buildTripEvent(trip: CalendarTrip, stamp: string): string | null {
 	lines.push(`UID:${uid}`);
 	lines.push(`DTSTAMP:${stamp}`);
 	lines.push(`SUMMARY:${escapeText(trip.name)}`);
-	lines.push(`DTSTART;VALUE=DATE:${formatDate(trip.startDate)}`);
+	lines.push(`DTSTART;VALUE=DATE:${start.toFormat('yyyyMMdd')}`);
 	if (trip.endDate) {
-		const end = DateTime.fromISO(trip.endDate, { zone: 'utc' }).plus({ days: 1 });
-		lines.push(`DTEND;VALUE=DATE:${end.toFormat('yyyyMMdd')}`);
+		const end = parseTripDate(trip.endDate);
+		if (end) {
+			const exclusive = end.plus({ days: 1 });
+			if (exclusive.toMillis() > start.toMillis()) {
+				lines.push(`DTEND;VALUE=DATE:${exclusive.toFormat('yyyyMMdd')}`);
+			}
+		}
 	}
 	if (destinationLabel) {
 		lines.push(`DESCRIPTION:${escapeText(destinationLabel)}`);

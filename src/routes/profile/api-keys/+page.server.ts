@@ -29,12 +29,21 @@ export const actions: Actions = {
 		const name = String(f.get('name') ?? '').trim();
 		const scopes = f.getAll('scopes').map(String) as Scope[];
 		const expiryRaw = String(f.get('expiresAt') ?? '').trim();
-		// Date inputs carry no time component; expire at end of the chosen day (UTC).
-		const expiresAt = expiryRaw ? new Date(`${expiryRaw}T23:59:59Z`).toISOString() : null;
 
 		if (!name) return fail(400, { error: 'Key name is required.' });
 		if (name.length > MAX_API_KEY_NAME_LENGTH) return fail(400, { error: 'Key name is too long.' });
 		if (scopes.length === 0) return fail(400, { error: 'Select at least one scope.' });
+
+		// Date inputs carry no time component; expire at end of the chosen day (UTC).
+		let expiresAt: string | null = null;
+		if (expiryRaw) {
+			if (!/^\d{4}-\d{2}-\d{2}$/.test(expiryRaw)) return fail(400, { error: 'Invalid expiry date.' });
+			const date = new Date(`${expiryRaw}T23:59:59Z`);
+			if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== expiryRaw) {
+				return fail(400, { error: 'Invalid expiry date.' });
+			}
+			expiresAt = date.toISOString();
+		}
 
 		try {
 			const { token } = createApiKey(u.id, { name, scopes, expiresAt });
@@ -50,7 +59,7 @@ export const actions: Actions = {
 		const f = await request.formData();
 		const id = Number(f.get('id'));
 		const name = String(f.get('name') ?? '').trim();
-		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid API key.' });
+		if (!Number.isInteger(id) || id <= 0) return fail(400, { error: 'Invalid API key.' });
 		if (!name || name.length > MAX_API_KEY_NAME_LENGTH) return fail(400, { error: 'Invalid name.' });
 		if (!renameApiKey(u.id, id, name)) return fail(400, { error: 'API key not found.' });
 		setFlash(cookies, 'API key renamed.');
@@ -60,7 +69,7 @@ export const actions: Actions = {
 		const u = requireUser(locals);
 		const f = await request.formData();
 		const id = Number(f.get('id'));
-		if (!Number.isFinite(id) || id <= 0) return fail(400, { error: 'Invalid API key.' });
+		if (!Number.isInteger(id) || id <= 0) return fail(400, { error: 'Invalid API key.' });
 		if (!revokeApiKey(u.id, id)) return fail(400, { error: 'API key not found or already revoked.' });
 		setFlash(cookies, 'API key revoked.');
 	}

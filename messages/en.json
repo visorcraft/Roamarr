@@ -185,5 +185,11 @@
 	"rental_car_more_details_section": "More details",
 	"rental_car_expand_all": "Expand all",
 	"rental_car_drivers_section": "Drivers",
-	"rental_car_drivers_placeholder": "Driver names"
+	"rental_car_drivers_placeholder": "Driver names",
+	"password_strength_label": "Password strength",
+	"password_strength_very_weak": "Very weak",
+	"password_strength_weak": "Weak",
+	"password_strength_fair": "Fair",
+	"password_strength_strong": "Strong",
+	"password_strength_very_strong": "Very strong"
 }

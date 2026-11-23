@@ -169,7 +169,10 @@ export function createChecklistItem(input: CreateChecklistItemInput): ChecklistI
 			assigned_to_companion_id: nullableInt(input.assignedToCompanionId)
 		} as Insert<typeof tripChecklistItems>)
 		.executeSync();
-	return toChecklistItem(row);
+	const item = toChecklistItem(row);
+	const tripId = checklistTripId(item.checklistId);
+	if (tripId != null) publishTripChanged(tripId);
+	return item;
 }
 
 export function updateChecklistItem(
@@ -180,7 +183,6 @@ export function updateChecklistItem(
 	if (patch.text !== undefined) set.text = patch.text;
 	if (patch.packed !== undefined) set.packed = patch.packed;
 	if (patch.assignedToCompanionId !== undefined) {
-		if (patch.assignedToCompanionId != null) (patch.assignedToCompanionId);
 		set.assigned_to_companion_id = nullableInt(patch.assignedToCompanionId);
 	}
 	const updated = kit
@@ -190,15 +192,29 @@ export function updateChecklistItem(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toChecklistItem(row);
+	const item = toChecklistItem(row);
+	const tripId = checklistTripId(item.checklistId);
+	if (tripId != null) publishTripChanged(tripId);
+	return item;
 }
 
 export function deleteChecklistItem(id: number): number {
+	const tripId = getChecklistItemTripId(id);
 	const deleted = kit
 		.deleteFrom(tripChecklistItems)
 		.where(eq(tripChecklistItems.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && tripId != null) publishTripChanged(tripId);
 	return Number(deleted);
+}
+
+function checklistTripId(checklistId: number): number | null {
+	const checklist = kit
+		.selectFrom(tripChecklists)
+		.where(eq(tripChecklists.id, kitId(checklistId)))
+		.executeSync()[0];
+	if (!checklist) return null;
+	return Number(checklist.trip_id);
 }
 
 export function getChecklistItemTripId(itemId: number): number | null {
@@ -207,12 +223,7 @@ export function getChecklistItemTripId(itemId: number): number | null {
 		.where(eq(tripChecklistItems.id, kitId(itemId)))
 		.executeSync()[0];
 	if (!item) return null;
-	const checklist = kit
-		.selectFrom(tripChecklists)
-		.where(eq(tripChecklists.id, kitId(Number(item.checklist_id))))
-		.executeSync()[0];
-	if (!checklist) return null;
-	return Number(checklist.trip_id);
+	return checklistTripId(Number(item.checklist_id));
 }
 
 // ============================================================================
@@ -383,7 +394,9 @@ export function createDocumentLink(input: CreateDocumentLinkInput): DocumentLink
 			notes: input.notes ?? null
 		} as Insert<typeof tripDocumentLinks>)
 		.executeSync();
-	return toDocumentLink(row);
+	const link = toDocumentLink(row);
+	publishTripChanged(link.tripId);
+	return link;
 }
 
 export function updateDocumentLink(
@@ -401,14 +414,18 @@ export function updateDocumentLink(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toDocumentLink(row);
+	const link = toDocumentLink(row);
+	publishTripChanged(link.tripId);
+	return link;
 }
 
 export function deleteDocumentLink(id: number): number {
+	const existing = getDocumentLinkById(id);
 	const deleted = kit
 		.deleteFrom(tripDocumentLinks)
 		.where(eq(tripDocumentLinks.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 
@@ -479,7 +496,9 @@ export function createHomeTask(input: CreateHomeTaskInput): HomeTask {
 			sort_order: 0n
 		} as Insert<typeof tripHomeTasks>)
 		.executeSync();
-	return toHomeTask(row);
+	const task = toHomeTask(row);
+	publishTripChanged(task.tripId);
+	return task;
 }
 
 export function updateHomeTask(id: number, patch: UpdateHomeTaskInput): HomeTask | null {
@@ -495,14 +514,18 @@ export function updateHomeTask(id: number, patch: UpdateHomeTaskInput): HomeTask
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toHomeTask(row);
+	const task = toHomeTask(row);
+	publishTripChanged(task.tripId);
+	return task;
 }
 
 export function deleteHomeTask(id: number): number {
+	const existing = getHomeTaskById(id);
 	const deleted = kit
 		.deleteFrom(tripHomeTasks)
 		.where(eq(tripHomeTasks.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 
@@ -584,7 +607,9 @@ export function createMailHold(input: CreateMailHoldInput): MailHold {
 			status: input.status ?? 'requested'
 		} as Insert<typeof tripMailHolds>)
 		.executeSync();
-	return toMailHold(row);
+	const hold = toMailHold(row);
+	publishTripChanged(hold.tripId);
+	return hold;
 }
 
 export function updateMailHold(id: number, patch: UpdateMailHoldInput): MailHold | null {
@@ -603,14 +628,18 @@ export function updateMailHold(id: number, patch: UpdateMailHoldInput): MailHold
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toMailHold(row);
+	const hold = toMailHold(row);
+	publishTripChanged(hold.tripId);
+	return hold;
 }
 
 export function deleteMailHold(id: number): number {
+	const existing = getMailHoldById(id);
 	const deleted = kit
 		.deleteFrom(tripMailHolds)
 		.where(eq(tripMailHolds.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 
@@ -726,14 +755,18 @@ export function createMedication(input: CreateMedicationInput): Medication {
 			notes: input.notes ?? null
 		} as Insert<typeof tripMedications>)
 		.executeSync();
-	return toMedication(row);
+	const med = toMedication(row);
+	publishTripChanged(med.tripId);
+	return med;
 }
 
 export function deleteMedication(id: number): number {
+	const existing = getMedicationById(id);
 	const deleted = kit
 		.deleteFrom(tripMedications)
 		.where(eq(tripMedications.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 
@@ -815,7 +848,9 @@ export function createEntryRequirement(input: CreateEntryRequirementInput): Entr
 			notes: input.notes ?? null
 		} as Insert<typeof tripEntryRequirements>)
 		.executeSync();
-	return toEntryRequirement(row);
+	const req = toEntryRequirement(row);
+	publishTripChanged(req.tripId);
+	return req;
 }
 
 export function updateEntryRequirement(
@@ -834,14 +869,18 @@ export function updateEntryRequirement(
 		.executeSync();
 	const row = updated[0];
 	if (!row) return null;
-	return toEntryRequirement(row);
+	const req = toEntryRequirement(row);
+	publishTripChanged(req.tripId);
+	return req;
 }
 
 export function deleteEntryRequirement(id: number): number {
+	const existing = getEntryRequirementById(id);
 	const deleted = kit
 		.deleteFrom(tripEntryRequirements)
 		.where(eq(tripEntryRequirements.id, kitId(id)))
 		.executeSync();
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
 	return Number(deleted);
 }
 
@@ -953,13 +992,17 @@ export function createImportantItem(input: CreateImportantItemInput): ImportantI
 			notes: input.notes ?? null
 		} as Insert<typeof tripImportantItems>)
 		.executeSync();
-	return toImportantItem(row);
+	const item = toImportantItem(row);
+	publishTripChanged(item.tripId);
+	return item;
 }
 
 export function deleteImportantItem(id: number): number {
+	const existing = getImportantItemById(id);
 	const deleted = kit
 		.deleteFrom(tripImportantItems)
 		.where(eq(tripImportantItems.id, kitId(id)))
 		.executeSync();
-		return Number(deleted);
+	if (Number(deleted) > 0 && existing) publishTripChanged(existing.tripId);
+	return Number(deleted);
 }

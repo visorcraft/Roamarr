@@ -32,21 +32,22 @@
 		{#each data.notifications as n (n.id)}
 			<li class="card flex items-start gap-3 p-4">
 				<span
+					aria-hidden="true"
 					class="mt-1.5 h-2 w-2 shrink-0 rounded-full {n.readAt
-						? 'bg-white/10'
-						: 'bg-indigo-400'}"
+						? 'bg-[var(--theme-line)]'
+						: 'bg-[var(--theme-brand)]'}"
 				></span>
 				<div class="min-w-0 flex-1">
 					<div class="flex flex-wrap items-center gap-2">
 						{#if n.link}
 							<a href={n.link} class="link font-semibold no-underline hover:underline">{n.title}</a>
 						{:else}
-							<span class="font-semibold text-white">{n.title}</span>
+							<span class="font-semibold text-[var(--theme-ink)]">{n.title}</span>
 						{/if}
 						{#if !n.readAt}<span class="badge badge-brand">New</span>{/if}
 					</div>
-					{#if n.body}<p class="mt-0.5 text-sm text-slate-400">{n.body}</p>{/if}
-					{#if n.createdAt}<p class="mt-1 font-mono text-xs text-slate-500">{formatDateTime(n.createdAt)}</p>{/if}
+					{#if n.body}<p class="mt-0.5 text-sm text-[var(--theme-muted)]">{n.body}</p>{/if}
+					{#if n.createdAt}<p class="mt-1 font-mono text-xs text-[var(--theme-muted)]">{formatDateTime(n.createdAt)}</p>{/if}
 				</div>
 				{#if n.readAt}
 					<form method="POST" action="?/markUnread" class="shrink-0">

@@ -69,8 +69,8 @@
 			</div>
 		</div>
 		{#if destinationLabel}
-			<p class="flex items-center gap-1.5 text-sm text-slate-400">
-				<Icon name="location" class="h-4 w-4 text-slate-500" />
+			<p class="flex items-center gap-1.5 text-sm text-[var(--theme-muted)]">
+				<Icon name="location" class="h-4 w-4 text-[var(--theme-muted)]" />
 				{destinationLabel}
 			</p>
 		{/if}
@@ -82,7 +82,7 @@
 			</div>
 		{/if}
 		{#if trip.startDate || trip.endDate}
-			<p class="mt-auto inline-flex items-center gap-1.5 font-mono text-xs text-slate-500">
+			<p class="mt-auto inline-flex items-center gap-1.5 font-mono text-xs text-[var(--theme-muted)]">
 				<span class="leading-none">{trip.startDate || '—'}</span>
 				<Icon name="arrow-right" class="h-[0.9375rem] w-[0.9375rem] shrink-0" />
 				<span class="leading-none">{trip.endDate || '—'}</span>

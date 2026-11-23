@@ -21,6 +21,7 @@ import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, pl
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
+import { COMPANION_PRIVATE_FIELDS } from './sharing';
 import { getReminderBySource, getReminderById, createReminder } from './repositories/remindersRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { updateSettings } from './settings';
@@ -351,9 +352,6 @@ describe('mcpServer', () => {
 			['roamarr_companion_list', 'companions:read'],
 			['roamarr_journal_list', 'journal:read'],
 			['roamarr_home_task_list', 'home-tasks:read'],
-			['roamarr_medication_list', 'medications:read'],
-			['roamarr_important_item_list', 'items:read'],
-			['roamarr_entry_requirement_list', 'requirements:read'],
 			['roamarr_comment_list', 'comments:read'],
 			['roamarr_doc_link_list', 'doc-links:read'],
 			['roamarr_poll_list', 'polls:read']
@@ -1606,6 +1604,164 @@ describe('mcpServer', () => {
 			const res = await client.getPrompt({ name: 'trip-summary', arguments: {} });
 			const text = res.messages[0]?.content?.type === 'text' ? res.messages[0].content.text : '';
 			expect(text).toContain('2099-01-01');
+		});
+
+		test('read-only share viewer gets companions without private fields', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const companion = insertTripCompanion(ownerId, trip.id, {
+				name: 'Sam',
+				category: 'child',
+				dietary: 'vegan marker',
+				allergies: 'penicillin allergy',
+				medicalNotes: 'medical notes marker',
+				needsCarSeat: true,
+				needsStroller: true,
+				needsCrib: true,
+				needsKidsMeal: true,
+				childTicketDiscount: 'child ticket discount marker',
+				seatPreference: 'seat preference marker',
+				bedPreference: 'bed preference marker',
+				accessibilityNeeds: 'accessibility needs marker',
+				roomNotes: 'room notes marker',
+				notes: 'private notes marker'
+			});
+			const { client } = await connect(otherId, ['companions:read']);
+			const res: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+			expect(res.isError).toBeFalsy();
+			const parsed = JSON.parse(res.content[0].text);
+			const row = parsed.items.find((r: any) => r.id === companion.id);
+			expect(row).toBeTruthy();
+			expect(row.id).toBe(companion.id);
+			expect(row.name).toBe('Sam');
+			for (const field of COMPANION_PRIVATE_FIELDS) expect(row[field]).toBeNull();
+			const serialized = res.content[0].text;
+			for (const marker of [
+				'vegan marker',
+				'penicillin allergy',
+				'medical notes marker',
+				'child ticket discount marker',
+				'seat preference marker',
+				'bed preference marker',
+				'accessibility needs marker',
+				'room notes marker',
+				'private notes marker'
+			]) {
+				expect(serialized).not.toContain(marker);
+			}
+		});
+
+		test('owner and edit-share viewer get full companion rows', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('edit');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const companion = insertTripCompanion(ownerId, trip.id, {
+				name: 'Sam',
+				category: 'child',
+				dietary: 'vegan marker',
+				allergies: 'penicillin allergy',
+				medicalNotes: 'medical notes marker',
+				needsCarSeat: true,
+				needsStroller: true,
+				needsCrib: true,
+				needsKidsMeal: true,
+				childTicketDiscount: 'child ticket discount marker',
+				seatPreference: 'seat preference marker',
+				bedPreference: 'bed preference marker',
+				accessibilityNeeds: 'accessibility needs marker',
+				roomNotes: 'room notes marker',
+				notes: 'private notes marker'
+			});
+			for (const [viewerId, label] of [
+				[ownerId, 'owner'],
+				[otherId, 'edit-share viewer']
+			] as const) {
+				const { client } = await connect(viewerId, ['companions:read']);
+				const res: any = await client.callTool({ name: 'roamarr_companion_list', arguments: { tripId: trip.id } });
+				expect(res.isError, label).toBeFalsy();
+				const row = JSON.parse(res.content[0].text).items.find((r: any) => r.id === companion.id);
+				expect(row).toBeTruthy();
+				expect(row.dietary).toBe('vegan marker');
+				expect(row.allergies).toBe('penicillin allergy');
+				expect(row.medicalNotes).toBe('medical notes marker');
+				expect(row.needsCarSeat).toBe(true);
+				expect(row.needsStroller).toBe(true);
+				expect(row.needsCrib).toBe(true);
+				expect(row.needsKidsMeal).toBe(true);
+				expect(row.childTicketDiscount).toBe('child ticket discount marker');
+				expect(row.seatPreference).toBe('seat preference marker');
+				expect(row.bedPreference).toBe('bed preference marker');
+				expect(row.accessibilityNeeds).toBe('accessibility needs marker');
+				expect(row.roomNotes).toBe('room notes marker');
+				expect(row.notes).toBe('private notes marker');
+			}
+		});
+
+		test('read-only share viewer is rejected for editor-only private-module tools', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { addMedication } = await import('./tripMedications');
+			const { addImportantItem } = await import('./tripImportantItems');
+			const { addEntryRequirement } = await import('./tripEntryRequirements');
+			addMedication(ownerId, trip.id, { name: 'Medicine', notes: 'take with food' });
+			addImportantItem(ownerId, trip.id, { name: 'Camera', serialNumber: 'SN-7731' });
+			addEntryRequirement(ownerId, trip.id, { country: 'JP', requirementType: 'visa', notes: 'gate code 4451' });
+			const { client } = await connect(otherId, ['medications:read', 'items:read', 'requirements:read']);
+			for (const name of ['roamarr_medication_list', 'roamarr_important_item_list', 'roamarr_entry_requirement_list']) {
+				const res: any = await client.callTool({ name, arguments: { tripId: trip.id } });
+				expect(res.isError, name).toBe(true);
+				const text = String(res.content?.[0]?.text ?? '');
+				expect(text).toMatch(/404|not found/i);
+				for (const marker of ['take with food', 'SN-7731', 'gate code 4451']) {
+					expect(text).not.toContain(marker);
+				}
+			}
+		});
+
+		test('owner and edit-share viewer get the full private-module lists', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('edit');
+			const { addMedication } = await import('./tripMedications');
+			const { addImportantItem } = await import('./tripImportantItems');
+			const { addEntryRequirement } = await import('./tripEntryRequirements');
+			addMedication(ownerId, trip.id, { name: 'Medicine', notes: 'take with food' });
+			addImportantItem(ownerId, trip.id, { name: 'Camera', serialNumber: 'SN-7731' });
+			addEntryRequirement(ownerId, trip.id, { country: 'JP', requirementType: 'visa', notes: 'gate code 4451' });
+			for (const [viewerId, label] of [
+				[ownerId, 'owner'],
+				[otherId, 'edit-share viewer']
+			] as const) {
+				const { client } = await connect(viewerId, ['medications:read', 'items:read', 'requirements:read']);
+				const meds: any = await client.callTool({ name: 'roamarr_medication_list', arguments: { tripId: trip.id } });
+				expect(meds.isError, label).toBeFalsy();
+				expect(JSON.parse(meds.content[0].text).items[0].notes).toBe('take with food');
+				const items: any = await client.callTool({ name: 'roamarr_important_item_list', arguments: { tripId: trip.id } });
+				expect(items.isError, label).toBeFalsy();
+				expect(JSON.parse(items.content[0].text).items[0].serialNumber).toBe('SN-7731');
+				const reqs: any = await client.callTool({ name: 'roamarr_entry_requirement_list', arguments: { tripId: trip.id } });
+				expect(reqs.isError, label).toBeFalsy();
+				expect(JSON.parse(reqs.content[0].text).items[0].notes).toBe('gate code 4451');
+			}
+		});
+
+		test('unrelated user is rejected for all four private-module tools', async () => {
+			const { ownerId, trip } = setupSharedTrip('read');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const { addMedication } = await import('./tripMedications');
+			const { addImportantItem } = await import('./tripImportantItems');
+			const { addEntryRequirement } = await import('./tripEntryRequirements');
+			insertTripCompanion(ownerId, trip.id, { name: 'Sam', allergies: 'penicillin allergy' });
+			addMedication(ownerId, trip.id, { name: 'Medicine', notes: 'take with food' });
+			addImportantItem(ownerId, trip.id, { name: 'Camera', serialNumber: 'SN-7731' });
+			addEntryRequirement(ownerId, trip.id, { country: 'JP', requirementType: 'visa', notes: 'gate code 4451' });
+			const strangerId = makeUser(ctx.kit).id;
+			const { client } = await connect(strangerId, ['companions:read', 'medications:read', 'items:read', 'requirements:read']);
+			for (const name of ['roamarr_companion_list', 'roamarr_medication_list', 'roamarr_important_item_list', 'roamarr_entry_requirement_list']) {
+				const res: any = await client.callTool({ name, arguments: { tripId: trip.id } });
+				expect(res.isError, name).toBe(true);
+				const text = String(res.content?.[0]?.text ?? '');
+				expect(text).toMatch(/404|not found/i);
+				for (const marker of ['penicillin allergy', 'take with food', 'SN-7731', 'gate code 4451']) {
+					expect(text).not.toContain(marker);
+				}
+			}
 		});
 	});
 

@@ -15,7 +15,7 @@ import * as segmentsRepo from './repositories/segmentsRepo';
 import { requireOwnedTrip, requireEditableTrip, requireViewableTrip, requireOwnedGroup } from './ownership';
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { loadTripFor } from '../../routes/trips/shared';
-import { viewerProjection } from './sharing';
+import { viewerProjection, canEdit, companionViewerProjection } from './sharing';
 import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
@@ -3607,8 +3607,12 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'companions:read')) return scopeError('companions:read');
 				const { listTripCompanions } = await import('./tripCompanions');
 				const tripId = Number(args.tripId);
-				requireViewableTrip(userId, tripId);
-				return textResult({ tripId, items: listTripCompanions(tripId) });
+				const trip = requireViewableTrip(userId, tripId);
+				const items = listTripCompanions(tripId);
+				return textResult({
+					tripId,
+					items: canEdit(userId, trip) ? items : items.map(companionViewerProjection)
+				});
 			}
 			case 'roamarr_companion_create': {
 				if (!hasScope(scopes, 'companions:write')) return scopeError('companions:write');
@@ -3898,7 +3902,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'medications:read')) return scopeError('medications:read');
 				const { listMedicationsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireViewableTrip(userId, tripId);
+				requireEditableTrip(userId, tripId);
 				return textResult({ tripId, items: listMedicationsForTrip(tripId) });
 			}
 			case 'roamarr_medication_create': {
@@ -3930,7 +3934,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'items:read')) return scopeError('items:read');
 				const { listImportantItemsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireViewableTrip(userId, tripId);
+				requireEditableTrip(userId, tripId);
 				return textResult({ tripId, items: listImportantItemsForTrip(tripId) });
 			}
 			case 'roamarr_important_item_create': {
@@ -3960,7 +3964,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'requirements:read')) return scopeError('requirements:read');
 				const { listEntryRequirementsForTrip } = await import('./repositories/tripMiscRepo');
 				const tripId = Number(args.tripId);
-				requireViewableTrip(userId, tripId);
+				requireEditableTrip(userId, tripId);
 				return textResult({ tripId, items: listEntryRequirementsForTrip(tripId) });
 			}
 			case 'roamarr_entry_requirement_create': {

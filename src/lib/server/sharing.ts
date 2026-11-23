@@ -112,6 +112,19 @@ export function viewerProjection(trip: Trip, segs: Segment[], includeDetails = f
 	};
 }
 
+export const COMPANION_PRIVATE_FIELDS = [
+	'notes', 'dietary', 'allergies', 'medicalNotes', 'needsCarSeat', 'needsStroller', 'needsCrib',
+	'needsKidsMeal', 'childTicketDiscount', 'seatPreference', 'bedPreference', 'accessibilityNeeds',
+	'roomNotes'
+] as const;
+
+/** Non-editors keep companion identity (id, name, category, ...) but never the private fields. */
+export function companionViewerProjection<T extends object>(companion: T): T {
+	const safe = { ...companion } as Record<string, unknown>;
+	for (const field of COMPANION_PRIVATE_FIELDS) safe[field] = null;
+	return safe as T;
+}
+
 type ListedTrip =
 	| (Trip & { isShared: false })
 	| (ReturnType<typeof viewerProjection> & { isShared: true });

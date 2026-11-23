@@ -31,6 +31,7 @@ import { listTripDocuments, listDocumentsBySegment } from './tripDocuments';
 import { listGalleryImages } from './gallery';
 import { listDayNotesForTrip } from './tripDayNotes';
 import { emptyMailHoldCoverage, coverMailHolds } from './mailHoldCoverage';
+import { companionViewerProjection } from './sharing';
 
 function computeTripStats(
 	segmentsList: Array<{ startAt: string | null; paymentStatus?: string | null }>,
@@ -66,24 +67,7 @@ export async function buildTripDetail(
 	const weather = await tripWeatherOverview(view.trip.id, u.id);
 	const baseCurrency = ((view.trip as Trip).baseCurrency as string | undefined) ?? 'USD';
 	const companions = listTripCompanions(view.trip.id).map((c) =>
-		view.editor
-			? c
-			: {
-					...c,
-					notes: null,
-					dietary: null,
-					allergies: null,
-					medicalNotes: null,
-					needsCarSeat: null,
-					needsStroller: null,
-					needsCrib: null,
-					needsKidsMeal: null,
-					childTicketDiscount: null,
-					seatPreference: null,
-					bedPreference: null,
-					accessibilityNeeds: null,
-					roomNotes: null
-			  }
+		view.editor ? c : companionViewerProjection(c)
 	);
 
 	// Private trip modules are only loaded for editors. Read-only viewers get the

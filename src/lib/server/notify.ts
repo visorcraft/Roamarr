@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { isIP } from 'node:net';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
 import { users } from './db/mongrelSchema';
@@ -7,19 +8,111 @@ import { getSettings } from './settings';
 import { resolveSmtpTransport, SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 import { decrypt } from './crypto';
 
+function isPrivateIPv4Octets(a: number, b: number, c: number, d: number): boolean {
+	if (a === 0) return true; // 0.0.0.0/8 unspecified
+	if (a === 10) return true;
+	if (a === 127) return true;
+	if (a === 169 && b === 254) return true; // link-local
+	if (a === 172 && b >= 16 && b <= 31) return true;
+	if (a === 192 && b === 168) return true;
+	return false;
+}
+
+function parseIPv4Octets(hostname: string): number[] | null {
+	const parts = hostname.split('.');
+	if (parts.length !== 4) return null;
+	const octets: number[] = [];
+	for (const part of parts) {
+		if (!/^\d{1,3}$/.test(part)) return null;
+		const n = Number(part);
+		if (n < 0 || n > 255) return null;
+		octets.push(n);
+	}
+	return octets;
+}
+
+function parseIPv6Groups(hostname: string): number[] | null {
+	const parsePart = (part: string): number[] | null => {
+		if (part === '') return [];
+		// Split off a trailing dotted-quad tail, if present.
+		const tail = part.match(/^(.*):(\d{1,3}(?:\.\d{1,3}){3})$/);
+		let hexPart = part;
+		let quadPart: string | null = null;
+		if (tail) {
+			hexPart = tail[1];
+			quadPart = tail[2];
+		} else if (part.includes('.')) {
+			hexPart = '';
+			quadPart = part;
+		}
+		const groups: number[] = [];
+		if (hexPart !== '') {
+			for (const p of hexPart.split(':')) {
+				if (!/^[0-9a-fA-F]{1,4}$/.test(p)) return null;
+				groups.push(parseInt(p, 16));
+			}
+		}
+		if (quadPart !== null) {
+			const octets = quadPart.split('.');
+			if (octets.length !== 4) return null;
+			const nums: number[] = [];
+			for (const o of octets) {
+				if (!/^\d{1,3}$/.test(o)) return null;
+				const n = Number(o);
+				if (n < 0 || n > 255) return null;
+				nums.push(n);
+			}
+			groups.push((nums[0] << 8) | nums[1], (nums[2] << 8) | nums[3]);
+		}
+		return groups;
+	};
+	const halves = hostname.split('::');
+	if (halves.length > 2) return null;
+	if (halves.length === 1) {
+		const groups = parsePart(halves[0]);
+		if (groups === null || groups.length !== 8) return null;
+		return groups;
+	}
+	const left = parsePart(halves[0]);
+	const right = parsePart(halves[1]);
+	if (left === null || right === null) return null;
+	const missing = 8 - left.length - right.length;
+	if (missing < 0) return null;
+	return [...left, ...new Array(missing).fill(0), ...right];
+}
+
 function isPrivateOrLocalHostname(hostname: string): boolean {
-	const lower = hostname.toLowerCase();
+	let lower = hostname.toLowerCase();
+	if (lower.startsWith('[') && lower.endsWith(']')) lower = lower.slice(1, -1);
+	const ip = isIP(lower);
+	if (ip === 4) {
+		const octets = parseIPv4Octets(lower);
+		if (octets === null) return true; // unparseable — fail closed
+		return isPrivateIPv4Octets(octets[0], octets[1], octets[2], octets[3]);
+	}
+	if (ip === 6) {
+		const groups = parseIPv6Groups(lower);
+		if (groups === null || groups.length !== 8) return true; // fail closed
+		// ::/96 — first 96 bits zero, apply IPv4 rules to the low 32 bits.
+		if (groups.slice(0, 6).every((g) => g === 0)) {
+			const low = groups[6] * 0x10000 + groups[7];
+			return isPrivateIPv4Octets((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
+		}
+		// ::ffff:0:0/96 — first 80 bits zero followed by ffff, IPv4 rules on the low 32 bits.
+		if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+			const low = groups[6] * 0x10000 + groups[7];
+			return isPrivateIPv4Octets((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
+		}
+		// fc00::/7 unique local
+		if ((groups[0] & 0xfe00) === 0xfc00) return true;
+		// fe80::/10 link-local
+		if ((groups[0] & 0xffc0) === 0xfe80) return true;
+		return false;
+	}
+	// DNS name — drop a single trailing dot, block only localhost and *.localhost.
+	if (lower.endsWith('.')) lower = lower.slice(0, -1);
 	if (lower === 'localhost') return true;
-	// IPv4 loopback and private ranges
-	if (lower.startsWith('127.')) return true;
-	if (lower.startsWith('10.')) return true;
-	if (lower.startsWith('192.168.')) return true;
-	if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(lower)) return true;
-	if (lower.startsWith('169.254.')) return true; // link-local
-	// IPv6 loopback / link-local / unique local
-	if (lower === '::1') return true;
-	if (lower.startsWith('fe80:')) return true;
-	if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+	if (lower.endsWith('.localhost')) return true;
 	return false;
 }
 

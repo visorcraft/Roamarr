@@ -167,6 +167,81 @@ test('skips webhook when webhookUrl points to a disallowed target', async () => 
 	expect(fetches.length).toBe(before);
 });
 
+test('webhook URL validation blocks IPv6 loopback, link-local, unique-local and IPv4-mapped literals', () => {
+	expect(isAllowedWebhookUrl('http://[::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[0:0:0:0:0:0:0:1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[fe80::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[FE80::1]:8443/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[febf::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[fc00::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[fd12:3456:789a::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[fdff::1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::ffff:127.0.0.1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::ffff:7f00:1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::ffff:10.0.0.1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::ffff:a00:1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://[::127.0.0.1]/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('https://[2606:4700:4700::1111]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[::ffff:8.8.8.8]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[::ffff:808:808]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[fbff::1]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[fe00::1]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[fe7f::1]/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://[fec0::1]/webhook')).toBe(true);
+});
+
+test('webhook URL validation blocks loopback spellings and the unspecified address', () => {
+	expect(isAllowedWebhookUrl('http://localhost./webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://LOCALHOST./webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://api.localhost/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://0/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://0.0.0.0/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://0.0.0.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://2130706433/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://0x7f000001/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://127.1/webhook')).toBe(false);
+	expect(isAllowedWebhookUrl('http://1.1.1.1/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('http://localhost.example.com/webhook')).toBe(true);
+});
+
+test('webhook URL validation keeps the RFC 1918 boundaries', () => {
+	expect(isAllowedWebhookUrl('http://172.16.0.1/')).toBe(false);
+	expect(isAllowedWebhookUrl('http://172.31.255.255/')).toBe(false);
+	expect(isAllowedWebhookUrl('http://169.254.169.254/')).toBe(false);
+	expect(isAllowedWebhookUrl('http://10.255.255.255/')).toBe(false);
+	expect(isAllowedWebhookUrl('http://192.168.0.1/')).toBe(false);
+	expect(isAllowedWebhookUrl('http://172.15.255.255/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://172.32.0.0/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://11.0.0.1/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://126.255.255.255/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://128.0.0.1/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://192.169.0.1/')).toBe(true);
+	expect(isAllowedWebhookUrl('http://169.253.0.1/')).toBe(true);
+});
+
+test('webhook URL validation allows public hostnames that merely start with fc or fd', () => {
+	expect(isAllowedWebhookUrl('https://fdroid.org/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('https://fc-hooks.example.com/webhook')).toBe(true);
+	expect(isAllowedWebhookUrl('https://fdn.example.com/webhook')).toBe(true);
+});
+
+test('skips webhook when webhookUrl is an IPv6 or loopback-spelling target', async () => {
+	const u = makeUser({ email: 'e@x.c', display_name: 'E' });
+	for (const webhookUrl of [
+		'http://[::1]:3000/admin',
+		'http://[fe80::1]/admin',
+		'http://[fd00::1]:8080/admin',
+		'http://localhost./admin',
+		'http://0/admin'
+	]) {
+		const before = fetches.length;
+		updateSettings({ webhookUrl });
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(fetches.length).toBe(before);
+	}
+});
+
 test('withDeadline resolves when the wrapped promise settles first', async () => {
 	await expect(withDeadline(Promise.resolve(42), 50, 'x')).resolves.toBe(42);
 });

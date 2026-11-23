@@ -79,6 +79,31 @@ export function updateEntryRequirementStatus(
 	return updated;
 }
 
+export function patchEntryRequirement(
+	userId: number,
+	tripId: number,
+	requirementId: number,
+	input: { status?: string; dueDate?: string | null; notes?: string | null }
+) {
+	requireEditableTrip(userId, tripId);
+	const v = new Validator();
+	if (input.status !== undefined)
+		v.enumValue(input.status, ENTRY_REQUIREMENT_STATUSES as readonly string[], 'status');
+	if (input.dueDate !== undefined) v.date(input.dueDate, 'dueDate');
+	if (input.notes !== undefined) v.optionalString(input.notes, 'notes', { max: 2000 });
+	if (!v.ok()) throw error(400, v.failMessage());
+	const existing = getEntryRequirementById(requirementId);
+	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
+	const patch: { status?: string; dueDate?: string | null; notes?: string | null } = {};
+	if (input.status !== undefined) patch.status = input.status.trim();
+	if (input.dueDate !== undefined) patch.dueDate = input.dueDate?.trim() || null;
+	if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+	const updated = repoUpdateEntryRequirement(requirementId, patch as any);
+	if (!updated) throw error(404, 'Not found');
+	logAudit(userId, 'update', 'trip_entry_requirement', requirementId, { tripId });
+	return updated;
+}
+
 export function deleteEntryRequirement(userId: number, tripId: number, requirementId: number) {
 	requireEditableTrip(userId, tripId);
 	const existing = getEntryRequirementById(requirementId);

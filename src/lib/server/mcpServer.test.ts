@@ -233,6 +233,65 @@ describe('mcpServer', () => {
 		expect((await call('roamarr_doc_link_list', { tripId: trip.id })).items[0]).toMatchObject({ label: 'Voucher', notes: 'offline copy' });
 	});
 
+	test('entry requirement update validates status, dueDate, and notes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Requirement trip' });
+		const { client } = await connect(userId, ['requirements:read', 'requirements:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_entry_requirement_create',
+			arguments: { tripId: trip.id, country: 'JP', requirementType: 'visa', status: 'in_progress', dueDate: '2026-07-01', notes: 'online form' }
+		});
+		expect(created.isError).toBeFalsy();
+		const requirementId = JSON.parse(created.content[0].text).id;
+
+		const listRow = async () => {
+			const listed: any = await client.callTool({ name: 'roamarr_entry_requirement_list', arguments: { tripId: trip.id } });
+			return JSON.parse(listed.content[0].text).items[0];
+		};
+
+		const badStatus: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, status: 'done' } });
+		expect(badStatus.isError).toBe(true);
+		expect((await listRow()).status).toBe('in_progress');
+
+		const badDate: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, dueDate: 'soon' } });
+		expect(badDate.isError).toBe(true);
+		expect((await listRow()).dueDate).toBe('2026-07-01');
+
+		const badNotes: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, notes: 'x'.repeat(2001) } });
+		expect(badNotes.isError).toBe(true);
+		expect((await listRow()).notes).toBe('online form');
+
+		const partial: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, notes: 'bring photos' } });
+		expect(partial.isError).toBeFalsy();
+		const partialRow = await listRow();
+		expect(partialRow.notes).toBe('bring photos');
+		expect(partialRow.status).toBe('in_progress');
+		expect(partialRow.dueDate).toBe('2026-07-01');
+
+		const full: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, status: 'complete', dueDate: '2026-08-15', notes: '' } });
+		expect(full.isError).toBeFalsy();
+		const fullRow = await listRow();
+		expect(fullRow.status).toBe('complete');
+		expect(fullRow.dueDate).toBe('2026-08-15');
+		expect(fullRow.notes).toBeNull();
+
+		const cleared: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, dueDate: '' } });
+		expect(cleared.isError).toBeFalsy();
+		expect((await listRow()).dueDate).toBeNull();
+
+		const badId: any = await client.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId: 'abc' } });
+		expect(badId.isError).toBe(true);
+		expect(badId.content[0].text).toContain('requirementId');
+
+		const otherId = makeUser(ctx.kit).id;
+		const { client: otherClient } = await connect(otherId, ['requirements:read', 'requirements:write']);
+		const denied: any = await otherClient.callTool({ name: 'roamarr_entry_requirement_update', arguments: { requirementId, notes: 'hijacked' } });
+		expect(denied.isError).toBe(true);
+		const unchanged = await listRow();
+		expect(unchanged.status).toBe('complete');
+		expect(unchanged.dueDate).toBeNull();
+		expect(unchanged.notes).toBeNull();
+	});
+
 	test('mail hold tools enforce scopes, confirmation, and coverage', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Mail trip', startDate: '2026-09-01', endDate: '2026-09-20' });
 		const denied = await connect(userId, ['trips:read']);

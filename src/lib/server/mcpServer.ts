@@ -2212,8 +2212,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						requirementId: { type: 'number' },
-						notes: { type: 'string' },
-						status: { type: 'string', enum: ['needed', 'in_progress', 'complete', 'not_needed'] }
+						status: { type: 'string', enum: ['needed', 'in_progress', 'complete', 'not_needed'] },
+						dueDate: { type: 'string', description: 'Due date as YYYY-MM-DD; an empty string clears it' },
+						notes: { type: 'string', description: 'Free-text notes (max 2000 characters)' }
 					},
 					required: ['requirementId']
 				}
@@ -3973,17 +3974,21 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_entry_requirement_update': {
 				if (!hasScope(scopes, 'requirements:write')) return scopeError('requirements:write');
-				const { getEntryRequirementById, updateEntryRequirement } = await import('./repositories/tripMiscRepo');
-				const r = getEntryRequirementById(Number(args.requirementId));
+				const { getEntryRequirementById } = await import('./repositories/tripMiscRepo');
+				const id = Number(args.requirementId);
+				if (!Number.isInteger(id) || id <= 0) {
+					return { content: [{ type: 'text' as const, text: 'requirementId must be a positive integer' }], isError: true };
+				}
+				const r = getEntryRequirementById(id);
 				if (!r) return { content: [{ type: 'text' as const, text: 'Requirement not found' }], isError: true };
-				requireEditableTrip(userId, r.tripId);
-				updateEntryRequirement(Number(args.requirementId), {
-					status: (args.status as any) ?? undefined,
-					dueDate: (args.dueDate as string) ?? undefined,
-					notes: (args.notes as string) ?? undefined
+				const { patchEntryRequirement } = await import('./tripEntryRequirements');
+				patchEntryRequirement(userId, r.tripId, id, {
+					status: args.status as string | undefined,
+					dueDate: args.dueDate as string | null | undefined,
+					notes: args.notes as string | null | undefined
 				});
-				logAudit(userId, 'mcp_entry_requirement_update', 'trip_entry_requirement', Number(args.requirementId), {});
-				return textResult({ ok: true, requirementId: Number(args.requirementId) });
+				logAudit(userId, 'mcp_entry_requirement_update', 'trip_entry_requirement', id, {});
+				return textResult({ ok: true, requirementId: id });
 			}
 			case 'roamarr_entry_requirement_delete': {
 				if (!hasScope(scopes, 'requirements:write')) return scopeError('requirements:write');

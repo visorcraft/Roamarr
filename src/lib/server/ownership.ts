@@ -75,6 +75,7 @@ export function assertOwnedRefs(
 		providerId?: number | null;
 		segmentId?: number | null;
 		placeCategoryId?: number | null;
+		companionId?: number | null;
 	}
 ) {
 	if (refs.tripId != null) requireOwnedTrip(userId, refs.tripId);
@@ -96,6 +97,11 @@ export function assertOwnedRefs(
 		const s = kit.selectFrom(segments).where(kitEq(segments.id, BigInt(refs.segmentId))).executeSync()[0];
 		if (!s) throw error(404, 'Not found');
 		requireOwnedTrip(userId, Number(s.trip_id));
+	}
+	if (refs.companionId != null) {
+		const c = kit.selectFrom(tripCompanions).where(kitEq(tripCompanions.id, BigInt(refs.companionId))).executeSync()[0];
+		if (!c) throw error(404, 'Not found');
+		requireOwnedTrip(userId, Number(c.trip_id));
 	}
 	if (refs.placeCategoryId != null) {
 		const c = kit

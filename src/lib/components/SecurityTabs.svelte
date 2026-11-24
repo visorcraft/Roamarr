@@ -10,13 +10,8 @@
 	const activeTab = $derived(page.url.searchParams.get('tab') ?? tabs[0].id);
 </script>
 
-<div class="tab-list visited-tab-list mt-6">
+<nav class="tab-list visited-tab-list mt-6" aria-label="Security sections">
 	{#each tabs as t (t.id)}
-		<a
-			href="/profile/security?tab={t.id}"
-			class="tab-link {activeTab === t.id ? 'tab-link-active' : ''}"
-		>
-			{t.label}
-		</a>
+		<a href="/profile/security?tab={t.id}" aria-current={activeTab === t.id ? 'page' : undefined} class="tab-link {activeTab === t.id ? 'tab-link-active' : ''}">{t.label}</a>
 	{/each}
-</div>
+</nav>

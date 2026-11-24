@@ -16,8 +16,8 @@
 	}
 </script>
 
-<div class="tab-list visited-tab-list mt-6">
+<nav class="tab-list visited-tab-list mt-6" aria-label="Profile sections">
 	{#each tabs as t (t.href)}
-		<a href={t.href} class="tab-link {isActive(t.href) ? 'tab-link-active' : ''}">{t.label}</a>
+		<a href={t.href} aria-current={isActive(t.href) ? 'page' : undefined} class="tab-link {isActive(t.href) ? 'tab-link-active' : ''}">{t.label}</a>
 	{/each}
-</div>
+</nav>

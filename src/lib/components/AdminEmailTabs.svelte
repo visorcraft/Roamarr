@@ -10,6 +10,6 @@
 
 <nav class="tab-list visited-tab-list" aria-label="Email configuration">
 	{#each tabs as tab}
-		<a href="/general/email?section={tab.id}" class="tab-link {active === tab.id ? 'tab-link-active' : ''}">{tab.label}</a>
+		<a href="/general/email?section={tab.id}" aria-current={active === tab.id ? 'page' : undefined} class="tab-link {active === tab.id ? 'tab-link-active' : ''}">{tab.label}</a>
 	{/each}
 </nav>

@@ -484,3 +484,23 @@ test('importTrips stores normalized trip dates from JSON', () => {
 	);
 	expect(dry.preview![0]!.startDate).toBe('2026-08-01');
 });
+
+test('importTrips reports non-array segments and mailHolds as single field errors', () => {
+	const u = makeUser('nonarr-fields@x.c');
+	const result = importTrips(Number(u.id), {
+		trips: [
+			{
+				name: 'Bad containers',
+				startDate: '2026-08-01',
+				segments: 'oops',
+				mailHolds: 'oops'
+			} as any
+		]
+	});
+	expect(result.imported).toBe(1);
+	expect(result.segmentCount).toBe(0);
+	expect(result.errors).toEqual([
+		{ row: 1, field: 'segments', message: 'Segments must be an array' },
+		{ row: 1, field: 'mailHolds', message: 'Mail holds must be an array' }
+	]);
+});

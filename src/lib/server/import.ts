@@ -293,19 +293,23 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 
 		const validSegments: ImportSegment[] = [];
 
-		if (tripInput.segments) {
-			for (let j = 0; j < tripInput.segments.length; j++) {
-				const segInput = tripInput.segments[j]!;
-				if (!isObjectLike(segInput)) {
-					result.errors.push({ row, field: `segment.${j}`, message: 'Segment must be an object' });
-					continue;
+		if (tripInput.segments != null) {
+			if (!Array.isArray(tripInput.segments)) {
+				result.errors.push({ row, field: 'segments', message: 'Segments must be an array' });
+			} else {
+				for (let j = 0; j < tripInput.segments.length; j++) {
+					const segInput = tripInput.segments[j]!;
+					if (!isObjectLike(segInput)) {
+						result.errors.push({ row, field: `segment.${j}`, message: 'Segment must be an object' });
+						continue;
+					}
+					const segErrors = validateSegment(segInput, j).map((e) => ({ ...e, row }));
+					if (segErrors.length) {
+						result.errors.push(...segErrors);
+						continue;
+					}
+					validSegments.push(segInput);
 				}
-				const segErrors = validateSegment(segInput, j).map((e) => ({ ...e, row }));
-				if (segErrors.length) {
-					result.errors.push(...segErrors);
-					continue;
-				}
-				validSegments.push(segInput);
 			}
 		}
 
@@ -367,31 +371,35 @@ export function importTrips(userId: number, input: { trips: ImportTrip[] }, dryR
 			result.segmentCount++;
 		}
 
-		for (let j = 0; j < (tripInput.mailHolds?.length ?? 0); j++) {
-			const hold = tripInput.mailHolds![j]!;
-			if (!isObjectLike(hold)) {
-				result.errors.push({ row, field: `mailHold.${j}`, message: 'Invalid mail hold' });
-				continue;
-			}
-			try {
-				addMailHold(userId, trip.id, {
-					carrier: hold.carrier,
-					startDate: hold.startDate,
-					endDate: hold.endDate,
-					confirmationNumber: hold.confirmationNumber,
-					addressLabel: hold.addressLabel,
-					notes: hold.notes,
-					status: hold.status
-				});
-			} catch (e) {
-				const body = typeof e === 'object' && e && 'body' in e ? (e as { body?: { message?: unknown } }).body : undefined;
-				const message =
-					typeof body?.message === 'string' && body.message
-						? body.message
-						: e instanceof Error && e.message
-							? e.message
-							: 'Invalid mail hold';
-				result.errors.push({ row, field: `mailHold.${j}`, message });
+		if (tripInput.mailHolds != null && !Array.isArray(tripInput.mailHolds)) {
+			result.errors.push({ row, field: 'mailHolds', message: 'Mail holds must be an array' });
+		} else {
+			for (let j = 0; j < (tripInput.mailHolds?.length ?? 0); j++) {
+				const hold = tripInput.mailHolds![j]!;
+				if (!isObjectLike(hold)) {
+					result.errors.push({ row, field: `mailHold.${j}`, message: 'Invalid mail hold' });
+					continue;
+				}
+				try {
+					addMailHold(userId, trip.id, {
+						carrier: hold.carrier,
+						startDate: hold.startDate,
+						endDate: hold.endDate,
+						confirmationNumber: hold.confirmationNumber,
+						addressLabel: hold.addressLabel,
+						notes: hold.notes,
+						status: hold.status
+					});
+				} catch (e) {
+					const body = typeof e === 'object' && e && 'body' in e ? (e as { body?: { message?: unknown } }).body : undefined;
+					const message =
+						typeof body?.message === 'string' && body.message
+							? body.message
+							: e instanceof Error && e.message
+								? e.message
+								: 'Invalid mail hold';
+					result.errors.push({ row, field: `mailHold.${j}`, message });
+				}
 			}
 		}
 	}

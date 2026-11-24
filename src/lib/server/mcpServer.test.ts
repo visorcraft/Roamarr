@@ -3580,6 +3580,13 @@ describe('mcpServer', () => {
 
 					const readerId = makeUser(ctx.kit).id;
 					makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: readerId, permission: 'read' });
+					const detailReaderId = makeUser(ctx.kit).id;
+					makeShare(ctx.kit, {
+						tripId: trip.id,
+						sharedWithUserId: detailReaderId,
+						permission: 'read',
+						showDetails: true
+					});
 
 					const expectFields = (doc: any) => {
 						expect(doc.filename).toBe('private.pdf');
@@ -3602,24 +3609,39 @@ describe('mcpServer', () => {
 
 					// Scope alone is not enough: trips:read + private-details:read with flag off.
 					const scopedReader = await connect(readerId, ['trips:read', 'private-details:read']);
-					const scopedListed = parse(await call(scopedReader.client, 'roamarr_attachment_list', { tripId: trip.id }));
+					const scopedDetailReader = await connect(detailReaderId, ['trips:read', 'private-details:read']);
+					const scopedListed = parse(
+						await call(scopedDetailReader.client, 'roamarr_attachment_list', { tripId: trip.id })
+					);
 					expect(scopedListed.items[0].notes).toBeNull();
 					expectFields(scopedListed.items[0]);
 					const scopedGot = parse(
-						await call(scopedReader.client, 'roamarr_attachment_get', { documentId: created.id })
+						await call(scopedDetailReader.client, 'roamarr_attachment_get', { documentId: created.id })
 					);
 					expect(scopedGot.document.notes).toBeNull();
 					expectFields(scopedGot.document);
 
-					// Gate on: scoped reader gets the note, trips:read-only reader still gets null.
+					// Gate on: share without showDetails still gets null even with private-details:read;
+					// share with showDetails: true + private-details:read and owner + private-details:read get the note.
 					updateSettings({ allowMcpPii: true });
-					const scopedListed2 = parse(
+					const noDetailsListed = parse(
 						await call(scopedReader.client, 'roamarr_attachment_list', { tripId: trip.id })
+					);
+					expect(noDetailsListed.items[0].notes).toBeNull();
+					expectFields(noDetailsListed.items[0]);
+					const noDetailsGot = parse(
+						await call(scopedReader.client, 'roamarr_attachment_get', { documentId: created.id })
+					);
+					expect(noDetailsGot.document.notes).toBeNull();
+					expectFields(noDetailsGot.document);
+
+					const scopedListed2 = parse(
+						await call(scopedDetailReader.client, 'roamarr_attachment_list', { tripId: trip.id })
 					);
 					expect(scopedListed2.items[0].notes).toBe('booking ref 4451 gate B');
 					expectFields(scopedListed2.items[0]);
 					const scopedGot2 = parse(
-						await call(scopedReader.client, 'roamarr_attachment_get', { documentId: created.id })
+						await call(scopedDetailReader.client, 'roamarr_attachment_get', { documentId: created.id })
 					);
 					expect(scopedGot2.document.notes).toBe('booking ref 4451 gate B');
 					expectFields(scopedGot2.document);
@@ -3629,6 +3651,12 @@ describe('mcpServer', () => {
 					const plainGot = parse(await call(reader.client, 'roamarr_attachment_get', { documentId: created.id }));
 					expect(plainGot.document.notes).toBeNull();
 					expectFields(plainGot.document);
+
+					const ownerPii = await connect(userId, ['trips:read', 'private-details:read']);
+					const ownerPiiListed = parse(await call(ownerPii.client, 'roamarr_attachment_list', { tripId: trip.id }));
+					expect(ownerPiiListed.items[0].notes).toBe('booking ref 4451 gate B');
+					const ownerPiiGot = parse(await call(ownerPii.client, 'roamarr_attachment_get', { documentId: created.id }));
+					expect(ownerPiiGot.document.notes).toBe('booking ref 4451 gate B');
 
 					// Owner with trips:read only, flag off: null on both tools.
 					updateSettings({ allowMcpPii: false });
@@ -3986,6 +4014,19 @@ describe('mcpServer', () => {
 				expect(res.isError).toBe(true);
 				expect(String(res.content?.[0]?.text ?? '')).toContain('showDetails');
 				expect(tripsRepo.getTripById(trip.id)?.publicToken).toBeNull();
+			});
+
+			test('rejects malformed tripId cleanly without throwing RangeError', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const { client } = await connect(ownerId, ['sharing:write']);
+				for (const badId of ['abc', 0, -1, 1.5, null]) {
+					const res: any = await client.callTool({
+						name: 'roamarr_share_create',
+						arguments: { tripId: badId, kind: 'public' }
+					});
+					expect(res.isError).toBe(true);
+					expect(String(res.content?.[0]?.text ?? '')).toContain('tripId');
+				}
 			});
 		});
 	});

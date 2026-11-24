@@ -16,7 +16,7 @@ import * as segmentsRepo from './repositories/segmentsRepo';
 import { requireOwnedTrip, requireEditableTrip, requireViewableTrip, requireOwnedGroup } from './ownership';
 import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { loadTripFor } from '../../routes/trips/shared';
-import { viewerProjection, canEdit, companionViewerProjection } from './sharing';
+import { viewerProjection, canEdit, canViewDetails, companionViewerProjection } from './sharing';
 import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
 import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
@@ -667,11 +667,11 @@ async function loadTripDocumentForView(userId: number, args: Record<string, unkn
 	if (!link || (expectedTripId != null && link.tripId !== expectedTripId)) {
 		throw error(404, 'Document not found');
 	}
-	requireViewableTrip(userId, link.tripId);
+	const trip = requireViewableTrip(userId, link.tripId);
 	const { listTripDocuments } = await import('./tripDocuments');
 	const row = listTripDocuments(link.tripId).find((item) => item.id === link.id);
 	if (!row) throw error(404, 'Document not found');
-	return { row };
+	return { row, trip };
 }
 
 const TRIP_RESOURCE_TEMPLATE = 'trip://{tripId}';
@@ -3297,10 +3297,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_share_create': {
 				if (!hasScope(scopes, 'sharing:write')) return scopeError('sharing:write');
+				if (typeof args.tripId !== 'number' || !Number.isSafeInteger(args.tripId) || args.tripId < 1) {
+					return { content: [{ type: 'text' as const, text: 'tripId must be a positive integer' }], isError: true };
+				}
 				const { createShare } = await import('./repositories/tripsRepo');
 				const { getUserByEmail } = await import('./repositories/usersRepo');
 				const { normalizeEmail } = await import('./users');
-				const tripId = Number(args.tripId);
+				const tripId = args.tripId;
 				requireOwnedTrip(userId, tripId);
 				const parsed = parseShareArgs(args);
 				if (!parsed.ok) return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
@@ -4490,7 +4493,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			case 'roamarr_attachment_list': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
 				const target = resolveAttachmentTarget(args as Record<string, unknown>);
-				requireViewableTrip(userId, target.tripId);
+				const trip = requireViewableTrip(userId, target.tripId);
 				if (target.segmentId != null) {
 					const seg = segmentsRepo.getSegmentById(target.segmentId);
 					if (!seg || seg.tripId !== target.tripId) throw error(400, 'Segment not found on this trip');
@@ -4501,17 +4504,19 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						? listSegmentDocuments(target.segmentId)
 						: listTripDocuments(target.tripId);
 				const page = paginateList(rows, args as { limit?: unknown; cursor?: unknown }, (row) => row.id);
+				const includeNotes = canReadPrivateDetails(scopes) && canViewDetails(userId, trip);
 				return textResult({
 					tripId: target.tripId,
 					segmentId: target.segmentId,
-					items: page.items.map((row) => projectTripDocument(row, canReadPrivateDetails(scopes))),
+					items: page.items.map((row) => projectTripDocument(row, includeNotes)),
 					nextCursor: page.nextCursor
 				});
 			}
 			case 'roamarr_attachment_get': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
 				const loaded = await loadTripDocumentForView(userId, args as Record<string, unknown>);
-				const document = projectTripDocument(loaded.row, canReadPrivateDetails(scopes));
+				const includeNotes = canReadPrivateDetails(scopes) && canViewDetails(userId, loaded.trip);
+				const document = projectTripDocument(loaded.row, includeNotes);
 				if (args.includeContent !== true) return textResult({ document });
 				const { readTripDocument } = await import('./tripDocuments');
 				const range = parseAttachmentByteRange(args as Record<string, unknown>);

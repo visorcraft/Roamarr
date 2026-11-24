@@ -427,5 +427,6 @@
 	"boat_title_label": "Cruise / ferry name",
 	"boat_title_placeholder": "Harbor ferry",
 	"boat_location_label": "Port / pier",
-	"boat_location_placeholder": "Pier 33"
+	"boat_location_placeholder": "Pier 33",
+	"mail_holds_delete_confirm": "Delete this mail hold?"
 }

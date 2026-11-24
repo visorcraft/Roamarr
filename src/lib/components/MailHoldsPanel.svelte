@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
+	import ConfirmButton from './ConfirmButton.svelte';
+
 	type Hold = {
 		id: number;
 		carrier: string;
@@ -72,16 +75,16 @@
 						<p class="field-help">Renewal date {hold.endDate}</p>
 					</div>
 					<div class="flex flex-wrap gap-2">
-						<button type="button" class="btn" onclick={() => (editingId = editingId === hold.id ? null : hold.id)}>Edit</button>
+						<button type="button" class="btn" aria-expanded={editingId === hold.id} onclick={() => (editingId = editingId === hold.id ? null : hold.id)}>Edit</button>
 						{#if hold.status !== 'cancelled'}
 							<form method="POST" action="?/addNextMailHold">
 								<input type="hidden" name="holdId" value={hold.id} />
 								<button class="btn" type="submit">Next 30 days</button>
 							</form>
 						{/if}
-						<form method="POST" action="?/deleteMailHold" onsubmit={(event) => { if (!confirm('Delete this mail hold?')) event.preventDefault(); }}>
+						<form method="POST" action="?/deleteMailHold">
 							<input type="hidden" name="holdId" value={hold.id} />
-							<button class="btn" type="submit">Delete</button>
+							<ConfirmButton type="submit" class="btn" message={m.mail_holds_delete_confirm()}>Delete</ConfirmButton>
 						</form>
 					</div>
 				</div>

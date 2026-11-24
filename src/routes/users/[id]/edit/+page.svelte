@@ -4,6 +4,8 @@
 	import TextField from '$lib/components/TextField.svelte';
 	import SelectField from '$lib/components/SelectField.svelte';
 	import CancelButton from '$lib/components/CancelButton.svelte';
+	import { m } from '$lib/paraglide/messages';
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import type { PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: Record<string, unknown> | null } = $props();
@@ -123,7 +125,7 @@
 			</div>
 		</div>
 
-		<div class="flex flex-wrap justify-end gap-2 border-t border-white/5 pt-4">
+		<div class="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
 			<CancelButton dirty={isDirty} onConfirm={() => goto('/users')}>Cancel</CancelButton>
 			<button class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>
 				Save changes
@@ -134,7 +136,7 @@
 	<form
 		method="POST"
 		action="?/sendReset"
-		class="mt-4 flex flex-col items-end justify-end gap-2 border-t border-white/5 pt-4"
+		class="mt-4 flex flex-col items-end justify-end gap-2 border-t border-line pt-4"
 		use:enhance={() => {
 			submitting = true;
 			return async ({ update }) => {
@@ -165,9 +167,14 @@
 			}}
 		>
 			<p class="field-help text-right">Two-factor authentication is enabled for this user.</p>
-			<button class="btn btn-danger" disabled={submitting} class:btn-loading={submitting}>
+			<ConfirmButton
+				type="submit"
+				class="btn btn-danger {submitting ? 'btn-loading' : ''}"
+				disabled={submitting}
+				message={m.users_disable_two_factor_confirm()}
+			>
 				Disable user 2FA (admin reset)
-			</button>
+			</ConfirmButton>
 		</form>
 	{/if}
 </section>

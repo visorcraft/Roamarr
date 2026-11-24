@@ -459,5 +459,6 @@
 	"card_benefit_action_edit": "Edit",
 	"card_benefit_action_update": "Update",
 	"card_benefit_action_delete": "Delete",
-	"card_benefit_delete_confirm": "Delete this benefit?"
+	"card_benefit_delete_confirm": "Delete this benefit?",
+	"users_disable_two_factor_confirm": "Disable two-factor authentication for this user? They will be able to sign in with their password alone."
 }

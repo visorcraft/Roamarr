@@ -466,9 +466,7 @@
 
 	<div class="theme-root" data-theme={data.themeId}>
 	<a href="#main-content" class="skip-link">Skip to content</a>
-	{#key toastMessage}
-		<Toast message={toastMessage} variant={toastVariant} />
-	{/key}
+	<Toast message={toastMessage} variant={toastVariant} />
 
 	{#if standalone}
 		<div class="flex min-h-screen flex-col">

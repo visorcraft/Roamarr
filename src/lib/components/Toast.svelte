@@ -31,25 +31,23 @@
 	};
 </script>
 
-{#if visible && message}
-	<div
-		class="toast toast-{variant}"
-		role="status"
-		aria-live="polite"
-	>
-		<span class="toast-icon toast-icon-{variant}">
-			<Icon name={variantIcon[variant]} class="h-3.5 w-3.5" />
-		</span>
-		<span class="font-medium">{message}</span>
-		{#if dismissible}
-			<button
-				type="button"
-				class="icon-button -mr-1 ml-auto h-7 w-7 shrink-0"
-				aria-label="Dismiss"
-				onclick={() => (visible = false)}
-			>
-				<Icon name="close" class="h-4 w-4" />
-			</button>
-		{/if}
-	</div>
-{/if}
+<div role={variant === 'error' ? 'alert' : 'status'} aria-live={variant === 'error' ? 'assertive' : 'polite'}>
+	{#if visible && message}
+		<div class="toast toast-{variant}">
+			<span class="toast-icon toast-icon-{variant}">
+				<Icon name={variantIcon[variant]} class="h-3.5 w-3.5" />
+			</span>
+			<span class="font-medium">{message}</span>
+			{#if dismissible}
+				<button
+					type="button"
+					class="icon-button -mr-1 ml-auto h-7 w-7 shrink-0"
+					aria-label="Dismiss"
+					onclick={() => (visible = false)}
+				>
+					<Icon name="close" class="h-4 w-4" />
+				</button>
+			{/if}
+		</div>
+	{/if}
+</div>

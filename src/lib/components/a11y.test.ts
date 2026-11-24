@@ -22,6 +22,16 @@ test('Toast warning variant has no axe violations', async () => {
 	expect(violations, formatViolations(violations)).toHaveLength(0);
 });
 
+test('Toast error variant has no axe violations', async () => {
+	const violations = await checkA11y(Toast, { message: 'Could not save.', variant: 'error' });
+	expect(violations, formatViolations(violations)).toHaveLength(0);
+});
+
+test('Toast with no message has no axe violations', async () => {
+	const violations = await checkA11y(Toast, { message: '' });
+	expect(violations, formatViolations(violations)).toHaveLength(0);
+});
+
 test('Icon has no axe violations (decorative)', async () => {
 	const violations = await checkA11y(Icon, { name: 'home', class: 'h-5 w-5' });
 	expect(violations, formatViolations(violations)).toHaveLength(0);

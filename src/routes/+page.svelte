@@ -12,7 +12,7 @@
 	const firstName = $derived((data.user?.displayName ?? '').split(/\s+/)[0]);
 
 	const stats = $derived([
-		{ label: 'Upcoming trips', value: data.stats.upcoming, href: '/trips', accent: 'text-indigo-300' },
+		{ label: 'Upcoming trips', value: data.stats.upcoming, href: '/trips', accent: 'text-[var(--theme-brand)]' },
 		{ label: 'Unread alerts', value: data.stats.unread, href: '/notifications', accent: 'text-[var(--theme-readable-warning)]' },
 		{ label: 'Docs expiring', value: data.stats.expiring, href: '/profile/documents', accent: 'text-[var(--theme-readable-success)]' },
 		{ label: 'Fare watches', value: data.stats.watches, href: '/fare-providers', accent: 'text-fuchsia-500' }
@@ -40,7 +40,7 @@
 	{#each stats as s (s.label)}
 		<a href={s.href} class="metric-card group">
 			<div class="text-4xl font-extrabold {s.accent}">{s.value}</div>
-			<div class="metric-label group-hover:text-slate-300">{s.label}</div>
+			<div class="metric-label group-hover:text-[var(--theme-ink)]">{s.label}</div>
 		</a>
 	{/each}
 </section>
@@ -165,8 +165,8 @@
 						</div>
 						<p class="row-subtitle truncate">{a.tripName}</p>
 						{#if a.kind === 'comment'}
-							<p class="mt-1 text-sm text-slate-300">{a.body ?? ''}</p>
-							<p class="mt-0.5 text-xs text-slate-500">by {a.displayName ?? 'Unknown'}</p>
+							<p class="mt-1 text-sm text-[var(--theme-ink)]">{a.body ?? ''}</p>
+							<p class="mt-0.5 text-xs text-[var(--theme-muted)]">by {a.displayName ?? 'Unknown'}</p>
 						{/if}
 					</div>
 					<span class="row-meta">{formatDateTime(a.createdAt)}</span>

@@ -41,7 +41,7 @@ test('dashboard stat values use readable theme tokens', () => {
 	const { body } = render(Page, { props: { data: fixture } as any });
 	const blocks = cardBlocks(body);
 	expect(blocks).toHaveLength(4);
-	expect(blocks[0]).toContain('text-indigo-300');
+	expect(blocks[0]).toContain('text-[var(--theme-brand)]');
 	expect(blocks[1]).toContain('text-[var(--theme-readable-warning)]');
 	expect(blocks[2]).toContain('text-[var(--theme-readable-success)]');
 	expect(blocks[3]).toContain('text-fuchsia-500');

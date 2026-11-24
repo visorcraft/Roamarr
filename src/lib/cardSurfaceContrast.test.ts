@@ -2,13 +2,14 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from 'vitest';
 import { THEMES } from './themes';
 
-// Card surfaces (the notifications page and TripCard) paint text and status colours from theme
+// Card surfaces (the notifications page, TripCard, and the dashboard) paint text and status colours from theme
 // tokens, not fixed Tailwind palette classes. This test checks the source uses those tokens, and
 // that every theme block defines them readable on both --theme-surface and --theme-surface2.
 
 const css = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
 const notifications = readFileSync(new URL('../routes/notifications/+page.svelte', import.meta.url), 'utf8');
 const tripCard = readFileSync(new URL('./components/TripCard.svelte', import.meta.url), 'utf8');
+const dashboard = readFileSync(new URL('../routes/+page.svelte', import.meta.url), 'utf8');
 
 type Rgb = [number, number, number];
 
@@ -38,7 +39,8 @@ const themeBlocks = [...css.matchAll(/([^{}]*)\{([^{}]*--theme-ink:[^{}]*)\}/g)]
 test('no fixed palette classes on card surfaces', () => {
 	for (const [name, source] of [
 		['notifications', notifications],
-		['TripCard', tripCard]
+		['TripCard', tripCard],
+		['dashboard', dashboard]
 	] as const) {
 		expect(source, `${name} must not use fixed palette classes`).not.toMatch(
 			/\b(?:text|bg)-(?:white|slate-\d{2,3}|indigo-\d{2,3})\b/
@@ -58,6 +60,15 @@ test('notifications page uses theme tokens', () => {
 test('TripCard uses theme tokens', () => {
 	expect(tripCard.match(/text-\[var\(--theme-muted\)\]/g)?.length).toBe(3);
 	expect(tripCard).not.toMatch(/text-slate-/);
+});
+
+test('dashboard uses theme tokens', () => {
+	// The stat value is text-4xl extrabold (large text), so the >= 3:1 floor that
+	// 'theme tokens are readable on every theme surface' enforces for brand applies.
+	expect(dashboard).toContain("accent: 'text-[var(--theme-brand)]'");
+	expect(dashboard).toContain('class="metric-label group-hover:text-[var(--theme-ink)]"');
+	expect(dashboard).toContain(`<p class="mt-1 text-sm text-[var(--theme-ink)]">{a.body ?? ''}</p>`);
+	expect(dashboard).toContain(`<p class="mt-0.5 text-xs text-[var(--theme-muted)]">by {a.displayName ?? 'Unknown'}</p>`);
 });
 
 test('theme tokens are readable on every theme surface', () => {

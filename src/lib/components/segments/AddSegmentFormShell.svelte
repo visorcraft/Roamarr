@@ -3,6 +3,7 @@
 	import CardSelect from '$lib/components/CardSelect.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import type { SegmentFormTrip } from '$lib/server/segmentNewPage';
+	import { m } from '$lib/paraglide/messages';
 	import { SEGMENT_CITY_DEFAULTS_KEY, type SegmentCityDefaults } from './segmentCityDefaults';
 
 	let {
@@ -45,12 +46,12 @@
 	<div>
 		<a href={`/trips/${trip.id}`} class="back-link">
 			<Icon name="back" class="h-4 w-4" />
-			Back to {trip.name}
+			{m.segment_new_back_to_trip({ name: trip.name })}
 		</a>
-		<h1 class="page-title">Add {label.toLowerCase()}</h1>
-		<p class="page-subtitle">Fill in the details below.</p>
+		<h1 class="page-title">{m.segment_new_title({ label: label.toLowerCase() })}</h1>
+		<p class="page-subtitle">{m.segment_new_subtitle()}</p>
 	</div>
-	<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>
+	<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">{m.segment_new_back()}</a>
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
@@ -64,10 +65,8 @@
 		{/if}
 
 		<div class="field sm:col-span-2">
-			<label class="label" for="segment-documents">Documents (optional)</label>
-			<p class="mb-2 text-sm text-muted">
-				Attach PDFs or images such as QR codes, vouchers, or booking confirmations (JPEG, PNG, WebP, or PDF, max 10&nbsp;MB each).
-			</p>
+			<label class="label" for="segment-documents">{m.segment_new_documents_label()}</label>
+			<p class="mb-2 text-sm text-muted">{m.segment_new_documents_hint()}</p>
 			<input
 				id="segment-documents"
 				name="documents"
@@ -79,10 +78,10 @@
 		</div>
 
 		<div class="form-actions sm:col-span-2">
-			<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">Back</a>
+			<a href={`/trips/${trip.id}/segments/new`} class="btn btn-ghost">{m.segment_new_back()}</a>
 			<div class="flex flex-wrap gap-2">
-				<a href={`/trips/${trip.id}`} class="btn btn-ghost">Cancel</a>
-				<button class="btn btn-primary">Save</button>
+				<a href={`/trips/${trip.id}`} class="btn btn-ghost">{m.common_cancel()}</a>
+				<button class="btn btn-primary">{m.segment_new_save()}</button>
 			</div>
 		</div>
 	</form>

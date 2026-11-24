@@ -328,5 +328,12 @@
 	"booking_rate_label": "Booking rate",
 	"booking_rate_placeholder": "Enter booking rate",
 	"booking_restrictions_label": "Restrictions",
-	"booking_restrictions_placeholder": "Enter restrictions"
+	"booking_restrictions_placeholder": "Enter restrictions",
+	"segment_new_back_to_trip": "Back to {name}",
+	"segment_new_title": "Add {label}",
+	"segment_new_subtitle": "Fill in the details below.",
+	"segment_new_back": "Back",
+	"segment_new_documents_label": "Documents (optional)",
+	"segment_new_documents_hint": "Attach PDFs or images such as QR codes, vouchers, or booking confirmations (JPEG, PNG, WebP, or PDF, max 10\u00a0MB each).",
+	"segment_new_save": "Save"
 }

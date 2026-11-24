@@ -16,6 +16,7 @@ import {
 } from '../repositories/travelDataRepo';
 import { deliver } from '../notify';
 import { requireOwnedTrip, assertOwnedRefs } from '../ownership';
+import { publishTripChanged } from '../eventBus';
 import { stub } from './stub';
 import { nowIso } from '../tz';
 import { getSegmentById } from '../repositories/segmentsRepo';
@@ -118,7 +119,9 @@ export function toggleWatch(
 	// existing row instead of stacking duplicate watches (and duplicate provider calls).
 	const existing = getFareWatchByTripAndProvider(tripId, providerId, sid);
 	if (existing) return existing;
-	return createFareWatch({ tripId, providerId, segmentId: sid, status: 'active' });
+	const created = createFareWatch({ tripId, providerId, segmentId: sid, status: 'active' });
+	publishTripChanged(tripId);
+	return created;
 }
 
 function requireOwnedWatch(userId: number, watchId: number): FareWatch {
@@ -130,22 +133,28 @@ function requireOwnedWatch(userId: number, watchId: number): FareWatch {
 }
 
 export function pauseWatch(userId: number, watchId: number) {
-	requireOwnedWatch(userId, watchId);
+	const w = requireOwnedWatch(userId, watchId);
+	if (w.status === 'paused') return w;
 	const updated = updateFareWatch(watchId, { status: 'paused' });
 	if (!updated) throw error(404, 'Not found');
+	publishTripChanged(w.tripId);
 	return updated;
 }
 
 export function resumeWatch(userId: number, watchId: number) {
-	requireOwnedWatch(userId, watchId);
+	const w = requireOwnedWatch(userId, watchId);
+	if (w.status === 'active') return w;
 	const updated = updateFareWatch(watchId, { status: 'active' });
 	if (!updated) throw error(404, 'Not found');
+	publishTripChanged(w.tripId);
 	return updated;
 }
 
 export function deleteWatch(userId: number, watchId: number) {
-	requireOwnedWatch(userId, watchId);
-	deleteFareWatch(watchId);
+	const w = requireOwnedWatch(userId, watchId);
+	const tripId = w.tripId;
+	const deleted = deleteFareWatch(watchId);
+	if (deleted) publishTripChanged(tripId);
 }
 
 function previousSummary(watch: FareWatch): string | null {

@@ -18,7 +18,7 @@ import { listVisited, markVisited, unmarkVisited } from './visitedPlaces';
 import { loadTripFor } from '../../routes/trips/shared';
 import { viewerProjection, canEdit, canViewDetails, companionViewerProjection } from './sharing';
 import { addItem as addChecklistItem, viewChecklist } from './tripChecklists';
-import { setBudget, listBudgetsWithSpent } from './tripBudgets';
+import { setBudget, listBudgetsWithSpent, BUDGET_CATEGORIES } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
 import { findCity, resolveCitySelection } from './cities';
@@ -121,6 +121,46 @@ function parseReminderOffsetMinutes(raw: unknown): number | null {
 	const n = Number(raw);
 	if (!Number.isInteger(n) || n < -10080 || n > 10080) return null;
 	return n;
+}
+
+type BudgetSetArgsResult =
+	| { ok: true; tripId: number; category: (typeof BUDGET_CATEGORIES)[number]; amount: number; currency: string }
+	| { ok: false; error: string };
+
+// Strict parser for roamarr_budget_set. The tool schema declares amount as a
+// number, but clients sometimes send strings, booleans, or floats, which would
+// otherwise be coerced into a misleading budget.
+function parseBudgetSetArgs(args: Record<string, unknown>): BudgetSetArgsResult {
+	const rawTripId = args.tripId;
+	if (typeof rawTripId !== 'number' || !Number.isSafeInteger(rawTripId) || rawTripId <= 0) {
+		return { ok: false, error: 'tripId must be a positive integer' };
+	}
+	const rawCategory = args.category;
+	if (typeof rawCategory !== 'string') {
+		return { ok: false, error: `category must be one of: ${BUDGET_CATEGORIES.join(', ')}` };
+	}
+	const category = rawCategory.trim();
+	if (!(BUDGET_CATEGORIES as readonly string[]).includes(category)) {
+		return { ok: false, error: `category must be one of: ${BUDGET_CATEGORIES.join(', ')}` };
+	}
+	const amount = args.amount;
+	if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount <= 0) {
+		return { ok: false, error: 'amount must be a positive integer number of cents' };
+	}
+	const rawCurrency = args.currency;
+	let currency: string;
+	if (rawCurrency == null || (typeof rawCurrency === 'string' && rawCurrency.trim() === '')) {
+		currency = 'USD';
+	} else if (typeof rawCurrency !== 'string') {
+		return { ok: false, error: 'currency must be a 3-letter ISO currency code' };
+	} else {
+		const normalized = rawCurrency.trim().toUpperCase();
+		if (!/^[A-Z]{3}$/.test(normalized)) {
+			return { ok: false, error: 'currency must be a 3-letter ISO currency code' };
+		}
+		currency = normalized;
+	}
+	return { ok: true, tripId: rawTripId, category: category as (typeof BUDGET_CATEGORIES)[number], amount, currency };
 }
 
 type ShareArgsResult =
@@ -1060,8 +1100,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					properties: {
 						tripId: { type: 'number' },
 						category: { type: 'string', description: 'Budget category (e.g. lodging, transport, food, activities, other)' },
-						amount: { type: 'number', description: 'Budget amount' },
-						currency: { type: 'string', description: 'ISO currency code, default USD' }
+						amount: { type: 'integer', description: 'Budget amount in integer cents (e.g. $150.00 → 15000); must be greater than 0' },
+						currency: { type: 'string', description: '3-letter ISO currency code (case-insensitive), default USD' }
 					},
 					required: ['tripId', 'category', 'amount']
 				}
@@ -2845,15 +2885,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_budget_set': {
 				if (!hasScope(scopes, 'budgets:write')) return scopeError('budgets:write');
+				const parsed = parseBudgetSetArgs(args as Record<string, unknown>);
+				if (!parsed.ok) {
+					return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
+				}
 				const validation = validateToolInput(args as Record<string, unknown>);
 				if (!validation.ok) return textResult({ error: validation.error });
-				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				setBudget(tripId, args.category as any, Number(args.amount), (args.currency as string) || 'USD');
-				logAudit(userId, 'mcp_budget_set', 'trip_budget_category', tripId, {
-					category: args.category, amount: args.amount
+				requireEditableTrip(userId, parsed.tripId);
+				const row = setBudget(parsed.tripId, parsed.category, parsed.amount, parsed.currency);
+				logAudit(userId, 'mcp_budget_set', 'trip_budget_category', parsed.tripId, {
+					category: parsed.category, amount: parsed.amount, currency: parsed.currency
 				});
-				return textResult({ ok: true, tripId, category: args.category, amount: args.amount });
+				return textResult({ ok: true, tripId: parsed.tripId, category: parsed.category, amount: parsed.amount, currency: row.currency });
 			}
 			case 'roamarr_budget_update': {
 				if (!hasScope(scopes, 'budgets:read')) return scopeError('budgets:read');

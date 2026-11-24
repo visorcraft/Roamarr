@@ -1860,6 +1860,87 @@ describe('mcpServer', () => {
 		expect(finalRow?.exchangeRate).toBe(11000);
 	});
 
+	test('budget_set validates tripId, category, amount, and currency', async () => {
+		const { getBudgetCategoryByTripAndCategory, listBudgetCategoriesForTrip } = await import('./repositories/expensesRepo');
+		const { client } = await connect(userId, ['budgets:write']);
+		const trip = makeTrip(ctx.kit, userId, { name: 'Budgets' });
+
+		const createRes: any = await client.callTool({
+			name: 'roamarr_budget_set',
+			arguments: { tripId: trip.id, category: 'food', amount: 15000, currency: 'eur' }
+		});
+		expect(createRes.isError).toBeFalsy();
+		const foodRow = getBudgetCategoryByTripAndCategory(trip.id, 'food');
+		expect(foodRow).toBeTruthy();
+		expect(foodRow!.amount).toBe(15000);
+		expect(foodRow!.currency).toBe('EUR');
+
+		const updateRes: any = await client.callTool({
+			name: 'roamarr_budget_set',
+			arguments: { tripId: trip.id, category: 'food', amount: 20000 }
+		});
+		expect(updateRes.isError).toBeFalsy();
+		expect(getBudgetCategoryByTripAndCategory(trip.id, 'food')!.amount).toBe(20000);
+		expect(listBudgetCategoriesForTrip(trip.id).filter((r) => r.category === 'food')).toHaveLength(1);
+
+		const defaultCurrencyRes: any = await client.callTool({
+			name: 'roamarr_budget_set',
+			arguments: { tripId: trip.id, category: 'lodging', amount: 50000 }
+		});
+		expect(defaultCurrencyRes.isError).toBeFalsy();
+		expect(getBudgetCategoryByTripAndCategory(trip.id, 'lodging')!.currency).toBe('USD');
+
+		const failureTrip = makeTrip(ctx.kit, userId, { name: 'BudgetsFailures' });
+		const baseArgs = { tripId: failureTrip.id, category: 'food', amount: 100 };
+		const invalidCases: Array<{ args: Record<string, unknown>; text: string }> = [
+			{ args: { ...baseArgs, tripId: 'abc' }, text: 'tripId must be a positive integer' },
+			{ args: { ...baseArgs, tripId: 1.5 }, text: 'tripId must be a positive integer' },
+			{ args: { ...baseArgs, tripId: 0 }, text: 'tripId must be a positive integer' },
+			{ args: { category: 'food', amount: 100 }, text: 'tripId must be a positive integer' },
+			{ args: { ...baseArgs, category: 'souvenirs' }, text: 'category must be one of' },
+			{ args: { ...baseArgs, category: 123 }, text: 'category must be one of' },
+			{ args: { tripId: failureTrip.id, amount: 100 }, text: 'category must be one of' },
+			{ args: { ...baseArgs, amount: 0 }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: -100 }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: 99.99 }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: '15000' }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: true }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: null }, text: 'amount must be' },
+			{ args: { ...baseArgs, amount: Number.MAX_SAFE_INTEGER + 1 }, text: 'amount must be' },
+			{ args: { tripId: failureTrip.id, category: 'food' }, text: 'amount must be' },
+			{ args: { ...baseArgs, currency: 'US' }, text: 'currency must be a 3-letter ISO currency code' },
+			{ args: { ...baseArgs, currency: 'euros' }, text: 'currency must be a 3-letter ISO currency code' },
+			{ args: { ...baseArgs, currency: 123 }, text: 'currency must be a 3-letter ISO currency code' },
+			{ args: { ...baseArgs, currency: true }, text: 'currency must be a 3-letter ISO currency code' }
+		];
+		for (const { args, text } of invalidCases) {
+			const before = listBudgetCategoriesForTrip(failureTrip.id);
+			const res: any = await client.callTool({ name: 'roamarr_budget_set', arguments: args });
+			expect(res.isError).toBeTruthy();
+			expect(String(res.content?.[0]?.text ?? '')).toContain(text);
+			expect(listBudgetCategoriesForTrip(failureTrip.id)).toEqual(before);
+		}
+
+		const otherId = makeUser(ctx.kit).id;
+		const { client: otherClient } = await connect(otherId, ['budgets:write']);
+		const authTrip = makeTrip(ctx.kit, userId, { name: 'BudgetsAuth' });
+		const authRes: any = await otherClient.callTool({
+			name: 'roamarr_budget_set',
+			arguments: { tripId: authTrip.id, category: 'food', amount: 100 }
+		});
+		expect(authRes.isError).toBeTruthy();
+		expect(listBudgetCategoriesForTrip(authTrip.id)).toHaveLength(0);
+
+		const { client: readOnlyClient } = await connect(userId, ['budgets:read']);
+		const readOnlyTrip = makeTrip(ctx.kit, userId, { name: 'BudgetsScope' });
+		const scopeRes: any = await readOnlyClient.callTool({
+			name: 'roamarr_budget_set',
+			arguments: { tripId: readOnlyTrip.id, category: 'food', amount: 100 }
+		});
+		expect(scopeRes.isError).toBeTruthy();
+		expect(listBudgetCategoriesForTrip(readOnlyTrip.id)).toHaveLength(0);
+	});
+
 	test('places_mark records ai source and ISO-3166-2 state codes', async () => {
 		const { client } = await connect(userId, ['places:write', 'places:read']);
 		const countryRes: any = await client.callTool({

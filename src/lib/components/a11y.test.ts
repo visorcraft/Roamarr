@@ -7,6 +7,7 @@ import Icon from './Icon.svelte';
 import EmptyState from './EmptyState.svelte';
 import CopyButton from './CopyButton.svelte';
 import TextField from './TextField.svelte';
+import TextAreaField from './TextAreaField.svelte';
 import CityAutocomplete from './segments/CityAutocomplete.svelte';
 import Modal from './Modal.svelte';
 import GlobeModal from './GlobeModal.svelte';
@@ -105,5 +106,42 @@ describe('Dialog accessible names', () => {
 		const id = labelledBy(html);
 		expect(id).toBeTruthy();
 		expect(html).toMatch(new RegExp(`<h2[^>]*\\bid="${id}"[^>]*>Cairo</h2>`));
+	});
+});
+
+describe('Field hints', () => {
+	test('hint and error link both via aria-describedby', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', hint: 'Markdown supported', errors: { notes: 'Required' } }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="notes-hint notes-notes-error"');
+		expect(tag).toContain('aria-invalid="true"');
+		expect(html).toContain('<p class="field-help" id="notes-hint">Markdown supported</p>');
+		expect(html).toContain('id="notes-notes-error"');
+	});
+
+	test('hint only links the hint', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', hint: 'Markdown supported' }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="notes-hint"');
+		expect(tag).not.toContain('aria-invalid');
+	});
+
+	test('no hint and no error has no aria-describedby', () => {
+		const html = render(TextAreaField, { props: { name: 'notes', label: 'Notes' } }).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).not.toContain('aria-describedby');
+	});
+
+	test('hint has no axe violations', async () => {
+		const violations = await checkA11y(TextAreaField, {
+			name: 'notes',
+			label: 'Notes',
+			hint: 'Markdown supported'
+		});
+		expect(violations, formatViolations(violations)).toHaveLength(0);
 	});
 });

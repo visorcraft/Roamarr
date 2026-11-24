@@ -81,3 +81,204 @@ test('no-ops gracefully when there is no control or no id', async () => {
 	expect(doc.querySelector('.field-error')!.id).toBe('');
 	disconnect();
 });
+
+test('wires hints already present at install time', () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<label class="label" for="donorId">Donor trip</label>
+			<p class="field-help">This trip is deleted after its contents move.</p>
+			<select id="donorId"><option value="">Choose donor</option></select>
+		</div></body>`);
+	const doc = dom.window.document;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const select = doc.getElementById('donorId')!;
+	const hint = doc.querySelector('.field-help')!;
+	expect(hint.id).toBe('donorId-hint-1');
+	expect(select.getAttribute('aria-describedby')).toBe('donorId-hint-1');
+	expect(select.getAttribute('aria-invalid')).toBeNull();
+	disconnect();
+});
+
+test('keeps the hint described while an error is shown and after it clears', async () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<label class="label" for="donorId">Donor trip</label>
+			<p class="field-help">This trip is deleted after its contents move.</p>
+			<select id="donorId"><option value="">Choose donor</option></select>
+		</div></body>`);
+	const doc = dom.window.document;
+	const field = doc.querySelector('.field')!;
+	const select = doc.getElementById('donorId')!;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const error = doc.createElement('p');
+	error.className = 'field-error';
+	error.textContent = 'Required';
+	field.appendChild(error);
+	await tick();
+
+	expect(select.getAttribute('aria-invalid')).toBe('true');
+	expect(select.getAttribute('aria-describedby')).toBe('donorId-hint-1 donorId-error');
+
+	error.remove();
+	await tick();
+
+	expect(select.getAttribute('aria-invalid')).toBeNull();
+	expect(select.getAttribute('aria-describedby')).toBe('donorId-hint-1');
+	disconnect();
+});
+
+test('preserves describedby tokens the template authored', async () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<input id="expiresAt" aria-describedby="external-note" />
+			<p class="field-help">Leave empty for a key that never expires.</p>
+			<p class="field-error">Enter a valid date</p>
+		</div></body>`);
+	const doc = dom.window.document;
+	const input = doc.getElementById('expiresAt')!;
+	const disconnect = installFieldErrorA11y(doc);
+
+	expect(input.getAttribute('aria-describedby')).toBe('external-note expiresAt-hint-1 expiresAt-error');
+
+	doc.querySelector('.field-error')!.remove();
+	await tick();
+
+	expect(input.getAttribute('aria-describedby')).toBe('external-note expiresAt-hint-1');
+	disconnect();
+});
+
+test('reuses an id the hint already has', () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<input id="expiresAt" />
+			<p class="field-help" id="expiry-help">Leave empty for a key that never expires.</p>
+		</div></body>`);
+	const doc = dom.window.document;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const input = doc.getElementById('expiresAt')!;
+	const hint = doc.querySelector('.field-help')!;
+	expect(hint.id).toBe('expiry-help');
+	expect(input.getAttribute('aria-describedby')).toBe('expiry-help');
+	disconnect();
+});
+
+test('wires hints added after install and drops them on removal', async () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<input id="q" />
+		</div></body>`);
+	const doc = dom.window.document;
+	const field = doc.querySelector('.field')!;
+	const input = doc.getElementById('q')!;
+	const disconnect = installFieldErrorA11y(doc);
+
+	expect(input.getAttribute('aria-describedby')).toBeNull();
+
+	const hint = doc.createElement('p');
+	hint.className = 'field-help';
+	hint.textContent = 'Markdown supported';
+	field.appendChild(hint);
+	await tick();
+
+	expect(input.getAttribute('aria-describedby')).toBe('q-hint-1');
+	expect(hint.id).toBe('q-hint-1');
+
+	hint.remove();
+	await tick();
+
+	expect(input.getAttribute('aria-describedby')).toBeNull();
+	disconnect();
+});
+
+test('gives id-less errors unique ids and keeps the survivor described', async () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<input id="tags" />
+		</div></body>`);
+	const doc = dom.window.document;
+	const field = doc.querySelector('.field')!;
+	const input = doc.getElementById('tags')!;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const first = doc.createElement('p');
+	first.className = 'field-error';
+	first.textContent = 'Required';
+	field.appendChild(first);
+	await tick();
+
+	const second = doc.createElement('p');
+	second.className = 'field-error';
+	second.textContent = 'Too many';
+	field.appendChild(second);
+	await tick();
+
+	expect(first.id).toBe('tags-error');
+	expect(second.id).toBe('tags-error-2');
+	expect(first.id).not.toBe(second.id);
+	expect(doc.querySelectorAll('#tags-error').length).toBe(1);
+	expect(doc.querySelectorAll('#tags-error-2').length).toBe(1);
+	expect(input.getAttribute('aria-describedby')).toBe('tags-error tags-error-2');
+
+	first.remove();
+	await tick();
+
+	expect(input.getAttribute('aria-describedby')).toBe('tags-error-2');
+	expect(input.getAttribute('aria-invalid')).toBe('true');
+
+	second.remove();
+	await tick();
+
+	expect(input.getAttribute('aria-invalid')).toBeNull();
+	expect(input.getAttribute('aria-describedby')).toBeNull();
+	disconnect();
+});
+
+test('scopes hints to their nearest field', () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<label class="label" for="outer">Outer</label>
+			<input id="outer" />
+			<p class="field-help">Outer hint</p>
+			<div class="field">
+				<label class="label" for="inner">Inner</label>
+				<input id="inner" />
+				<p class="field-help">Inner hint</p>
+			</div>
+		</div>
+		<div class="settings-row">
+			<p class="field-help">Row hint</p>
+		</div></body>`);
+	const doc = dom.window.document;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const outer = doc.getElementById('outer')!;
+	const inner = doc.getElementById('inner')!;
+	const outerHint = doc.querySelector('.field > .field-help')!;
+	const innerHint = doc.querySelector('.field .field > .field-help')!;
+	const rowHint = doc.querySelector('.settings-row .field-help')!;
+	expect(outerHint.id).toBe('outer-hint-1');
+	expect(innerHint.id).toBe('inner-hint-1');
+	expect(outer.getAttribute('aria-describedby')).toBe('outer-hint-1');
+	expect(inner.getAttribute('aria-describedby')).toBe('inner-hint-1');
+	expect(rowHint.id).toBe('');
+	disconnect();
+});
+
+test('leaves controls without an id untouched', () => {
+	const dom = new JSDOM(`<!DOCTYPE html><body>
+		<div class="field">
+			<input />
+			<p class="field-help">Markdown supported</p>
+		</div></body>`);
+	const doc = dom.window.document;
+	const disconnect = installFieldErrorA11y(doc);
+
+	const input = doc.querySelector('.field input')!;
+	const hint = doc.querySelector('.field-help')!;
+	expect(input.getAttribute('aria-describedby')).toBeNull();
+	expect(hint.id).toBe('');
+	disconnect();
+});

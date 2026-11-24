@@ -35,7 +35,8 @@
 	);
 	const invalid = $derived(errorPairs.length > 0);
 	const controlClass = $derived(`textarea ${invalid ? 'input-error' : ''}`.trim());
-	const describedBy = $derived(errorPairs.map((p) => p.id).join(' '));
+	const hintId = $derived(hint ? `${id}-hint` : undefined);
+	const describedBy = $derived([hintId, ...errorPairs.map((p) => p.id)].filter(Boolean).join(' '));
 </script>
 
 <div class="field {wrapClass}">
@@ -49,10 +50,10 @@
 		{disabled}
 		class={controlClass}
 		aria-invalid={invalid ? 'true' : undefined}
-		aria-describedby={invalid ? describedBy : undefined}
+		aria-describedby={describedBy || undefined}
 		{...rest}
 	>{value as string | undefined}</textarea>
-	{#if hint}<p class="field-help">{hint}</p>{/if}
+	{#if hint}<p class="field-help" id={hintId}>{hint}</p>{/if}
 	{#each errorPairs as p (p.id)}
 		<p class="field-error" id={p.id}>{p.msg}</p>
 	{/each}

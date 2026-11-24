@@ -11,6 +11,20 @@
 
 	const firstName = $derived((data.user?.displayName ?? '').split(/\s+/)[0]);
 
+	const ACTIVITY_KIND_LABELS: Record<string, string> = {
+		comment: 'Comment',
+		journal: 'Journal entry'
+	};
+
+	function activityLabel(kind: string): string {
+		return ACTIVITY_KIND_LABELS[kind] ?? kind;
+	}
+
+	function activityTitle(a: { kind: string; title?: string | null }): string {
+		const title = (a.title ?? '').trim();
+		return title.length > 0 ? title : activityLabel(a.kind);
+	}
+
 	const stats = $derived([
 		{ label: 'Upcoming trips', value: data.stats.upcoming, href: '/trips', accent: 'text-[var(--theme-brand)]' },
 		{ label: 'Unread alerts', value: data.stats.unread, href: '/notifications', accent: 'text-[var(--theme-readable-warning)]' },
@@ -157,20 +171,22 @@
 	{#if data.activity.length}
 		<div class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
 			{#each data.activity as a (`${a.kind}-${a.id}`)}
-				<div class="card flex items-start justify-between gap-4 p-5">
+				<a href={`/trips/${a.tripId}`} class="card flex items-start justify-between gap-4 p-5">
 					<div class="min-w-0">
 						<div class="flex items-center gap-2">
-							<span class="row-title">{a.title ?? 'Comment'}</span>
-							<span class="badge badge-slate badge-compact">{a.kind}</span>
+							<span class="row-title">{activityTitle(a)}</span>
+							<span class="badge badge-slate badge-compact">{activityLabel(a.kind)}</span>
 						</div>
-						<p class="row-subtitle truncate">{a.tripName}</p>
+						<span class="row-subtitle truncate">{a.tripName}</span>
+						{#if a.body}
+							<p class="mt-1 line-clamp-2 text-sm text-[var(--theme-ink)]">{a.body}</p>
+						{/if}
 						{#if a.kind === 'comment'}
-							<p class="mt-1 text-sm text-[var(--theme-ink)]">{a.body ?? ''}</p>
 							<p class="mt-0.5 text-xs text-[var(--theme-muted)]">by {a.displayName ?? 'Unknown'}</p>
 						{/if}
 					</div>
 					<span class="row-meta">{formatDateTime(a.createdAt)}</span>
-				</div>
+				</a>
 			{/each}
 		</div>
 	{:else}

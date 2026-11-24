@@ -29,6 +29,10 @@ import {
 import { load } from './+page.server';
 import { travelDocuments } from '$lib/server/db/mongrelSchema';
 import { makeLocals } from '../../tests/eventHelpers';
+import { render } from 'svelte/server';
+import Dashboard from './+page.svelte';
+import * as tripMiscRepo from '$lib/server/repositories/tripMiscRepo';
+import { addComment } from '$lib/server/tripComments';
 
 test('dashboard includes upcoming trips shared with the user and labels them shared', () => {
 	// Pinned "today" so `future`/`past` stay future/past regardless of when
@@ -179,4 +183,127 @@ test('dashboard agenda is empty when nothing happens today', () => {
 	expect(data.agenda).toHaveLength(0);
 
 	vi.useRealTimers();
+});
+
+test('journal entries are hidden from read-only share recipients', () => {
+	const owner = makeUser(kit, { email: 'owner@x.c', passwordHash: 'x', displayName: 'Owner' });
+	const recipient = makeUser(kit, { email: 'recipient@x.c', passwordHash: 'x', displayName: 'Recipient' });
+	const t = makeTrip(kit, owner.id, { name: 'Shared Trip' });
+	makeShare(kit, { tripId: t.id, sharedWithUserId: recipient.id });
+
+	tripMiscRepo.createJournalEntry({ tripId: t.id, entryDate: '2026-11-20', title: 'Day 1', body: 'Private notes' });
+	addComment(owner.id, t.id, 'Hello');
+
+	const ownerData = load({ locals: makeLocals(owner) } as any) as any;
+	expect(ownerData.activity.map((a: any) => a.kind).sort()).toEqual(['comment', 'journal']);
+
+	const recipientData = load({ locals: makeLocals(recipient) } as any) as any;
+	expect(recipientData.activity.map((a: any) => a.kind)).toEqual(['comment']);
+	expect(recipientData.activity.some((a: any) => a.kind === 'journal')).toBe(false);
+});
+
+// --- SSR rendering of the Recent activity section ---
+
+function renderDashboard(activity: unknown[]): string {
+	return render(Dashboard, {
+		props: {
+			data: {
+				user: { displayName: 'Ada Lovelace' },
+				stats: { upcoming: 0, unread: 0, expiring: 0, watches: 0 },
+				agenda: [],
+				upcoming: [],
+				expiring: [],
+				paymentsDue: [],
+				activity
+			} as any
+		}
+	}).body;
+}
+
+test('journal item renders title, label, trip name, body, and trip link', () => {
+	const body = renderDashboard([
+		{
+			kind: 'journal',
+			id: 7,
+			tripId: 42,
+			tripName: 'Japan 2026',
+			title: 'Day 3 in Kyoto',
+			body: 'Rained all morning.',
+			createdAt: '2026-11-20T08:00:00.000Z'
+		}
+	]);
+	expect(body).toContain('>Day 3 in Kyoto</span>');
+	expect(body).toContain('>Journal entry</span>');
+	expect(body).toContain('>Japan 2026</span>');
+	expect(body).toContain('Rained all morning.');
+	expect(body).toContain('href="/trips/42"');
+	expect(body).not.toContain('>journal</span>');
+	expect(body).not.toContain('Comment');
+});
+
+test('journal item with empty title renders the kind label', () => {
+	const empty = renderDashboard([
+		{ kind: 'journal', id: 7, tripId: 42, tripName: 'Japan 2026', title: '', body: 'Rained.', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(empty).toContain('>Journal entry</span>');
+	expect(empty.match(/>Journal entry<\/span>/g)).toHaveLength(2);
+	expect(empty).not.toContain('Comment');
+
+	const whitespace = renderDashboard([
+		{ kind: 'journal', id: 8, tripId: 42, tripName: 'Japan 2026', title: '   ', body: 'Rained.', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(whitespace).toContain('>Journal entry</span>');
+	expect(whitespace.match(/>Journal entry<\/span>/g)).toHaveLength(2);
+	expect(whitespace).not.toContain('Comment');
+});
+
+test('journal item title is trimmed', () => {
+	const body = renderDashboard([
+		{ kind: 'journal', id: 7, tripId: 42, tripName: 'Japan 2026', title: '  Day 3  ', body: 'Rained.', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(body).toContain('>Day 3</span>');
+});
+
+test('journal item with no body renders no excerpt and no by line', () => {
+	const missing = renderDashboard([
+		{ kind: 'journal', id: 7, tripId: 42, tripName: 'Japan 2026', title: 'Day 3', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(missing).not.toContain('line-clamp-2');
+	expect(missing).not.toContain('by ');
+
+	const empty = renderDashboard([
+		{ kind: 'journal', id: 7, tripId: 42, tripName: 'Japan 2026', title: 'Day 3', body: '', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(empty).not.toContain('line-clamp-2');
+	expect(empty).not.toContain('by ');
+});
+
+test('comment item renders title, badge, body, author, and trip link', () => {
+	const body = renderDashboard([
+		{ kind: 'comment', id: 3, tripId: 9, tripName: 'Peru', body: 'Booked the flight', displayName: 'Ada', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(body).toContain('>Comment</span>');
+	expect(body).toContain('Booked the flight');
+	expect(body).toContain('by Ada');
+	expect(body).toContain('href="/trips/9"');
+});
+
+test('comment item without displayName renders by Unknown', () => {
+	const body = renderDashboard([
+		{ kind: 'comment', id: 3, tripId: 9, tripName: 'Peru', body: 'Booked the flight', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(body).toContain('by Unknown');
+});
+
+test('unrecognised kind renders the raw kind and never an empty row-title', () => {
+	const body = renderDashboard([
+		{ kind: 'note', id: 5, tripId: 11, tripName: 'Peru', createdAt: '2026-11-20T08:00:00.000Z' }
+	]);
+	expect(body).toContain('>note</span>');
+	expect(body).not.toContain('>"></span>');
+});
+
+test('empty activity renders the empty state', () => {
+	const body = renderDashboard([]);
+	expect(body).toContain('No recent activity.');
 });

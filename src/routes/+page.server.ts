@@ -191,15 +191,19 @@ export const load: PageServerLoad = ({ locals }) => {
 				body: c.body,
 				displayName: c.displayName
 			}));
-			const journal = tripMiscRepo.listJournalEntriesForTrip(tripId).map((j) => ({
-				kind: 'journal' as const,
-				id: j.id,
-				tripId,
-				tripName: tripNameMap.get(tripId) ?? '',
-				createdAt: j.createdAt,
-				title: j.title,
-				body: j.body
-			}));
+			// Journal entries are editor-only (see tripDetail.ts); read-only
+			// viewers must not see their private body/title on the dashboard.
+			const journal = editableIds.includes(tripId)
+				? tripMiscRepo.listJournalEntriesForTrip(tripId).map((j) => ({
+						kind: 'journal' as const,
+						id: j.id,
+						tripId,
+						tripName: tripNameMap.get(tripId) ?? '',
+						createdAt: j.createdAt,
+						title: j.title,
+						body: j.body
+					}))
+				: [];
 			activity.push(...comments, ...journal);
 		}
 		activity.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

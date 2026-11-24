@@ -314,5 +314,19 @@
 	"parking_total_cost_label": "Total cost",
 	"parking_total_cost_placeholder": "Enter total cost",
 	"parking_notes_label": "Notes",
-	"parking_notes_placeholder": "Optional notes"
+	"parking_notes_placeholder": "Optional notes",
+	"booking_section": "Booking info",
+	"booking_site_label": "Booking site",
+	"booking_site_placeholder": "Enter booking site",
+	"booking_reference_label": "Booking reference",
+	"booking_reference_placeholder": "Enter booking reference",
+	"booking_website_label": "Booking website",
+	"booking_website_placeholder": "Enter booking website",
+	"booking_phone_label": "Booking phone",
+	"booking_phone_placeholder": "Enter booking phone",
+	"booking_date_label": "Booking date",
+	"booking_rate_label": "Booking rate",
+	"booking_rate_placeholder": "Enter booking rate",
+	"booking_restrictions_label": "Restrictions",
+	"booking_restrictions_placeholder": "Enter restrictions"
 }

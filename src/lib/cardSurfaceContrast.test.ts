@@ -2,14 +2,17 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from 'vitest';
 import { THEMES } from './themes';
 
-// Card surfaces (the notifications page, TripCard, and the dashboard) paint text and status colours from theme
-// tokens, not fixed Tailwind palette classes. This test checks the source uses those tokens, and
+// Card surfaces (the notifications page, TripCard, the dashboard, the public share page, and the
+// trip edit page) paint text and status colours from theme tokens, not fixed Tailwind palette classes.
+// This test checks the source uses those tokens, and
 // that every theme block defines them readable on both --theme-surface and --theme-surface2.
 
 const css = readFileSync(new URL('../app.css', import.meta.url), 'utf8');
 const notifications = readFileSync(new URL('../routes/notifications/+page.svelte', import.meta.url), 'utf8');
 const tripCard = readFileSync(new URL('./components/TripCard.svelte', import.meta.url), 'utf8');
 const dashboard = readFileSync(new URL('../routes/+page.svelte', import.meta.url), 'utf8');
+const share = readFileSync(new URL('../routes/share/[token]/+page.svelte', import.meta.url), 'utf8');
+const tripEdit = readFileSync(new URL('../routes/trips/[id]/edit/+page.svelte', import.meta.url), 'utf8');
 
 type Rgb = [number, number, number];
 
@@ -40,7 +43,9 @@ test('no fixed palette classes on card surfaces', () => {
 	for (const [name, source] of [
 		['notifications', notifications],
 		['TripCard', tripCard],
-		['dashboard', dashboard]
+		['dashboard', dashboard],
+		['share', share],
+		['trip edit', tripEdit]
 	] as const) {
 		expect(source, `${name} must not use fixed palette classes`).not.toMatch(
 			/\b(?:text|bg)-(?:white|slate-\d{2,3}|indigo-\d{2,3})\b/
@@ -69,6 +74,18 @@ test('dashboard uses theme tokens', () => {
 	expect(dashboard).toContain('class="metric-label group-hover:text-[var(--theme-ink)]"');
 	expect(dashboard).toContain(`<p class="mt-1 text-sm text-[var(--theme-ink)]">{a.body ?? ''}</p>`);
 	expect(dashboard).toContain(`<p class="mt-0.5 text-xs text-[var(--theme-muted)]">by {a.displayName ?? 'Unknown'}</p>`);
+});
+
+test('public share page uses theme tokens', () => {
+	expect(share).toContain('class="text-xs font-medium tracking-wide text-brand uppercase"');
+	expect(share).toContain(`<Icon name="location" class="h-4 w-4 shrink-0 text-muted" />`);
+	expect(share).toContain('<span class="font-mono text-xs text-muted">');
+	expect(share).not.toMatch(/text-(?:slate|indigo)-\d/);
+});
+
+test('trip edit page themes its status hint', () => {
+	expect(tripEdit).toContain('<p class="mt-1 text-sm text-muted">Dates in your timezone show this trip as');
+	expect(tripEdit).not.toMatch(/text-slate-/);
 });
 
 test('theme tokens are readable on every theme surface', () => {

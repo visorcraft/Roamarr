@@ -108,7 +108,7 @@
 			</select>
 			{#if form?.errors?.status}<p class="field-error">{form.errors.status}</p>{/if}
 			{#if data.displayStatus && data.displayStatus !== data.trip.status}
-				<p class="mt-1 text-sm text-slate-400">Dates in your timezone show this trip as {statusLabel[data.displayStatus]}. The saved status stays {statusLabel[data.trip.status]} unless you change it here.</p>
+				<p class="mt-1 text-sm text-muted">Dates in your timezone show this trip as {statusLabel[data.displayStatus]}. The saved status stays {statusLabel[data.trip.status]} unless you change it here.</p>
 			{/if}
 		</div>
 		<TextAreaField name="notes" label="Notes" rows={4} placeholder="Anything worth remembering…" value={data.trip.notes ?? ''} disabled={submitting} class="sm:col-span-2" errors={form?.errors ?? {}} />

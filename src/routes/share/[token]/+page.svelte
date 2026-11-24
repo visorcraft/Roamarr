@@ -10,17 +10,17 @@
 </script>
 
 <div class="card w-full max-w-3xl p-7 sm:p-8">
-	<p class="text-xs font-medium tracking-wide text-indigo-300/80 uppercase">Shared via {data.instanceName}</p>
+	<p class="text-xs font-medium tracking-wide text-brand uppercase">Shared via {data.instanceName}</p>
 	<h1 class="page-title mt-2">{data.trip.name}</h1>
 	<p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
 		{#if destinationLabel}
 			<span class="flex items-center gap-1.5">
-				<Icon name="location" class="h-4 w-4 shrink-0 text-slate-500" />
+				<Icon name="location" class="h-4 w-4 shrink-0 text-muted" />
 				{destinationLabel}
 			</span>
 		{/if}
 		{#if data.trip.startDate || data.trip.endDate}
-			<span class="font-mono text-xs text-slate-500">{data.trip.startDate || '—'} → {data.trip.endDate || '—'}</span>
+			<span class="font-mono text-xs text-muted">{data.trip.startDate || '—'} → {data.trip.endDate || '—'}</span>
 		{/if}
 	</p>
 

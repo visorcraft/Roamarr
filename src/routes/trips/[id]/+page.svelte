@@ -24,7 +24,9 @@
 	import { effectiveTripStatus, todayInTimezone, tripStatusBadge } from '$lib/tripStatus';
 	import { visibilityBadgeClass } from '$lib/visibility';
 	import { coalesceTrailing, subscribeLiveEvents } from '$lib/liveEvents';
+	import { browser } from '$app/env';
 	import { onMount, tick } from 'svelte';
+	import { SIDE_PANEL_MODAL_MEDIA, shouldCloseSidePanel } from './sidePanelA11y';
 	import type { PageData, SubmitFunction } from './$types';
 	import TripMap from '$lib/components/TripMap.svelte';
 	import GlobeModal from '$lib/components/GlobeModal.svelte';
@@ -347,14 +349,14 @@
 
 	function handleSegmentCardClick(segment: SegmentRow, event: MouseEvent) {
 		if (isInteractiveSegmentTarget(event)) return;
-		if (segment.id != null) focusedSegmentId = segment.id;
+		selectSegment(segment, event.currentTarget);
 	}
 
 	function handleSegmentKeydown(segment: SegmentRow, event: KeyboardEvent) {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
 		if (isInteractiveSegmentTarget(event)) return;
 		event.preventDefault();
-		if (segment.id != null) focusedSegmentId = segment.id;
+		selectSegment(segment, event.currentTarget);
 	}
 
 	function choosePoster() {
@@ -524,6 +526,56 @@
 			? (filteredSegmentList.find((s) => s.id === focusedSegmentId) ?? null)
 			: null
 	);
+
+	// On narrow viewports the selected-segment panel is a full-screen overlay
+	// (trip-detail-modern.css), so it has to behave like a modal dialog.
+	let sidePanelEl = $state<HTMLElement | null>(null);
+	let sidePanelCloseEl = $state<HTMLButtonElement | null>(null);
+	let sidePanelModal = $state(false);
+	const sidePanelOpen = $derived(selectedSegment != null);
+	const sidePanelTitleId = $props.id();
+	// Plain variable on purpose: only touched from event handlers and effects.
+	let sidePanelReturnFocus: HTMLElement | null = null;
+
+	function selectSegment(segment: SegmentRow, trigger: EventTarget | null) {
+		if (segment.id == null) return;
+		sidePanelReturnFocus = trigger instanceof HTMLElement ? trigger : null;
+		focusedSegmentId = segment.id;
+	}
+
+	function closeSidePanel() {
+		if (focusedSegmentId == null) return;
+		const returnTo = sidePanelReturnFocus;
+		focusedSegmentId = null;
+		// The panel's controls unmount with the selection, so wait for the DOM
+		// update before putting focus back on the segment card.
+		if (!browser || !returnTo?.isConnected) return;
+		void tick().then(() => {
+			if (focusedSegmentId == null) returnTo.focus();
+		});
+	}
+
+	function handleSidePanelKeydown(event: KeyboardEvent) {
+		const state = { open: sidePanelOpen, modal: sidePanelModal, panel: sidePanelEl };
+		if (!shouldCloseSidePanel(event, state)) return;
+		event.preventDefault();
+		closeSidePanel();
+	}
+
+	$effect(() => {
+		if (!browser || typeof window.matchMedia !== 'function') return;
+		const query = window.matchMedia(SIDE_PANEL_MODAL_MEDIA);
+		const sync = () => (sidePanelModal = query.matches);
+		sync();
+		query.addEventListener('change', sync);
+		return () => query.removeEventListener('change', sync);
+	});
+
+	// The full-screen overlay hides the list, so focus has to move into it.
+	$effect(() => {
+		if (!browser || !sidePanelModal || !sidePanelOpen) return;
+		sidePanelCloseEl?.focus();
+	});
 	const selectedAttendees = $derived(
 		selectedSegment?.id != null ? (data.attendeesBySegment?.get(selectedSegment.id) ?? []) : []
 	);
@@ -814,6 +866,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={handleSidePanelKeydown} />
+
 <div class="trip-detail trip-modern">
 	<section class="trip-hero {data.nextCity && data.tileConfig ? 'trip-hero--map' : ''}">
 		<div class="trip-hero-backdrop"></div>
@@ -987,11 +1041,11 @@
 					{:else}<div class="trip-modern-empty">No itinerary segments match your filters.</div>{/if}
 				</main>
 
-				<aside class="trip-modern-side-panel" class:trip-modern-side-panel-open={selectedSegment} aria-label="Selected segment details" role={selectedSegment ? 'dialog' : undefined} aria-modal={selectedSegment ? 'true' : undefined}>
+				<aside bind:this={sidePanelEl} class="trip-modern-side-panel" class:trip-modern-side-panel-open={selectedSegment} aria-labelledby={selectedSegment ? sidePanelTitleId : undefined} aria-label={selectedSegment ? undefined : 'Selected segment details'} role={selectedSegment ? 'dialog' : undefined} aria-modal={selectedSegment && sidePanelModal ? 'true' : undefined}>
 					{#if selectedSegment}
-						<header class="trip-modern-selected-head"><h2 class="trip-modern-selected-title">Selected segment</h2><button type="button" class="icon-button icon-button-sm" aria-label="Close selected segment" onclick={() => (focusedSegmentId = null)}><Icon name="close" class="h-4 w-4" /></button></header>
+						<header class="trip-modern-selected-head"><h2 class="trip-modern-selected-title" id={sidePanelTitleId}>Selected segment{#if selectedSegment.title}<span class="sr-only">: {selectedSegment.title}</span>{/if}</h2><button type="button" class="icon-button icon-button-sm" aria-label="Close selected segment" bind:this={sidePanelCloseEl} onclick={closeSidePanel}><Icon name="close" class="h-4 w-4" /></button></header>
 						<div class="trip-modern-selected-summary {segmentTypeClass(selectedSegment.type)}"><span class="trip-modern-selected-node" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{@html SEG[selectedSegment.type as keyof typeof SEG]?.icon ?? ''}</svg></span><div class="min-w-0 flex-1"><h3 class="trip-modern-selected-name">{selectedSegment.title}</h3><div class="mt-2 flex flex-wrap gap-1.5">{#if selectedSegment.status}<span class="badge badge-compact {segmentStatusClass(selectedSegment.status)}">{segmentStatusLabel(selectedSegment.status)}</span>{/if}{#if selectedSegment.paymentStatus}<span class="badge badge-compact badge-green">{paymentStatusLabel(selectedSegment.paymentStatus)}</span>{/if}</div>{#if selectedPlaceLines.place}<p class="trip-modern-selected-place">{selectedPlaceLines.place}</p>{/if}{#if selectedPlaceLines.address}<p class="trip-modern-selected-address">{selectedPlaceLines.address}</p>{/if}</div></div>
-						<nav class="trip-modern-detail-tabs" aria-label="Selected segment sections">{#each SEGMENT_PANEL_TABS as tab (tab.id)}<button type="button" class="trip-modern-detail-tab {segmentPanelTab === tab.id ? 'trip-modern-detail-tab-active' : ''}" onclick={() => (segmentPanelTab = tab.id)}>{tab.label}{#if tab.id === 'travelers' && (selectedAttendees.length || selectedFreeTextTravelers.length)} ({selectedAttendees.length || selectedFreeTextTravelers.length}){/if}{#if tab.id === 'files' && selectedSegmentDocuments.length} ({selectedSegmentDocuments.length}){/if}{#if tab.id === 'reminders' && selectedSegmentReminders.length} ({selectedSegmentReminders.length}){/if}</button>{/each}</nav>
+						<nav class="trip-modern-detail-tabs" aria-label="Selected segment sections">{#each SEGMENT_PANEL_TABS as tab (tab.id)}<button type="button" class="trip-modern-detail-tab {segmentPanelTab === tab.id ? 'trip-modern-detail-tab-active' : ''}" aria-current={segmentPanelTab === tab.id ? 'true' : undefined} onclick={() => (segmentPanelTab = tab.id)}>{tab.label}{#if tab.id === 'travelers' && (selectedAttendees.length || selectedFreeTextTravelers.length)} ({selectedAttendees.length || selectedFreeTextTravelers.length}){/if}{#if tab.id === 'files' && selectedSegmentDocuments.length} ({selectedSegmentDocuments.length}){/if}{#if tab.id === 'reminders' && selectedSegmentReminders.length} ({selectedSegmentReminders.length}){/if}</button>{/each}</nav>
 
 						{#if segmentPanelTab === 'details'}<div class="trip-modern-detail-list">{#each selectedDetailRows as row (row.label)}<div class="trip-modern-detail-row"><Icon name={row.icon} class="trip-modern-detail-icon h-4 w-4" /><span class="trip-modern-detail-label">{row.label}</span><span class="trip-modern-detail-value">{row.value}</span></div>{/each}</div>{:else if segmentPanelTab === 'travelers'}<div class="trip-modern-detail-list">{#if selectedAttendees.length}{#each selectedAttendees as a (a.id)}<div class="trip-modern-list-row"><span>{a.name}</span><span class="badge badge-compact {a.status === 'going' ? 'badge-green' : a.status === 'maybe' ? 'badge-amber' : 'badge-slate'} capitalize">{a.status.replace('_', ' ')}</span></div>{/each}{:else if selectedFreeTextTravelers.length}{#each selectedFreeTextTravelers as name (name)}<div class="trip-modern-list-row"><span>{name}</span><span class="badge badge-compact badge-slate">listed</span></div>{/each}<p class="trip-modern-panel-muted text-sm mt-2">From booking details (not linked as trip people).</p>{:else}<p class="trip-modern-empty">No travelers assigned to this segment.</p>{/if}</div>{:else if segmentPanelTab === 'notes'}<div class="trip-modern-detail-list">{#if selectedNotesRows.length}{#each selectedNotesRows as row (row.label)}{@const stacked = notesRowStacked(row)}<div class="trip-modern-list-row trip-modern-kv-row {stacked ? 'trip-modern-kv-row-stacked' : ''}"><span class="trip-modern-kv-label">{row.label}</span>{#if row.label === 'Notes'}<span class="trip-modern-kv-value"><MarkdownText text={row.value} /></span>{:else}<span class="trip-modern-kv-value">{row.value}</span>{/if}</div>{/each}{:else}<p class="trip-modern-empty">No extra notes for this segment.</p>{/if}</div>{:else if segmentPanelTab === 'files'}<div class="trip-modern-detail-list"><TripDocumentsTable tripId={trip.id} documents={selectedSegmentDocuments} canEdit={isEditor} pageSize={5} showScope={false} compact={true} emptyMessage="No files attached to this segment." />{#if isEditor && selectedSegment.id}<form method="POST" action="?/uploadTripDocument" enctype="multipart/form-data" class="trip-modern-reminder-card mt-3"><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="segment-doc-file">Upload PDF or image</label><input id="segment-doc-file" type="file" name="file" accept="image/jpeg,image/png,image/webp,application/pdf" class="input text-sm" required /><input name="label" class="input text-sm" placeholder="Label (optional)" /><button class="btn btn-primary btn-sm"><Icon name="upload" class="h-4 w-4" />Upload file</button></form>{/if}</div>{:else}<div class="trip-modern-detail-list">{#if reminderFeedback}<p class="notice notice-success">{reminderFeedback}</p>{/if}{#if selectedSegmentReminders.length}<div class="trip-modern-list">{#each selectedSegmentReminders as r (r.id)}<div class="trip-modern-list-row"><div><strong>{reminderKindLabel(r.kind)}</strong><p class="trip-modern-panel-muted text-sm">{formatDateTime(r.fireAt)}</p></div><span class="badge badge-compact {r.status === 'pending' ? 'badge-green' : r.status === 'sending' ? 'badge-amber' : 'badge-slate'} capitalize">{r.status}</span></div>{/each}</div>{:else}<p class="trip-modern-empty">No reminders for this segment yet.</p>{/if}{#if isEditor && selectedSegment.id}<form method="POST" action="?/segmentReminder" class="trip-modern-reminder-card" use:enhance={keepReminderTabAfterSubmit}><input type="hidden" name="segmentId" value={selectedSegment.id} /><label class="label" for="selected-reminder-offset">Remind me before this segment</label><select id="selected-reminder-offset" name="offsetMinutes" class="input text-sm">{#each REMINDER_OFFSETS.filter((o) => o.minutes <= 1440) as offset}<option value={offset.minutes}>{offset.label}</option>{/each}</select><button class="btn btn-primary btn-sm"><Icon name="notification" class="h-4 w-4" />Save reminder</button></form>{/if}</div>{/if}
 

@@ -112,6 +112,16 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 	return { ok: false, error: messages.join('; ') };
 }
 
+// Validated MCP reminder offset. Callers handle absent (null/undefined)
+// themselves. Returns the integer, or null when invalid.
+function parseReminderOffsetMinutes(raw: unknown): number | null {
+	if (raw == null) return null;
+	if (typeof raw === 'string' && raw.trim() === '') return null;
+	const n = Number(raw);
+	if (!Number.isInteger(n) || n < -10080 || n > 10080) return null;
+	return n;
+}
+
 type ShareArgsResult =
 	| { ok: true; permission: SharePermission | undefined; showDetails: boolean | undefined }
 	| { ok: false; error: string };
@@ -1099,7 +1109,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						offsetMinutes: { type: 'number', description: 'Minutes before the trip start' },
+						offsetMinutes: { type: 'integer', minimum: -10080, maximum: 10080, description: 'Minutes before the trip start' },
 						title: { type: 'string' }, reminderType: { type: 'string', enum: ['trip', 'document'] },
 						name: { type: 'string' }, description: { type: 'string' }, fireAt: { type: 'string' }, refId: { type: 'number' }
 					},
@@ -2904,18 +2914,29 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (args.fireAt != null) {
 					const { createReminder } = await import('./repositories/remindersRepo');
 					const refType = args.reminderType === 'document' ? 'document' : 'trip';
-					const refId = args.refId == null ? 0 : Number(args.refId);
-					if (!String(args.name ?? '').trim()) return { content: [{ type: 'text' as const, text: 'name is required' }], isError: true };
+					if (typeof args.name !== 'string' || !args.name.trim()) return { content: [{ type: 'text' as const, text: 'name is required' }], isError: true };
+					if (args.name.length > 200) return { content: [{ type: 'text' as const, text: 'name must be a string up to 200 chars' }], isError: true };
+					if (args.description != null && (typeof args.description !== 'string' || args.description.length > 1000)) return { content: [{ type: 'text' as const, text: 'description must be a string up to 1000 chars' }], isError: true };
 					if (!Number.isFinite(Date.parse(String(args.fireAt)))) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
-					if (refType === 'trip' && refId) requireViewableTrip(userId, refId);
-					if (refType === 'document' && refId) { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
-					const reminder = createReminder({ userId, kind: 'custom', refType, refId, fireAt: new Date(String(args.fireAt)).toISOString(), name: String(args.name).trim(), description: String(args.description ?? '').trim() || null });
+					if (args.refId == null || !Number.isSafeInteger(Number(args.refId)) || Number(args.refId) <= 0) return { content: [{ type: 'text' as const, text: 'refId must be a positive integer' }], isError: true };
+					const refId = Number(args.refId);
+					if (refType === 'trip') requireViewableTrip(userId, refId);
+					if (refType === 'document') { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
+					const reminder = createReminder({ userId, kind: 'custom', refType, refId, fireAt: new Date(String(args.fireAt)).toISOString(), name: args.name.trim(), description: String(args.description ?? '').trim() || null });
 					logAudit(userId, 'mcp_reminder_add', 'reminder', reminder.id, {});
 					return textResult({ id: reminder.id });
 				}
 				const { upsertCustomReminder } = await import('./reminders');
+				if (args.tripId == null || !Number.isSafeInteger(Number(args.tripId)) || Number(args.tripId) <= 0) return { content: [{ type: 'text' as const, text: 'tripId must be a positive integer' }], isError: true };
 				const tripId = Number(args.tripId);
-				const offset = Number(args.offsetMinutes ?? 60);
+				let offset: number;
+				if (args.offsetMinutes == null) {
+					offset = 60;
+				} else {
+					const parsedOffset = parseReminderOffsetMinutes(args.offsetMinutes);
+					if (parsedOffset === null) return { content: [{ type: 'text' as const, text: 'offsetMinutes must be an integer between -10080 and 10080' }], isError: true };
+					offset = parsedOffset;
+				}
 				// Editors of shared trips can attach their own custom
 				// trip-start reminders; the reminder is scoped to userId.
 				const t = requireEditableTrip(userId, tripId);
@@ -3214,10 +3235,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					return textResult({ ok: true, reminderId: id });
 				}
 				const { safeUpdateCustomReminder } = await import('./reminders');
+				let offsetMinutes: number | undefined;
+				if (args.offsetMinutes != null) {
+					const parsedOffset = parseReminderOffsetMinutes(args.offsetMinutes);
+					if (parsedOffset === null) return { content: [{ type: 'text' as const, text: 'offsetMinutes must be an integer between -10080 and 10080' }], isError: true };
+					offsetMinutes = parsedOffset;
+				}
 				safeUpdateCustomReminder(userId, id, {
 					title: args.title as string | undefined,
 					customNote: args.customNote as string | undefined,
-					offsetMinutes: args.offsetMinutes != null ? Number(args.offsetMinutes) : undefined
+					offsetMinutes
 				});
 				logAudit(userId, 'mcp_reminder_update', 'reminder', id, {});
 				return textResult({ ok: true, reminderId: id });
@@ -3226,10 +3253,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
 				const confirmErr = requireConfirm(args, 'roamarr_reminder_delete');
 				if (confirmErr) return confirmErr;
+				const id = Number(args.reminderId);
+				if (!Number.isSafeInteger(id) || id <= 0) {
+					return { content: [{ type: 'text' as const, text: 'reminderId must be a positive integer' }], isError: true };
+				}
 				const { cancelReminder } = await import('./reminders');
-				cancelReminder(userId, Number(args.reminderId));
-				logAudit(userId, 'mcp_reminder_delete', 'reminder', Number(args.reminderId), {});
-				return textResult({ ok: true, reminderId: Number(args.reminderId) });
+				cancelReminder(userId, id);
+				logAudit(userId, 'mcp_reminder_delete', 'reminder', id, {});
+				return textResult({ ok: true, reminderId: id });
 			}
 			// ---- Round 2: wallet, sharing, calendar, contacts, profile ----
 			case 'roamarr_card_list': {

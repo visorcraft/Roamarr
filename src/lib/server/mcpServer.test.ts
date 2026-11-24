@@ -18,7 +18,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
@@ -505,6 +505,263 @@ describe('mcpServer', () => {
 		const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, fireAt: '2026-10-02T15:30:00Z' } });
 		expect(res.isError).toBeFalsy();
 		expect(getReminderById(reminder.id)!.fireAt).toBe(new Date('2026-10-02T15:30:00Z').toISOString());
+	});
+
+	test('reminder_add rejects malformed refId before any write', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'RefId trip' });
+		const { client } = await connect(userId, ['reminders:write']);
+		const countReminders = () =>
+			ctx.kit.selectFrom(reminders).where(kitEq(reminders.user_id, BigInt(userId))).executeSync().length;
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_add').length;
+		const cases: Array<Record<string, unknown>> = [
+			{},
+			{ refId: null },
+			{ refId: 'abc' },
+			{ refId: '' },
+			{ refId: 0 },
+			{ refId: -1 },
+			{ refId: 1.5 }
+		];
+		for (const extra of cases) {
+			const before = countReminders();
+			const auditBefore = countAudit();
+			const res: any = await client.callTool({
+				name: 'roamarr_reminder_add',
+				arguments: { reminderType: 'trip', name: 'x', description: 'y', fireAt: '2026-08-01T12:30:00Z', ...extra }
+			});
+			expect(res.isError, JSON.stringify(extra)).toBe(true);
+			expect(res.content[0].text).toContain('refId must be a positive integer');
+			expect(countReminders()).toBe(before);
+			expect(countAudit()).toBe(auditBefore);
+		}
+	});
+
+	test('reminder_add authorizes trip and document references', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bPrivateTrip = tripsRepo.createTrip(bId, { name: 'B private trip' });
+		const bDoc = makeTravelDocument(ctx.kit, bId, { type: 'passport' });
+		const sharedTrip = tripsRepo.createTrip(bId, { name: 'Shared trip' });
+		tripsRepo.createShare({ tripId: sharedTrip.id, sharedWithUserId: userId, permission: 'read' });
+		const aDoc = makeTravelDocument(ctx.kit, userId, { type: 'passport' });
+		const { client } = await connect(userId, ['reminders:write']);
+		const countReminders = () =>
+			ctx.kit.selectFrom(reminders).where(kitEq(reminders.user_id, BigInt(userId))).executeSync().length;
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_add').length;
+		const before = countReminders();
+		const auditBefore = countAudit();
+
+		const foreignTrip: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { reminderType: 'trip', name: 'x', description: 'y', fireAt: '2026-08-01T12:30:00Z', refId: bPrivateTrip.id } });
+		expect(foreignTrip.isError).toBe(true);
+		expect(countReminders()).toBe(before);
+		expect(countAudit()).toBe(auditBefore);
+
+		const foreignDoc: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { reminderType: 'document', name: 'x', description: 'y', fireAt: '2026-08-01T12:30:00Z', refId: bDoc.id } });
+		expect(foreignDoc.isError).toBe(true);
+		expect(countReminders()).toBe(before);
+		expect(countAudit()).toBe(auditBefore);
+
+		const shared: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { reminderType: 'trip', name: 'Shared', description: 'y', fireAt: '2026-08-01T12:30:00Z', refId: sharedTrip.id } });
+		expect(shared.isError).toBeFalsy();
+		const sharedId = JSON.parse(shared.content[0].text).id;
+		const sharedRow = getReminderById(sharedId)!;
+		expect(sharedRow.kind).toBe('custom');
+		expect(sharedRow.refType).toBe('trip');
+		expect(sharedRow.refId).toBe(sharedTrip.id);
+		expect(sharedRow.userId).toBe(userId);
+
+		const ownDoc: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { reminderType: 'document', name: 'Doc', description: 'y', fireAt: '2026-08-01T12:30:00Z', refId: aDoc.id } });
+		expect(ownDoc.isError).toBeFalsy();
+		const ownDocId = JSON.parse(ownDoc.content[0].text).id;
+		expect(getReminderById(ownDocId)!.refType).toBe('document');
+	});
+
+	test('reminder_add rejects malformed name/description', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Name trip' });
+		const { client } = await connect(userId, ['reminders:write']);
+		const countReminders = () =>
+			ctx.kit.selectFrom(reminders).where(kitEq(reminders.user_id, BigInt(userId))).executeSync().length;
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_add').length;
+		const base: Record<string, unknown> = { reminderType: 'trip', fireAt: '2026-08-01T12:30:00Z', refId: trip.id };
+		const before = countReminders();
+		const auditBefore = countAudit();
+
+		const missing: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, description: 'y' } });
+		expect(missing.isError).toBe(true);
+		expect(missing.content[0].text).toContain('name is required');
+
+		const blank: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, name: '   ' } });
+		expect(blank.isError).toBe(true);
+		expect(blank.content[0].text).toContain('name is required');
+
+		const numeric: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, name: 123 } });
+		expect(numeric.isError).toBe(true);
+		expect(numeric.content[0].text).toContain('name is required');
+
+		const longName: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, name: 'x'.repeat(201) } });
+		expect(longName.isError).toBe(true);
+		expect(longName.content[0].text).toContain('name must be a string up to 200 chars');
+
+		const numericDesc: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, name: 'ok', description: 123 } });
+		expect(numericDesc.isError).toBe(true);
+		expect(numericDesc.content[0].text).toContain('description must be a string up to 1000 chars');
+
+		const longDesc: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { ...base, name: 'ok', description: 'y'.repeat(1001) } });
+		expect(longDesc.isError).toBe(true);
+		expect(longDesc.content[0].text).toContain('description must be a string up to 1000 chars');
+
+		expect(countReminders()).toBe(before);
+		expect(countAudit()).toBe(auditBefore);
+	});
+
+	test('reminder_add rejects malformed tripId (implicit branch)', async () => {
+		const { client } = await connect(userId, ['reminders:write']);
+		const countReminders = () =>
+			ctx.kit.selectFrom(reminders).where(kitEq(reminders.user_id, BigInt(userId))).executeSync().length;
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_add').length;
+		const cases: Array<Record<string, unknown>> = [
+			{},
+			{ tripId: null },
+			{ tripId: 'abc' },
+			{ tripId: 0 },
+			{ tripId: -1 },
+			{ tripId: 1.5 }
+		];
+		for (const extra of cases) {
+			const before = countReminders();
+			const auditBefore = countAudit();
+			const res: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { offsetMinutes: 60, ...extra } });
+			expect(res.isError, JSON.stringify(extra)).toBe(true);
+			expect(res.content[0].text).toContain('tripId must be a positive integer');
+			expect(countReminders()).toBe(before);
+			expect(countAudit()).toBe(auditBefore);
+		}
+	});
+
+	test('reminder_add validates offsetMinutes (implicit branch)', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Offset trip', startDate: '2026-09-01' });
+		const { client } = await connect(userId, ['reminders:write']);
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_add').length;
+
+		for (const bad of ['abc', '', '   ', 1.5, 10081, -10081]) {
+			const auditBefore = countAudit();
+			const res: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: { tripId: trip.id, offsetMinutes: bad } });
+			expect(res.isError, JSON.stringify(bad)).toBe(true);
+			expect(res.content[0].text).toContain('offsetMinutes must be an integer between -10080 and 10080');
+			expect(getReminderBySource('custom', 'trip', trip.id)).toBeNull();
+			expect(countAudit()).toBe(auditBefore);
+		}
+
+		const valid: Array<[Record<string, unknown>, string]> = [
+			[{ tripId: trip.id }, '2026-09-01T08:00:00.000Z'],
+			[{ tripId: trip.id, offsetMinutes: null }, '2026-09-01T08:00:00.000Z'],
+			[{ tripId: trip.id, offsetMinutes: 10080 }, '2026-08-25T09:00:00.000Z'],
+			[{ tripId: trip.id, offsetMinutes: -10080 }, '2026-09-08T09:00:00.000Z'],
+			[{ tripId: trip.id, offsetMinutes: '90' }, '2026-09-01T07:30:00.000Z']
+		];
+		for (const [args, expected] of valid) {
+			const res: any = await client.callTool({ name: 'roamarr_reminder_add', arguments: args });
+			expect(res.isError, JSON.stringify(args)).toBeFalsy();
+			const row = getReminderBySource('custom', 'trip', trip.id)!;
+			expect(DateTime.fromISO(row.fireAt, { zone: 'utc' }).toUTC().toISO()).toBe(expected);
+		}
+	});
+
+	test('reminder_update rejects blank offsetMinutes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Update trip', startDate: '2026-09-01' });
+		upsertCustomReminder(userId, 'trip', trip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', trip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_update').length;
+
+		const auditBefore = countAudit();
+		const blank: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, offsetMinutes: '' } });
+		expect(blank.isError).toBe(true);
+		expect(blank.content[0].text).toContain('offsetMinutes must be an integer between -10080 and 10080');
+		expect(getReminderById(reminder.id)!.fireAt).toBe(reminder.fireAt);
+		expect(countAudit()).toBe(auditBefore);
+
+		const ok: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, offsetMinutes: 120 } });
+		expect(ok.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.fireAt).toBe('2026-09-01T07:00:00.000Z');
+	});
+
+	test('reminder_delete validates id and authorizes ownership', async () => {
+		const bId = makeUser(ctx.kit).id;
+		const bTrip = tripsRepo.createTrip(bId, { name: 'B trip' });
+		upsertCustomReminder(bId, 'trip', bTrip.id, '2026-09-01T09:00:00Z', 60);
+		const bReminder = getReminderBySource('custom', 'trip', bTrip.id)!;
+		const aTrip = tripsRepo.createTrip(userId, { name: 'A trip' });
+		upsertCustomReminder(userId, 'trip', aTrip.id, '2026-09-01T09:00:00Z', 60);
+		const aReminder = getReminderBySource('custom', 'trip', aTrip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+		const countAudit = () =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(userId)))
+				.executeSync()
+				.filter((r: any) => r.action === 'mcp_reminder_delete').length;
+
+		const cases: Array<Record<string, unknown>> = [
+			{},
+			{ reminderId: null },
+			{ reminderId: 'abc' },
+			{ reminderId: 0 },
+			{ reminderId: -1 },
+			{ reminderId: 1.5 }
+		];
+		for (const extra of cases) {
+			const auditBefore = countAudit();
+			const res: any = await client.callTool({ name: 'roamarr_reminder_delete', arguments: { confirm: true, ...extra } });
+			expect(res.isError, JSON.stringify(extra)).toBe(true);
+			expect(res.content[0].text).toContain('reminderId must be a positive integer');
+			expect(getReminderById(aReminder.id)).not.toBeNull();
+			expect(countAudit()).toBe(auditBefore);
+		}
+
+		const auditBeforeNoConfirm = countAudit();
+		const noConfirm: any = await client.callTool({ name: 'roamarr_reminder_delete', arguments: { reminderId: aReminder.id } });
+		expect(noConfirm.isError).toBe(true);
+		expect(getReminderById(aReminder.id)).not.toBeNull();
+		expect(countAudit()).toBe(auditBeforeNoConfirm);
+
+		const foreign: any = await client.callTool({ name: 'roamarr_reminder_delete', arguments: { reminderId: bReminder.id, confirm: true } });
+		expect(foreign.isError).toBe(true);
+		expect(getReminderById(bReminder.id)).not.toBeNull();
+		expect(countAudit()).toBe(auditBeforeNoConfirm);
+
+		const own: any = await client.callTool({ name: 'roamarr_reminder_delete', arguments: { reminderId: aReminder.id, confirm: true } });
+		expect(own.isError).toBeFalsy();
+		expect(getReminderById(aReminder.id)).toBeNull();
 	});
 
 	test('trip_list and trip_get derive status from dates and leave the saved status in place', async () => {

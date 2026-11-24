@@ -20,18 +20,29 @@ import {
 
 let testRoot: string;
 let originalDatabasePath: string | undefined;
+let originalAttachmentsPath: string | undefined;
 
 beforeEach(() => {
 	testRoot = join(tmpdir(), `roamarr-restore-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(testRoot, { recursive: true });
 	originalDatabasePath = process.env.DATABASE_PATH;
+	originalAttachmentsPath = process.env.ATTACHMENTS_PATH;
 });
 
 afterEach(() => {
 	rmSync(testRoot, { recursive: true, force: true });
 	if (originalDatabasePath === undefined) delete process.env.DATABASE_PATH;
 	else process.env.DATABASE_PATH = originalDatabasePath;
+	if (originalAttachmentsPath === undefined) delete process.env.ATTACHMENTS_PATH;
+	else process.env.ATTACHMENTS_PATH = originalAttachmentsPath;
 });
+
+function makeDir(name: string, sentinel: string): string {
+	const dir = join(testRoot, name);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(join(dir, `${sentinel}.txt`), sentinel);
+	return dir;
+}
 
 function makeDbDir(name = 'roamarr-db'): string {
 	// Clone the per-process migrated template: creating a full-schema database
@@ -110,6 +121,75 @@ test('applyPendingRestore also replaces the attachments directory', () => {
 
 	expect(existsSync(join(currentAttachments, 'new.txt'))).toBe(true);
 	expect(existsSync(join(currentAttachments, 'old.txt'))).toBe(false);
+	expect(existsSync(`${currentDb}.old`)).toBe(true);
+	expect(existsSync(`${currentAttachments}.old`)).toBe(true);
+});
+
+
+test('applyPendingRestore refuses to start when the restored attachments directory is missing', () => {
+	const currentDb = makeDir('current-db', 'old');
+	const currentAttachments = makeDir('current-attachments', 'old');
+	process.env.ATTACHMENTS_PATH = currentAttachments;
+	const restoredDb = makeDir('restored-db', 'new');
+
+	writeRestoreMarker(restoredDb, join(testRoot, 'missing-attachments'), currentDb);
+
+	expect(() => applyPendingRestore(currentDb)).toThrow('Restored directory not found');
+	expect(existsSync(join(currentDb, 'old.txt'))).toBe(true);
+	expect(existsSync(join(currentDb, 'new.txt'))).toBe(false);
+	expect(existsSync(join(restoredDb, 'new.txt'))).toBe(true);
+	expect(existsSync(join(currentAttachments, 'old.txt'))).toBe(true);
+	expect(existsSync(`${currentDb}.old`)).toBe(false);
+	expect(readRestoreMarker(currentDb)).not.toBeNull();
+});
+
+test('applyPendingRestore refuses to start when a restored path is a regular file', () => {
+	const currentDb = makeDir('current-db', 'old');
+	const currentAttachments = makeDir('current-attachments', 'old');
+	process.env.ATTACHMENTS_PATH = currentAttachments;
+	const restoredDb = makeDir('restored-db', 'new');
+	const fileSource = join(testRoot, 'attachments-file');
+	writeFileSync(fileSource, 'not a directory');
+
+	writeRestoreMarker(restoredDb, fileSource, currentDb);
+
+	expect(() => applyPendingRestore(currentDb)).toThrow('Restored path is not a directory');
+	expect(existsSync(join(currentDb, 'old.txt'))).toBe(true);
+	expect(existsSync(join(currentDb, 'new.txt'))).toBe(false);
+	expect(existsSync(join(restoredDb, 'new.txt'))).toBe(true);
+	expect(existsSync(join(currentAttachments, 'old.txt'))).toBe(true);
+	expect(existsSync(`${currentDb}.old`)).toBe(false);
+	expect(readRestoreMarker(currentDb)).not.toBeNull();
+});
+
+test('applyPendingRestore refuses to start when the restored database directory is missing', () => {
+	const currentDb = makeDir('current-db', 'old');
+
+	writeRestoreMarker(join(testRoot, 'missing-db'), undefined, currentDb);
+
+	expect(() => applyPendingRestore(currentDb)).toThrow('Restored directory not found');
+	expect(existsSync(join(currentDb, 'old.txt'))).toBe(true);
+	expect(existsSync(`${currentDb}.old`)).toBe(false);
+	expect(readRestoreMarker(currentDb)).not.toBeNull();
+});
+
+test('applyPendingRestore rolls the database back when the attachments swap fails', () => {
+	const currentDb = makeDir('current-db', 'old');
+	const restoredDb = makeDir('restored-db', 'new');
+	const restoredAttachments = makeDir('restored-attachments', 'new');
+
+	const blocker = join(testRoot, 'blocker');
+	writeFileSync(blocker, 'not a directory');
+	process.env.ATTACHMENTS_PATH = join(testRoot, 'blocker', 'attachments');
+
+	writeRestoreMarker(restoredDb, restoredAttachments, currentDb);
+
+	expect(() => applyPendingRestore(currentDb)).toThrow();
+	expect(existsSync(join(currentDb, 'old.txt'))).toBe(true);
+	expect(existsSync(join(currentDb, 'new.txt'))).toBe(false);
+	expect(existsSync(join(restoredDb, 'new.txt'))).toBe(true);
+	expect(existsSync(`${currentDb}.old`)).toBe(false);
+	expect(readRestoreMarker(currentDb)).not.toBeNull();
 });
 
 test('findMongrelDbDirectory locates the database inside an extracted root', () => {

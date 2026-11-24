@@ -101,6 +101,28 @@ export function validateRestoredDirectory(dir: string): void {
 	}
 }
 
+/**
+ * Reverses a completed swapDirectory(target, source): restores the live
+ * directory's pre-swap contents and moves the restored contents back where the
+ * marker expects them. Never deletes <target>.old.
+ */
+function undoSwap(target: string, source: string): void {
+	const targetPath = resolve(target);
+	const sourcePath = resolve(source);
+	const oldPath = `${targetPath}.old`;
+	if (!existsSync(oldPath)) return;
+	if (existsSync(targetPath)) {
+		if (existsSync(sourcePath)) {
+			// Installed through the cross-device copy fallback; the source is intact.
+			rmSync(targetPath, { recursive: true, force: true });
+		} else {
+			// Installed by rename; move it back to where the marker expects it.
+			renameSync(targetPath, sourcePath);
+		}
+	}
+	renameSync(oldPath, targetPath);
+}
+
 function swapDirectory(target: string, source: string): void {
 	const targetPath = resolve(target);
 	const sourcePath = resolve(source);
@@ -135,6 +157,18 @@ export function applyPendingRestore(dbPath: string = getDatabasePath()): void {
 	const marker = readRestoreMarker(dbPath);
 	if (!marker) return;
 
+	// Preflight every restored path before any mutation so a bad marker never
+	// touches the live directories.
+	for (const p of [marker.databasePath, marker.attachmentsPath]) {
+		if (!p) continue;
+		if (!existsSync(p)) {
+			throw new Error(`Restored directory not found: ${resolve(p)}`);
+		}
+		if (!statSync(p).isDirectory()) {
+			throw new Error(`Restored path is not a directory: ${resolve(p)}`);
+		}
+	}
+
 	// Capture the wrapper directory (mkdtemp-created `.roamarr-restore-*` next
 	// to the live database) before swapDirectory consumes the inner subtree via
 	// rename. After the swaps, this wrapper is empty and must be removed.
@@ -155,7 +189,16 @@ export function applyPendingRestore(dbPath: string = getDatabasePath()): void {
 	swapDirectory(dbPath, marker.databasePath);
 
 	if (marker.attachmentsPath) {
-		swapDirectory(getAttachmentsPath(dbPath), marker.attachmentsPath);
+		try {
+			swapDirectory(getAttachmentsPath(dbPath), marker.attachmentsPath);
+		} catch (err) {
+			try {
+				undoSwap(dbPath, marker.databasePath);
+			} catch {
+				// Swallow undo failures; the original error is the one to rethrow.
+			}
+			throw err;
+		}
 	}
 
 	removeRestoreMarker(dbPath);

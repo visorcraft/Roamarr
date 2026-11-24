@@ -18,6 +18,7 @@ import {
 import { tripBudgetCategories, auditLogs, trips, users } from './db/mongrelSchema';
 import { eq, and, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip } from '../../../tests/helpers';
+import { subscribeUser, currentTripRev, type LiveEvent } from './eventBus';
 
 function getKit(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -160,9 +161,11 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 	const other = makeSyncedUser(kit, { email: 'bn@x.c', passwordHash: 'x', displayName: 'N' });
 	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
 
+	const revBeforeRejectedSet = currentTripRev(t.id);
 	expect(() => setTripBudget(other.id, t.id, 'food', 10000)).toThrowError(
 		expect.objectContaining({ status: 404 })
 	);
+	expect(currentTripRev(t.id)).toBe(revBeforeRejectedSet);
 
 	setTripBudget(owner.id, t.id, 'food', 10000);
 	const row = kit
@@ -171,9 +174,11 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 		.executeSync()[0];
 	expect(row!.currency).toBe('GBP');
 
+	const revBeforeRejectedDelete = currentTripRev(t.id);
 	expect(() => deleteTripBudget(other.id, t.id, 'food')).toThrowError(
 		expect.objectContaining({ status: 404 })
 	);
+	expect(currentTripRev(t.id)).toBe(revBeforeRejectedDelete);
 
 	deleteTripBudget(owner.id, t.id, 'food');
 	const audit = kit
@@ -182,4 +187,104 @@ test('setTripBudget snapshots the editing users default currency and deleteTripB
 		.executeSync();
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'set')).toBe(true);
 	expect(audit.some((a: Record<string, unknown>) => a.action === 'delete')).toBe(true);
+});
+
+test('setBudget and deleteBudget publish exactly one trip-changed event per real mutation', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'p1@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const seen: LiveEvent[] = [];
+	const unsub = subscribeUser(u.id, (e) => seen.push(e))!;
+	try {
+		let rev = currentTripRev(t.id);
+		setBudget(t.id, 'food', 10000);
+		expect(currentTripRev(t.id)).toBe(rev + 1);
+
+		rev = currentTripRev(t.id);
+		setBudget(t.id, 'food', 15000);
+		expect(currentTripRev(t.id)).toBe(rev + 1);
+
+		rev = currentTripRev(t.id);
+		const deleted = deleteBudget(t.id, 'food');
+		expect(deleted).toBe(true);
+		expect(currentTripRev(t.id)).toBe(rev + 1);
+
+		const tripEvents = seen.filter((e) => e.type === 'trip' && e.id === t.id);
+		expect(tripEvents).toHaveLength(3);
+		for (const e of tripEvents) {
+			expect(e).toMatchObject({ type: 'trip', id: t.id });
+		}
+	} finally {
+		unsub();
+	}
+});
+
+test('setTripBudget publishes once; deleteTripBudget skips publish and audit when no budget row exists', () => {
+	const kit = getKit();
+	const owner = makeSyncedUser(kit, { email: 'p2@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeSyncedTrip(kit, { ownerId: owner.id, name: 'T' });
+	const seen: LiveEvent[] = [];
+	const unsub = subscribeUser(owner.id, (e) => seen.push(e))!;
+	try {
+		let rev = currentTripRev(t.id);
+		setTripBudget(owner.id, t.id, 'food', 10000);
+		expect(currentTripRev(t.id)).toBe(rev + 1);
+
+		rev = currentTripRev(t.id);
+		deleteTripBudget(owner.id, t.id, 'transport');
+		expect(currentTripRev(t.id)).toBe(rev);
+		expect(seen.filter((e) => e.type === 'trip' && e.id === t.id)).toHaveLength(1);
+
+		const deleteAudits = () =>
+			kit
+				.selectFrom(auditLogs)
+				.where(
+					and(
+						eq(auditLogs.entity_type, 'trip_budget_category'),
+						eq(auditLogs.action, 'delete'),
+						eq(auditLogs.user_id, BigInt(owner.id))
+					)
+				)
+				.executeSync();
+		expect(deleteAudits()).toHaveLength(0);
+
+		rev = currentTripRev(t.id);
+		deleteTripBudget(owner.id, t.id, 'food');
+		expect(currentTripRev(t.id)).toBe(rev + 1);
+		expect(deleteAudits()).toHaveLength(1);
+	} finally {
+		unsub();
+	}
+});
+
+test('invalid budget input throws 400 without publishing or writing', () => {
+	const kit = getKit();
+	const u = makeSyncedUser(kit, { email: 'p3@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const seen: LiveEvent[] = [];
+	const unsub = subscribeUser(u.id, (e) => seen.push(e))!;
+	try {
+		const rev = currentTripRev(t.id);
+		expect(() => setBudget(t.id, 'not-a-category' as never, 1000)).toThrowError(
+			expect.objectContaining({ status: 400 })
+		);
+		expect(() => setBudget(t.id, 'food', 0)).toThrowError(
+			expect.objectContaining({ status: 400 })
+		);
+		expect(() => setBudget(t.id, 'food', 1000, 'Euro')).toThrowError(
+			expect.objectContaining({ status: 400 })
+		);
+		expect(() => deleteBudget(t.id, 'nope' as never)).toThrowError(
+			expect.objectContaining({ status: 400 })
+		);
+		expect(currentTripRev(t.id)).toBe(rev);
+		expect(seen).toHaveLength(0);
+		const rows = kit
+			.selectFrom(tripBudgetCategories)
+			.where(eq(tripBudgetCategories.trip_id, BigInt(t.id)))
+			.executeSync();
+		expect(rows).toHaveLength(0);
+	} finally {
+		unsub();
+	}
 });

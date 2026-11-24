@@ -5,6 +5,7 @@ import { withTripAction } from './actions';
 import { requireEditableTrip } from './ownership';
 import { Validator } from './validation';
 import { logAudit } from './audit';
+import { publishTripChanged } from './eventBus';
 
 export const BUDGET_CATEGORIES = ['lodging', 'transport', 'food', 'activities', 'other'] as const;
 type BudgetCategory = (typeof BUDGET_CATEGORIES)[number];
@@ -82,18 +83,20 @@ export function setBudget(tripId: number, category: BudgetCategory, amount: numb
 	const normalizedCurrency = assertCurrency(currency);
 
 	const existing = expensesRepo.getBudgetCategoryByTripAndCategory(tripId, category);
-	if (existing) {
-		return expensesRepo.updateBudgetCategory(existing.id, { amount })!;
-	}
-	return expensesRepo.createBudgetCategory({ tripId, category, amount, currency: normalizedCurrency });
+	const row = existing
+		? expensesRepo.updateBudgetCategory(existing.id, { amount })!
+		: expensesRepo.createBudgetCategory({ tripId, category, amount, currency: normalizedCurrency });
+	publishTripChanged(tripId);
+	return row;
 }
 
-export function deleteBudget(tripId: number, category: BudgetCategory) {
+export function deleteBudget(tripId: number, category: BudgetCategory): boolean {
 	assertCategory(category);
 	const existing = expensesRepo.getBudgetCategoryByTripAndCategory(tripId, category);
-	if (existing) {
-		expensesRepo.deleteBudgetCategory(existing.id);
-	}
+	if (!existing) return false;
+	if (!expensesRepo.deleteBudgetCategory(existing.id)) return false;
+	publishTripChanged(tripId);
+	return true;
 }
 
 export function listBudgetsWithSpent(
@@ -151,7 +154,8 @@ export function setTripBudget(
 
 export function deleteTripBudget(userId: number, tripId: number, category: BudgetCategory) {
 	requireEditableTrip(userId, tripId);
-	deleteBudget(tripId, category);
+	const deleted = deleteBudget(tripId, category);
+	if (!deleted) return;
 	logAudit(userId, 'delete', 'trip_budget_category', tripId, { tripId, category });
 }
 

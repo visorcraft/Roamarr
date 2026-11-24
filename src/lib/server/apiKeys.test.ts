@@ -111,6 +111,32 @@ describe('apiKeys', () => {
 		expect(verifyApiKey(token)).toBeNull();
 	});
 
+	test('verify fails closed when the stored expiry cannot be parsed', () => {
+		const { token } = newKey();
+		ctx.kit
+			.updateTable(apiKeys)
+			.set({ expires_at: 'not-a-date' })
+			.executeSync();
+		expect(verifyApiKey(token)).toBeNull();
+
+		ctx.kit.updateTable(apiKeys).set({ expires_at: '' }).executeSync();
+		expect(verifyApiKey(token)).not.toBeNull();
+
+		ctx.kit.updateTable(apiKeys).set({ expires_at: null }).executeSync();
+		expect(verifyApiKey(token)).not.toBeNull();
+	});
+
+	test('verify rewrites an unparseable last_used_at instead of keeping it', () => {
+		const { token } = newKey();
+		ctx.kit.updateTable(apiKeys).set({ last_used_at: 'garbage' }).executeSync();
+		expect(verifyApiKey(token)).not.toBeNull();
+
+		const lastUsedAt = listApiKeys(userId)[0].lastUsedAt;
+		expect(lastUsedAt).not.toBe('garbage');
+		expect(lastUsedAt).not.toBeNull();
+		expect(Number.isFinite(new Date(lastUsedAt as string).getTime())).toBe(true);
+	});
+
 	test('creation validates scopes against the registry and rejects admin scopes', () => {
 		expect(() => newKey([])).toThrow('At least one scope');
 		expect(() => newKey(['trips:read', 'bogus:read'] as never)).toThrow('not allowed');

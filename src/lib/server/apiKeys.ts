@@ -152,15 +152,22 @@ export function verifyApiKey(token: string): VerifiedApiKey | null {
 		.executeSync()[0];
 	if (!row) return null;
 	if (row.revoked_at) return null;
+	// Fail closed: an expiry that cannot be parsed must never read as "never expires".
 	const expiresAt = row.expires_at as string | null;
-	if (expiresAt && Date.now() > new Date(expiresAt).getTime()) return null;
+	if (expiresAt) {
+		const expiresMs = new Date(expiresAt).getTime();
+		if (!Number.isFinite(expiresMs) || Date.now() > expiresMs) return null;
+	}
 	// Mirror the OAuth invariant: a disabled (or deleted) user's credentials
 	// must stop authenticating immediately.
 	const user = getUserById(Number(row.user_id));
 	if (!user || user.disabled) return null;
 
 	const lastUsedAt = row.last_used_at as string | null;
-	if (!lastUsedAt || Date.now() - new Date(lastUsedAt).getTime() > LAST_USED_THROTTLE_MS) {
+	const lastUsedAgeMs = lastUsedAt ? Date.now() - new Date(lastUsedAt).getTime() : NaN;
+	// NULL, unparseable, or older than the throttle rewrites last_used_at; a future
+	// timestamp (clock skew) is left alone.
+	if (!Number.isFinite(lastUsedAgeMs) || lastUsedAgeMs > LAST_USED_THROTTLE_MS) {
 		kit
 			.updateTable(apiKeys)
 			.set({ last_used_at: nowIso() })

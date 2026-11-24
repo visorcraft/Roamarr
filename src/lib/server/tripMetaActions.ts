@@ -23,10 +23,15 @@ import { setFlash } from './flash';
 import { positiveIdFromForm, Validator } from './validation';
 import { withTripAction } from './actions';
 
+const DEFAULT_OFFSET_MINUTES = 60;
+
 function parseOffsetMinutes(formData: FormData): number {
-	const offset = Number(formData.get('offsetMinutes') ?? 60);
-	if (!Number.isFinite(offset) || offset < 0) throw error(400, 'Invalid offset');
-	return offset;
+	const raw = formData.get('offsetMinutes');
+	if (raw == null) return DEFAULT_OFFSET_MINUTES;
+	const text = String(raw).trim();
+	if (text === '') return DEFAULT_OFFSET_MINUTES;
+	if (!/^\d{1,9}$/.test(text)) throw error(400, 'Invalid offset');
+	return Number(text);
 }
 
 export async function duplicate(event: RequestEvent) {

@@ -103,17 +103,24 @@ marketing dashboard.
 Roamarr can:
 
 - Track trips, itinerary segments, dates, timezones, booking status, notes,
-  tags, favorites, archives, comments, printable itineraries, searchable visited
-  country/U.S. state lists, weather forecasts, and trip-page maps of the next
-  upcoming city.
+  day notes, dated trip journals, tags, favorites, archives, comments,
+  printable itineraries, real-time live updates (SSE) across open trip pages,
+  searchable visited country/U.S. state lists, weather forecasts, per-day route
+  optimization, and trip-page maps plus an interactive 3D globe.
 - Manage flights, hotels, trains, rental cars, rideshares, shuttles, boats,
-  food plans, events, parking, directions, points of interest, todos, and free
-  form notes.
-- Share trips with users, groups, public links, and calendar feeds with
-  read/edit/detail controls and token expiry.
-- Keep traveler context close to the itinerary: companions, documents, loyalty
-  programs, payment cards, insurance policies, entry requirements, medications,
-  emergency contacts, important items, home-preparation tasks, and mail holds.
+  food plans, events, meetups, parking, directions, points of interest, todos,
+  and free-form notes.
+- Build a reusable saved-places library with categories, links, map view, geo
+  imports, and one-click trip bridging, plus ordered photo galleries and
+  uploaded PDF/image documents scoped to trips or individual segments.
+- Search across trips, itineraries, and saved data with lexical search plus
+  optional admin-enabled local MiniLM semantic search.
+- Share trips with users, groups, public links, and per-trip or account-wide
+  calendar feeds with read/edit/detail controls and token expiry.
+- Keep traveler context close to the itinerary: companions, travel documents
+  (passports, visas, national IDs, licenses), loyalty programs, payment cards,
+  insurance policies, entry requirements, medications, emergency contacts,
+  important items, home-preparation tasks, and mail holds.
 - Coordinate family and group travel with attendee lists, polls, packing
   templates, kid gear, accessibility notes, dietary details, room preferences,
   and emergency itinerary sharing.
@@ -129,19 +136,24 @@ Roamarr can:
 - Send reminders and operational notifications in app, by SMTP, per-user SMTP
   overrides, or through signed webhooks.
 - Secure accounts with TOTP authenticator apps, WebAuthn passkeys, backup
-  codes, and active session review.
-- Connect external clients via OAuth (71 scopes, PKCE, refresh-token
-  rotation, and Dynamic Client Registration) and expose an MCP integration endpoint with 144 tools, 16
-  prompts, and 9 resource templates — covering trips, segments, file attachments, expenses, polls,
-  companions, wallet (cards/loyalty/insurance/documents), sharing, reminders,
-  templates, and profile preferences. Destructive operations require an explicit
-  `confirm: true`. Payment-card, policy, membership, and travel-document numbers
-  stay redacted. Administrators can optionally let users approve private trip
-  notes, confirmation numbers, and itinerary details per MCP client.
-- Run admin workflows for setup, users, registration, audit logs, scheduled
-  jobs, backups, restores, demo data, instance stats, health checks, database
-  maintenance (integrity check, compaction, flush, and doctor), and map
-  configuration (GeoNames city import and raster tile providers).
+  codes, optional OIDC single sign-on (PKCE S256 + JWKS RS256), and active
+  session review.
+- Connect external clients via OAuth 2.1 (71 scopes, PKCE, refresh-token
+  rotation, and Dynamic Client Registration), personal API keys (`rk_…` scoped
+  tokens for `/api/*` and `/mcp`), an HTTP JSON API, and a Streamable HTTP MCP
+  endpoint with 144 tools, 16 prompts, and 9 resource templates — covering
+  trips, segments, file attachments, galleries, day notes, places, mail holds,
+  expenses, polls, companions, wallet (cards/loyalty/insurance/documents),
+  sharing, reminders, templates, and profile preferences. Destructive
+  operations require an explicit `confirm: true`. Payment-card, policy,
+  membership, and travel-document numbers stay redacted. Administrators can
+  optionally let users approve private trip notes, confirmation numbers, and
+  itinerary details per MCP client.
+- Run admin workflows for setup, users, registration, OIDC SSO, audit logs,
+  scheduled jobs, manual and scheduled automatic backups, restores, demo data,
+  instance stats, health checks, database maintenance (integrity check,
+  compaction, flush, and doctor), and map configuration (GeoNames city import
+  and raster tile providers).
 - Surface license text, runtime credits, package attribution, and app version
   details from the About page.
 
@@ -156,17 +168,19 @@ provider.
 ### One local database
 
 Roamarr stores application data with MongrelDB. By default the database
-lives at `./roamarr-db`, and receipt attachments are stored beside it in an
-`attachments/` directory. Move the database path, back it up, snapshot it, or
-keep it on persistent storage that fits your own setup.
+lives at `./roamarr-db`, and uploaded files (trip/segment documents, gallery
+photos, posters, and receipt attachments) are stored in
+`./roamarr-db/attachments/` (or an `attachments/` sibling directory when
+`DATABASE_PATH` points to a file extension). Move the database path, back it
+up, snapshot it, or keep it on persistent storage that fits your own setup.
 
 ### Private by default
 
 The app requires a `ROAMARR_SECRET` before boot. Sensitive fields such as travel
-document numbers, fare-provider API keys, SMTP passwords, TOTP secrets, and
-per-user SMTP passwords are encrypted at rest with AES-256-GCM. Passwords use
-argon2id, session cookies contain random tokens, and the database stores only
-token hashes.
+document numbers, fare-provider API keys, SMTP/IMAP passwords, map tile and
+Google Places API keys, OIDC client secrets, and TOTP secrets are encrypted at
+rest with AES-256-GCM. Passwords use argon2id, session cookies and personal API
+keys contain random tokens, and the database stores only token hashes.
 
 Public share links and calendar feeds use reduced viewer data instead of
 dumping every private field attached to a trip. Roamarr is built around the
@@ -285,21 +299,25 @@ source.
 | `DATABASE_PATH` | no | `./roamarr-db` | MongrelDB data directory or file path. |
 | `DATABASE_USER` | no | none | MongrelDB administrator username. Must be set with `DATABASE_PASS` before first creation. |
 | `DATABASE_PASS` | no | none | MongrelDB administrator password. Must be set with `DATABASE_USER` before first creation. |
-| `ATTACHMENTS_PATH` | no | beside database | Directory for receipt attachments. Defaults to an `attachments/` directory next to the resolved database path. |
+| `ATTACHMENTS_PATH` | no | `<DATABASE_PATH>/attachments` | Directory for uploaded attachments (documents, gallery photos, posters, receipts). Defaults inside directory database paths (`./roamarr-db/attachments`), or beside file-extension paths. |
 | `EMBEDDINGS_CACHE_PATH` | no | `roamarr-models/` beside the database | Cache directory for optional MiniLM ONNX models used by admin-enabled semantic search. |
 | `PORT` | no | `3000` | adapter-node listen port. |
-| `ORIGIN` | no | none | Public origin for cookies and redirects, especially behind reverse proxies. |
+| `ORIGIN` | no | none | Public origin for cookies, redirects, OIDC callbacks, and WebAuthn/passkeys behind reverse proxies. |
+| `BODY_SIZE_LIMIT` | no | `512K` | adapter-node maximum HTTP request body size. Set higher (or `Infinity`) for large uploads, restores, and MCP attachments. |
+| `ROAMARR_MAX_RESTORE_BYTES` | no | unlimited | Optional positive byte cap for uploaded backup restore archives (`0` or `unlimited` disables the app cap; `BODY_SIZE_LIMIT` still applies). |
 
-SMTP, IMAP, email parsing, webhooks, registration policy, themes, fare
-providers, backups, and most admin settings are configured inside the app after
-setup.
+SMTP, IMAP, email parsing, OIDC SSO, webhooks, registration policy, themes,
+fare providers, scheduled backups, and most admin settings are configured
+inside the app after setup.
 
 ### Runtime data
 
 | Data | Default path |
 | ---- | ------------ |
 | MongrelDB database | `./roamarr-db` |
-| Receipt attachments | `./roamarr-db/attachments/` |
+| Uploaded attachments | `./roamarr-db/attachments/` |
+| Scheduled auto-backups | `./backups/` (beside `DATABASE_PATH`) |
+| Semantic search model cache | `./roamarr-models/` (beside `DATABASE_PATH`) |
 | Production build output | `./build/` |
 | SvelteKit build cache | `./.svelte-kit/` |
 
@@ -314,6 +332,9 @@ such as `.env.example`.
 ```bash
 # Start the dev server
 npm run dev
+
+# Compile Paraglide i18n message catalog (also runs inside `npm run check`)
+npm run i18n:compile
 
 # Type-check Svelte and TypeScript
 npm run check
@@ -358,23 +379,29 @@ an equivalent local file and Podman. Install Chromium first with
 
 After the first setup flow, use the admin pages for:
 
-- Instance name, public registration, and admin controls.
+- Instance name, public registration, OIDC single sign-on, and admin controls.
 - Global and per-user SMTP/IMAP policy, email parsing providers, polling
   interval, and signed webhooks.
 - Fare provider accounts and connection tests.
-- Backups, restores, scheduled jobs, audit logs, health information, database
-  maintenance, and demo data.
+- Manual and scheduled automatic backups, restores, scheduled jobs, audit logs,
+  health information, database maintenance, and demo data.
 - Project license, third-party package credits, runtime component
   acknowledgements, and app details on the About page.
 
 Use Profile for:
 
-- Password changes, email changes, and active session management.
+- Password changes, email changes, emergency contacts, and active session
+  management.
 - Visited Countries and U.S. States, with visit-date editing and quick
   country/state list toggles.
 - Security settings: TOTP authenticator setup, backup codes, and WebAuthn
   passkey management.
-- Per-user theme selection, including High Contrast.
+- Personal API keys (`rk_…`), scoped to `/api/*` and `/mcp` without an OAuth
+  browser flow.
+- Personal email settings (IMAP/SMTP/AI parsing when allowed) and the
+  account-wide calendar feed.
+- Per-user theme selection (15 themes, including Light, Dark, OLED Black, and
+  High Contrast).
 - MCP client management and OAuth credentials for manually registered clients.
 
 Use each trip's Share page for user/group access, public links, and calendar
@@ -510,27 +537,30 @@ also require `confirm: true`.
 ## Architecture
 
 Roamarr is a SvelteKit 3 app using Svelte 5, TypeScript ES modules,
-`@sveltejs/adapter-node`, Tailwind CSS v4, MongrelDB (via MongrelDB Kit), Luxon,
+`@sveltejs/adapter-node`, Tailwind CSS v4, Paraglide JS (`@inlang/paraglide-js`,
+message catalog in `messages/en.json`), MongrelDB (via MongrelDB Kit), Luxon,
 Nodemailer, MapLibre GL JS v6, and Vitest. Supporting libraries include WebAuthn
 (`@simplewebauthn/*`), TOTP (`otpauth`, `qrcode`), MCP/AI access
 (`@modelcontextprotocol/sdk`), optional MiniLM semantic search
-(`@huggingface/transformers`), 3D globe rendering (`three`), and tar streaming
-(`tar-fs`).
+(`@huggingface/transformers`), 3D globe rendering (`three`), data tables
+(`gridjs`), and tar streaming (`tar-fs`).
 
 Startup imports `src/hooks.server.ts`, requires `ROAMARR_SECRET`, applies any
 pending restore, runs migrations, ensures default settings and benefit templates
 exist, then starts a guarded in-process scheduler. The scheduler tick runs
 reminders, fare checks, weather-cache refresh, per-user IMAP ingestion, expiry
-purges (sessions, passkey challenges, OAuth authorization codes, rate-limit
-buckets, share windows), memtable flush, hourly compaction, and run pruning
-without duplicate starts or overlapping ticks.
+purges (sessions, passkey challenges, OAuth tokens, rate-limit buckets, share
+windows), due scheduled admin auto-backups, memtable flush, hourly compaction,
+and run pruning without duplicate starts or overlapping ticks.
 
 Routes stay thin. Server-side business logic lives under `src/lib/server/`.
 Trip access is centralized in three ownership helpers — `requireOwnedTrip`
 (owner only), `requireEditableTrip` (owner + edit-share), and
 `requireViewableTrip` (owner + any share) — so MCP tools, route actions, and
-resource reads all share one consistent authorization layer. Public share and
-calendar-feed routes expose only a reduced `viewerProjection`.
+resource reads all share one consistent authorization layer. Trip and share
+mutations publish invalidations through `src/lib/server/eventBus.ts` so open
+pages update live over `/api/events` (SSE). Public share and calendar-feed
+routes expose only a reduced `viewerProjection`.
 
 SvelteKit configuration lives in `vite.config.ts`. Type checks use TypeScript 7;
 TypeScript 6 remains installed for the Svelte compiler API. adapter-node reads
@@ -598,8 +628,10 @@ changes so Credits/Acknowledgements and Third-party Licenses match
 - [Operations](docs/operations.md)
 - [Backup and restore](docs/backup-restore.md)
 - [Security and privacy](docs/SECURITY.md)
+- [OIDC single sign-on](docs/oidc.md)
 - [OAuth 2.1](docs/oauth.md)
 - [MCP and AI](docs/mcp-ai.md)
+- [Personal API keys](docs/api-keys.md)
 - [HTTP JSON API](docs/http-api.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Contribution guidelines](CONTRIBUTING.md)

@@ -405,5 +405,19 @@
 	"train_route_label": "Route",
 	"train_route_placeholder": "Boston → New York",
 	"train_seat_label": "Seat / car",
-	"train_seat_placeholder": "Car 7, Seat 42"
+	"train_seat_placeholder": "Car 7, Seat 42",
+	"directions_title_label": "Directions title",
+	"directions_title_placeholder": "Drive to hotel",
+	"directions_from_label": "From",
+	"directions_from_placeholder": "Starting point",
+	"directions_to_label": "To",
+	"directions_to_placeholder": "Destination",
+	"directions_notes_label": "Notes",
+	"directions_notes_placeholder": "Turn-by-turn notes",
+	"meetup_title_label": "Meet up title",
+	"meetup_title_placeholder": "Coffee with Alex",
+	"meetup_location_label": "Meeting place",
+	"meetup_location_placeholder": "Cafe address or landmark",
+	"meetup_attendees_label": "Who",
+	"meetup_attendees_placeholder": "Names or group"
 }

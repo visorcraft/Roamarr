@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import StandardPlanForm from './StandardPlanForm.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 
@@ -7,10 +8,10 @@
 
 <StandardPlanForm
 	{errors}
-	titleLabel="Meet up title"
-	titlePlaceholder="Coffee with Alex"
-	locationLabel="Meeting place"
-	locationPlaceholder="Cafe address or landmark"
+	titleLabel={m.meetup_title_label()}
+	titlePlaceholder={m.meetup_title_placeholder()}
+	locationLabel={m.meetup_location_label()}
+	locationPlaceholder={m.meetup_location_placeholder()}
 	requireEnd={true}
 />
-<TextField name="detail_attendees" label="Who" placeholder="Names or group" class="sm:col-span-2" />
+<TextField name="detail_attendees" label={m.meetup_attendees_label()} placeholder={m.meetup_attendees_placeholder()} class="sm:col-span-2" />

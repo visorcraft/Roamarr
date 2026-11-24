@@ -942,7 +942,7 @@
 
 			<div class="trip-modern-content">
 				<main class="trip-modern-main trip-modern-main-{viewMode}" id="trip-panel-itinerary">
-					{#if ownerTrip?.notes}<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Overview</h2></div><MarkdownText text={ownerTrip.notes} class="prose prose-invert max-w-none text-sm leading-relaxed text-slate-300" /></section>{/if}
+					{#if ownerTrip?.notes}<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Overview</h2></div><MarkdownText text={ownerTrip.notes} class="max-w-none text-sm leading-relaxed" /></section>{/if}
 					{#if data.weather && data.weather.days.length > 0}
 						{@const weather = data.weather}
 						<section class="trip-modern-panel" aria-label="Trip weather">

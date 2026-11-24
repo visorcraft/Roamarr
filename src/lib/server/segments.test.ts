@@ -15,6 +15,7 @@ import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, upd
 import { segments, auditLogs } from './db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
 import * as tripsRepo from './repositories/tripsRepo';
+import { getSegmentById } from './repositories/segmentsRepo';
 
 test('detects overlap with existing segment', () => {
 	const u = makeUser(kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
@@ -180,6 +181,120 @@ test('moveSegmentToDate preserves local time, duration and rally offset', () => 
 	expect(moved.startAt).toBe('2026-09-15T03:30:00.000Z');
 	expect(moved.endAt).toBe('2026-09-15T04:30:00.000Z');
 	expect(moved.meetingAt).toBe('2026-09-15T03:15:00.000Z');
+
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
+	expect(logs).toHaveLength(1);
+	expect(logs[0].action).toBe('move_date');
+});
+
+test('moveSegmentToDate rejects non-date-only targets and writes nothing', () => {
+	const u = makeUser(kit, { email: 'move-reject@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-09-10T13:00:00.000Z',
+		startTz: 'America/New_York',
+		endAt: '2026-09-10T17:00:00.000Z'
+	});
+
+	const original = getSegmentById(s.id)!;
+
+	for (const bad of [
+		'2026-09-15T00:00:00Z',
+		'2026-09-15T09:00:00+02:00',
+		'2026-09',
+		'2026',
+		'20260915',
+		'2026-02-30'
+	]) {
+		try {
+			moveSegmentToDate(u.id, t.id, s.id, bad);
+			expect.unreachable(`expected a 400 for ${bad}`);
+		} catch (e: any) {
+			expect(e.status).toBe(400);
+		}
+		const after = getSegmentById(s.id)!;
+		expect(after.startAt).toBe(original.startAt);
+		expect(after.endAt).toBe(original.endAt);
+		expect(after.meetingAt).toBe(original.meetingAt);
+		const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
+		expect(logs).toHaveLength(0);
+	}
+});
+
+test('moveSegmentToDate fails closed on an unparseable stored end_at', () => {
+	const u = makeUser(kit, { email: 'move-end-bad@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-09-10T13:00:00.000Z',
+		startTz: 'America/New_York',
+		endAt: '2026-09-10T17:00:00.000Z'
+	});
+
+	kit.updateTable(segments).set({ end_at: 'not-a-date' }).where(eq(segments.id, BigInt(s.id))).executeSync();
+
+	try {
+		moveSegmentToDate(u.id, t.id, s.id, '2026-09-15');
+		expect.unreachable('expected a 400 for an unparseable end_at');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+
+	const after = getSegmentById(s.id)!;
+	expect(after.startAt).toBe('2026-09-10T13:00:00.000Z');
+	expect(after.endAt).toBe('not-a-date');
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
+	expect(logs).toHaveLength(0);
+});
+
+test('moveSegmentToDate fails closed on an unparseable stored meeting_at', () => {
+	const u = makeUser(kit, { email: 'move-meeting-bad@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'meetup',
+		title: 'A',
+		startAt: '2026-09-10T13:00:00.000Z',
+		startTz: 'America/New_York',
+		endAt: '2026-09-10T17:00:00.000Z',
+		meetingAt: '2026-09-10T16:00:00.000Z'
+	});
+
+	kit.updateTable(segments).set({ meeting_at: 'not-a-date' }).where(eq(segments.id, BigInt(s.id))).executeSync();
+
+	try {
+		moveSegmentToDate(u.id, t.id, s.id, '2026-09-15');
+		expect.unreachable('expected a 400 for an unparseable meeting_at');
+	} catch (e: any) {
+		expect(e.status).toBe(400);
+	}
+
+	const after = getSegmentById(s.id)!;
+	expect(after.startAt).toBe('2026-09-10T13:00:00.000Z');
+	expect(after.endAt).toBe('2026-09-10T17:00:00.000Z');
+	expect(after.meetingAt).toBe('not-a-date');
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
+	expect(logs).toHaveLength(0);
+});
+
+test('moveSegmentToDate keeps wall-clock time across a DST boundary', () => {
+	const u = makeUser(kit, { email: 'move-dst@x.c', passwordHash: 'x', displayName: 'M' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-03-07T19:00:00.000Z',
+		startTz: 'America/New_York',
+		endAt: '2026-03-07T23:00:00.000Z',
+		meetingAt: '2026-03-07T17:00:00.000Z'
+	});
+
+	const moved = moveSegmentToDate(u.id, t.id, s.id, '2026-09-15');
+	expect(moved.startAt).toBe('2026-09-15T18:00:00.000Z');
+	expect(moved.endAt).toBe('2026-09-15T22:00:00.000Z');
+	expect(moved.meetingAt).toBe('2026-09-15T16:00:00.000Z');
 
 	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_id, BigInt(s.id))).executeSync();
 	expect(logs).toHaveLength(1);

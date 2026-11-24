@@ -212,12 +212,20 @@ export function updateSegment(
 	return seg;
 }
 
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 export function moveSegmentToDate(userId: number, tripId: number, segId: number, targetDate: string) {
 	const existing = requireSegmentOnTrip(userId, tripId, segId);
+	if (!DATE_ONLY_PATTERN.test(targetDate)) throw error(400, 'Invalid segment date');
 	const start = DateTime.fromISO(existing.startAt, { zone: 'utc' });
 	const startLocal = start.setZone(existing.startTz || 'UTC');
 	const targetLocalDate = DateTime.fromISO(targetDate, { zone: existing.startTz || 'UTC' });
 	if (!start.isValid || !startLocal.isValid || !targetLocalDate.isValid) {
+		throw error(400, 'Invalid segment date');
+	}
+	const endParsed = existing.endAt ? DateTime.fromISO(existing.endAt, { zone: 'utc' }) : null;
+	const meetingParsed = existing.meetingAt ? DateTime.fromISO(existing.meetingAt, { zone: 'utc' }) : null;
+	if ((endParsed && !endParsed.isValid) || (meetingParsed && !meetingParsed.isValid)) {
 		throw error(400, 'Invalid segment date');
 	}
 
@@ -229,16 +237,14 @@ export function moveSegmentToDate(userId: number, tripId: number, segId: number,
 			millisecond: startLocal.millisecond
 		})
 		.toUTC();
+	const movedStartIso = movedStart.toISO();
+	if (!movedStart.isValid || !movedStartIso) throw error(400, 'Invalid segment date');
 	const delta = movedStart.diff(start);
-	const movedEndAt = existing.endAt
-		? DateTime.fromISO(existing.endAt, { zone: 'utc' }).plus(delta).toUTC().toISO()
-		: null;
-	const movedMeetingAt = existing.meetingAt
-		? DateTime.fromISO(existing.meetingAt, { zone: 'utc' }).plus(delta).toUTC().toISO()
-		: null;
+	const movedEndAt = endParsed ? endParsed.plus(delta).toUTC().toISO() : null;
+	const movedMeetingAt = meetingParsed ? meetingParsed.plus(delta).toUTC().toISO() : null;
 
 	const seg = updateSegmentRepo(segId, {
-		start_at: movedStart.toISO()!,
+		start_at: movedStartIso,
 		end_at: movedEndAt,
 		meeting_at: movedMeetingAt,
 		updated_at: nowIso()

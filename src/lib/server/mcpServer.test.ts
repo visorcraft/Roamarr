@@ -317,9 +317,11 @@ describe('mcpServer', () => {
 			addressLabel: 'HOMEADDR'
 		});
 		expect(created.warning).toMatch(/30 days/);
-		expect(created.hold.confirmationNumber).toBe('HOLDSECRET');
+		expect(created.hold.confirmationNumber).toBeNull();
 		const listed = await call('roamarr_mail_hold_list', { tripId: trip.id });
 		expect(listed.items[0].addressLabel).toBe('HOMEADDR');
+		expect(listed.items[0].confirmationNumber).toBeNull();
+		expect(JSON.stringify(listed)).not.toContain('HOLDSECRET');
 		const coverage = await call('roamarr_mail_hold_coverage', { tripId: trip.id });
 		expect(coverage.awayDatesKnown).toBe(true);
 		expect(coverage.renewals[0].renewalDate).toBe('2026-10-15');
@@ -339,6 +341,136 @@ describe('mcpServer', () => {
 		expect(unconfirmed.isError).toBe(true);
 		await call('roamarr_mail_hold_delete', { holdId: created.id, confirm: true });
 		expect((await call('roamarr_mail_hold_list', { tripId: trip.id })).items).toHaveLength(0);
+	});
+
+	test('mail hold notes and confirmation numbers require PII consent', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'PII trip', startDate: '2026-09-01', endDate: '2026-09-20' });
+		const { client } = await connect(userId, ['mail-holds:read', 'mail-holds:write']);
+
+		const created: any = await client.callTool({
+			name: 'roamarr_mail_hold_create',
+			arguments: {
+				tripId: trip.id,
+				startDate: '2026-09-01',
+				endDate: '2026-09-20',
+				confirmationNumber: 'HOLDSECRET',
+				notes: 'PRIVATE NOTE',
+				addressLabel: 'HOMEADDR'
+			}
+		});
+		expect(created.isError).toBeFalsy();
+		expect(created.content[0].text).not.toContain('HOLDSECRET');
+		expect(created.content[0].text).not.toContain('PRIVATE NOTE');
+		const createdJson = JSON.parse(created.content[0].text);
+		expect(createdJson.hold.confirmationNumber).toBeNull();
+		expect(createdJson.hold.notes).toBeNull();
+
+		const listed: any = await client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(listed.isError).toBeFalsy();
+		expect(listed.content[0].text).not.toContain('HOLDSECRET');
+		expect(listed.content[0].text).not.toContain('PRIVATE NOTE');
+		expect(JSON.parse(listed.content[0].text).items[0].notes).toBeNull();
+		expect(JSON.parse(listed.content[0].text).items[0].confirmationNumber).toBeNull();
+
+		const updated: any = await client.callTool({
+			name: 'roamarr_mail_hold_update',
+			arguments: { holdId: createdJson.id, addressLabel: 'WORKADDR' }
+		});
+		expect(updated.isError).toBeFalsy();
+		expect(updated.content[0].text).not.toContain('HOLDSECRET');
+		expect(updated.content[0].text).not.toContain('PRIVATE NOTE');
+		const updatedJson = JSON.parse(updated.content[0].text);
+		expect(updatedJson.hold.notes).toBeNull();
+		expect(updatedJson.hold.confirmationNumber).toBeNull();
+		expect(updatedJson.hold.addressLabel).toBe('WORKADDR');
+
+		updateSettings({ allowMcpPii: true });
+		const scoped = await connect(userId, ['mail-holds:read', 'mail-holds:write', 'private-details:read']);
+		const listedPii: any = await scoped.client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(listedPii.isError).toBeFalsy();
+		const listedPiiJson = JSON.parse(listedPii.content[0].text);
+		expect(listedPiiJson.items[0].confirmationNumber).toBe('HOLDSECRET');
+		expect(listedPiiJson.items[0].notes).toBe('PRIVATE NOTE');
+
+		const updatedPii: any = await scoped.client.callTool({
+			name: 'roamarr_mail_hold_update',
+			arguments: { holdId: createdJson.id, addressLabel: 'WORKADDR2' }
+		});
+		expect(updatedPii.isError).toBeFalsy();
+		const updatedPiiJson = JSON.parse(updatedPii.content[0].text);
+		expect(updatedPiiJson.hold.confirmationNumber).toBe('HOLDSECRET');
+		expect(updatedPiiJson.hold.notes).toBe('PRIVATE NOTE');
+
+		updateSettings({ allowMcpPii: false });
+		const listedRedacted: any = await scoped.client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listedRedacted.content[0].text).items[0].confirmationNumber).toBeNull();
+		expect(JSON.parse(listedRedacted.content[0].text).items[0].notes).toBeNull();
+
+		updateSettings({ allowMcpPii: true });
+		const noScope = await connect(userId, ['mail-holds:read', 'mail-holds:write']);
+		const listedNoScope: any = await noScope.client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listedNoScope.content[0].text).items[0].confirmationNumber).toBeNull();
+		expect(JSON.parse(listedNoScope.content[0].text).items[0].notes).toBeNull();
+
+		updateSettings({ allowMcpPii: false });
+	});
+
+	test('mail hold update and delete reject invalid holdId', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Validation trip', startDate: '2026-09-01', endDate: '2026-09-20' });
+		const { client } = await connect(userId, ['mail-holds:read', 'mail-holds:write']);
+		const created: any = await client.callTool({
+			name: 'roamarr_mail_hold_create',
+			arguments: { tripId: trip.id, startDate: '2026-09-01', endDate: '2026-09-10' }
+		});
+		expect(created.isError).toBeFalsy();
+		const createdJson = JSON.parse(created.content[0].text);
+
+		for (const badId of [0, -1, 1.5]) {
+			const upd: any = await client.callTool({
+				name: 'roamarr_mail_hold_update',
+				arguments: { holdId: badId, addressLabel: 'X' }
+			});
+			expect(upd.isError).toBe(true);
+			expect(upd.content[0].text).toContain('holdId must be a positive integer');
+
+			const del: any = await client.callTool({
+				name: 'roamarr_mail_hold_delete',
+				arguments: { holdId: badId, confirm: true }
+			});
+			expect(del.isError).toBe(true);
+			expect(del.content[0].text).toContain('holdId must be a positive integer');
+		}
+
+		const listed: any = await client.callTool({ name: 'roamarr_mail_hold_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items).toHaveLength(1);
+	});
+
+	test('mail hold no-op update skips the write and the audit row', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Noop trip', startDate: '2026-09-01', endDate: '2026-09-20' });
+		const { client } = await connect(userId, ['mail-holds:read', 'mail-holds:write']);
+		const call = async (name: string, arguments_: Record<string, unknown>) => {
+			const result: any = await client.callTool({ name, arguments: arguments_ });
+			expect(result.isError, result.content?.[0]?.text).toBeFalsy();
+			return JSON.parse(result.content[0].text);
+		};
+		const countAudit = () =>
+			ctx.kit.selectFrom(auditLogs).where(kitEq(auditLogs.user_id, BigInt(userId))).executeSync().length;
+
+		const created = await call('roamarr_mail_hold_create', {
+			tripId: trip.id,
+			startDate: '2026-09-01',
+			endDate: '2026-10-15',
+			addressLabel: 'HOMEADDR'
+		});
+		const before = countAudit();
+		const noop = await call('roamarr_mail_hold_update', { holdId: created.id });
+		expect(noop.warning).toBe(created.warning);
+		const listed = await call('roamarr_mail_hold_list', { tripId: trip.id });
+		expect(noop.hold).toEqual(listed.items[0]);
+		expect(countAudit()).toBe(before);
+
+		await call('roamarr_mail_hold_update', { holdId: created.id, addressLabel: 'X' });
+		expect(countAudit()).toBe(before + 1);
 	});
 
 	test('read-only collaborators can load every native planning workflow', async () => {

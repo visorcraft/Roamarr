@@ -37,6 +37,7 @@ import {
 	streamToBase64
 } from './mcpHelpers';
 import type { TripDocumentRow } from './repositories/tripDocumentsRepo';
+import type { MailHold } from './repositories/tripMiscRepo';
 import type { PlaceLinkPatch } from './placeLinks';
 import { getSettings } from './settings';
 import { effectiveTripStatus, todayForUser } from './tripLifecycle';
@@ -812,6 +813,17 @@ function optionalPositiveId(value: unknown, field: string): number | null {
 	return positiveId(value, field);
 }
 
+function parseMailHoldId(raw: unknown): number | null {
+	if (typeof raw === 'number') {
+		return Number.isSafeInteger(raw) && raw >= 1 ? raw : null;
+	}
+	if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+		const n = Number(raw);
+		return Number.isSafeInteger(n) && n >= 1 ? n : null;
+	}
+	return null;
+}
+
 function attachmentFilename(value: unknown): string {
 	const filename = reqString(value, 'filename', 255);
 	if (filename === '.' || filename === '..' || /[\\/\0]/.test(filename)) {
@@ -856,6 +868,14 @@ function projectTripDocument(row: Omit<TripDocumentRow, 'attachmentId'>, include
 		contentType: row.contentType,
 		sizeBytes: row.sizeBytes,
 		createdAt: row.createdAt
+	};
+}
+
+function projectMailHold(hold: MailHold, includePrivate: boolean) {
+	return {
+		...hold,
+		confirmationNumber: includePrivate ? hold.confirmationNumber : null,
+		notes: includePrivate ? hold.notes : null
 	};
 }
 
@@ -4173,13 +4193,16 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'mail-holds:read')) return scopeError('mail-holds:read');
 				const { listMailHolds } = await import('./tripMailHolds');
 				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				return textResult({ tripId, items: listMailHolds(tripId) });
+				const trip = requireEditableTrip(userId, tripId);
+				const includePrivate = canReadPrivateDetails(scopes) && canViewDetails(userId, trip);
+				return textResult({ tripId, items: listMailHolds(tripId).map((hold) => projectMailHold(hold, includePrivate)) });
 			}
 			case 'roamarr_mail_hold_create': {
 				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
 				const { addMailHold } = await import('./tripMailHolds');
 				const tripId = Number(args.tripId);
+				const trip = requireEditableTrip(userId, tripId);
+				const includePrivate = canReadPrivateDetails(scopes) && canViewDetails(userId, trip);
 				const created = addMailHold(userId, tripId, {
 					carrier: args.carrier as string | undefined,
 					startDate: String(args.startDate ?? ''),
@@ -4189,14 +4212,18 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					notes: (args.notes as string) ?? null,
 					status: args.status == null ? undefined : String(args.status)
 				});
-				return textResult({ id: created.hold.id, warning: created.warning, hold: created.hold });
+				return textResult({ id: created.hold.id, warning: created.warning, hold: projectMailHold(created.hold, includePrivate) });
 			}
 			case 'roamarr_mail_hold_update': {
 				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
+				const holdId = parseMailHoldId(args.holdId);
+				if (holdId === null) return { content: [{ type: 'text' as const, text: 'holdId must be a positive integer' }], isError: true };
 				const { getMailHoldById } = await import('./repositories/tripMiscRepo');
 				const { updateMailHold } = await import('./tripMailHolds');
-				const existing = getMailHoldById(Number(args.holdId));
+				const existing = getMailHoldById(holdId);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Mail hold not found' }], isError: true };
+				const trip = requireEditableTrip(userId, existing.tripId);
+				const includePrivate = canReadPrivateDetails(scopes) && canViewDetails(userId, trip);
 				const patch: Record<string, string | null> = {};
 				if (args.carrier !== undefined) patch.carrier = String(args.carrier ?? '');
 				if (args.startDate !== undefined) patch.startDate = String(args.startDate ?? '');
@@ -4205,16 +4232,26 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (args.addressLabel !== undefined) patch.addressLabel = args.addressLabel == null ? null : String(args.addressLabel);
 				if (args.notes !== undefined) patch.notes = args.notes == null ? null : String(args.notes);
 				if (args.status !== undefined) patch.status = String(args.status ?? '');
+				if (Object.keys(patch).length === 0) {
+					const { uspsHoldWarning } = await import('./mailHoldCoverage');
+					return textResult({
+						id: existing.id,
+						warning: uspsHoldWarning(existing.carrier, existing.startDate, existing.endDate),
+						hold: projectMailHold(existing, includePrivate)
+					});
+				}
 				const updated = updateMailHold(userId, existing.tripId, existing.id, patch);
-				return textResult({ id: updated.hold.id, warning: updated.warning, hold: updated.hold });
+				return textResult({ id: updated.hold.id, warning: updated.warning, hold: projectMailHold(updated.hold, includePrivate) });
 			}
 			case 'roamarr_mail_hold_delete': {
 				if (!hasScope(scopes, 'mail-holds:write')) return scopeError('mail-holds:write');
 				const confirmErr = requireConfirm(args, 'roamarr_mail_hold_delete');
 				if (confirmErr) return confirmErr;
+				const holdId = parseMailHoldId(args.holdId);
+				if (holdId === null) return { content: [{ type: 'text' as const, text: 'holdId must be a positive integer' }], isError: true };
 				const { getMailHoldById } = await import('./repositories/tripMiscRepo');
 				const { deleteMailHold } = await import('./tripMailHolds');
-				const existing = getMailHoldById(Number(args.holdId));
+				const existing = getMailHoldById(holdId);
 				if (!existing) return { content: [{ type: 'text' as const, text: 'Mail hold not found' }], isError: true };
 				deleteMailHold(userId, existing.tripId, existing.id);
 				return textResult({ ok: true, holdId: existing.id });

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
+	import type { SubmitFunction } from '$app/forms';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
@@ -10,14 +12,31 @@
 	let keyName = $state('');
 	let expiresAt = $state('');
 	let selectedScopes = $state<string[]>(['trips:read']);
-	let dismissed = $state(false);
+	let dismissedToken = $state<string | null>(null);
 	let editingId = $state<number | null>(null);
+	let submitting = $state(false);
 
 	const created = $derived(
-		form && 'createdToken' in form && !dismissed
+		form && 'createdToken' in form && String(form.createdToken) !== dismissedToken
 			? { token: form.createdToken as string, name: (form.createdName as string) ?? '' }
 			: null
 	);
+
+	const createKey: SubmitFunction = () => {
+		submitting = true;
+		return async ({ result, update }) => {
+			try {
+				await update({ reset: false });
+				if (result.type === 'success') {
+					keyName = '';
+					expiresAt = '';
+					selectedScopes = ['trips:read'];
+				}
+			} finally {
+				submitting = false;
+			}
+		};
+	};
 
 	// Group scopes by resource prefix (trips, segments, …) like the OAuth
 	// consent screen groups related permissions together.
@@ -43,7 +62,7 @@
 	</div>
 </header>
 
-{#if form?.error}<p class="notice notice-error mt-6">{form.error}</p>{/if}
+{#if form?.error}<p class="notice notice-error mt-6" role="alert">{form.error}</p>{/if}
 
 {#if created}
 	<section class="notice notice-warning mt-6 p-5">
@@ -56,27 +75,33 @@
 		<p class="field-help mt-2">
 			Use it as <code>X-Api-Token: {created.token.slice(0, 10)}…</code> or <code>Authorization: Bearer {created.token.slice(0, 10)}…</code> on <code>/api/*</code> and <code>/mcp</code>.
 		</p>
-		<button class="btn btn-primary mt-3" onclick={() => (dismissed = true)}>I saved it</button>
+		<button class="btn btn-primary mt-3" onclick={() => (dismissedToken = created.token)}>I saved it</button>
 	</section>
 {/if}
 
 <section class="card mt-6 p-5 sm:p-6">
 	<h2 class="section-title mb-4">Create a new key</h2>
-	<form method="POST" action="?/create" class="space-y-4">
+	<form
+		method="POST"
+		action="?/create"
+		class="space-y-4"
+		use:enhance={createKey}
+		aria-busy={submitting}
+	>
 		<div class="grid gap-4 sm:grid-cols-2">
 			<div class="field">
 				<label class="label" for="keyName">Name</label>
-				<input id="keyName" name="name" bind:value={keyName} placeholder="e.g. CI script, Claude" class="input" required />
+				<input id="keyName" name="name" bind:value={keyName} placeholder="e.g. CI script, Claude" class="input" required disabled={submitting} />
 			</div>
 			<div class="field">
 				<label class="label" for="expiresAt">Expires (optional)</label>
-				<input id="expiresAt" name="expiresAt" type="date" bind:value={expiresAt} class="input" />
-				<p class="field-help mt-1">Leave empty for a key that never expires.</p>
+				<input id="expiresAt" name="expiresAt" type="date" bind:value={expiresAt} class="input" aria-describedby="expiresAt-hint" disabled={submitting} />
+				<p id="expiresAt-hint" class="field-help mt-1">Leave empty for a key that never expires.</p>
 			</div>
 		</div>
-		<div class="field">
-			<span class="label">Scopes</span>
-			<p class="field-help mt-1">The key can only do what the selected scopes allow. Admin capabilities can never be granted to API keys.</p>
+		<div class="field" role="group" aria-labelledby="scopes-label" aria-describedby="scopes-help">
+			<span class="label" id="scopes-label">Scopes</span>
+			<p id="scopes-help" class="field-help mt-1">The key can only do what the selected scopes allow. Admin capabilities can never be granted to API keys.</p>
 			<div class="mt-3 space-y-3">
 				{#each scopeGroups as [resource, scopes] (resource)}
 					<div>
@@ -90,6 +115,7 @@
 										value={scope}
 										class="checkbox"
 										checked={selectedScopes.includes(scope)}
+										disabled={submitting}
 										onchange={(e) => {
 											if (e.currentTarget.checked) selectedScopes = [...selectedScopes, scope];
 											else selectedScopes = selectedScopes.filter((s) => s !== scope);
@@ -105,7 +131,7 @@
 			</div>
 		</div>
 		<div class="flex justify-end">
-			<button class="btn btn-primary">Create key</button>
+			<button type="submit" class="btn btn-primary" disabled={submitting} class:btn-loading={submitting}>{submitting ? 'Creating…' : 'Create key'}</button>
 		</div>
 	</form>
 </section>

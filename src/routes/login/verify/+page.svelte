@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 
 	let code = $state('');
+	const showError = $derived(page.status === 400 || page.status === 401 || page.status === 429);
 </script>
 
 <div class="mx-auto mt-20 max-w-sm">
@@ -10,8 +11,8 @@
 		Enter the 6-digit code from your authenticator app, or a backup code.
 	</p>
 
-	{#if page.status === 400 || page.status === 401 || page.status === 429}
-		<p class="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-center text-sm text-red-400">
+	{#if showError}
+		<p id="verify-error" class="notice notice-error mb-4 text-center">
 			{page.form?.error ?? 'Invalid code.'}
 		</p>
 	{/if}
@@ -24,15 +25,18 @@
 				name="code"
 				bind:value={code}
 				placeholder="123456"
-				class="input text-center text-lg tracking-widest"
+				class="input text-center text-lg tracking-widest {showError ? 'input-error' : ''}"
 				autocomplete="one-time-code"
 				inputmode="numeric"
+				required
+				aria-invalid={showError ? 'true' : undefined}
+				aria-describedby={showError ? 'verify-error' : undefined}
 			/>
 		</div>
 		<button class="btn btn-primary w-full">Verify</button>
 	</form>
 
 	<p class="meta mt-4 text-center">
-		<a href="/login" class="text-indigo-400 hover:underline">Back to login</a>
+		<a href="/login" class="link">Back to login</a>
 	</p>
 </div>

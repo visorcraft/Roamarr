@@ -125,7 +125,7 @@
 				submitting = false;
 			};
 		}}
-		class="mt-6 grid gap-3 border-t border-white/5 pt-5 sm:grid-cols-2"
+		class="mt-6 grid gap-3 border-t border-line pt-5 sm:grid-cols-2"
 	>
 		<div class="field sm:col-span-2">
 			<h3 class="subsection-title">Add emergency contact</h3>

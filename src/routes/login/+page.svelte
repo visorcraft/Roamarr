@@ -64,7 +64,7 @@
 	{#if passkeyError}<p class="notice notice-error mt-3">{passkeyError}</p>{/if}
 
 	{#if data.passkeyAvailable}
-		<div class="mt-4 border-t border-slate-200 pt-4 dark:border-slate-700">
+		<div class="mt-4 border-t border-line pt-4">
 			<button class="btn btn-primary w-full" onclick={signInWithPasskey} disabled={passkeyBusy}>
 				{passkeyBusy ? m.login_passkey_waiting() : m.login_passkey_button()}
 			</button>
@@ -72,7 +72,7 @@
 	{/if}
 
 	{#if data.oidc?.enabled}
-		<div class="mt-4 {data.passkeyAvailable ? '' : 'border-t border-slate-200 pt-4 dark:border-slate-700'}">
+		<div class="mt-4 {data.passkeyAvailable ? '' : 'border-t border-line pt-4'}">
 			<a href={ssoHref} class="btn btn-primary w-full text-center">{m.login_sso_button({ provider: data.oidc.displayName })}</a>
 		</div>
 	{/if}

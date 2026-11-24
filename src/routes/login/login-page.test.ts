@@ -44,3 +44,34 @@ test('drops off-site backslash next values from SSO href and uses safeNextPath f
 	expect(src).toContain("import { safeNextPath } from '$lib/safeNextPath'");
 	expect(src).not.toContain("startsWith('/')");
 });
+
+test('themes the passkey and SSO dividers with the theme line colour', () => {
+	mockPage.url = new URL('http://x/login');
+	const withPasskey = render(LoginPage, {
+		props: {
+			data: { passkeyAvailable: true, allowRegistration: true, oidc: { enabled: true, displayName: 'Keycloak' } },
+			form: null
+		} as any
+	});
+	expect(withPasskey.body).toMatch(/class="mt-4 border-t border-line pt-4">\s*<button class="btn btn-primary w-full">Sign in with a passkey<\/button>/);
+	expect(withPasskey.body).toMatch(/class="mt-4\s*">\s*<a href="\/auth\/oidc\/start"/);
+
+	mockPage.url = new URL('http://x/login');
+	const withoutPasskey = render(LoginPage, {
+		props: {
+			data: { passkeyAvailable: false, allowRegistration: true, oidc: { enabled: true, displayName: 'Keycloak' } },
+			form: null
+		} as any
+	});
+	expect(withoutPasskey.body).toMatch(/class="mt-4 border-t border-line pt-4">\s*<a href="\/auth\/oidc\/start"/);
+	expect(withoutPasskey.body).not.toContain('Sign in with a passkey');
+
+	for (const body of [withPasskey.body, withoutPasskey.body]) {
+		expect(body).not.toContain('border-slate-');
+		expect(body).not.toContain('dark:');
+		expect(body).not.toContain('border-white/');
+	}
+
+	const src = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+	expect(src).not.toContain('dark:');
+});

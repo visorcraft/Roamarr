@@ -14,6 +14,7 @@ import { makeUser, makeTrip, makeSegment, makeCard } from '../../../tests/helper
 import { addSegment, updateSegment, hasOverlappingSegment, duplicateSegment, updateSegmentStatus, setSegmentStatus, deleteSegments, moveSegmentToDate, patchSegment } from './segments';
 import { segments, auditLogs } from './db/mongrelSchema';
 import { eq } from '@visorcraft/mongreldb-kit';
+import * as tripsRepo from './repositories/tripsRepo';
 
 test('detects overlap with existing segment', () => {
 	const u = makeUser(kit, { email: 'o@x.c', passwordHash: 'x', displayName: 'O' });
@@ -562,4 +563,166 @@ test('patchSegment still renames a legacy inverted segment', () => {
 	expect(updated.title).toBe('New');
 	expect(updated.startAt).toBe('2026-01-01T12:00:00Z');
 	expect(updated.endAt).toBe('2026-01-01T10:00:00Z');
+});
+
+test('shared editor without details keeps the owner card and stored confirmation/details', () => {
+	const owner = makeUser(kit, { email: 'card-owner1@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'card-editor1@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const ownerCard = makeCard(kit, owner.id, { nickname: 'Owner', network: 'visa', last4: '1111' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF123',
+		detailsJson: JSON.stringify({ note: 'keep' }),
+		cardId: ownerCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+
+	const updated = updateSegment(editor.id, t.id, s.id, {
+		title: 'Flight renamed',
+		localStart: '2026-01-01T10:00:00',
+		startTz: 'UTC'
+	});
+
+	expect(updated.cardId).toBe(ownerCard.id);
+	expect(updated.confirmationNumber).toBe('CONF123');
+	expect(updated.detailsJson).toBe(JSON.stringify({ note: 'keep' }));
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row.card_id)).toBe(ownerCard.id);
+	expect(row.confirmation_number).toBe('CONF123');
+	expect(row.details_json).toBe(JSON.stringify({ note: 'keep' }));
+});
+
+test('shared editor with details keeps the owner card', () => {
+	const owner = makeUser(kit, { email: 'card-owner2@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'card-editor2@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const ownerCard = makeCard(kit, owner.id, { nickname: 'Owner', network: 'visa', last4: '1111' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		cardId: ownerCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: true });
+
+	const updated = updateSegment(editor.id, t.id, s.id, {
+		title: 'Flight renamed',
+		localStart: '2026-01-01T10:00:00',
+		startTz: 'UTC'
+	});
+
+	expect(updated.cardId).toBe(ownerCard.id);
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row.card_id)).toBe(ownerCard.id);
+});
+
+test('owner can clear and replace the card', () => {
+	const u = makeUser(kit, { email: 'card-owner3@x.c', passwordHash: 'x', displayName: 'O' });
+	const t = makeTrip(kit, u.id, { name: 'T' });
+	const c1 = makeCard(kit, u.id, { nickname: 'C1', network: 'visa', last4: '1111' });
+	const c2 = makeCard(kit, u.id, { nickname: 'C2', network: 'amex', last4: '2222' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		cardId: c1.id
+	});
+
+	const replaced = updateSegment(u.id, t.id, s.id, {
+		title: 'Flight',
+		localStart: '2026-01-01T10:00:00',
+		startTz: 'UTC',
+		cardId: c2.id
+	});
+	expect(replaced.cardId).toBe(c2.id);
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row.card_id)).toBe(c2.id);
+
+	const cleared = updateSegment(u.id, t.id, s.id, {
+		title: 'Flight',
+		localStart: '2026-01-01T10:00:00',
+		startTz: 'UTC'
+	});
+	expect(cleared.cardId).toBeNull();
+	const row2 = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row2.card_id).toBeNull();
+});
+
+test('shared editor can set their own card', () => {
+	const owner = makeUser(kit, { email: 'card-owner4@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'card-editor4@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const ownerCard = makeCard(kit, owner.id, { nickname: 'Owner', network: 'visa', last4: '1111' });
+	const editorCard = makeCard(kit, editor.id, { nickname: 'Mine', network: 'amex', last4: '3333' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		cardId: ownerCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+
+	const updated = updateSegment(editor.id, t.id, s.id, {
+		title: 'Flight',
+		localStart: '2026-01-01T10:00:00',
+		startTz: 'UTC',
+		cardId: editorCard.id
+	});
+
+	expect(updated.cardId).toBe(editorCard.id);
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row.card_id)).toBe(editorCard.id);
+});
+
+test('shared editor cannot set the owner card and read-only viewer and stranger are rejected', () => {
+	const owner = makeUser(kit, { email: 'card-owner5@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'card-editor5@x.c', passwordHash: 'x', displayName: 'E' });
+	const viewer = makeUser(kit, { email: 'card-viewer5@x.c', passwordHash: 'x', displayName: 'V' });
+	const stranger = makeUser(kit, { email: 'card-stranger5@x.c', passwordHash: 'x', displayName: 'S' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const ownerCard = makeCard(kit, owner.id, { nickname: 'Owner', network: 'visa', last4: '1111' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		cardId: ownerCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: viewer.id, permission: 'read', showDetails: false });
+
+	expect(() =>
+		updateSegment(editor.id, t.id, s.id, {
+			title: 'Flight',
+			localStart: '2026-01-01T10:00:00',
+			startTz: 'UTC',
+			cardId: ownerCard.id
+		})
+	).toThrow();
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row.card_id)).toBe(ownerCard.id);
+
+	expect(() =>
+		updateSegment(viewer.id, t.id, s.id, {
+			title: 'Flight',
+			localStart: '2026-01-01T10:00:00',
+			startTz: 'UTC'
+		})
+	).toThrow();
+	expect(() =>
+		updateSegment(stranger.id, t.id, s.id, {
+			title: 'Flight',
+			localStart: '2026-01-01T10:00:00',
+			startTz: 'UTC'
+		})
+	).toThrow();
+	const row2 = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(Number(row2.card_id)).toBe(ownerCard.id);
 });

@@ -174,10 +174,13 @@ export function updateSegment(
 	const existing = getSegmentById(segId);
 	if (!existing || existing.tripId !== tripId) throw error(404, 'Not found');
 	if (i.cardId != null) assertOwnedRefs(userId, { cardId: i.cardId });
+	const isOwner = trip.ownerId === userId;
 	const endTz = i.endTz ?? i.startTz;
 	const { meetingPoint, meetingAt } = normalizeMeetingAt(i);
 	const paymentStatus = i.paymentStatus ? normalizePaymentStatus(i.paymentStatus) : undefined;
 	// Editors without details must not blank out stored confirmation/details.
+	// Shared editors can only reference their own cards, so a blank cardId means
+	// "none of mine": only the trip owner may clear or replace the stored card.
 	const showDetails = canViewDetails(userId, trip);
 	const patch: Parameters<typeof updateSegmentRepo>[1] = {
 		title: i.title,
@@ -193,7 +196,7 @@ export function updateSegment(
 		city_lng: i.cityLng ?? null,
 		venue: i.venue ?? null,
 		confirmation_number: showDetails ? (i.confirmationNumber ?? null) : existing.confirmationNumber,
-		card_id: i.cardId != null ? BigInt(i.cardId) : null,
+		card_id: i.cardId != null ? BigInt(i.cardId) : isOwner ? null : existing.cardId != null ? BigInt(existing.cardId) : null,
 		details_json: showDetails ? (i.details ? JSON.stringify(i.details) : null) : existing.detailsJson,
 		meeting_point: meetingPoint,
 		meeting_at: meetingAt,

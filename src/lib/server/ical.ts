@@ -71,13 +71,24 @@ function foldLine(input: string): string {
 		.join('\r\n');
 }
 
+const UTC_FORMAT = "yyyyMMdd'T'HHmmss'Z'";
+
 function formatUtcDateTime(iso: string): string {
 	const dt = DateTime.fromISO(iso, { zone: 'utc' });
 	if (!dt.isValid) throw new Error(`invalid datetime: ${iso}`);
-	return dt.toFormat("yyyyMMdd'T'HHmmss'Z'");
+	return dt.toFormat(UTC_FORMAT);
 }
 
-function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number, stamp: string): string {
+function parseUtcDateTime(value: unknown): DateTime | null {
+	if (typeof value !== 'string') return null;
+	const dt = DateTime.fromISO(value, { zone: 'utc' });
+	return dt.isValid ? dt : null;
+}
+
+function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number, stamp: string): string | null {
+	const start = parseUtcDateTime(segment.startAt);
+	if (!start) return null;
+	const end = segment.endAt ? parseUtcDateTime(segment.endAt) : null;
 	const uid = `roamarr-trip-${trip.id}-segment-${index + 1}@roamarr`;
 	const label = SEGMENT_LABELS[segment.type] ?? segment.type;
 	const summary = `${label}: ${segment.title}`;
@@ -87,14 +98,9 @@ function buildEvent(trip: CalendarTrip, segment: CalendarSegment, index: number,
 	lines.push(`UID:${uid}`);
 	lines.push(`DTSTAMP:${stamp}`);
 	lines.push(`SUMMARY:${escapeText(summary)}`);
-	lines.push(`DTSTART:${formatUtcDateTime(segment.startAt)}`);
-	if (segment.endAt) {
-		const start = DateTime.fromISO(segment.startAt, { zone: 'utc' });
-		const end = DateTime.fromISO(segment.endAt, { zone: 'utc' });
-		const endIsBeforeStart = start.isValid && end.isValid && end.toMillis() < start.toMillis();
-		if (!endIsBeforeStart) {
-			lines.push(`DTEND:${formatUtcDateTime(segment.endAt)}`);
-		}
+	lines.push(`DTSTART:${start.toFormat(UTC_FORMAT)}`);
+	if (end && end.toMillis() >= start.toMillis()) {
+		lines.push(`DTEND:${end.toFormat(UTC_FORMAT)}`);
 	}
 	if (segment.location) {
 		lines.push(`LOCATION:${escapeText(segment.location)}`);
@@ -166,7 +172,8 @@ export function buildCalendar(trip: CalendarTrip, segments: CalendarSegment[]): 
 	if (tripEvent) parts.push(tripEvent);
 
 	segments.forEach((segment, index) => {
-		parts.push(buildEvent(trip, segment, index, stamp));
+		const event = buildEvent(trip, segment, index, stamp);
+		if (event) parts.push(event);
 	});
 
 	parts.push('END:VCALENDAR');
@@ -194,7 +201,8 @@ export function buildAggregateCalendar(
 		if (tripEvent) parts.push(tripEvent);
 
 		segments.forEach((segment, index) => {
-			parts.push(buildEvent(trip, segment, index, stamp));
+			const event = buildEvent(trip, segment, index, stamp);
+			if (event) parts.push(event);
 		});
 	}
 

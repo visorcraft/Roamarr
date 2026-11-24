@@ -281,3 +281,95 @@ test('omits DTEND when a segment ends before it starts', () => {
 	expect(normal).toBeDefined();
 	expect(normal).toContain('DTEND:20261202T130000Z');
 });
+
+test('skips segments whose start time is unparseable and keeps the rest of the feed', () => {
+	const badStarts = ['not-a-date', '', '2026-02-30T10:00:00Z', null as unknown as string];
+	for (const badStart of badStarts) {
+		const ics = buildCalendar(
+			{ id: 13, name: 'Trip' },
+			[
+				{ type: 'flight', title: 'Broken', startAt: badStart },
+				{ type: 'hotel', title: 'Healthy', startAt: '2026-08-01T15:00:00.000Z' }
+			]
+		);
+		expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+		expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+		expect(ics).not.toContain('Invalid DateTime');
+		expect(ics).not.toContain('Broken');
+		expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+		expect(ics).toContain('DTSTART:20260801T150000Z');
+	}
+});
+
+test('keeps segment UIDs stable when an earlier segment is skipped', () => {
+	const ics = buildCalendar(
+		{ id: 13, name: 'Trip' },
+		[
+			{ type: 'flight', title: 'Broken', startAt: 'not-a-date' },
+			{ type: 'hotel', title: 'Healthy', startAt: '2026-08-01T15:00:00.000Z' }
+		]
+	);
+	expect(ics).toContain('UID:roamarr-trip-13-segment-2@roamarr');
+	expect(ics).not.toContain('UID:roamarr-trip-13-segment-1@roamarr');
+});
+
+test('omits DTEND when a segment end time is unparseable', () => {
+	const badEnds = ['not-a-date', '2026-02-30T18:00:00Z'];
+	for (const badEnd of badEnds) {
+		const ics = buildCalendar(
+			{ id: 13, name: 'Trip' },
+			[
+				{ type: 'flight', title: 'Flight', startAt: '2026-12-02T10:00:00.000Z', endAt: badEnd }
+			]
+		);
+		expect(ics).toContain('DTSTART:20261202T100000Z');
+		expect(ics).not.toContain('DTEND');
+	}
+});
+
+test('keeps DTEND when a segment ends exactly when it starts', () => {
+	const ics = buildCalendar(
+		{ id: 13, name: 'Trip' },
+		[
+			{
+				type: 'flight',
+				title: 'Flight',
+				startAt: '2026-12-02T10:00:00.000Z',
+				endAt: '2026-12-02T10:00:00.000Z'
+			}
+		]
+	);
+	expect(ics).toContain('DTEND:20261202T100000Z');
+});
+
+test('keeps the aggregate feed valid when a segment time is unparseable', () => {
+	const ics = buildAggregateCalendar('All Trips', [
+		{
+			trip: { id: 1, name: 'Trip One' },
+			segments: [
+				{ type: 'flight', title: 'Broken', startAt: 'not-a-date' },
+				{ type: 'hotel', title: 'Healthy', startAt: '2026-08-01T15:00:00.000Z' }
+			]
+		},
+		{
+			trip: { id: 2, name: 'Trip Two' },
+			segments: [
+				{
+					type: 'flight',
+					title: 'Trip Two Flight',
+					startAt: '2026-08-10T09:00:00.000Z',
+					endAt: '2026-02-30T18:00:00Z'
+				}
+			]
+		}
+	]);
+	expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
+	expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true);
+	expect(ics).not.toContain('Invalid DateTime');
+	expect(ics).toContain('UID:roamarr-trip-1-segment-2@roamarr');
+	expect(ics).not.toContain('UID:roamarr-trip-1-segment-1@roamarr');
+	expect(ics).toContain('DTSTART:20260810T090000Z');
+	const trip2Event = ics.split('BEGIN:VEVENT').find((e) => e.includes('Trip Two Flight'));
+	expect(trip2Event).toBeDefined();
+	expect(trip2Event).not.toContain('DTEND');
+});

@@ -135,6 +135,114 @@ function parseShareArgs(args: Record<string, unknown>): ShareArgsResult {
 	};
 }
 
+// Strict parser for roamarr_segment_update. The SDK does not enforce the
+// declared inputSchema, and patchSegment gates every column with `!== undefined`,
+// so a client that sends null (the usual JSON rendering of an omitted optional
+// field) or a mistyped value writes it straight through. Only keys that were
+// actually supplied are returned; the input object is never mutated. Null is
+// accepted ONLY as "clear" for the nullable fields; every other updatable field
+// rejects null with a message naming the field. Date/time and timezone validity
+// of startAt/endAt/startTz/endTz, and the type enum, stay with the existing
+// validateToolInput call.
+const SEGMENT_UPDATE_NULLABLE_FIELDS = new Set([
+	'endAt',
+	'cityName',
+	'countryCode',
+	'admin1Code',
+	'cityLat',
+	'cityLng',
+	'location',
+	'venue',
+	'confirmationNumber'
+]);
+
+const SEGMENT_UPDATE_FIELD_ORDER = [
+	'type',
+	'title',
+	'startAt',
+	'startTz',
+	'endAt',
+	'endTz',
+	'cityName',
+	'countryCode',
+	'admin1Code',
+	'cityLat',
+	'cityLng',
+	'location',
+	'venue',
+	'confirmationNumber',
+	'notes',
+	'details',
+	'paymentStatus'
+] as const;
+
+const SEGMENT_UPDATE_STRING_FIELDS = new Set([
+	'startTz',
+	'endTz',
+	'cityName',
+	'countryCode',
+	'admin1Code',
+	'location',
+	'venue',
+	'confirmationNumber',
+	'notes',
+	'paymentStatus'
+]);
+
+type SegmentUpdateArgsResult =
+	| { ok: true; patch: Record<string, unknown> }
+	| { ok: false; error: string };
+
+function parseSegmentUpdateArgs(args: Record<string, unknown>): SegmentUpdateArgsResult {
+	const patch: Record<string, unknown> = {};
+	for (const field of SEGMENT_UPDATE_FIELD_ORDER) {
+		const value = args[field];
+		if (value === undefined) continue;
+		if (value === null) {
+			if (SEGMENT_UPDATE_NULLABLE_FIELDS.has(field)) {
+				patch[field] = null;
+				continue;
+			}
+			return { ok: false, error: `${field} cannot be null; omit it to leave the field unchanged` };
+		}
+		if (field === 'title') {
+			if (typeof value !== 'string' || !value.trim()) {
+				return { ok: false, error: 'title must be a non-empty string' };
+			}
+			patch.title = value;
+			continue;
+		}
+		if (field === 'cityLat' || field === 'cityLng') {
+			const [min, max] = field === 'cityLat' ? [-90, 90] : [-180, 180];
+			if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+				return { ok: false, error: `${field} must be a finite number between ${min} and ${max}` };
+			}
+			patch[field] = value;
+			continue;
+		}
+		if (field === 'details') {
+			if (typeof value !== 'object' || Array.isArray(value)) {
+				return { ok: false, error: 'details must be an object' };
+			}
+			patch.details = value;
+			continue;
+		}
+		if (SEGMENT_UPDATE_STRING_FIELDS.has(field)) {
+			if (typeof value !== 'string') {
+				return { ok: false, error: `${field} must be a string` };
+			}
+			patch[field] = value;
+			continue;
+		}
+		// type, startAt, endAt: validity stays with validateToolInput.
+		patch[field] = value;
+	}
+	if (Object.keys(patch).length === 0) {
+		return { ok: false, error: 'at least one field to update is required' };
+	}
+	return { ok: true, patch };
+}
+
 // Strict parser shared by roamarr_trip_create and roamarr_trip_update. The SDK
 // does not enforce the declared inputSchema, so every field that reaches
 // tripsRepo is checked here. Absent keys are omitted so a partial update leaves
@@ -2820,31 +2928,41 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			// ---- Round 1: trip planning vertical ----
 			case 'roamarr_segment_update': {
 				if (!hasScope(scopes, 'segments:write')) return scopeError('segments:write');
+				const raw = args.segmentId;
+				const segId = Number(raw);
+				if (typeof raw !== 'number' || !Number.isSafeInteger(segId) || segId <= 0) {
+					return { content: [{ type: 'text' as const, text: 'segmentId must be a positive integer' }], isError: true };
+				}
+				const parsed = parseSegmentUpdateArgs(args as Record<string, unknown>);
+				if (!parsed.ok) return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
 				const validation = validateToolInput(args as Record<string, unknown>);
 				if (!validation.ok) return { content: [{ type: 'text' as const, text: validation.error }], isError: true };
+				const patch = parsed.patch;
 				const { patchSegment } = await import('./segments');
-				const segId = Number(args.segmentId);
 				const existing = segmentsRepo.getSegmentById(segId);
 				patchSegment(userId, segId, {
-					type: args.type as import('$lib/segmentLabels').SegmentType | undefined,
-					title: args.title as string | undefined,
-					startAt: args.startAt as string | undefined,
-					startTz: args.startTz as string | undefined,
-					endAt: args.endAt as string | undefined,
-					endTz: args.endTz as string | undefined,
-					cityName: args.cityName as string | undefined,
-					countryCode: args.countryCode as string | undefined,
-					admin1Code: args.admin1Code as string | undefined,
-					cityLat: args.cityLat as number | undefined,
-					cityLng: args.cityLng as number | undefined,
-					location: args.location as string | undefined,
+					type: patch.type as import('$lib/segmentLabels').SegmentType | undefined,
+					title: patch.title as string | undefined,
+					startAt: patch.startAt as string | undefined,
+					startTz: patch.startTz as string | undefined,
+					endAt: patch.endAt as string | null | undefined,
+					endTz: patch.endTz as string | undefined,
+					cityName: patch.cityName as string | null | undefined,
+					countryCode: patch.countryCode as string | null | undefined,
+					admin1Code: patch.admin1Code as string | null | undefined,
+					cityLat: patch.cityLat as number | null | undefined,
+					cityLng: patch.cityLng as number | null | undefined,
+					location: patch.location as string | null | undefined,
 					venue:
-						(args.venue as string | undefined) ??
-						(existing?.type === 'hotel' ? (args.location as string | undefined) : undefined),
-					confirmationNumber: args.confirmationNumber as string | undefined,
-					notes: args.notes as string | undefined,
-					details: args.details as Record<string, unknown> | undefined,
-					paymentStatus: args.paymentStatus as string | undefined
+						patch.venue !== undefined
+							? (patch.venue as string | null)
+							: existing?.type === 'hotel'
+								? (patch.location as string | undefined)
+								: undefined,
+					confirmationNumber: patch.confirmationNumber as string | null | undefined,
+					notes: patch.notes as string | undefined,
+					details: patch.details as Record<string, unknown> | undefined,
+					paymentStatus: patch.paymentStatus as string | undefined
 				});
 				logAudit(userId, 'mcp_segment_update', 'segment', segId, {});
 				return textResult({ ok: true, segmentId: segId });

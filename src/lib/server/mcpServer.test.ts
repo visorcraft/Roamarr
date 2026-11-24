@@ -18,7 +18,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, auditLogs } from './db/mongrelSchema';
+import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
@@ -3119,6 +3119,161 @@ describe('mcpServer', () => {
 				arguments: { linkId, confirm: true }
 			});
 			expect(deleted.isError).toBe(true);
+		});
+	});
+
+	describe('segment update strict input validation', () => {
+		async function seedSegment(trip: { id: number }) {
+			const { createSegment } = await import('./repositories/segmentsRepo');
+			return createSegment({
+				trip_id: BigInt(trip.id),
+				type: 'event',
+				title: 'Museum',
+				start_at: '2026-08-01T10:00:00Z',
+				start_tz: 'UTC'
+			});
+		}
+
+		test('segment update rejects a malformed segmentId', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'Bad id' });
+			const seg = await seedSegment(trip);
+			const { client } = await connect(userId, ['segments:read', 'segments:write']);
+
+			const malformed: Array<Record<string, unknown>> = [
+				{ title: 'x' },
+				{ segmentId: 'abc', title: 'x' },
+				{ segmentId: 1.5, title: 'x' },
+				{ segmentId: 0, title: 'x' },
+				{ segmentId: -1, title: 'x' },
+				{ segmentId: null, title: 'x' },
+				{ segmentId: true, title: 'x' }
+			];
+			for (const args of malformed) {
+				const res: any = await client.callTool({
+					name: 'roamarr_segment_update',
+					arguments: args
+				});
+				expect(res.isError, JSON.stringify(args)).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('segmentId must be a positive integer');
+			}
+
+			const { getSegmentById } = await import('./repositories/segmentsRepo');
+			expect(getSegmentById(seg.id)!.title).toBe('Museum');
+		});
+
+		test('segment update rejects null and mistyped fields without changing the segment', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'Strict update' });
+			const seg = await seedSegment(trip);
+			const { client } = await connect(userId, ['segments:read', 'segments:write']);
+			const { getSegmentById } = await import('./repositories/segmentsRepo');
+			const before = getSegmentById(seg.id)!;
+
+			const rows: Array<[Record<string, unknown>, string]> = [
+				[{ title: null }, 'title cannot be null'],
+				[{ title: '   ' }, 'title must be a non-empty string'],
+				[{ title: 123 }, 'title must be a non-empty string'],
+				[{ type: null }, 'type cannot be null'],
+				[{ startAt: null }, 'startAt cannot be null'],
+				[{ startTz: null }, 'startTz cannot be null'],
+				[{ endTz: null }, 'endTz cannot be null'],
+				[{ notes: null }, 'notes cannot be null'],
+				[{ paymentStatus: null }, 'paymentStatus cannot be null'],
+				[{ details: null }, 'details cannot be null'],
+				[{ details: 'abc' }, 'details must be an object'],
+				[{ details: [1, 2] }, 'details must be an object'],
+				[{ cityLat: '48.85' }, 'cityLat must be a finite number between -90 and 90'],
+				[{ cityLat: 91 }, 'cityLat must be a finite number between -90 and 90'],
+				[{ cityLat: -91 }, 'cityLat must be a finite number between -90 and 90'],
+				[{ cityLng: 200 }, 'cityLng must be a finite number between -180 and 180'],
+				[{ cityLng: 'x' }, 'cityLng must be a finite number between -180 and 180'],
+				[{ location: 5 }, 'location must be a string'],
+				[{ venue: {} }, 'venue must be a string'],
+				[{ confirmationNumber: true }, 'confirmationNumber must be a string'],
+				[{ cityName: 7 }, 'cityName must be a string'],
+				[{ countryCode: 12 }, 'countryCode must be a string'],
+				[{ admin1Code: [] }, 'admin1Code must be a string'],
+				[{}, 'at least one field to update is required']
+			];
+			for (const [args, expected] of rows) {
+				const res: any = await client.callTool({
+					name: 'roamarr_segment_update',
+					arguments: { segmentId: seg.id, ...args }
+				});
+				expect(res.isError, JSON.stringify(args)).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain(expected);
+			}
+
+			const after = getSegmentById(seg.id)!;
+			expect(after.title).toBe(before.title);
+			expect(after.type).toBe(before.type);
+			expect(after.startAt).toBe(before.startAt);
+			expect(after.startTz).toBe(before.startTz);
+			expect(after.cityLat).toBe(before.cityLat);
+			expect(after.cityLng).toBe(before.cityLng);
+			expect(after.detailsJson).toBe(before.detailsJson);
+			if ('updatedAt' in before) {
+				expect(after.updatedAt).toBe(before.updatedAt);
+			}
+		});
+
+		test('segment update still applies valid partial patches', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'Valid update' });
+			const seg = await seedSegment(trip);
+			const { client } = await connect(userId, ['segments:read', 'segments:write']);
+			const { getSegmentById } = await import('./repositories/segmentsRepo');
+			const before = getSegmentById(seg.id)!;
+
+			const titleRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, title: 'Updated museum' }
+			});
+			expect(titleRes.isError).toBeFalsy();
+			const afterTitle = getSegmentById(seg.id)!;
+			expect(afterTitle.title).toBe('Updated museum');
+			expect(afterTitle.type).toBe(before.type);
+			expect(afterTitle.startAt).toBe(before.startAt);
+			expect(afterTitle.detailsJson).toBe(before.detailsJson);
+
+			const notesRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, notes: 'Bring ID' }
+			});
+			expect(notesRes.isError).toBeFalsy();
+			const detailsRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, details: { bookingRef: 'A1' } }
+			});
+			expect(detailsRes.isError).toBeFalsy();
+			const merged = getSegmentById(seg.id)!;
+			expect(JSON.parse(merged.detailsJson!)).toMatchObject({ notes: 'Bring ID', bookingRef: 'A1' });
+
+			const coordsRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, cityLat: 48.8566, cityLng: 2.3522 }
+			});
+			expect(coordsRes.isError).toBeFalsy();
+			const coords = getSegmentById(seg.id)!;
+			expect(coords.cityLat).toBe(48.8566);
+			expect(coords.cityLng).toBe(2.3522);
+
+			const clearRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, cityLat: null, cityLng: null, endAt: null, venue: null }
+			});
+			expect(clearRes.isError).toBeFalsy();
+			const cleared = getSegmentById(seg.id)!;
+			expect(cleared.cityLat).toBeNull();
+			expect(cleared.cityLng).toBeNull();
+			expect(cleared.endAt).toBeNull();
+			expect(cleared.venue).toBeNull();
+
+			const paymentStatus = SEGMENT_PAYMENT_STATUSES[2];
+			const paymentRes: any = await client.callTool({
+				name: 'roamarr_segment_update',
+				arguments: { segmentId: seg.id, paymentStatus }
+			});
+			expect(paymentRes.isError).toBeFalsy();
+			expect(getSegmentById(seg.id)!.paymentStatus).toBe(paymentStatus);
 		});
 	});
 

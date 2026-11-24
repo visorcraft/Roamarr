@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, describe, vi } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -73,4 +73,46 @@ test('load rejects a trip the user cannot view', () => {
 	const t = makeTrip(kit, owner.id, { name: 'Private' });
 
 	expect(() => load(event(other, t.id))).toThrow();
+});
+
+import { readFileSync } from 'node:fs';
+
+const page = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+const template = page.slice(0, page.indexOf('<style>'));
+const printBlock = page.slice(page.indexOf('@media print'));
+
+describe('print itinerary page theming', () => {
+	test('print rules beat the inline theme colours', () => {
+		// A style attribute outranks every selector, so each colour, background, border, or
+		// shadow declaration in the print block needs !important to reach the paper.
+		expect(printBlock).not.toMatch(/\b(?:color|background|border-color|box-shadow):\s*[^;!]+;/);
+		for (const selector of [
+			'.print-title',
+			'.print-segment-title',
+			'.print-meta',
+			'.print-companion',
+			'.print-segment-meta',
+			'.print-segment-time',
+			'.print-segment-details',
+			'.print-header',
+			'.print-day-title',
+			'.badge',
+			'.empty-text'
+		]) {
+			expect(printBlock, selector).toContain(selector);
+		}
+	});
+
+	test('every fixed-palette text class carries a theme colour override', () => {
+		const tags =
+			template.match(/<[a-z0-9]+\b[^>]*\btext-(?:white|slate-\d{2,3}|indigo-\d{2,3})\b[^>]*>/g) ?? [];
+		expect(tags.length).toBeGreaterThan(0);
+		for (const tag of tags) expect(tag, tag).toMatch(/\bstyle="[^"]*\bcolor: var\(--theme-/);
+	});
+
+	test('the date arrow and companion details inherit the themed text colour', () => {
+		expect(template).toContain('<span>→</span>');
+		expect(template).toContain('<span class="capitalize">({c.category})</span>');
+		expect(template).toContain('<span>— {c.notes}</span>');
+	});
 });

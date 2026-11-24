@@ -95,7 +95,7 @@
 			{#if trip.startDate || trip.endDate}
 				<span class="print-meta-item inline-flex items-center gap-1.5">
 					{formatDate(trip.startDate) || '—'}
-					<span class="text-slate-400">→</span>
+					<span>→</span>
 					{formatDate(trip.endDate) || '—'}
 				</span>
 			{/if}
@@ -113,8 +113,8 @@
 				{#each companions as c (c.id)}
 					<li class="print-companion text-slate-300" style="color: var(--theme-ink)">
 						<span class="font-medium">{c.name}</span>
-						<span class="text-slate-500 capitalize">({c.category})</span>
-						{#if c.notes}<span class="text-slate-500">— {c.notes}</span>{/if}
+						<span class="capitalize">({c.category})</span>
+						{#if c.notes}<span>— {c.notes}</span>{/if}
 					</li>
 				{/each}
 			</ul>
@@ -172,7 +172,7 @@
 				{/each}
 			</div>
 		{:else}
-			<p class="empty-text py-6 text-center text-sm text-slate-500">No segments yet.</p>
+			<p class="empty-text py-6 text-center text-sm text-slate-500" style="color: var(--theme-readable-muted)">No segments yet.</p>
 		{/if}
 	</section>
 </div>
@@ -185,32 +185,38 @@
 		.print-itinerary {
 			max-width: none;
 			padding: 0;
-			color: #000;
-			background: #fff;
+			color: #000 !important;
+			background: #fff !important;
 		}
 		.print-title,
 		.print-section-title,
 		.print-day-title,
 		.print-segment-title {
-			color: #000;
+			color: #000 !important;
 		}
 		.print-meta,
 		.print-companion,
 		.print-segment-meta {
-			color: #333;
+			color: #333 !important;
 		}
-		.print-segment-time {
-			color: #555;
+		.print-segment-time,
+		.empty-text {
+			color: #555 !important;
+		}
+		.badge {
+			background: #eee !important;
+			color: #333 !important;
 		}
 		.print-segment-details {
-			background: #f5f5f5;
-			color: #333;
-			box-shadow: none;
+			background: #f5f5f5 !important;
+			color: #333 !important;
+			box-shadow: none !important;
 			border: 1px solid #ddd;
 		}
 		.print-header,
 		.print-day-title {
-			border-color: #ccc;
+			border-color: #ccc !important;
 		}
 	}
+
 </style>

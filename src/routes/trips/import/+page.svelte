@@ -1,7 +1,22 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, type SubmitFunction } from '$app/forms';
 
 	let { form } = $props();
+
+	let submitting = $state(false);
+	let previewing = $state(false);
+
+	function submitImport({ formData }: Parameters<SubmitFunction>[0]) {
+		previewing = formData.get('dryRun') === 'true';
+		submitting = true;
+		return async ({ update }: { update: () => Promise<void> }) => {
+			try {
+				await update();
+			} finally {
+				submitting = false;
+			}
+		};
+	}
 </script>
 
 <header class="page-header">
@@ -13,33 +28,32 @@
 </header>
 
 <section class="card mt-6 p-5 sm:p-6">
-	<form method="POST" enctype="multipart/form-data" use:enhance class="grid gap-4">
+	<form method="POST" enctype="multipart/form-data" use:enhance={submitImport} aria-busy={submitting} class="grid gap-4">
 		<div class="field">
 			<label class="label" for="format">Format</label>
-			<select id="format" name="format" class="select">
+			<select id="format" name="format" class="select" disabled={submitting}>
 				<option value="json">JSON</option>
 				<option value="csv">CSV</option>
 			</select>
 		</div>
 		<div class="field">
 			<label class="label" for="file">File</label>
-			<input id="file" name="file" type="file" accept=".json,.csv" class="input" required />
+			<input id="file" name="file" type="file" accept=".json,.csv" class="input" required disabled={submitting} aria-describedby="file-hint" />
+			<p id="file-hint" class="field-help">A .json or .csv export. Preview checks the file without saving; Import creates the trips.</p>
 		</div>
 		<div class="flex flex-wrap gap-2">
-			<button type="submit" name="dryRun" value="true" class="btn btn-primary">Preview</button>
-			<button type="submit" name="dryRun" value="false" class="btn btn-primary">Import</button>
+			<button type="submit" name="dryRun" value="true" class="btn btn-primary" disabled={submitting} class:btn-loading={submitting && previewing}>{submitting && previewing ? 'Previewing…' : 'Preview'}</button>
+			<button type="submit" name="dryRun" value="false" class="btn btn-primary" disabled={submitting} class:btn-loading={submitting && !previewing}>{submitting && !previewing ? 'Importing…' : 'Import'}</button>
 		</div>
 	</form>
 
 	{#if form?.error}
-		<div class="notice notice-error mt-4">
-			{form.error}
-		</div>
+		<div class="notice notice-error mt-4" role="alert">{form.error}</div>
 	{/if}
 
-	{#if form?.success && form?.result}
-		<div class="notice mt-4 {form.dryRun ? 'notice-info' : 'notice-success'}">
-			<p>
+	{#if form?.result}
+		<div class="notice mt-4 {form.error ? 'notice-error' : form.dryRun ? 'notice-info' : 'notice-success'}">
+			<p role="status">
 				{form.dryRun ? 'Would import' : 'Imported'} {form.result.imported} trip{form.result.imported === 1 ? '' : 's'} with
 				{form.result.segmentCount} segment{form.result.segmentCount === 1 ? '' : 's'}.
 			</p>
@@ -54,7 +68,7 @@
 				</ul>
 			{/if}
 			{#if form.result.errors.length}
-				<p class="mt-2 font-semibold">{form.result.errors.length} row(s) had errors:</p>
+				<p class="mt-2 font-semibold" role="status">{form.result.errors.length} row(s) had errors:</p>
 				<ul class="mt-1 list-inside list-disc text-sm">
 					{#each form.result.errors as e}
 						<li>Row {e.row}, field {e.field}: {e.message}</li>

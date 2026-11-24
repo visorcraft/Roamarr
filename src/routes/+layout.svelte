@@ -9,6 +9,7 @@
 	import type { IconName } from '$lib/icons';
 	import { installPickerInputs } from '$lib/pickerInput';
 	import { installFieldErrorA11y } from '$lib/fieldErrorA11y';
+	import { installDisclosureMenus } from '$lib/disclosureMenu';
 	import type { ToastVariant } from '$lib/toast';
 	import { provideDateFormat } from '$lib/dateFormatContext.svelte';
 	import { isActive as routeIsActive, activeChildHref, activeItemHref } from '$lib/navActive';
@@ -122,6 +123,7 @@
 	onMount(() => {
 		const disconnectPickerInputs = installPickerInputs();
 		const disconnectFieldA11y = installFieldErrorA11y();
+		const disconnectDisclosureMenus = installDisclosureMenus();
 		if (!browser) return;
 		function handleDocumentClick(event: MouseEvent) {
 			if (!userMenuDetails) return;
@@ -136,6 +138,7 @@
 			document.removeEventListener('click', handleDocumentClick);
 			disconnectFieldA11y();
 			disconnectPickerInputs();
+			disconnectDisclosureMenus();
 		};
 	});
 

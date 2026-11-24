@@ -4,6 +4,7 @@
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import SecurityTabs from '$lib/components/SecurityTabs.svelte';
+	import TextField from '$lib/components/TextField.svelte';
 	import { startRegistration as webauthnRegister } from '@simplewebauthn/browser';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 
@@ -15,6 +16,8 @@
 	const activeTab = $derived(mcpPage ? 'api-clients' : page.url.searchParams.get('tab') ?? 'password');
 	const tfa = $derived(data.state);
 	const backupCodes = $derived(form?.backupCodes as string[] | undefined);
+	const passwordError = $derived(form?.errors ? form.error : undefined);
+	const passwordErrors = $derived(form?.errors ?? {});
 
 	let submittingProfile = $state(false);
 	let disablePassword = $state('');
@@ -86,7 +89,7 @@
 
 {#if !mcpPage}<SecurityTabs />{/if}
 
-{#if form?.error}<p class="notice notice-error mt-6">{form.error}</p>{/if}
+{#if form?.error && !form.errors}<p class="notice notice-error mt-6">{form.error}</p>{/if}
 
 {#if activeTab === 'password'}
 	<section class="card mt-6 p-5 sm:p-6">
@@ -102,19 +105,37 @@
 				};
 			}}
 			class="grid gap-4 sm:grid-cols-2"
+			aria-busy={submittingProfile}
 		>
-			<div class="field">
-				<label class="label" for="newPassword">New password</label>
-				<input id="newPassword" name="newPassword" type="password" class="input" required />
-			</div>
-			<div class="field">
-				<label class="label" for="confirmPassword">Confirm new password</label>
-				<input id="confirmPassword" name="confirmPassword" type="password" class="input" required />
-			</div>
-			<div class="field sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]">
-				<label class="label" for="oldPassword">Current password</label>
-				<input id="oldPassword" name="oldPassword" type="password" class="input" required />
-			</div>
+			{#if passwordError}<p class="notice notice-error sm:col-span-2" role="alert">{passwordError}</p>{/if}
+			<TextField
+				name="oldPassword"
+				label="Current password"
+				type="password"
+				required
+				disabled={submittingProfile}
+				autocomplete="current-password"
+				class="sm:col-span-2 sm:max-w-[calc(50%-0.5rem)]"
+				errors={passwordErrors}
+			/>
+			<TextField
+				name="newPassword"
+				label="New password"
+				type="password"
+				required
+				disabled={submittingProfile}
+				autocomplete="new-password"
+				errors={passwordErrors}
+			/>
+			<TextField
+				name="confirmPassword"
+				label="Confirm new password"
+				type="password"
+				required
+				disabled={submittingProfile}
+				autocomplete="new-password"
+				errors={passwordErrors}
+			/>
 			<div class="flex justify-end sm:col-span-2">
 				<button class="btn btn-primary" class:btn-loading={submittingProfile} disabled={submittingProfile}>
 					Update password

@@ -64,10 +64,19 @@ export const actions: Actions = {
 		const confirmPassword = String(f.get('confirmPassword') ?? '');
 		const token = cookies.get('session');
 		if (!token) throw redirect(302, '/login');
+		const errors: Record<string, string> = {};
+		if (!oldPassword) errors.oldPassword = 'Enter your current password.';
+		const newPasswordBytes = Buffer.byteLength(newPassword, 'utf8');
+		if (newPasswordBytes < 8) errors.newPassword = 'Use at least 8 characters.';
+		else if (newPasswordBytes > 1024) errors.newPassword = 'Password is too long.';
+		if (newPassword !== confirmPassword) errors.confirmPassword = 'Passwords do not match.';
+		if (Object.keys(errors).length > 0) {
+			return fail(400, { error: 'Password not changed. Fix the highlighted fields.', errors });
+		}
 		try {
 			await _updatePassword(u.id, token, { oldPassword, newPassword, confirmPassword });
 		} catch (e) {
-			return fail(400, { error: e instanceof Error ? e.message : 'Password update failed' });
+			return fail(400, { error: e instanceof Error ? e.message : 'Password update failed', errors: {} });
 		}
 		setFlash(cookies, 'Password changed.');
 		throw redirect(303, securityUrl('password'));

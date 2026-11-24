@@ -348,3 +348,84 @@ test('backup-code UI requires an explicit saved acknowledgment', async () => {
 	expect(source).toContain('bind:checked={savedAck}');
 	expect(source).toContain('aria-disabled={!savedAck}');
 });
+
+test('updatePassword returns a field error when confirmation does not match', async () => {
+	const kit = kitDb();
+	const u = makeUser(kit, { email: 'pw-mismatch@x.c', passwordHash: await hashPassword('oldsecret') });
+	const cookies = { set: vi.fn(), get: () => 'current-token' };
+	const form = new FormData();
+	form.set('oldPassword', 'oldsecret');
+	form.set('newPassword', 'newsecret1');
+	form.set('confirmPassword', 'different');
+
+	const result = (await actions.updatePassword({
+		request: { formData: async () => form },
+		locals: { user: u },
+		cookies
+	} as any)) as { status: number; data: { error: string; errors: Record<string, string> } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.errors).toEqual({ confirmPassword: 'Passwords do not match.' });
+	expect(result.data.error).toBe('Password not changed. Fix the highlighted fields.');
+	expect(JSON.stringify(result.data)).not.toContain('newsecret1');
+	expect(JSON.stringify(result.data)).not.toContain('different');
+});
+
+test('updatePassword flags a short new password', async () => {
+	const kit = kitDb();
+	const u = makeUser(kit, { email: 'pw-short@x.c', passwordHash: await hashPassword('oldsecret') });
+	const cookies = { set: vi.fn(), get: () => 'current-token' };
+	const form = new FormData();
+	form.set('oldPassword', 'oldsecret');
+	form.set('newPassword', 'short');
+	form.set('confirmPassword', 'short');
+
+	const result = (await actions.updatePassword({
+		request: { formData: async () => form },
+		locals: { user: u },
+		cookies
+	} as any)) as { status: number; data: { error: string; errors: Record<string, string> } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.errors).toEqual({ newPassword: 'Use at least 8 characters.' });
+});
+
+test('updatePassword flags a missing current password', async () => {
+	const kit = kitDb();
+	const u = makeUser(kit, { email: 'pw-missing@x.c', passwordHash: await hashPassword('oldsecret') });
+	const cookies = { set: vi.fn(), get: () => 'current-token' };
+	const form = new FormData();
+	form.set('oldPassword', '');
+	form.set('newPassword', 'newsecret1');
+	form.set('confirmPassword', 'newsecret1');
+
+	const result = (await actions.updatePassword({
+		request: { formData: async () => form },
+		locals: { user: u },
+		cookies
+	} as any)) as { status: number; data: { error: string; errors: Record<string, string> } };
+
+	expect(result.status).toBe(400);
+	expect(result.data.errors).toEqual({ oldPassword: 'Enter your current password.' });
+});
+
+test('updatePassword keeps thrown messages as a form-level failure', async () => {
+	const kit = kitDb();
+	const u = makeUser(kit, { email: 'pw-thrown@x.c', passwordHash: await hashPassword('oldsecret') });
+	const cookies = { set: vi.fn(), get: () => 'current-token' };
+	const form = new FormData();
+	form.set('oldPassword', 'wrong');
+	form.set('newPassword', 'newsecret1');
+	form.set('confirmPassword', 'newsecret1');
+
+	const result = (await actions.updatePassword({
+		request: { formData: async () => form },
+		locals: { user: u },
+		cookies
+	} as any)) as { status: number; data: { error: string; errors: Record<string, string> } };
+
+	expect(result.status).toBe(400);
+	expect(typeof result.data.error).toBe('string');
+	expect(result.data.error.length).toBeGreaterThan(0);
+	expect(result.data.errors).toEqual({});
+});

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import StandardPlanForm from './StandardPlanForm.svelte';
+	import { m } from '$lib/paraglide/messages';
 	import type { PlacePrefill } from '$lib/server/segmentNewPage';
 
 	let {
@@ -17,10 +18,10 @@
 {/if}
 <StandardPlanForm
 	{errors}
-	titleLabel="Place name"
-	titlePlaceholder="Eiffel Tower"
-	locationLabel="Address"
-	locationPlaceholder="Enter address"
+	titleLabel={m.poi_title_label()}
+	titlePlaceholder={m.poi_title_placeholder()}
+	locationLabel={m.poi_location_label()}
+	locationPlaceholder={m.poi_location_placeholder()}
 	title={prefill?.title ?? ''}
 	venue={prefill?.venue ?? ''}
 	countryCode={prefill?.countryCode ?? undefined}

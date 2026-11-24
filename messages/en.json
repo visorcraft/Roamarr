@@ -419,5 +419,13 @@
 	"meetup_location_label": "Meeting place",
 	"meetup_location_placeholder": "Cafe address or landmark",
 	"meetup_attendees_label": "Who",
-	"meetup_attendees_placeholder": "Names or group"
+	"meetup_attendees_placeholder": "Names or group",
+	"poi_title_label": "Place name",
+	"poi_title_placeholder": "Eiffel Tower",
+	"poi_location_label": "Address",
+	"poi_location_placeholder": "Enter address",
+	"boat_title_label": "Cruise / ferry name",
+	"boat_title_placeholder": "Harbor ferry",
+	"boat_location_label": "Port / pier",
+	"boat_location_placeholder": "Pier 33"
 }

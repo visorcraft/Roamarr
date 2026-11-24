@@ -7,9 +7,10 @@
 		icon?: Snippet;
 		actionHref?: string;
 		actionLabel?: string;
+		onAction?: () => void;
 	}
 
-	let { message, icon, actionHref, actionLabel }: Props = $props();
+	let { message, icon, actionHref, actionLabel, onAction }: Props = $props();
 </script>
 
 <div class="empty-state">
@@ -21,7 +22,9 @@
 		{/if}
 	</div>
 	<p class="text-[var(--theme-ink)]">{message}</p>
-	{#if actionHref && actionLabel}
+	{#if onAction && actionLabel}
+		<button type="button" class="btn btn-primary mt-1" onclick={onAction}>{actionLabel}</button>
+	{:else if actionHref && actionLabel}
 		<a href={actionHref} class="btn btn-primary mt-1">{actionLabel}</a>
 	{/if}
 </div>

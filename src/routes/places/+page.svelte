@@ -1,4 +1,5 @@
 <script lang="ts">
+	import EmptyState from '$lib/components/EmptyState.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import MarkdownText from '$lib/components/MarkdownText.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -192,6 +193,18 @@
 		const qs = params.toString();
 		return qs ? `/places?${qs}` : '/places';
 	}
+
+	const hasActiveFilters = $derived(
+		Boolean(
+			data.filters.q ||
+				data.filters.status ||
+				data.filters.favorite ||
+				data.filters.categoryId != null
+		)
+	);
+	const emptyMessage = $derived(
+		hasActiveFilters ? 'No places match these filters.' : 'No saved places yet.'
+	);
 </script>
 
 <header class="page-header">
@@ -260,10 +273,14 @@
 		<div class="notice notice-error mb-4">{form.error}</div>
 	{/if}
 	{#if data.places.length === 0}
-		<div class="empty-state">
-			<p>No saved places yet.</p>
-			<p class="text-sm">Add your first place to build a reusable library.</p>
-		</div>
+		<EmptyState
+			message={emptyMessage}
+			actionHref={hasActiveFilters ? '/places' : undefined}
+			actionLabel={hasActiveFilters ? 'Clear filters' : 'Add place'}
+			onAction={hasActiveFilters ? undefined : openCreate}
+		>
+			{#snippet icon()}<Icon name="location" class="h-6 w-6" />{/snippet}
+		</EmptyState>
 	{:else}
 		<ul class="divide-y divide-(--theme-line)">
 			{#each data.places as place (place.id)}

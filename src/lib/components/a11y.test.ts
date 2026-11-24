@@ -1,4 +1,6 @@
-import { test, expect } from 'vitest';
+import { describe, test, expect } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { render } from 'svelte/server';
 import { checkA11y, formatViolations } from '../../../tests/a11y';
 import Toast from './Toast.svelte';
 import Icon from './Icon.svelte';
@@ -6,6 +8,8 @@ import EmptyState from './EmptyState.svelte';
 import CopyButton from './CopyButton.svelte';
 import TextField from './TextField.svelte';
 import CityAutocomplete from './segments/CityAutocomplete.svelte';
+import Modal from './Modal.svelte';
+import GlobeModal from './GlobeModal.svelte';
 
 test('Toast has no axe violations', async () => {
 	const violations = await checkA11y(Toast, { message: 'Settings saved.', variant: 'success' });
@@ -73,4 +77,33 @@ test('CityAutocomplete exposes a labelled combobox', async () => {
 		}
 	);
 	expect(violations, formatViolations(violations)).toHaveLength(0);
+});
+
+const modalBody = createRawSnippet(() => ({ render: () => '<p>Are you sure?</p>' }));
+const renderModal = (props: Record<string, unknown> = {}) =>
+	render(Modal, { props: { children: modalBody, open: true, ...props } }).body;
+/** aria-labelledby value on the opening <dialog> tag. */
+const labelledBy = (html: string) =>
+	html.match(/<dialog\b[^>]*>/)?.[0].match(/\baria-labelledby="([^"]+)"/)?.[1];
+
+describe('Dialog accessible names', () => {
+	test('Modal names the dialog after its title', () => {
+		const html = renderModal({ title: 'Delete trip' });
+		const id = labelledBy(html);
+		expect(id).toBeTruthy();
+		expect(html).toMatch(new RegExp(`<h2[^>]*\\bid="${id}"[^>]*>Delete trip</h2>`));
+	});
+
+	test('Modal without a title has no aria-labelledby reference', () => {
+		const html = renderModal();
+		expect(labelledBy(html)).toBeUndefined();
+		expect(html).not.toContain('modal-title');
+	});
+
+	test('GlobeModal names the dialog after its city heading', () => {
+		const html = render(GlobeModal, { props: { open: true, lat: 1, lng: 2, cityName: 'Cairo' } }).body;
+		const id = labelledBy(html);
+		expect(id).toBeTruthy();
+		expect(html).toMatch(new RegExp(`<h2[^>]*\\bid="${id}"[^>]*>Cairo</h2>`));
+	});
 });

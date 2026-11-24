@@ -14,6 +14,7 @@
 		lng: number;
 		cityName: string;
 	} = $props();
+	const titleId = $props.id();
 
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 	let container = $state<HTMLDivElement | null>(null);
@@ -104,6 +105,7 @@
 <dialog
 	bind:this={dialogEl}
 	class="globe-dialog"
+	aria-labelledby={titleId}
 	onclose={handleClose}
 	onclick={(e) => {
 		if (e.target === dialogEl) requestClose();
@@ -111,7 +113,7 @@
 >
 	<div class="card globe-modal">
 		<div class="globe-modal-head">
-			<h2 class="section-title">{cityName}</h2>
+			<h2 class="section-title" id={titleId}>{cityName}</h2>
 			<button class="btn btn-secondary" type="button" onclick={requestClose} aria-label="Close globe"><Icon name="close" class="h-4 w-4" /></button>
 		</div>
 		<div class="globe-modal-stage" bind:this={container}>

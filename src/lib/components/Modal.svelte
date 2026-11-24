@@ -11,6 +11,8 @@
 	}
 
 	let { open = $bindable(false), title, children, actions, onclose }: Props = $props();
+	// Unique per instance: several modals can be mounted on one page.
+	const titleId = $props.id();
 	let dialogEl = $state<HTMLDialogElement | null>(null);
 
 	$effect(() => {
@@ -39,13 +41,14 @@
 <dialog
 	bind:this={dialogEl}
 	class="modal-dialog"
+	aria-labelledby={title ? titleId : undefined}
 	onclose={handleClose}
 	onclick={handleBackdropClick}
 >
 	<div class="modal-panel">
 		{#if title}
 			<div class="modal-head">
-				<h2 class="modal-title">{title}</h2>
+				<h2 class="modal-title" id={titleId}>{title}</h2>
 			</div>
 		{/if}
 		<div class="modal-body">

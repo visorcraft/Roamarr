@@ -10,6 +10,7 @@
 	import { COUNTRIES } from '$lib/countries';
 	import { usesPickupDropoff } from '$lib/segmentLabels';
 	import TripDocumentsTable from '$lib/components/TripDocumentsTable.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	interface SegmentEdit {
 		id?: number;
@@ -70,28 +71,28 @@
 
 <form method="POST" action={`/trips/${tripId}/segments?/update`} class="trip-timeline-card grid gap-4 sm:grid-cols-2" oninput={() => (isDirty = true)}>
 	<input type="hidden" name="segmentId" value={s.id} />
-	<TextField name="title" id={fid('title')} label="Title" value={s.title} required {errors} />
-	<TextField name="localStart" id={fid('localStart')} label={hotel ? 'Check-in' : flight ? 'Departure' : pickupDropoff ? 'Pick-up' : 'Starts'} type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} required {errors} />
+	<TextField name="title" id={fid('title')} label={m.plan_title_label()} value={s.title} required {errors} />
+	<TextField name="localStart" id={fid('localStart')} label={hotel ? m.segment_edit_checkin_label() : flight ? m.segment_edit_departure_label() : pickupDropoff ? m.segment_edit_pickup_label() : m.segment_edit_starts_label()} type="datetime-local" value={toDatetimeLocal(s.startAt, s.startTz)} required {errors} />
 	<div class="field">
-		<label class="label" for={fid('startTz')}>Timezone</label>
+		<label class="label" for={fid('startTz')}>{m.datetime_timezone_label()}</label>
 		<TimezoneSelect id={fid('startTz')} name="startTz" value={s.startTz} class="input {errors.startTz ? 'input-error' : ''}" />
 		{#if errors.startTz}<p class="field-error">{errors.startTz}</p>{/if}
 	</div>
-	<TextField name="endAt" id={fid('endAt')} label={hotel ? 'Check-out' : flight ? 'Arrival' : pickupDropoff ? 'Drop-off' : 'Ends'} type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} {errors} />
+	<TextField name="endAt" id={fid('endAt')} label={hotel ? m.segment_edit_checkout_label() : flight ? m.segment_edit_arrival_label() : pickupDropoff ? m.segment_edit_dropoff_label() : m.segment_edit_ends_label()} type="datetime-local" value={toDatetimeLocal(s.endAt, s.endTz ?? s.startTz)} {errors} />
 	<div class="field">
-		<label class="label" for={fid('endTz')}>{hotel ? 'Check-out timezone' : flight ? 'Arrival timezone' : pickupDropoff ? 'Drop-off timezone' : 'End timezone'}</label>
+		<label class="label" for={fid('endTz')}>{hotel ? m.hotel_checkout_timezone_label() : flight ? m.flight_arrival_timezone_label() : pickupDropoff ? m.rental_car_dropoff_timezone_label() : m.datetime_end_timezone_label()}</label>
 		<TimezoneSelect id={fid('endTz')} name="endTz" value={s.endTz ?? s.startTz} class="input {errors.endTz ? 'input-error' : ''}" />
 		{#if errors.endTz}<p class="field-error">{errors.endTz}</p>{/if}
 	</div>
 	<div class="field">
-		<label class="label" for={fid('countryCode')}>Country</label>
+		<label class="label" for={fid('countryCode')}>{m.plan_country_label()}</label>
 		<select
 			id={fid('countryCode')}
 			name="countryCode"
 			class="input {errors.countryCode ? 'input-error' : ''}"
 			bind:value={countryCode}
 		>
-			<option value="">Select country</option>
+			<option value="">{m.plan_country_placeholder()}</option>
 			{#each COUNTRIES as c (c.code)}
 				<option value={c.code}>{c.name}</option>
 			{/each}
@@ -116,31 +117,29 @@
 		lngName="cityLng"
 		{errors}
 	/>
-	<TextField name="venue" id={fid('venue')} label={hotel ? 'Address' : 'Venue'} value={s.venue ?? ''} class="sm:col-span-2" {errors} />
-	<TextField name="confirmationNumber" id={fid('confirmationNumber')} label="Confirmation #" value={s.confirmationNumber ?? ''} {errors} />
-	<TextField name="meetingPoint" id={fid('meetingPoint')} label="Meeting / rally point" value={s.meetingPoint ?? ''} maxlength="200" class="sm:col-span-2" {errors} />
-	<TextField name="meetingAt" id={fid('meetingAt')} label="Rally time" type="datetime-local" value={toDatetimeLocal(s.meetingAt, s.startTz ?? 'UTC')} {errors} />
-	<SelectField name="paymentStatus" id={fid('paymentStatus')} label="Payment status" {errors}>
-		<option value="quoted" selected={s.paymentStatus === 'quoted'}>Quoted</option>
-		<option value="deposit_paid" selected={s.paymentStatus === 'deposit_paid'}>Deposit paid</option>
-		<option value="fully_paid" selected={s.paymentStatus === 'fully_paid'}>Fully paid</option>
-		<option value="refunded" selected={s.paymentStatus === 'refunded'}>Refunded</option>
+	<TextField name="venue" id={fid('venue')} label={hotel ? m.hotel_address_label() : m.plan_location_label()} value={s.venue ?? ''} class="sm:col-span-2" {errors} />
+	<TextField name="confirmationNumber" id={fid('confirmationNumber')} label={m.segment_edit_confirmation_label()} value={s.confirmationNumber ?? ''} {errors} />
+	<TextField name="meetingPoint" id={fid('meetingPoint')} label={m.plan_meeting_point_label()} value={s.meetingPoint ?? ''} maxlength="200" class="sm:col-span-2" {errors} />
+	<TextField name="meetingAt" id={fid('meetingAt')} label={m.plan_rally_time_label()} type="datetime-local" value={toDatetimeLocal(s.meetingAt, s.startTz ?? 'UTC')} {errors} />
+	<SelectField name="paymentStatus" id={fid('paymentStatus')} label={m.segment_edit_payment_status_label()} {errors}>
+		<option value="quoted" selected={s.paymentStatus === 'quoted'}>{m.segment_edit_payment_status_quoted()}</option>
+		<option value="deposit_paid" selected={s.paymentStatus === 'deposit_paid'}>{m.segment_edit_payment_status_deposit_paid()}</option>
+		<option value="fully_paid" selected={s.paymentStatus === 'fully_paid'}>{m.segment_edit_payment_status_fully_paid()}</option>
+		<option value="refunded" selected={s.paymentStatus === 'refunded'}>{m.segment_edit_payment_status_refunded()}</option>
 	</SelectField>
-	<TextField name="paymentDueDate" id={fid('paymentDueDate')} label="Payment due" type="date" value={s.paymentDueDate ?? ''} {errors} />
+	<TextField name="paymentDueDate" id={fid('paymentDueDate')} label={m.segment_edit_payment_due_label()} type="date" value={s.paymentDueDate ?? ''} {errors} />
 	{#if s.id != null}
 		<details class="panel-subtle sm:col-span-2" open={documents.length > 0}>
-			<summary class="cursor-pointer font-semibold">Attached files</summary>
+			<summary class="cursor-pointer font-semibold">{m.segment_edit_attached_files_section()}</summary>
 			<div class="mt-3 space-y-3">
-				<p class="text-sm text-muted">
-					PDFs or images (JPEG, PNG, WebP) such as QR codes and vouchers, max 10&nbsp;MB each.
-				</p>
+				<p class="text-sm text-muted">{m.segment_edit_attached_files_hint()}</p>
 				<TripDocumentsTable
 					{tripId}
 					{documents}
 					canEdit={true}
 					pageSize={5}
 					showScope={false}
-					emptyMessage="No files yet."
+					emptyMessage={m.segment_edit_no_files()}
 				/>
 				<!-- Inputs associate to a sibling form via the form= attribute (no nested forms). -->
 				<div class="grid gap-2 sm:grid-cols-2">
@@ -157,20 +156,20 @@
 						form="segment-file-upload-{s.id}"
 						name="label"
 						class="input text-sm"
-						placeholder="Label (optional)"
+						placeholder={m.segment_edit_label_placeholder()}
 					/>
 					<button form="segment-file-upload-{s.id}" type="submit" class="btn btn-secondary btn-sm">
-						Upload file
+						{m.segment_edit_upload_file()}
 					</button>
 				</div>
 			</div>
 		</details>
 	{/if}
 	<details class="panel-subtle sm:col-span-2" open={Boolean(errors.detailsJson)}>
-		<summary class="cursor-pointer font-semibold">Additional details</summary>
+		<summary class="cursor-pointer font-semibold">{m.segment_edit_more_details_section()}</summary>
 		<div class="field mt-3">
-			<label class="label" for={fid('detailsJson')}>Stored data</label>
-			<p class="mb-2 text-sm text-muted">Roamarr keeps booking-specific fields here. Usually no changes are needed.</p>
+			<label class="label" for={fid('detailsJson')}>{m.segment_edit_stored_data_label()}</label>
+			<p class="mb-2 text-sm text-muted">{m.segment_edit_stored_data_hint()}</p>
 			<textarea id={fid('detailsJson')} name="detailsJson" class="input h-20 font-mono text-xs {errors.detailsJson ? 'input-error' : ''}">{s.detailsJson ?? ''}</textarea>
 			{#if errors.detailsJson}<p class="field-error">{errors.detailsJson}</p>{/if}
 		</div>
@@ -179,8 +178,8 @@
 		<CardSelect {cards} name="cardId" value={s.cardId} {errors} />
 	{/if}
 	<div class="flex justify-end gap-2 sm:col-span-2">
-		<CancelButton dirty={isDirty} onConfirm={onCancel}>Cancel</CancelButton>
-		<button class="btn btn-primary">Save</button>
+		<CancelButton dirty={isDirty} onConfirm={onCancel}>{m.common_cancel()}</CancelButton>
+		<button class="btn btn-primary">{m.segment_new_save()}</button>
 	</div>
 </form>
 {#if s.id != null}

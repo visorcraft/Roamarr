@@ -37,6 +37,7 @@ import {
 	streamToBase64
 } from './mcpHelpers';
 import type { TripDocumentRow } from './repositories/tripDocumentsRepo';
+import type { PlaceLinkPatch } from './placeLinks';
 import { getSettings } from './settings';
 import { effectiveTripStatus, todayForUser } from './tripLifecycle';
 
@@ -129,6 +130,38 @@ function parseShareArgs(args: Record<string, unknown>): ShareArgsResult {
 		permission: (permission as SharePermission | undefined) ?? undefined,
 		showDetails: (showDetails as boolean | undefined) ?? undefined
 	};
+}
+
+type PlaceLinkPatchResult =
+	| { ok: true; linkId: number; patch: PlaceLinkPatch; empty: boolean }
+	| { ok: false; error: string };
+
+// Strict parser for roamarr_place_links_update. Only real strings are accepted:
+// String(null) === 'null' and String({}) === '[object Object]' would otherwise be
+// persisted as the label or notes. Trimming, length caps, and URL format stay in
+// placeLinks.ts (validateLabel/validateUrl/validateNotes) and are not duplicated.
+function parsePlaceLinkArgs(args: Record<string, unknown>): PlaceLinkPatchResult {
+	const raw = args.linkId;
+	const linkId = Number(raw);
+	if (typeof raw !== 'number' || !Number.isSafeInteger(linkId) || linkId <= 0) {
+		return { ok: false, error: 'linkId must be a positive integer' };
+	}
+	const patch: PlaceLinkPatch = {};
+	if (args.label !== undefined) {
+		if (typeof args.label !== 'string') return { ok: false, error: 'label must be a string' };
+		patch.label = args.label;
+	}
+	if (args.url !== undefined) {
+		if (typeof args.url !== 'string') return { ok: false, error: 'url must be a string' };
+		patch.url = args.url;
+	}
+	if (args.notes !== undefined) {
+		if (args.notes !== null && typeof args.notes !== 'string') {
+			return { ok: false, error: 'notes must be a string or null' };
+		}
+		patch.notes = args.notes;
+	}
+	return { ok: true, linkId, patch, empty: Object.keys(patch).length === 0 };
 }
 
 function destinationCityPatch(
@@ -4281,22 +4314,24 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 		}
 		case 'roamarr_place_links_update': {
 			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');
+			const parsed = parsePlaceLinkArgs(args);
+			if (!parsed.ok) {
+				return { content: [{ type: 'text' as const, text: parsed.error }], isError: true };
+			}
+			if (parsed.empty) {
+				return textResult({ ok: true, linkId: parsed.linkId, updated: false });
+			}
 			const { getPlaceById } = await import('./places');
 			const { getPlaceLinkById, updatePlaceLink } = await import('./placeLinks');
-			const id = Number(args.linkId);
-			const existing = getPlaceLinkById(id);
+			const existing = getPlaceLinkById(parsed.linkId);
 			if (!existing || !getPlaceById(existing.placeId, userId)) {
 				return { content: [{ type: 'text' as const, text: 'Link not found' }], isError: true };
 			}
 			// Partial patch: absent keys are omitted entirely so they are never
 			// written as NULL (Kit treats explicit undefined as NULL).
-			const patch: Parameters<typeof updatePlaceLink>[3] = {};
-			if (args.label !== undefined) patch.label = String(args.label);
-			if (args.url !== undefined) patch.url = String(args.url);
-			if (args.notes !== undefined) patch.notes = args.notes === null ? null : String(args.notes);
-			updatePlaceLink(userId, existing.placeId, id, patch);
-			logAudit(userId, 'mcp_place_link_update', 'place_link', id, {});
-			return textResult({ ok: true, linkId: id });
+			updatePlaceLink(userId, existing.placeId, parsed.linkId, parsed.patch);
+			logAudit(userId, 'mcp_place_link_update', 'place_link', parsed.linkId, {});
+			return textResult({ ok: true, linkId: parsed.linkId, updated: true });
 		}
 		case 'roamarr_place_links_delete': {
 			if (!hasScope(scopes, 'saved-places:write')) return scopeError('saved-places:write');

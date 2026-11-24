@@ -2606,6 +2606,148 @@ describe('mcpServer', () => {
 			expect((await call('roamarr_place_links_list', { placeId })).items).toHaveLength(0);
 		});
 
+		test('place links update rejects a malformed linkId', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+			const placeId = await seedPlace(client);
+			await call('roamarr_place_links_create', {
+				placeId,
+				label: 'Official site',
+				url: 'https://cafe.example',
+				notes: 'Menu PDF'
+			});
+
+			const malformed: Array<Record<string, unknown>> = [
+				{ label: 'x' },
+				{ linkId: 'abc', label: 'x' },
+				{ linkId: 1.5, label: 'x' },
+				{ linkId: 0, label: 'x' },
+				{ linkId: null, label: 'x' }
+			];
+			for (const args of malformed) {
+				const res: any = await client.callTool({
+					name: 'roamarr_place_links_update',
+					arguments: args
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('linkId must be a positive integer');
+			}
+
+			const listed = await call('roamarr_place_links_list', { placeId });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].label).toBe('Official site');
+		});
+
+		test('place links update rejects non-string fields instead of stringifying them', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+			const placeId = await seedPlace(client);
+			const created = await call('roamarr_place_links_create', {
+				placeId,
+				label: 'Official site',
+				url: 'https://cafe.example',
+				notes: 'Menu PDF'
+			});
+
+			const bad: Array<Record<string, unknown>> = [
+				{ linkId: created.id, label: null },
+				{ linkId: created.id, label: 42 },
+				{ linkId: created.id, label: {} },
+				{ linkId: created.id, url: null },
+				{ linkId: created.id, url: ['https://evil.example'] },
+				{ linkId: created.id, notes: 42 },
+				{ linkId: created.id, notes: ['a', 'b'] }
+			];
+			for (const args of bad) {
+				const res: any = await client.callTool({
+					name: 'roamarr_place_links_update',
+					arguments: args
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('must be a string');
+			}
+
+			const listed = await call('roamarr_place_links_list', { placeId });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].label).toBe('Official site');
+			expect(listed.items[0].url).toBe('https://cafe.example');
+			expect(listed.items[0].notes).toBe('Menu PDF');
+		});
+
+		test('place links update with no fields is a no-op without an audit row', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+			const placeId = await seedPlace(client);
+			const created = await call('roamarr_place_links_create', {
+				placeId,
+				label: 'Official site',
+				url: 'https://cafe.example',
+				notes: 'Menu PDF'
+			});
+			const countAudit = () =>
+				ctx.kit
+					.selectFrom(auditLogs)
+					.where(kitEq(auditLogs.user_id, BigInt(userId)))
+					.executeSync()
+					.filter((r: any) => r.action === 'mcp_place_link_update').length;
+			const before = countAudit();
+
+			const res = await call('roamarr_place_links_update', { linkId: created.id });
+			expect(res).toEqual({ ok: true, linkId: created.id, updated: false });
+			expect(countAudit()).toBe(before);
+
+			const listed = await call('roamarr_place_links_list', { placeId });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].label).toBe('Official site');
+			expect(listed.items[0].url).toBe('https://cafe.example');
+			expect(listed.items[0].notes).toBe('Menu PDF');
+		});
+
+		test('place links update clears notes and audits a real write', async () => {
+			const { client } = await connect(userId, ['saved-places:read', 'saved-places:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).not.toBe(true);
+				return JSON.parse(res.content[0].text);
+			};
+			const placeId = await seedPlace(client);
+			const created = await call('roamarr_place_links_create', {
+				placeId,
+				label: 'Official site',
+				url: 'https://cafe.example',
+				notes: 'Menu PDF'
+			});
+			const countAudit = () =>
+				ctx.kit
+					.selectFrom(auditLogs)
+					.where(kitEq(auditLogs.user_id, BigInt(userId)))
+					.executeSync()
+					.filter((r: any) => r.action === 'mcp_place_link_update').length;
+			const before = countAudit();
+
+			const res = await call('roamarr_place_links_update', { linkId: created.id, notes: null });
+			expect(res).toEqual({ ok: true, linkId: created.id, updated: true });
+			expect(countAudit()).toBe(before + 1);
+
+			const listed = await call('roamarr_place_links_list', { placeId });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].notes).toBe(null);
+			expect(listed.items[0].label).toBe('Official site');
+			expect(listed.items[0].url).toBe('https://cafe.example');
+		});
+
 		test('place links IDOR: another user\'s place is not visible or mutable', async () => {
 			const other = makeUser(ctx.kit).id;
 			const { client: otherClient } = await connect(other, ['saved-places:read', 'saved-places:write']);

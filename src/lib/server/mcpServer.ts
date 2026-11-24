@@ -65,10 +65,13 @@ function withDerivedStatus<T extends { status?: string | null; startDate?: strin
 	return { ...trip, status: effectiveTripStatus(trip, todayForUser(userId)) };
 }
 
+function canReadPrivateDetails(scopes: Scope[]): boolean {
+	return getSettings().allowMcpPii && hasScope(scopes, 'private-details:read');
+}
+
 function safeTripProjection(tripId: number, userId: number, scopes: Scope[]) {
 	const view = loadTripFor(userId, tripId);
-	const includePrivateDetails =
-		getSettings().allowMcpPii && hasScope(scopes, 'private-details:read');
+	const includePrivateDetails = canReadPrivateDetails(scopes);
 	if (view.editor) {
 		const projection = viewerProjection(view.trip, view.segments, false);
 		return withDerivedStatus(userId, {
@@ -641,13 +644,13 @@ function resolveAttachmentTarget(args: Record<string, unknown>): { tripId: numbe
 	return { tripId, segmentId };
 }
 
-function projectTripDocument(row: Omit<TripDocumentRow, 'attachmentId'>) {
+function projectTripDocument(row: Omit<TripDocumentRow, 'attachmentId'>, includeNotes: boolean) {
 	return {
 		id: row.id,
 		tripId: row.tripId,
 		segmentId: row.segmentId,
 		label: row.label,
-		notes: row.notes,
+		notes: includeNotes ? row.notes : null,
 		filename: row.filename,
 		contentType: row.contentType,
 		sizeBytes: row.sizeBytes,
@@ -4458,18 +4461,22 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					segmentId: target.segmentId,
 					filename
 				});
+				// The caller just supplied these notes; addTripDocument already enforced edit access.
 				return textResult(
-					projectTripDocument({
-						id: link.id,
-						tripId: link.tripId,
-						segmentId: link.segmentId,
-						label: link.label,
-						notes: link.notes,
-						filename: attachment.filename,
-						contentType: attachment.contentType,
-						sizeBytes: attachment.sizeBytes,
-						createdAt: link.createdAt
-					})
+					projectTripDocument(
+						{
+							id: link.id,
+							tripId: link.tripId,
+							segmentId: link.segmentId,
+							label: link.label,
+							notes: link.notes,
+							filename: attachment.filename,
+							contentType: attachment.contentType,
+							sizeBytes: attachment.sizeBytes,
+							createdAt: link.createdAt
+						},
+						true
+					)
 				);
 			}
 			case 'roamarr_attachment_list': {
@@ -4489,14 +4496,14 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				return textResult({
 					tripId: target.tripId,
 					segmentId: target.segmentId,
-					items: page.items.map(projectTripDocument),
+					items: page.items.map((row) => projectTripDocument(row, canReadPrivateDetails(scopes))),
 					nextCursor: page.nextCursor
 				});
 			}
 			case 'roamarr_attachment_get': {
 				if (!hasScope(scopes, 'trips:read')) return scopeError('trips:read');
 				const loaded = await loadTripDocumentForView(userId, args as Record<string, unknown>);
-				const document = projectTripDocument(loaded.row);
+				const document = projectTripDocument(loaded.row, canReadPrivateDetails(scopes));
 				if (args.includeContent !== true) return textResult({ document });
 				const { readTripDocument } = await import('./tripDocuments');
 				const range = parseAttachmentByteRange(args as Record<string, unknown>);

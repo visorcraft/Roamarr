@@ -25,7 +25,7 @@ import { upsertCustomReminder } from './reminders';
 import { COMPANION_PRIVATE_FIELDS } from './sharing';
 import { getReminderBySource, getReminderById, createReminder } from './repositories/remindersRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
-import { updateSettings } from './settings';
+import { getSettings, updateSettings } from './settings';
 
 async function connect(userId: number, scopes: Scope[]) {
 	const server = createMcpServer(userId, scopes);
@@ -3492,6 +3492,91 @@ describe('mcpServer', () => {
 				expect(parse(await call(owner.client, 'roamarr_attachment_list', { tripId: trip.id })).items).toHaveLength(
 					2
 				);
+			});
+		});
+
+		test('attachment_list and attachment_get redact notes unless the PII gate passes', async () => {
+			await withAttachmentsDir(async () => {
+				const savedPii = getSettings().allowMcpPii;
+				try {
+					updateSettings({ allowMcpPii: false });
+					const trip = makeTrip(ctx.kit, userId, { name: 'Private notes trip' });
+					const owner = await connect(userId, ['trips:read', 'trips:write']);
+					const created = parse(
+						await call(owner.client, 'roamarr_attachment_upload', {
+							tripId: trip.id,
+							filename: 'private.pdf',
+							mimeType: 'application/pdf',
+							contentBase64: pdfBase64('private'),
+							label: 'Private doc',
+							notes: 'booking ref 4451 gate B'
+						})
+					);
+
+					const readerId = makeUser(ctx.kit).id;
+					makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: readerId, permission: 'read' });
+
+					const expectFields = (doc: any) => {
+						expect(doc.filename).toBe('private.pdf');
+						expect(doc.label).toBe('Private doc');
+						expect(doc.id).toBe(created.id);
+					};
+
+					// Reader with trips:read only, flag off: notes redacted on both tools.
+					const reader = await connect(readerId, ['trips:read']);
+					const listedRaw = await call(reader.client, 'roamarr_attachment_list', { tripId: trip.id });
+					const listed = parse(listedRaw);
+					expect(listed.items[0].notes).toBeNull();
+					expectFields(listed.items[0]);
+					const gotRaw = await call(reader.client, 'roamarr_attachment_get', { documentId: created.id });
+					const got = parse(gotRaw);
+					expect(got.document.notes).toBeNull();
+					expectFields(got.document);
+					expect(listedRaw.content[0].text).not.toContain('booking ref 4451 gate B');
+					expect(gotRaw.content[0].text).not.toContain('booking ref 4451 gate B');
+
+					// Scope alone is not enough: trips:read + private-details:read with flag off.
+					const scopedReader = await connect(readerId, ['trips:read', 'private-details:read']);
+					const scopedListed = parse(await call(scopedReader.client, 'roamarr_attachment_list', { tripId: trip.id }));
+					expect(scopedListed.items[0].notes).toBeNull();
+					expectFields(scopedListed.items[0]);
+					const scopedGot = parse(
+						await call(scopedReader.client, 'roamarr_attachment_get', { documentId: created.id })
+					);
+					expect(scopedGot.document.notes).toBeNull();
+					expectFields(scopedGot.document);
+
+					// Gate on: scoped reader gets the note, trips:read-only reader still gets null.
+					updateSettings({ allowMcpPii: true });
+					const scopedListed2 = parse(
+						await call(scopedReader.client, 'roamarr_attachment_list', { tripId: trip.id })
+					);
+					expect(scopedListed2.items[0].notes).toBe('booking ref 4451 gate B');
+					expectFields(scopedListed2.items[0]);
+					const scopedGot2 = parse(
+						await call(scopedReader.client, 'roamarr_attachment_get', { documentId: created.id })
+					);
+					expect(scopedGot2.document.notes).toBe('booking ref 4451 gate B');
+					expectFields(scopedGot2.document);
+					const plainListed = parse(await call(reader.client, 'roamarr_attachment_list', { tripId: trip.id }));
+					expect(plainListed.items[0].notes).toBeNull();
+					expectFields(plainListed.items[0]);
+					const plainGot = parse(await call(reader.client, 'roamarr_attachment_get', { documentId: created.id }));
+					expect(plainGot.document.notes).toBeNull();
+					expectFields(plainGot.document);
+
+					// Owner with trips:read only, flag off: null on both tools.
+					updateSettings({ allowMcpPii: false });
+					const ownerRead = await connect(userId, ['trips:read']);
+					const ownerListed = parse(await call(ownerRead.client, 'roamarr_attachment_list', { tripId: trip.id }));
+					expect(ownerListed.items[0].notes).toBeNull();
+					expectFields(ownerListed.items[0]);
+					const ownerGot = parse(await call(ownerRead.client, 'roamarr_attachment_get', { documentId: created.id }));
+					expect(ownerGot.document.notes).toBeNull();
+					expectFields(ownerGot.document);
+				} finally {
+					updateSettings({ allowMcpPii: savedPii });
+				}
 			});
 		});
 

@@ -35,6 +35,15 @@ describe('Autocomplete', () => {
 		document.body.innerHTML = '';
 	});
 
+	const scrollIntoView = vi.fn();
+	beforeEach(() => {
+		Element.prototype.scrollIntoView = scrollIntoView;
+	});
+	afterEach(() => {
+		vi.restoreAllMocks();
+		delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+	});
+
 	function fetchSuggestions(q: string): Promise<Suggestion[]> {
 		const d = deferred<Suggestion[]>();
 		calls.push({ q, d });
@@ -193,6 +202,134 @@ describe('Autocomplete', () => {
 		expect(input.getAttribute('aria-invalid')).toBeNull();
 		expect(input.getAttribute('aria-describedby')).toBeNull();
 		expect(document.getElementById('city-error')).toBeNull();
+	});
+
+	function keydown(key: string) {
+		getInput().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+		flushSync();
+	}
+
+	function activeOptionId(): string | null {
+		return getInput().getAttribute('aria-activedescendant');
+	}
+
+	function lastScrollTargetId(): string | undefined {
+		const contexts = (scrollIntoView as { mock?: { instances?: unknown[] } }).mock?.instances;
+		const last = contexts?.at(-1) as HTMLElement | undefined;
+		return last?.id;
+	}
+
+	it('scrolls the active option into view as the highlight moves down', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Paris' },
+			{ id: 2, label: 'Parma' },
+			{ id: 3, label: 'Pisa' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+		scrollIntoView.mockClear();
+
+		keydown('ArrowDown');
+		expect(activeOptionId()).toBe('city-option-1');
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(lastScrollTargetId()).toBe('city-option-1');
+
+		keydown('ArrowDown');
+		expect(activeOptionId()).toBe('city-option-2');
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(lastScrollTargetId()).toBe('city-option-2');
+	});
+
+	it('ArrowUp from the first option scrolls to the wrapped last option', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Paris' },
+			{ id: 2, label: 'Parma' },
+			{ id: 3, label: 'Pisa' }
+		]);
+		await flushLookup();
+		scrollIntoView.mockClear();
+
+		keydown('ArrowUp');
+		expect(activeOptionId()).toBe('city-option-2');
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(lastScrollTargetId()).toBe('city-option-2');
+	});
+
+	it('End and Home move the scroll target', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Paris' },
+			{ id: 2, label: 'Parma' },
+			{ id: 3, label: 'Pisa' }
+		]);
+		await flushLookup();
+		scrollIntoView.mockClear();
+
+		keydown('End');
+		expect(activeOptionId()).toBe('city-option-2');
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(lastScrollTargetId()).toBe('city-option-2');
+
+		keydown('Home');
+		expect(activeOptionId()).toBe('city-option-0');
+		expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+		expect(lastScrollTargetId()).toBe('city-option-0');
+	});
+
+	it('does not scroll while the list is closed', async () => {
+		mountAutocomplete();
+		expect(scrollIntoView).not.toHaveBeenCalled();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		expect(scrollIntoView).not.toHaveBeenCalled();
+
+		calls[0].d.resolve([
+			{ id: 1, label: 'Paris' },
+			{ id: 2, label: 'Parma' },
+			{ id: 3, label: 'Pisa' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+		const callsAfterOpen = scrollIntoView.mock.calls.length;
+		expect(callsAfterOpen).toBeGreaterThan(0);
+
+		keydown('Escape');
+		expect(listbox()).toBeNull();
+		expect(scrollIntoView.mock.calls.length).toBe(callsAfterOpen);
+	});
+
+	it('works when scrollIntoView is unavailable', async () => {
+		delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Paris' },
+			{ id: 2, label: 'Parma' },
+			{ id: 3, label: 'Pisa' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+
+		keydown('ArrowDown');
+		keydown('Enter');
+
+		const hidden = document.querySelector('input[type="hidden"]') as HTMLInputElement;
+		expect(hidden.value).toBe('2');
+		expect(listbox()).toBeNull();
 	});
 
 	it('listbox uses the theme line token', async () => {

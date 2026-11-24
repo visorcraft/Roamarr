@@ -58,6 +58,12 @@
 		activeIndex = open && suggestions.length > 0 ? 0 : -1;
 	});
 
+	// Keep the keyboard-highlighted option visible inside the capped, scrollable listbox.
+	$effect(() => {
+		if (!open || activeIndex < 0) return;
+		document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+	});
+
 	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
 	function cancelPendingLookup() {
 		if (timer) {

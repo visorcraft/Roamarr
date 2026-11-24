@@ -62,6 +62,12 @@
 		return `${name}-option-${i}`;
 	}
 
+	// Keep the keyboard-highlighted option visible inside the capped, scrollable listbox.
+	$effect(() => {
+		if (!open || activeIndex < 0) return;
+		document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+	});
+
 	$effect(() => {
 		// reset active option when the suggestion set or visibility changes
 		activeIndex = open && suggestions.length > 0 ? 0 : -1;

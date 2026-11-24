@@ -304,5 +304,15 @@
 	"plan_rally_time_label": "Rally time",
 	"plan_notes_label": "Notes",
 	"plan_notes_placeholder": "Optional notes",
-	"plan_notes_hint": "Markdown supported"
+	"plan_notes_hint": "Markdown supported",
+	"parking_location_label": "Parking location",
+	"parking_location_placeholder": "DFW Airport parking",
+	"parking_lot_label": "Lot / garage",
+	"parking_lot_placeholder": "Terminal garage, level 3",
+	"parking_confirmation_label": "Confirmation",
+	"parking_confirmation_placeholder": "Enter confirmation",
+	"parking_total_cost_label": "Total cost",
+	"parking_total_cost_placeholder": "Enter total cost",
+	"parking_notes_label": "Notes",
+	"parking_notes_placeholder": "Optional notes"
 }

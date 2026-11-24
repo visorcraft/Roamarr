@@ -121,8 +121,10 @@ export async function readTripDocument(
 export async function deleteTripDocument(userId: number, docId: number): Promise<void> {
 	const { link, tripId } = requireDocForEdit(userId, docId);
 	const attachmentId = link.attachmentId;
-	const attachment = await deleteGenericAttachment(attachmentId);
+	// Delete the link first: the attachment delete below cascades the
+	// trip_documents row away via the FK, so it must run before the repo delete.
 	docsRepo.deleteTripDocumentLink(link.id);
+	const attachment = await deleteGenericAttachment(attachmentId);
 	logAudit(userId, 'delete', 'trip_document', docId, {
 		tripId,
 		segmentId: link.segmentId,

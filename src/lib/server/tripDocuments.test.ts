@@ -21,6 +21,8 @@ import { tripDocuments, trips, users, segments } from './db/mongrelSchema';
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip, makeShare, streamToBuffer } from '../../../tests/helpers';
 import { addSegment } from './segments';
+import * as docsRepo from './repositories/tripDocumentsRepo';
+import { currentTripRev, subscribeUser, type LiveEvent } from './eventBus';
 
 function fileFromString(s: string, name: string, type: 'image/png' | 'application/pdf' = 'image/png') {
 	const prefixes: Record<string, Uint8Array> = {
@@ -192,4 +194,56 @@ test('read share can download but not upload', async () => {
 	await expect(
 		addTripDocument(viewer.id, t.id, { file: fileFromString('no', 'n.png') })
 	).rejects.toMatchObject({ status: 404 });
+});
+
+test('addTripDocument publishes exactly one trip change', async () => {
+	const { u, t } = seed();
+	const before = currentTripRev(t.id);
+	const events: LiveEvent[] = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e));
+	expect(unsubscribe).not.toBeNull();
+	try {
+		await addTripDocument(u.id, t.id, { file: fileFromString('qr', 'boarding.png') });
+	} finally {
+		unsubscribe!();
+	}
+	expect(currentTripRev(t.id)).toBe(before + 1);
+	expect(events).toEqual([{ type: 'trip', id: t.id, rev: before + 1, origin: null }]);
+});
+
+test('deleteTripDocument publishes exactly one trip change', async () => {
+	const { u, t } = seed();
+	const { link } = await addTripDocument(u.id, t.id, {
+		file: fileFromString('gone', 'g.png')
+	});
+	const before = currentTripRev(t.id);
+	const events: LiveEvent[] = [];
+	const unsubscribe = subscribeUser(u.id, (e) => events.push(e));
+	expect(unsubscribe).not.toBeNull();
+	try {
+		await deleteTripDocument(u.id, link.id);
+	} finally {
+		unsubscribe!();
+	}
+	expect(currentTripRev(t.id)).toBe(before + 1);
+	expect(events).toEqual([{ type: 'trip', id: t.id, rev: before + 1, origin: null }]);
+});
+
+test('rejected document uploads publish nothing', async () => {
+	const { u, t } = seed();
+	const before = currentTripRev(t.id);
+	await expect(
+		addTripDocument(u.id, t.id, {
+			file: fileFromString('x', 'x.png'),
+			segmentId: 999999
+		})
+	).rejects.toMatchObject({ status: 400 });
+	expect(currentTripRev(t.id)).toBe(before);
+});
+
+test('deleteTripDocumentLink publishes nothing when the link does not exist', () => {
+	const { t } = seed();
+	const before = currentTripRev(t.id);
+	expect(docsRepo.deleteTripDocumentLink(999999)).toBe(false);
+	expect(currentTripRev(t.id)).toBe(before);
 });

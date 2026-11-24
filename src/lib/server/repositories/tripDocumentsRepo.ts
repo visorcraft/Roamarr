@@ -10,6 +10,7 @@ import {
 import { kit, getDb } from '$lib/server/db';
 import { tripDocuments, attachments } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
+import { publishTripChanged } from '$lib/server/eventBus';
 
 function toBigInt(id: number): bigint {
 	return BigInt(id);
@@ -167,6 +168,7 @@ export function createTripDocumentLink(input: {
 			createdAt: row.created_at
 		};
 	});
+	publishTripChanged(input.tripId);
 	return result!;
 }
 
@@ -195,6 +197,7 @@ export function deleteTripDocumentLink(id: number): boolean {
 	runSyncTxn(db, (txn) => {
 		planDelete(ck, txn, tripDocuments, BigInt(id), { row, rowId: rowJs.rowId });
 	});
+	publishTripChanged(num(row.trip_id));
 	return true;
 }
 

@@ -50,6 +50,8 @@
 	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
+	const listboxVisible = $derived(open && suggestions.length > 0);
+	const noResults = $derived(open && suggestions.length === 0);
 	function optionId(i: number): string {
 		return `${name}-option-${i}`;
 	}
@@ -105,7 +107,7 @@
 			const rows = await fetchSuggestions(query);
 			if (seq !== requestSeq) return;
 			suggestions = rows;
-			open = rows.length > 0;
+			open = true;
 		} catch {
 			if (seq !== requestSeq) return;
 			suggestions = [];
@@ -199,7 +201,7 @@
 		autocomplete="off"
 		aria-autocomplete="list"
 		aria-expanded={open ? 'true' : 'false'}
-		aria-controls={listboxId}
+		aria-controls={listboxVisible ? listboxId : undefined}
 		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
 		aria-invalid={errors[name] ? 'true' : undefined}
 		aria-describedby={errors[name] ? `${name}-error` : undefined}
@@ -221,16 +223,13 @@
 		>×</button>
 	{/if}
 	{#if errors[name]}<p class="field-error" id={`${name}-error`}>{errors[name]}</p>{/if}
-	{#if open}
+	{#if listboxVisible}
 		<ul
 			id={listboxId}
 			role="listbox"
 			aria-label={label}
 			class="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md bg-surface shadow-lg ring-1 ring-[var(--theme-line)]"
 		>
-			{#if suggestions.length === 0}
-				<li class="px-3 py-2 text-sm text-muted">{noResultsText}</li>
-			{/if}
 			{#each suggestions as s, i (s.id)}
 				<li
 					id={optionId(i)}
@@ -255,4 +254,11 @@
 			{/each}
 		</ul>
 	{/if}
+	{#if noResults}
+		<p
+			aria-hidden="true"
+			class="absolute z-20 mt-1 w-full rounded-md bg-surface px-3 py-2 text-sm text-muted shadow-lg ring-1 ring-[var(--theme-line)]"
+		>{noResultsText}</p>
+	{/if}
+	<span class="sr-only" role="status">{noResults ? noResultsText : ''}</span>
 </div>

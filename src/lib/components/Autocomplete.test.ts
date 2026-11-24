@@ -344,4 +344,154 @@ describe('Autocomplete', () => {
 		expect(box!.className).toContain('ring-[var(--theme-line)]');
 		expect(box!.className).not.toContain('ring-white');
 	});
+
+	const status = () => document.querySelector('[role="status"]')?.textContent;
+
+	it('shows the no-results message when a lookup returns no rows', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		expect(listbox()).toBeNull();
+		expect(status()).toBe('No matches');
+		expect(document.querySelector('p[aria-hidden="true"]')?.textContent).toBe('No matches');
+		expect(getInput().getAttribute('aria-expanded')).toBe('true');
+		expect(getInput().getAttribute('aria-controls')).toBeNull();
+		expect(getInput().getAttribute('aria-activedescendant')).toBeNull();
+	});
+
+	it('honours a custom noResultsText', async () => {
+		mountAutocomplete({ noResultsText: 'Nothing found' });
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		expect(status()).toBe('Nothing found');
+	});
+
+	it('no-results message uses the theme line token', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		const message = document.querySelector('p[aria-hidden="true"]');
+		expect(message).not.toBeNull();
+		expect(message!.className).toContain('ring-[var(--theme-line)]');
+		expect(message!.className).not.toContain('ring-white');
+	});
+
+	it('Escape dismisses the no-results message', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+		expect(status()).toBe('No matches');
+
+		keydown('Escape');
+
+		expect(status()).toBe('');
+		expect(getInput().getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('Enter is not swallowed while the no-results message is shown', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+		getInput().dispatchEvent(event);
+		flushSync();
+
+		expect(event.defaultPrevented).toBe(false);
+		expect(status()).toBe('No matches');
+	});
+
+	it('blur dismisses the no-results message', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+		expect(status()).toBe('No matches');
+
+		getInput().dispatchEvent(new Event('blur'));
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+
+		expect(status()).toBe('');
+		expect(getInput().getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('does not scroll while the no-results message is shown', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		expect(status()).toBe('No matches');
+		expect(scrollIntoView).not.toHaveBeenCalled();
+	});
+
+	it('a stale empty lookup shows no message', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		type('zz');
+
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		expect(status()).toBe('');
+	});
+
+	it('a failed lookup shows no message', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+
+		calls[0].d.reject(new Error('boom'));
+		await flushLookup();
+
+		expect(status()).toBe('');
+		expect(getInput().getAttribute('aria-expanded')).toBe('false');
+		expect(listbox()).toBeNull();
+	});
+
+	it('a later lookup with rows replaces the no-results message', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+		expect(status()).toBe('No matches');
+
+		type('pa');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[1].d.resolve([{ id: 2, label: 'Paris' }]);
+		await flushLookup();
+
+		expect(listbox()).not.toBeNull();
+		expect(status()).toBe('');
+		expect(getInput().getAttribute('aria-controls')).toBe('city-listbox');
+	});
 });

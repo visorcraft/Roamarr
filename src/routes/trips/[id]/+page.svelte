@@ -3,6 +3,7 @@
 	import './trip-detail-modern-fixes.css';
 	import { applyAction, enhance } from '$app/forms';
 	import { invalidateAll, replaceState } from '$app/navigation';
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import CopyButton from '$lib/components/CopyButton.svelte';
 	import SegmentEditForm from '$lib/components/segments/SegmentEditForm.svelte';
@@ -1056,7 +1057,7 @@
 				</aside>
 			</div>
 		{:else if activeTab === 'prep'}
-			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Prep</h2><span class="badge badge-slate badge-compact">{prepItemCount} item{prepItemCount === 1 ? '' : 's'}</span></div>{#if data.checklist?.items?.length}<div class="trip-modern-list">{#each data.checklist.items as item (item.id)}<div class="trip-modern-list-row"><form method="POST" action="?/toggleChecklistItem" class="flex min-w-0 items-center gap-3"><input type="hidden" name="itemId" value={item.id} /><button class="check-toggle" type="submit"><span class="check-marker {item.packed ? 'check-marker-active' : ''}"><Icon name="check" class="h-3.5 w-3.5" /></span><span class="check-label {item.packed ? 'check-label-done' : ''}">{item.text}</span></button></form>{#if item.assignedToName}<span class="badge badge-slate badge-compact">{item.assignedToName}</span>{/if}</div>{/each}</div>{:else}<p class="trip-modern-empty">No prep items yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addChecklistItem" class="trip-modern-form-inline"><input name="text" class="input flex-1 text-sm" placeholder="Add checklist item" required /><select name="assignedToCompanionId" class="input w-auto text-sm"><option value="">Unassigned</option>{#each data.companions ?? [] as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select><button class="btn btn-primary btn-sm">Add item</button></form>{/if}</section>
+			<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Prep</h2><span class="badge badge-slate badge-compact">{prepItemCount} item{prepItemCount === 1 ? '' : 's'}</span></div>{#if data.checklist?.items?.length}<div class="trip-modern-list">{#each data.checklist.items as item (item.id)}<div class="trip-modern-list-row"><form method="POST" action="?/toggleChecklistItem" class="flex min-w-0 items-center gap-3"><input type="hidden" name="itemId" value={item.id} /><button class="check-toggle min-h-11" type="submit" aria-pressed={item.packed}><span class="check-marker {item.packed ? 'check-marker-active' : ''}" aria-hidden="true"><Icon name="check" class="h-3.5 w-3.5" /></span><span class="check-label {item.packed ? 'check-label-done' : ''}">{item.text}</span></button></form>{#if item.assignedToName}<span class="badge badge-slate badge-compact">{item.assignedToName}</span>{/if}</div>{/each}</div>{:else}<p class="trip-modern-empty">No prep items yet.</p>{/if}{#if isEditor}<form method="POST" action="?/addChecklistItem" class="trip-modern-form-inline"><input name="text" class="input flex-1 text-sm" placeholder="Add checklist item" aria-label="Checklist item" required /><select name="assignedToCompanionId" class="input w-auto text-sm" aria-label="Assigned to"><option value="">Unassigned</option>{#each data.companions ?? [] as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select><button class="btn btn-primary btn-sm">Add item</button></form>{/if}</section>
 			{#if isEditor && data.mailHoldCoverage}
 				<MailHoldsPanel holds={data.mailHolds ?? []} coverage={data.mailHoldCoverage} />
 			{/if}
@@ -1089,7 +1090,7 @@
 						{#each data.expenses as e (e.id)}
 							<li class="trip-modern-list-row">
 								<div><strong>{e.description}</strong><p class="trip-modern-panel-muted text-sm capitalize">{e.category} · paid by {settlementName(e.paidBy)}</p>{#if e.attachments?.length}<div class="mt-1 flex flex-wrap gap-2">{#each e.attachments as a (a.id)}<a href="/trips/{trip.id}/expenses/{e.id}/attachments/{a.id}" target="_blank" class="link text-xs">{a.filename}</a>{/each}</div>{/if}</div>
-								<div class="flex items-center gap-2"><span class="font-mono">{e.currency} {(e.amount / 100).toFixed(2)}</span>{#if isEditor}<form method="POST" action="?/deleteExpense"><input type="hidden" name="expenseId" value={e.id} /><button class="icon-button icon-button-sm" aria-label="Delete expense"><Icon name="close" class="h-3.5 w-3.5" /></button></form>{/if}</div>
+								<div class="flex items-center gap-2"><span class="font-mono">{e.currency} {(e.amount / 100).toFixed(2)}</span>{#if isEditor}<form method="POST" action="?/deleteExpense"><input type="hidden" name="expenseId" value={e.id} /><ConfirmButton type="submit" class="icon-button icon-button-sm" aria-label={`Delete expense ${e.description}`} message={`Delete expense ${e.description}? This cannot be undone.`}><Icon name="close" class="h-3.5 w-3.5" /></ConfirmButton></form>{/if}</div>
 							</li>
 						{/each}
 					</ul>

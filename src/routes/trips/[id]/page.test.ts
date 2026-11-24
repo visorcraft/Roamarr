@@ -33,3 +33,29 @@ test('the Overview notes inherit the themed panel ink', () => {
 	const classValue = match ? (/\bclass="([^"]*)"/.exec(match[0])?.[1] ?? '') : '';
 	expect(classValue).toBe('max-w-none text-sm leading-relaxed');
 });
+
+test('prep checklist toggle exposes its packed state and has a touch-sized target', () => {
+	const start = source.indexOf("{:else if activeTab === 'prep'}");
+	const end = source.indexOf("{:else if activeTab === 'money'}", start);
+	expect(start, 'expected the prep tab branch').toBeGreaterThan(-1);
+	expect(end, 'expected the money tab branch after prep').toBeGreaterThan(start);
+	const prep = source.slice(start, end);
+	expect(prep).toContain('<button class="check-toggle min-h-11" type="submit" aria-pressed={item.packed}>');
+	expect(prep).toMatch(/<span class="check-marker \{item\.packed \? 'check-marker-active' : ''\}" aria-hidden="true">/);
+	expect(prep).toContain('placeholder="Add checklist item" aria-label="Checklist item" required');
+	expect(prep).toContain('name="assignedToCompanionId" class="input w-auto text-sm" aria-label="Assigned to"');
+});
+
+test('expense deletion is confirmed in the shared dialog and named per row', () => {
+	expect(source).toContain("import ConfirmButton from '$lib/components/ConfirmButton.svelte';");
+	const form = /<form method="POST" action="\?\/deleteExpense">([\s\S]*?)<\/form>/.exec(source)?.[1] ?? '';
+	expect(form, 'expected the deleteExpense form').not.toBe('');
+	expect(form).toContain('<input type="hidden" name="expenseId" value={e.id} />');
+	expect(form).toMatch(
+		/<ConfirmButton\s+type="submit"\s+class="icon-button icon-button-sm"\s+aria-label=\{`Delete expense \$\{e\.description\}`\}\s+message=\{`Delete expense \$\{e\.description\}\? This cannot be undone\.`\}\s*>/
+	);
+	expect(form).toContain('<Icon name="close" class="h-3.5 w-3.5" /></ConfirmButton>');
+	// The one-tap delete control and native confirm() must not come back.
+	expect(source).not.toContain('aria-label="Delete expense"');
+	expect(source).not.toMatch(/\b(?:window\.)?confirm\(/);
+});

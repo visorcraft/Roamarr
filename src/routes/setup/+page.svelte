@@ -22,7 +22,7 @@
 	);
 
 	function statusClass(ok?: boolean) {
-		return ok ? 'text-green-600' : 'text-red-600';
+		return ok ? 'text-[var(--theme-readable-success)]' : 'text-[var(--theme-readable-danger)]';
 	}
 </script>
 
@@ -75,7 +75,7 @@
 						</li>
 					</ul>
 					{#if data.setupCheck?.error || data.bootError}
-						<div class="mt-3 p-3 rounded bg-red-50 text-red-800 text-sm font-mono whitespace-pre-wrap">
+						<div class="notice notice-error mt-3 font-mono whitespace-pre-wrap [overflow-wrap:anywhere]">
 							{data.setupCheck?.error ?? data.bootError}
 						</div>
 					{/if}

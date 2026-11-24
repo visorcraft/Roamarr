@@ -358,5 +358,18 @@
 	"segment_edit_upload_file": "Upload file",
 	"segment_edit_more_details_section": "Additional details",
 	"segment_edit_stored_data_label": "Stored data",
-	"segment_edit_stored_data_hint": "Roamarr keeps booking-specific fields here. Usually no changes are needed."
+	"segment_edit_stored_data_hint": "Roamarr keeps booking-specific fields here. Usually no changes are needed.",
+	"note_title_label": "Note title",
+	"note_title_placeholder": "Enter note title",
+	"note_body_label": "Note",
+	"note_body_placeholder": "Enter note",
+	"note_markdown_hint": "Markdown supported",
+	"note_date_label": "Date",
+	"note_time_label": "Time",
+	"todo_title_label": "Todo item",
+	"todo_title_placeholder": "What needs to be done?",
+	"todo_due_date_label": "Due date",
+	"todo_due_time_label": "Due time",
+	"todo_notes_label": "Notes",
+	"todo_notes_placeholder": "Additional details (optional)"
 }

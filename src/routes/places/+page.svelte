@@ -290,11 +290,19 @@
 						class="inline-block h-3 w-3 shrink-0 rounded-full"
 						style:background-color={category?.color ?? '#64748b'}
 						title={category?.name ?? 'Uncategorized'}
+						role={category ? undefined : 'img'}
+						aria-label={category ? undefined : 'Uncategorized'}
+						aria-hidden={category ? 'true' : undefined}
 					></span>
 					<div class="min-w-0 flex-1">
 						<div class="flex flex-wrap items-center gap-2">
 							<span class="font-medium">{place.name}</span>
-							{#if place.favorite}<Icon name="star" class="h-4 w-4 text-amber-500" />{/if}
+							{#if place.favorite}
+								<span class="inline-flex items-center">
+									<Icon name="star" class="h-4 w-4 fill-current text-[var(--theme-readable-warning)]" />
+									<span class="sr-only">Favorite</span>
+								</span>
+							{/if}
 							<span class="badge badge-compact {place.status === 'visited' ? 'badge-green' : 'badge-slate'}">
 								{place.status}
 							</span>

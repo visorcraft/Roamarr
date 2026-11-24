@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import CancelButton from '$lib/components/CancelButton.svelte';
+	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 
 	let { data, form } = $props();
-	let submitting = $state(false);
+	let editingSubmitting = $state(false);
+	let addingSubmitting = $state(false);
 	let editingContactId = $state<number | null>(null);
 	let dirtyContactIds = $state<Record<number, boolean>>({});
 </script>
@@ -15,7 +18,7 @@
 	</div>
 </header>
 
-{#if form?.error}<p class="notice notice-error mt-6">{form.error}</p>{/if}
+{#if form?.error}<p class="notice notice-error mt-6" role="alert">{form.error}</p>{/if}
 
 <section class="card mt-6 p-5 sm:p-6">
 	{#if data.emergencyContacts.length}
@@ -27,11 +30,14 @@
 							method="POST"
 							action="?/updateEmergencyContact"
 							use:enhance={() => {
-								submitting = true;
-								return async ({ update }) => {
-									await update();
-									submitting = false;
-									editingContactId = null;
+								editingSubmitting = true;
+								return async ({ update, result }) => {
+									try {
+										await update();
+										if (result.type !== 'failure') editingContactId = null;
+									} finally {
+										editingSubmitting = false;
+									}
 								};
 							}}
 							class="grid gap-3 sm:grid-cols-2"
@@ -66,7 +72,7 @@
 									dirty={dirtyContactIds[contact.id] ?? false}
 									onConfirm={() => (editingContactId = null)}>Cancel</CancelButton
 								>
-								<button class="btn btn-primary btn-sm" class:btn-loading={submitting} disabled={submitting}>
+								<button class="btn btn-primary btn-sm" class:btn-loading={editingSubmitting} disabled={editingSubmitting} aria-busy={editingSubmitting}>
 									Save
 								</button>
 							</div>
@@ -97,13 +103,18 @@
 									}}
 									aria-label={`Edit ${contact.name}`}
 								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+									<Icon name="edit" class="h-4 w-4" />
 								</button>
 								<form method="POST" action="?/deleteEmergencyContact" class="inline">
 									<input type="hidden" name="id" value={contact.id} />
-									<button class="icon-button icon-button-danger" aria-label={`Delete ${contact.name}`}>
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-									</button>
+									<ConfirmButton
+										type="submit"
+										class="btn btn-danger btn-sm"
+										aria-label={`Delete ${contact.name}`}
+										message={`Delete ${contact.name}? This cannot be undone.`}
+									>
+										Delete
+									</ConfirmButton>
 								</form>
 							</div>
 						</div>
@@ -119,10 +130,13 @@
 		method="POST"
 		action="?/addEmergencyContact"
 		use:enhance={() => {
-			submitting = true;
+			addingSubmitting = true;
 			return async ({ update }) => {
-				await update();
-				submitting = false;
+				try {
+					await update();
+				} finally {
+					addingSubmitting = false;
+				}
 			};
 		}}
 		class="mt-6 grid gap-3 border-t border-line pt-5 sm:grid-cols-2"
@@ -153,7 +167,7 @@
 			</label>
 		</div>
 		<div class="flex justify-end sm:col-span-2">
-			<button class="btn btn-primary" class:btn-loading={submitting} disabled={submitting}>
+			<button class="btn btn-primary" class:btn-loading={addingSubmitting} disabled={addingSubmitting} aria-busy={addingSubmitting}>
 				Add contact
 			</button>
 		</div>

@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import Icon from '$lib/components/Icon.svelte';
 	import ConfirmButton from '$lib/components/ConfirmButton.svelte';
+	import { lightboxReturnTarget, wrappedTabTarget } from './galleryLightboxA11y';
 
 	export interface GalleryImageItem {
 		id: number;
@@ -33,13 +34,22 @@
 
 	let lightboxIndex = $state<number | null>(null);
 	const lightboxImage = $derived(lightboxIndex != null ? images[lightboxIndex] : null);
+	let rootEl = $state<HTMLElement | null>(null);
+	let lightboxEl = $state<HTMLElement | null>(null);
+	/** Element focused before the viewer opened; not reactive. */
+	let returnFocusTo: HTMLElement | null = null;
 
 	function openLightbox(index: number) {
+		const active = typeof document === 'undefined' ? null : document.activeElement;
+		returnFocusTo = active instanceof HTMLElement && active !== document.body ? active : null;
 		lightboxIndex = index;
 	}
 
 	function closeLightbox() {
+		const index = lightboxIndex;
 		lightboxIndex = null;
+		if (typeof document === 'undefined') return;
+		lightboxReturnTarget(rootEl, index, returnFocusTo)?.focus();
 	}
 
 	function stepLightbox(delta: number) {
@@ -58,13 +68,24 @@
 		} else if (event.key === 'ArrowRight') {
 			event.preventDefault();
 			stepLightbox(1);
+		} else if (event.key === 'Tab') {
+			const target = wrappedTabTarget(lightboxEl, document.activeElement, event.shiftKey);
+			if (target) {
+				event.preventDefault();
+				target.focus();
+			}
 		}
 	}
+
+	// Move focus into the viewer so keyboard and screen-reader users start inside the modal.
+	$effect(() => {
+		lightboxEl?.focus();
+	});
 </script>
 
 <svelte:window onkeydown={onLightboxKeydown} />
 
-<div class="gallery">
+<div class="gallery" bind:this={rootEl}>
 	{#if images.length === 0}
 		<p class="text-sm opacity-75">{emptyMessage}</p>
 	{:else}
@@ -74,6 +95,7 @@
 					<button
 						type="button"
 						class="gallery-thumb"
+						data-gallery-index={index}
 						onclick={() => openLightbox(index)}
 						aria-label={m.gallery_view_photo({ name: image.caption || image.filename })}
 					>
@@ -185,9 +207,11 @@
 		class="gallery-lightbox"
 		role="dialog"
 		aria-modal="true"
+		tabindex="-1"
+		bind:this={lightboxEl}
 		aria-label={lightboxImage.caption || lightboxImage.filename}
 	>
-		<button type="button" class="gallery-lightbox-backdrop" onclick={closeLightbox} aria-label={m.gallery_close_viewer()}></button>
+		<button type="button" class="gallery-lightbox-backdrop" tabindex="-1" onclick={closeLightbox} aria-label={m.gallery_close_viewer()}></button>
 		<figure class="gallery-lightbox-figure">
 			<img src={lightboxImage.url} alt={lightboxImage.caption || lightboxImage.filename} />
 			{#if lightboxImage.caption}
@@ -215,6 +239,7 @@
 		<button type="button" class="gallery-lightbox-close" onclick={closeLightbox} aria-label={m.gallery_close_viewer()}>
 			<Icon name="close" class="h-6 w-6" />
 		</button>
+		<p class="sr-only" role="status" aria-live="polite">{lightboxImage.caption || lightboxImage.filename}</p>
 	</div>
 {/if}
 
@@ -277,6 +302,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+
+	.gallery-lightbox:focus-visible {
+		outline: none;
 	}
 
 	.gallery-lightbox-backdrop {

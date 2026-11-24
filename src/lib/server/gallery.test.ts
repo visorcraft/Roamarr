@@ -372,3 +372,66 @@ test('writes log audit events', async () => {
 	expect(actions).toContain('gallery_image_add');
 	expect(actions).toContain('gallery_image_remove');
 });
+
+test('moveGalleryImage authorizes before the edge no-op short-circuit', async () => {
+	const owner = makeUser(ctx.kit);
+	const viewer = makeUser(ctx.kit);
+	const editor = makeUser(ctx.kit);
+	const stranger = makeUser(ctx.kit);
+	const trip = makeTrip(ctx.kit, owner.id);
+	makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: viewer.id, permission: 'read' });
+	makeShare(ctx.kit, { tripId: trip.id, sharedWithUserId: editor.id, permission: 'edit' });
+
+	const [first] = await addGalleryImages(owner.id, 'trip', trip.id, [
+		pngFile('a.png'),
+		pngFile('b.png')
+	]);
+	const auditCount = ctx.kit.selectFrom(auditLogs).executeSync().length;
+
+	// first is already at the front, so earlier is the no-op path.
+	expect(() => moveGalleryImage(stranger.id, first.id, 'earlier')).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
+	expect(() => moveGalleryImage(viewer.id, first.id, 'earlier')).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
+	// A non-edge move was already guarded; it must still reject the viewer.
+	expect(() => moveGalleryImage(viewer.id, first.id, 'later')).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
+
+	expect(ctx.kit.selectFrom(auditLogs).executeSync().length).toBe(auditCount);
+	expect(listGalleryImages('trip', trip.id).map((i) => i.filename)).toEqual(['a.png', 'b.png']);
+
+	expect(moveGalleryImage(editor.id, first.id, 'earlier').map((i) => i.filename)).toEqual([
+		'a.png',
+		'b.png'
+	]);
+	expect(moveGalleryImage(editor.id, first.id, 'later').map((i) => i.filename)).toEqual([
+		'b.png',
+		'a.png'
+	]);
+});
+
+test('moveGalleryImage on a place gallery rejects non-owners on the edge no-op', async () => {
+	const owner = makeUser(ctx.kit);
+	const stranger = makeUser(ctx.kit);
+	const place = makePlace(owner.id);
+
+	const [first] = await addGalleryImages(owner.id, 'place', place.id, [
+		pngFile('a.png'),
+		pngFile('b.png')
+	]);
+
+	expect(() => moveGalleryImage(stranger.id, first.id, 'earlier')).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
+	expect(() => moveGalleryImage(stranger.id, 999, 'later')).toThrow(
+		expect.objectContaining({ status: 404 })
+	);
+
+	expect(moveGalleryImage(owner.id, first.id, 'later').map((i) => i.filename)).toEqual([
+		'b.png',
+		'a.png'
+	]);
+});

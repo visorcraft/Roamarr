@@ -287,6 +287,7 @@ export function moveGalleryImage(
 	if (!row) throw error(404, 'Not found');
 	const ownerType = row.owner_type as GalleryOwnerType;
 	const ownerId = Number(row.owner_id);
+	requireGalleryWrite(userId, ownerType, ownerId);
 	const current = listGalleryImages(ownerType, ownerId);
 	const index = current.findIndex((i) => i.id === imageId);
 	const target = direction === 'earlier' ? index - 1 : index + 1;

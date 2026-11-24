@@ -2843,6 +2843,12 @@ describe('mcpServer', () => {
 	});
 
 	describe('day notes tools', () => {
+		const auditRowsFor = (uid: number) =>
+			ctx.kit
+				.selectFrom(auditLogs)
+				.where(kitEq(auditLogs.user_id, BigInt(uid)))
+				.executeSync();
+
 		test('lists the day notes tools', async () => {
 			const { client } = await connect(userId, ['day-notes:read']);
 			const { tools } = await client.listTools();
@@ -2933,6 +2939,174 @@ describe('mcpServer', () => {
 				arguments: { tripId: trip.id }
 			});
 			expect(listed.isError).toBe(true);
+		});
+
+		test('day_notes_set writes one audit row per write', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+			const before = auditRowsFor(userId).length;
+
+			const first = await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'first'
+			});
+			expect(auditRowsFor(userId)).toHaveLength(before + 1);
+			const createRows = auditRowsFor(userId).filter(
+				(r: any) => r.entity_id === BigInt(first.id)
+			);
+			expect(createRows.map((r: any) => r.action)).toEqual(['create']);
+			expect(
+				auditRowsFor(userId).some((r: any) => r.action === 'mcp_day_note_set')
+			).toBe(false);
+
+			await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'second'
+			});
+			expect(auditRowsFor(userId)).toHaveLength(before + 2);
+			const rows = auditRowsFor(userId).filter(
+				(r: any) => r.entity_id === BigInt(first.id)
+			);
+			expect(rows.map((r: any) => r.action)).toEqual(['create', 'update']);
+			expect(
+				auditRowsFor(userId).some((r: any) => r.action === 'mcp_day_note_set')
+			).toBe(false);
+		});
+
+		test('day_notes_delete writes one audit row and removes the note', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+			const before = auditRowsFor(userId).length;
+
+			const note = await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'first'
+			});
+			await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'second'
+			});
+
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_delete',
+				arguments: { tripId: trip.id, date: '2026-07-12', confirm: true }
+			});
+			expect(res.isError).toBeFalsy();
+			expect(JSON.parse(res.content[0].text)).toEqual({
+				ok: true,
+				tripId: trip.id,
+				date: '2026-07-12'
+			});
+
+			const listed = await call('roamarr_trip_day_notes_list', { tripId: trip.id });
+			expect(listed.items).toHaveLength(0);
+			const rows = auditRowsFor(userId).filter(
+				(r: any) => r.entity_id === BigInt(note.id)
+			);
+			expect(rows.map((r: any) => r.action)).toEqual(['create', 'update', 'delete']);
+			expect(auditRowsFor(userId)).toHaveLength(before + 3);
+			expect(
+				auditRowsFor(userId).some((r: any) => r.action === 'mcp_day_note_delete')
+			).toBe(false);
+		});
+
+		test('day_notes_delete for a date without a note is an error and writes no audit row', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+			await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'first'
+			});
+			const before = auditRowsFor(userId).length;
+
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_delete',
+				arguments: { tripId: trip.id, date: '2026-07-13', confirm: true }
+			});
+			expect(res.isError).toBe(true);
+			expect(auditRowsFor(userId)).toHaveLength(before);
+
+			const listed = await call('roamarr_trip_day_notes_list', { tripId: trip.id });
+			expect(listed.items).toHaveLength(1);
+			expect(listed.items[0].date).toBe('2026-07-12');
+		});
+
+		test('day_notes_delete without confirm writes nothing', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+			await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'first'
+			});
+			const before = auditRowsFor(userId).length;
+
+			const res: any = await client.callTool({
+				name: 'roamarr_trip_day_notes_delete',
+				arguments: { tripId: trip.id, date: '2026-07-12' }
+			});
+			expect(res.isError).toBe(true);
+			expect(auditRowsFor(userId)).toHaveLength(before);
+
+			const listed = await call('roamarr_trip_day_notes_list', { tripId: trip.id });
+			expect(listed.items).toHaveLength(1);
+		});
+
+		test("day_notes_delete on another user's trip is rejected without an audit row", async () => {
+			const other = makeUser(ctx.kit).id;
+			const trip = tripsRepo.createTrip(userId, { name: 'T' });
+			const { client } = await connect(userId, ['day-notes:read', 'day-notes:write']);
+			const call = async (name: string, args: Record<string, unknown>) => {
+				const res: any = await client.callTool({ name, arguments: args });
+				expect(res.isError, res.content?.[0]?.text).toBeFalsy();
+				return JSON.parse(res.content[0].text);
+			};
+			const note = await call('roamarr_trip_day_notes_set', {
+				tripId: trip.id,
+				date: '2026-07-12',
+				body: 'first'
+			});
+			const otherCount = auditRowsFor(other).length;
+			const { client: otherClient } = await connect(other, ['day-notes:read', 'day-notes:write']);
+			const res: any = await otherClient.callTool({
+				name: 'roamarr_trip_day_notes_delete',
+				arguments: { tripId: trip.id, date: '2026-07-12', confirm: true }
+			});
+			expect(res.isError).toBe(true);
+
+			const listed = await call('roamarr_trip_day_notes_list', { tripId: trip.id });
+			expect(listed.items).toHaveLength(1);
+			expect(
+				auditRowsFor(userId).filter(
+					(r: any) => r.entity_id === BigInt(note.id) && r.action === 'delete'
+				)
+			).toHaveLength(0);
+			expect(auditRowsFor(other)).toHaveLength(otherCount);
 		});
 	});
 

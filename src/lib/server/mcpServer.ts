@@ -3875,18 +3875,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					icon: args.icon != null && String(args.icon).trim() !== '' ? String(args.icon) : null,
 					body: String(args.body ?? '')
 				});
-				logAudit(userId, 'mcp_day_note_set', 'trip_day_note', note.id, { tripId, date: note.date });
 				return textResult(note);
 			}
 			case 'roamarr_trip_day_notes_delete': {
 				if (!hasScope(scopes, 'day-notes:write')) return scopeError('day-notes:write');
 				const confirmErr = requireConfirm(args, 'roamarr_trip_day_notes_delete');
 				if (confirmErr) return confirmErr;
-				const { getDayNote, deleteDayNote } = await import('./tripDayNotes');
+				const { deleteDayNote } = await import('./tripDayNotes');
 				const tripId = Number(args.tripId);
-				const existing = getDayNote(userId, tripId, String(args.date ?? ''));
 				deleteDayNote(userId, tripId, args.date);
-				logAudit(userId, 'mcp_day_note_delete', 'trip_day_note', existing?.id ?? 0, { tripId, date: String(args.date ?? '') });
 				return textResult({ ok: true, tripId, date: String(args.date ?? '') });
 			}
 			case 'roamarr_home_task_list': {

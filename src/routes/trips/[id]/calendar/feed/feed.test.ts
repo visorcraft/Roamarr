@@ -73,3 +73,20 @@ test('expired calendar token returns 404', () => {
 		expect(e.status).toBe(404);
 	}
 });
+
+test('unparseable calendar token expiry returns 404', () => {
+	resetRateLimit();
+	const u = makeUser(kit, { email: 'feed-bad-expiry@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeTrip(kit, u.id, {
+		name: 'F',
+		calendarToken: 'cal-bad-expiry',
+		calendarTokenExpiresAt: 'not-a-date'
+	});
+
+	try {
+		GET(event(t.id, 'cal-bad-expiry', '1.2.3.4'));
+		expect.fail('expected 404');
+	} catch (e: any) {
+		expect(e.status).toBe(404);
+	}
+});

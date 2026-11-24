@@ -6,6 +6,7 @@
 	import BookedCheckbox from '../BookedCheckbox.svelte';
 	import BookingInfoSection from '../BookingInfoSection.svelte';
 	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import SelectField from '$lib/components/SelectField.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import { COUNTRIES } from '$lib/countries';
@@ -92,16 +93,18 @@
 		</div>
 
 		{#if index === 0}
-			<div class="field">
-				<label class="label" for="countryCode">{m.flight_country_label()}</label>
-				<select id="countryCode" name="countryCode" bind:value={countryCode} class="input {errors.countryCode ? 'input-error' : ''}">
-					<option value="">{m.flight_country_placeholder()}</option>
-					{#each COUNTRIES as c (c.code)}
-						<option value={c.code}>{c.name}</option>
-					{/each}
-				</select>
-				{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
-			</div>
+			<SelectField
+				name="countryCode"
+				label={m.flight_country_label()}
+				value={countryCode}
+				onchange={(event: Event & { currentTarget: HTMLSelectElement }) => (countryCode = event.currentTarget.value)}
+				{errors}
+			>
+				<option value="">{m.flight_country_placeholder()}</option>
+				{#each COUNTRIES as c (c.code)}
+					<option value={c.code}>{c.name}</option>
+				{/each}
+			</SelectField>
 
 			<Admin1Select {countryCode} name="admin1Code" bind:value={admin1Code} {errors} />
 

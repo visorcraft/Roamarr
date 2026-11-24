@@ -3,6 +3,7 @@
 	import DateTimeRangeFields from '../DateTimeRangeFields.svelte';
 	import BookedRow from '../BookedRow.svelte';
 	import CityAutocomplete from '../CityAutocomplete.svelte';
+	import SelectField from '$lib/components/SelectField.svelte';
 	import TextField from '$lib/components/TextField.svelte';
 	import TextAreaField from '$lib/components/TextAreaField.svelte';
 	import { COUNTRIES } from '$lib/countries';
@@ -63,21 +64,18 @@
 
 <DateTimeRangeFields {errors} {requireEnd} {startDateLabel} {startTimeLabel} {endDateLabel} {endTimeLabel} {endTimezoneLabel} />
 
-<div class="field">
-	<label class="label" for="countryCode">{m.plan_country_label()}</label>
-	<select
-		id="countryCode"
-		name="countryCode"
-		class="input {errors.countryCode ? 'input-error' : ''}"
-		bind:value={countryCode}
-	>
-		<option value="">{m.plan_country_placeholder()}</option>
-		{#each COUNTRIES as c (c.code)}
-			<option value={c.code}>{c.name}</option>
-		{/each}
-	</select>
-	{#if errors.countryCode}<p class="field-error">{errors.countryCode}</p>{/if}
-</div>
+<SelectField
+	name="countryCode"
+	label={m.plan_country_label()}
+	value={countryCode}
+	onchange={(event: Event & { currentTarget: HTMLSelectElement }) => (countryCode = event.currentTarget.value)}
+	{errors}
+>
+	<option value="">{m.plan_country_placeholder()}</option>
+	{#each COUNTRIES as c (c.code)}
+		<option value={c.code}>{c.name}</option>
+	{/each}
+</SelectField>
 
 <Admin1Select {countryCode} name="admin1Code" bind:value={admin1Code} {errors} />
 

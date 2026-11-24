@@ -1010,6 +1010,286 @@ describe('mcpServer', () => {
 		expect(text).not.toContain('cancelled');
 	});
 
+	test('trip_update: editor without showDetails cannot change notes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original', notes: 'OWNER NOTES' });
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: false });
+		const { client } = await connect(editorId, ['trips:write']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, name: 'Editor rename', notes: 'OVERWRITTEN' }
+		});
+		expect(String(res.content[0].text)).toContain('notes cannot be changed');
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Original', notes: 'OWNER NOTES' });
+
+		const resNull: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: null }
+		});
+		expect(String(resNull.content[0].text)).toContain('notes cannot be changed');
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Original', notes: 'OWNER NOTES' });
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(trip.id)))
+			.executeSync();
+		expect(auditRows.filter((r: any) => r.action === 'mcp_trip_update')).toHaveLength(0);
+	});
+
+	test('trip_update: editor without showDetails is still rejected with private-details:read scope', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original', notes: 'OWNER NOTES' });
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: false });
+		const { client } = await connect(editorId, ['trips:write', 'private-details:read']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, name: 'Editor rename', notes: 'OVERWRITTEN' }
+		});
+		expect(String(res.content[0].text)).toContain('notes cannot be changed');
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Original', notes: 'OWNER NOTES' });
+	});
+
+	test('trip_update: editor without showDetails can edit non-private fields', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original', notes: 'OWNER NOTES' });
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: false });
+		const { client } = await connect(editorId, ['trips:write']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, name: 'Editor rename' }
+		});
+		expect(res.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Editor rename', notes: 'OWNER NOTES' });
+	});
+
+	test('trip_update: editor with showDetails can set and clear notes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original', notes: 'OWNER NOTES' });
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: true });
+		const { client } = await connect(editorId, ['trips:write']);
+
+		const setRes: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: 'EDITOR NOTES' }
+		});
+		expect(setRes.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.notes).toBe('EDITOR NOTES');
+
+		const clearRes: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: null }
+		});
+		expect(clearRes.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.notes).toBeNull();
+	});
+
+	test('trip_update: owner sets and clears notes without private-details:read', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original' });
+		const { client } = await connect(userId, ['trips:write']);
+
+		const setRes: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: 'NEW' }
+		});
+		expect(setRes.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.notes).toBe('NEW');
+
+		const clearRes: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: '   ' }
+		});
+		expect(clearRes.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.notes).toBeNull();
+	});
+
+	test('trip_update: a read-only viewer is rejected', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Original', notes: 'OWNER NOTES' });
+		const viewerId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read', showDetails: true });
+		const { client } = await connect(viewerId, ['trips:write']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, notes: 'x' }
+		});
+		expect(res.isError).toBe(true);
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Original', notes: 'OWNER NOTES' });
+	});
+
+	test('trip_update rejects malformed fields and writes nothing', async () => {
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Original',
+			notes: 'keep',
+			startDate: '2026-03-10',
+			endDate: '2026-03-20',
+			baseCurrency: 'USD'
+		});
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+
+		const cases: Array<{ args: Record<string, unknown>; expected: string; notContain?: string }> = [
+			{ args: { name: '' }, expected: 'name' },
+			{ args: { name: '   ' }, expected: 'name' },
+			{ args: { name: null }, expected: 'name' },
+			{ args: { name: 42 }, expected: 'name' },
+			{ args: { name: 'x'.repeat(201) }, expected: 'name' },
+			{ args: { notes: 42 }, expected: 'notes must be' },
+			{ args: { notes: 'n'.repeat(5001) }, expected: 'notes must be' },
+			{ args: { startDate: 'not-a-date' }, expected: 'must be a valid date (YYYY-MM-DD)' },
+			{ args: { endDate: '2026-02-30' }, expected: 'must be a valid date (YYYY-MM-DD)' },
+			{ args: { startDate: 20260310 }, expected: 'must be a valid date (YYYY-MM-DD)' },
+			{ args: { baseCurrency: 'EURO' }, expected: 'baseCurrency must be a 1-3 letter code' },
+			{ args: { baseCurrency: 5 }, expected: 'baseCurrency must be a 1-3 letter code' },
+			{ args: { defaultVisibility: 'banana' }, expected: 'defaultVisibility must be one of', notContain: 'banana' }
+		];
+
+		for (const { args, expected, notContain } of cases) {
+			const res: any = await client.callTool({ name: 'roamarr_trip_update', arguments: { tripId: trip.id, ...args } });
+			const text = String(res.content[0].text);
+			expect(text).toContain(expected);
+			if (notContain) expect(text).not.toContain(notContain);
+			expect(tripsRepo.getTripById(trip.id)).toMatchObject({
+				name: 'Original',
+				notes: 'keep',
+				startDate: '2026-03-10',
+				endDate: '2026-03-20',
+				baseCurrency: 'USD'
+			});
+		}
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(trip.id)))
+			.executeSync();
+		expect(auditRows.filter((r: any) => r.action === 'mcp_trip_update')).toHaveLength(0);
+	});
+
+	test('trip_update rejects an end date before the start date', async () => {
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Original',
+			startDate: '2026-03-10',
+			endDate: '2026-03-20'
+		});
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+
+		const inverted: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, startDate: '2026-03-20', endDate: '2026-03-10' }
+		});
+		expect(String(inverted.content[0].text)).toContain('startDate must be on or before endDate');
+
+		const againstStored: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, endDate: '2026-03-01' }
+		});
+		expect(String(againstStored.content[0].text)).toContain('startDate must be on or before endDate');
+
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ startDate: '2026-03-10', endDate: '2026-03-20' });
+
+		const equal: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, startDate: '2026-03-10', endDate: '2026-03-10' }
+		});
+		expect(equal.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ startDate: '2026-03-10', endDate: '2026-03-10' });
+	});
+
+	test('trip_update leaves a legacy inverted trip editable', async () => {
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Original',
+			startDate: '2026-03-10',
+			endDate: '2026-03-01'
+		});
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, name: 'Renamed' }
+		});
+		expect(res.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.name).toBe('Renamed');
+	});
+
+	test('trip_update normalizes input', async () => {
+		const trip = tripsRepo.createTrip(userId, {
+			name: 'Original',
+			startDate: '2026-03-10',
+			endDate: '2026-03-20',
+			baseCurrency: 'USD'
+		});
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+
+		const currency: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, baseCurrency: ' eur ' }
+		});
+		expect(currency.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.baseCurrency).toBe('EUR');
+
+		const nullEnums: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, defaultVisibility: null, status: null }
+		});
+		expect(nullEnums.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ defaultVisibility: 'private', status: 'booked' });
+
+		const clearStart: any = await client.callTool({
+			name: 'roamarr_trip_update',
+			arguments: { tripId: trip.id, startDate: null }
+		});
+		expect(clearStart.isError).toBeFalsy();
+		expect(tripsRepo.getTripById(trip.id)?.startDate).toBeNull();
+	});
+
+	test('trip_create rejects bad input and creates nothing', async () => {
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+		const before = tripsRepo.listTripsForUser(userId).length;
+
+		const cases: Array<{ args: Record<string, unknown>; expected: string; notContain?: string }> = [
+			{ args: {}, expected: 'name is required' },
+			{ args: { name: '' }, expected: 'name is required' },
+			{ args: { name: 7 }, expected: 'name is required' },
+			{ args: { name: 'Ok', status: 'banana' }, expected: 'status must be one of', notContain: 'banana' },
+			{ args: { name: 'Ok', startDate: 'tomorrow' }, expected: 'must be a valid date (YYYY-MM-DD)' }
+		];
+
+		for (const { args, expected, notContain } of cases) {
+			const res: any = await client.callTool({ name: 'roamarr_trip_create', arguments: args });
+			const text = String(res.content[0].text);
+			expect(text).toContain(expected);
+			if (notContain) expect(text).not.toContain(notContain);
+			expect(tripsRepo.listTripsForUser(userId).length).toBe(before);
+		}
+	});
+
+	test('trip_create normalizes valid input', async () => {
+		const { client } = await connect(userId, ['trips:write', 'trips:read']);
+		const res: any = await client.callTool({
+			name: 'roamarr_trip_create',
+			arguments: {
+				name: '  Lisbon  ',
+				baseCurrency: 'eur',
+				startDate: '2026-05-01',
+				endDate: '2026-05-03',
+				defaultVisibility: 'private',
+				status: 'booked'
+			}
+		});
+		expect(res.isError).toBeFalsy();
+		const body = JSON.parse(res.content[0].text);
+		const row = tripsRepo.getTripById(body.id);
+		expect(row).toMatchObject({
+			name: 'Lisbon',
+			baseCurrency: 'EUR',
+			startDate: '2026-05-01',
+			endDate: '2026-05-03',
+			defaultVisibility: 'private',
+			status: 'booked'
+		});
+	});
+
 	test('trip_delete requires confirm: true', async () => {
 		const trip = makeTrip(ctx.kit, userId, { name: 'DeleteMe' });
 		const { client } = await connect(userId, ['trips:write']);

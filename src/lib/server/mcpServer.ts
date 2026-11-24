@@ -22,7 +22,7 @@ import { setBudget, listBudgetsWithSpent } from './tripBudgets';
 import { logAudit } from './audit';
 import { Validator } from './validation';
 import { findCity, resolveCitySelection } from './cities';
-import { TRIP_STATUSES, SEGMENT_TYPES, EXPENSE_CATEGORIES, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType, type CompanionCategory } from './db/mongrelSchema';
+import { TRIP_STATUSES, VISIBILITIES, SEGMENT_TYPES, EXPENSE_CATEGORIES, TRAVEL_DOCUMENT_TYPES, type TravelDocumentType, type CompanionCategory } from './db/mongrelSchema';
 import {
 	projectCard,
 	projectLoyalty,
@@ -133,6 +133,89 @@ function parseShareArgs(args: Record<string, unknown>): ShareArgsResult {
 		permission: (permission as SharePermission | undefined) ?? undefined,
 		showDetails: (showDetails as boolean | undefined) ?? undefined
 	};
+}
+
+// Strict parser shared by roamarr_trip_create and roamarr_trip_update. The SDK
+// does not enforce the declared inputSchema, so every field that reaches
+// tripsRepo is checked here. Absent keys are omitted so a partial update leaves
+// the stored value alone; an explicit null clears notes and dates. The web
+// rules mirrored here live in /trips/[id]/edit save (name 200, notes 5000,
+// YYYY-MM-DD dates, 1-3 letter currency, visibility/status enums).
+type TripFieldPatch = {
+	name?: string;
+	notes?: string | null;
+	startDate?: string | null;
+	endDate?: string | null;
+	baseCurrency?: string;
+	defaultVisibility?: (typeof VISIBILITIES)[number];
+	status?: (typeof TRIP_STATUSES)[number];
+};
+
+type TripFieldsResult = { ok: true; fields: TripFieldPatch } | { ok: false; error: string };
+
+// `existing` is the stored trip for an update and null for a create.
+function parseTripFieldsArgs(
+	args: Record<string, unknown>,
+	existing: { startDate: string | null; endDate: string | null } | null
+): TripFieldsResult {
+	const v = new Validator();
+	const fields: TripFieldPatch = {};
+
+	// Create always needs a name; update only validates it when supplied.
+	if (existing === null || args.name !== undefined) {
+		const name = v.requiredString(args.name, 'name', { max: 200 });
+		if (name !== undefined) fields.name = name;
+	}
+
+	if (args.notes !== undefined) {
+		if (args.notes === null) fields.notes = null;
+		else fields.notes = v.optionalString(args.notes, 'notes', { max: 5000 }) ?? null;
+	}
+
+	for (const key of ['startDate', 'endDate'] as const) {
+		const raw = args[key];
+		if (raw === undefined) continue;
+		if (raw === null || (typeof raw === 'string' && raw.trim() === '')) {
+			fields[key] = null;
+			continue;
+		}
+		const date = v.date(raw, key);
+		if (date !== undefined) fields[key] = date;
+		else if (typeof raw !== 'string') v.addError(key, `${key} must be a valid date (YYYY-MM-DD)`);
+	}
+
+	// Only re-check the range when this call writes a date, so a legacy row with
+	// an inverted range stays editable for unrelated fields. Compare against the
+	// stored counterpart, and only when both sides are well-formed dates.
+	if (fields.startDate !== undefined || fields.endDate !== undefined) {
+		const start = fields.startDate !== undefined ? fields.startDate : (existing?.startDate ?? null);
+		const end = fields.endDate !== undefined ? fields.endDate : (existing?.endDate ?? null);
+		if (/^\d{4}-\d{2}-\d{2}$/.test(start ?? '') && /^\d{4}-\d{2}-\d{2}$/.test(end ?? '')) {
+			v.dateRange(start ?? undefined, end ?? undefined);
+		}
+	}
+
+	if (args.baseCurrency != null) {
+		if (typeof args.baseCurrency !== 'string') {
+			v.addError('baseCurrency', 'baseCurrency must be a 1-3 letter code');
+		} else {
+			const currency = args.baseCurrency.trim().toUpperCase();
+			if (!/^[A-Z]{1,3}$/.test(currency)) v.addError('baseCurrency', 'baseCurrency must be a 1-3 letter code');
+			else fields.baseCurrency = currency;
+		}
+	}
+
+	if (args.defaultVisibility != null) {
+		const visibility = v.enumValue(args.defaultVisibility, VISIBILITIES, 'defaultVisibility');
+		if (visibility !== undefined) fields.defaultVisibility = visibility;
+	}
+	if (args.status != null) {
+		const status = v.enumValue(args.status, TRIP_STATUSES, 'status');
+		if (status !== undefined) fields.status = status;
+	}
+
+	if (!v.ok()) return { ok: false, error: Object.values(v.errors).join('; ') };
+	return { ok: true, fields };
 }
 
 type PlaceLinkPatchResult =
@@ -2504,15 +2587,19 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_trip_create': {
 				if (!hasScope(scopes, 'trips:write')) return scopeError('trips:write');
+				const validation = validateToolInput(args as Record<string, unknown>);
+				if (!validation.ok) return textResult({ error: validation.error });
+				const parsed = parseTripFieldsArgs(args as Record<string, unknown>, null);
+				if (!parsed.ok) return textResult({ error: parsed.error });
+				const { name, ...fields } = parsed.fields;
+				if (name === undefined) return textResult({ error: 'name is required' }); // unreachable after the parser; keeps the type honest without `!`
 				const destination = destinationCityPatch(args);
 				const trip = tripsRepo.createTrip(userId, {
-					name: String(args.name ?? ''),
 					destination: args.destination as string | undefined,
 					...destination,
-					startDate: args.startDate as string | undefined,
-					endDate: args.endDate as string | undefined, notes: args.notes as string | undefined,
-					tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined, baseCurrency: args.baseCurrency as string | undefined,
-					defaultVisibility: args.defaultVisibility as any, status: args.status as any
+					tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined,
+					...fields,
+					name
 				});
 				logAudit(userId, 'mcp_trip_create', 'trip', trip.id, { name: trip.name });
 				return textResult({ id: trip.id, name: trip.name });
@@ -2524,17 +2611,22 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const tripId = Number(args.tripId);
 				// Editors of shared trips can update trip metadata, matching
 				// the web UI /trips/[id]/edit save action (requireEditableTrip).
-				requireEditableTrip(userId, tripId);
-				const destination = destinationCityPatch(args, tripsRepo.getTripById(tripId));
+				const existing = requireEditableTrip(userId, tripId);
+				// Same guard as the web edit action: an editor whose share lacks
+				// showDetails must not overwrite the owner's private notes.
+				if (args.notes !== undefined && !canViewDetails(userId, existing)) {
+					return textResult({
+						error: 'notes cannot be changed without permission to view private trip details; omit notes and retry'
+					});
+				}
+				const parsed = parseTripFieldsArgs(args as Record<string, unknown>, existing);
+				if (!parsed.ok) return textResult({ error: parsed.error });
+				const destination = destinationCityPatch(args, existing);
 				const updated = tripsRepo.updateTrip(tripId, {
-					name: args.name as string | undefined,
 					destination: args.destination as string | undefined,
 					...destination,
-					startDate: args.startDate as string | undefined,
-					endDate: args.endDate as string | undefined,
-					notes: args.notes as string | undefined, tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined,
-					baseCurrency: args.baseCurrency as string | undefined, defaultVisibility: args.defaultVisibility as any,
-					status: args.status as any | undefined
+					tags: Array.isArray(args.tags) ? JSON.stringify(args.tags) : undefined,
+					...parsed.fields
 				});
 				if (!updated) return textResult({ error: 'Trip not found' });
 				logAudit(userId, 'mcp_trip_update', 'trip', tripId, {});

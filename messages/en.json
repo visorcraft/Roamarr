@@ -393,5 +393,17 @@
 	"rideshare_dropoff_time_label": "Drop-off time",
 	"rideshare_dropoff_timezone_label": "Drop-off timezone",
 	"rideshare_dropoff_label": "Drop-off",
-	"rideshare_dropoff_placeholder": "Drop-off address"
+	"rideshare_dropoff_placeholder": "Drop-off address",
+	"food_title_label": "Restaurant",
+	"food_title_placeholder": "Dinner reservation",
+	"food_address_label": "Address",
+	"food_address_placeholder": "Restaurant address",
+	"food_party_size_label": "Party size",
+	"food_party_size_placeholder": "2",
+	"train_title_label": "Train",
+	"train_title_placeholder": "Amtrak 123",
+	"train_route_label": "Route",
+	"train_route_placeholder": "Boston → New York",
+	"train_seat_label": "Seat / car",
+	"train_seat_placeholder": "Car 7, Seat 42"
 }

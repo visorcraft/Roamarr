@@ -47,8 +47,12 @@ test('delegate forms add their extra fields on top of StandardPlanForm', () => {
 	const hotel = render(HotelForm, { props: {} }).body;
 	expect(hotel).toContain('name="detail_phone"');
 	expect(hotel).toContain('Check-out time');
-	expect(render(FoodForm, { props: {} }).body).toContain('name="detail_partySize"');
-	expect(render(TrainForm, { props: {} }).body).toContain('name="detail_seat"');
+	const foodBody = render(FoodForm, { props: {} }).body;
+	expect(foodBody).toContain('name="detail_partySize"');
+	expect(foodBody).toMatch(/for="detail_partySize">Party size/);
+	const trainBody = render(TrainForm, { props: {} }).body;
+	expect(trainBody).toContain('name="detail_seat"');
+	expect(trainBody).toMatch(/for="detail_seat">Seat \/ car/);
 	// BoatForm is a pure wrapper (labels only) and still surfaces the base fields
 	expect(render(BoatForm, { props: {} }).body).toContain('name="title"');
 	expect(render(ShuttleForm, { props: {} }).body).toContain('Pick-up time');
@@ -77,6 +81,24 @@ const expectedPlanMessages: Record<string, string> = {
 	plan_notes_label: 'Notes',
 	plan_notes_placeholder: 'Optional notes',
 	plan_notes_hint: 'Markdown supported'
+};
+
+const expectedFoodMessages: Record<string, string> = {
+	food_title_label: 'Restaurant',
+	food_title_placeholder: 'Dinner reservation',
+	food_address_label: 'Address',
+	food_address_placeholder: 'Restaurant address',
+	food_party_size_label: 'Party size',
+	food_party_size_placeholder: '2'
+};
+
+const expectedTrainMessages: Record<string, string> = {
+	train_title_label: 'Train',
+	train_title_placeholder: 'Amtrak 123',
+	train_route_label: 'Route',
+	train_route_placeholder: 'Boston → New York',
+	train_seat_label: 'Seat / car',
+	train_seat_placeholder: 'Car 7, Seat 42'
 };
 
 test.each([...Object.entries(expectedDateTimeMessages), ...Object.entries(expectedPlanMessages)])(
@@ -170,5 +192,79 @@ test('StandardPlanForm and DateTimeRangeFields read labels from the catalog, not
 		expect(source).not.toContain('label="Rally time"');
 		expect(source).not.toContain('hint="Markdown supported"');
 		expect(source).not.toContain('>Timezone</label>');
+	}
+});
+
+test.each(Object.entries({ ...expectedFoodMessages, ...expectedTrainMessages }))(
+	'catalog message %s matches the English string',
+	(key, expected) => {
+		const fn = (m as Record<string, (i?: unknown) => string>)[key];
+		expect(typeof fn).toBe('function');
+		expect(fn()).toBe(expected);
+	}
+);
+
+test('FoodForm renders its labels from the catalog', () => {
+	const { body } = render(FoodForm, { props: {} });
+	expect(body).toMatch(/for="title">Restaurant(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="Dinner reservation"');
+	expect(body).toMatch(/for="venue">Address(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="Restaurant address"');
+	expect(body).toMatch(/for="detail_partySize">Party size(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="2"');
+	for (const expected of Object.values(expectedFoodMessages)) {
+		expect(body).toContain(expected);
+	}
+	expect(body).toMatch(/for="segment-startDate">Start date(?:<!---->)?<\/label>/);
+	expect(body).toMatch(/for="segment-endDate">End date(?:<!---->)?<\/label>/);
+});
+
+test('TrainForm renders its labels from the catalog', () => {
+	const { body } = render(TrainForm, { props: {} });
+	expect(body).toMatch(/for="title">Train(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="Amtrak 123"');
+	expect(body).toMatch(/for="venue">Route(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="Boston → New York"');
+	expect(body).toMatch(/for="detail_seat">Seat \/ car(?:<!---->)?<\/label>/);
+	expect(body).toContain('placeholder="Car 7, Seat 42"');
+	for (const expected of Object.values(expectedTrainMessages)) {
+		expect(body).toContain(expected);
+	}
+});
+
+test('FoodForm and TrainForm keep the required title and venue fields', () => {
+	for (const Form of [FoodForm, TrainForm]) {
+		const { body } = render(Form, { props: {} });
+		expect(body).toMatch(/<input[^>]*name="title"[^>]*required/);
+		expect(body).toContain('name="venue"');
+	}
+	const food = render(FoodForm, { props: {} }).body;
+	expect(food).toContain('name="detail_partySize"');
+	const train = render(TrainForm, { props: {} }).body;
+	expect(train).toContain('name="detail_seat"');
+	expect(train).toMatch(/class="field sm:col-span-2">\s*<label class="label" for="detail_seat">/);
+});
+
+test('FoodForm and TrainForm forward errors', () => {
+	for (const Form of [FoodForm, TrainForm]) {
+		const { body } = render(Form, { props: { errors: { title: 'Need a title.', venue: 'Where?' } } });
+		expect(body).toContain('Need a title.');
+		expect(body).toContain('Where?');
+		expect(body).toContain('aria-invalid="true"');
+	}
+});
+
+test('FoodForm and TrainForm read their strings from the catalog, not literals', () => {
+	const foodSource = readFileSync(new URL('./FoodForm.svelte', import.meta.url), 'utf8');
+	const trainSource = readFileSync(new URL('./TrainForm.svelte', import.meta.url), 'utf8');
+	for (const [source, table, prefix] of [
+		[foodSource, expectedFoodMessages, 'food'],
+		[trainSource, expectedTrainMessages, 'train']
+	] as const) {
+		expect(source).toContain("from '$lib/paraglide/messages'");
+		const used = [...new Set([...source.matchAll(new RegExp(`m\\.(${prefix}_[a-z_]+)\\(\\)`, 'g'))].map(([, key]) => key))].sort();
+		expect(used).toEqual(Object.keys(table).sort());
+		expect(source).not.toMatch(/\b(?:titleLabel|titlePlaceholder|locationLabel|locationPlaceholder)="[^"]*"/);
+		expect(source).not.toMatch(/\b(?:label|placeholder)="[^"]*"/);
 	}
 });

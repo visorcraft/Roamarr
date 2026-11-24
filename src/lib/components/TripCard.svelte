@@ -56,8 +56,15 @@
 	<div class="flex flex-col gap-3 {showCheckbox && !trip.isShared ? 'pr-7' : ''}">
 		<div class="flex items-start justify-between gap-3">
 			<h2 class="section-title">
-				{#if trip.favorite}<span class="text-yellow-400" title="Favorite">★</span>{/if}
-				{trip.name}
+				{#if trip.favorite}
+					<span class="inline-flex items-center gap-1.5">
+						<Icon name="star" class="h-4 w-4 fill-current text-[var(--theme-readable-warning)]" />
+						<span class="sr-only">Favorite</span>
+						{trip.name}
+					</span>
+				{:else}
+					{trip.name}
+				{/if}
 			</h2>
 			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
 				<span class="badge {status.class} capitalize">{status.label}</span>

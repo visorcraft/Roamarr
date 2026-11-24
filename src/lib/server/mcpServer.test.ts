@@ -1126,6 +1126,71 @@ describe('mcpServer', () => {
 		expect(mcpRows).toHaveLength(1);
 	});
 
+	test('expense_update validates expenseId and money fields like expense_create', async () => {
+		const trip = makeTrip(ctx.kit, userId, { name: 'Expenses' });
+		const { addTripExpense } = await import('./tripExpenses/repository');
+		const { getExpenseById } = await import('./repositories/expensesRepo');
+		const created = addTripExpense(userId, trip.id, {
+			description: 'Dinner',
+			amount: 2500,
+			currency: 'USD'
+		});
+		const { client } = await connect(userId, ['expenses:write']);
+
+		const assertUnchanged = () => {
+			const row = getExpenseById(created.id);
+			expect(row).toBeTruthy();
+			expect(row!.amount).toBe(2500);
+			expect(row!.baseAmount).toBe(2500);
+			expect(row!.exchangeRate).toBe(10000);
+		};
+
+		const invalidIds = [{ expenseId: 'abc' }, { expenseId: 1.5 }, { expenseId: 0 }, {}];
+		for (const args of invalidIds) {
+			const res: any = await client.callTool({ name: 'roamarr_expense_update', arguments: args });
+			expect(res.isError).toBeTruthy();
+			expect(String(res.content?.[0]?.text ?? '')).toContain('expenseId must be a positive integer');
+			assertUnchanged();
+		}
+
+		const invalidMoney = [
+			{ expenseId: created.id, baseAmount: -500 },
+			{ expenseId: created.id, baseAmount: '3000' },
+			{ expenseId: created.id, exchangeRate: true },
+			{ exchangeRate: '11000' },
+			{ expenseId: created.id, exchangeRate: '11000' }
+		];
+		for (const args of invalidMoney) {
+			const res: any = await client.callTool({ name: 'roamarr_expense_update', arguments: args });
+			expect(res.isError).toBeTruthy();
+			assertUnchanged();
+		}
+
+		const baseAmountRes: any = await client.callTool({
+			name: 'roamarr_expense_update',
+			arguments: { expenseId: created.id, baseAmount: 3000 }
+		});
+		expect(baseAmountRes.isError).toBeFalsy();
+		expect(getExpenseById(created.id)?.baseAmount).toBe(3000);
+
+		const exchangeRateRes: any = await client.callTool({
+			name: 'roamarr_expense_update',
+			arguments: { expenseId: created.id, exchangeRate: 11000 }
+		});
+		expect(exchangeRateRes.isError).toBeFalsy();
+		expect(getExpenseById(created.id)?.exchangeRate).toBe(11000);
+
+		const descRes: any = await client.callTool({
+			name: 'roamarr_expense_update',
+			arguments: { expenseId: created.id, description: 'Supper' }
+		});
+		expect(descRes.isError).toBeFalsy();
+		const finalRow = getExpenseById(created.id);
+		expect(finalRow?.description).toBe('Supper');
+		expect(finalRow?.baseAmount).toBe(3000);
+		expect(finalRow?.exchangeRate).toBe(11000);
+	});
+
 	test('places_mark records ai source and ISO-3166-2 state codes', async () => {
 		const { client } = await connect(userId, ['places:write', 'places:read']);
 		const countryRes: any = await client.callTool({

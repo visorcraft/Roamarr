@@ -1094,8 +1094,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 						description: { type: 'string' },
 						amount: { type: 'integer' },
 						currency: { type: 'string' },
-						category: { type: 'string' }, exchangeRate: { type: 'integer' }, baseAmount: { type: 'integer' },
-						paidByCompanionId: { type: 'number' }, splitAmong: { type: 'array', items: { oneOf: [{ type: 'string', enum: ['owner'] }, { type: 'number' }] } }
+						category: { type: 'string' },
+						exchangeRate: { type: 'integer', description: 'Rate × 10000 (10000 = 1.0)' },
+						baseAmount: { type: 'integer', description: 'Amount in cents in base currency' },
+						paidByCompanionId: { type: 'number' },
+						splitAmong: { type: 'array', items: { oneOf: [{ type: 'string', enum: ['owner'] }, { type: 'number' }] } }
 					},
 					required: ['expenseId']
 				}
@@ -2884,15 +2887,20 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_expense_update': {
 				if (!hasScope(scopes, 'expenses:write')) return scopeError('expenses:write');
+				const raw = args.expenseId;
+				const id = Number(raw);
+				if (typeof raw !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+					return { content: [{ type: 'text' as const, text: 'expenseId must be a positive integer' }], isError: true };
+				}
 				const { updateTripExpense } = await import('./tripExpenses/repository');
 				const { toCents, optString } = await import('./mcpHelpers');
-				const id = Number(args.expenseId);
 				const updated = updateTripExpense(userId, id, {
 					description: optString(args.description, 500) ?? undefined,
 					amount: args.amount != null ? toCents(args.amount, 'amount') : undefined,
 					currency: optString(args.currency) ?? undefined,
-					category: optString(args.category) ?? undefined, exchangeRate: args.exchangeRate == null ? undefined : Number(args.exchangeRate),
-					baseAmount: args.baseAmount == null ? undefined : Number(args.baseAmount),
+					category: optString(args.category) ?? undefined,
+					exchangeRate: args.exchangeRate != null ? toCents(args.exchangeRate, 'exchangeRate') : undefined,
+					baseAmount: args.baseAmount != null ? toCents(args.baseAmount, 'baseAmount') : undefined,
 					paidByCompanionId: args.paidByCompanionId == null ? undefined : Number(args.paidByCompanionId),
 					splitAmong: Array.isArray(args.splitAmong) ? args.splitAmong.map((v) => v === 'owner' ? 'owner' : Number(v)) : undefined
 				});

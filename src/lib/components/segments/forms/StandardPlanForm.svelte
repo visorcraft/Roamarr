@@ -11,16 +11,17 @@
 		type SegmentCityDefaults
 	} from '../segmentCityDefaults';
 	import Admin1Select from '$lib/components/Admin1Select.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	const tripDefaults = getContext<SegmentCityDefaults | undefined>(SEGMENT_CITY_DEFAULTS_KEY);
 
 	let {
 		errors = {},
-		titleLabel = 'Title',
-		titlePlaceholder = 'Enter title',
+		titleLabel = m.plan_title_label(),
+		titlePlaceholder = m.plan_title_placeholder(),
 		title = '',
-		locationLabel = 'Venue',
-		locationPlaceholder = 'Enter venue',
+		locationLabel = m.plan_location_label(),
+		locationPlaceholder = m.plan_location_placeholder(),
 		countryCode: countryCodeProp = tripDefaults?.countryCode ?? '',
 		admin1Code: admin1CodeProp = tripDefaults?.admin1Code ?? '',
 		cityName = tripDefaults?.cityName ?? '',
@@ -28,11 +29,11 @@
 		cityLng = tripDefaults?.cityLng ?? null,
 		venue = '',
 		requireEnd = false,
-		startDateLabel = 'Start date',
-		startTimeLabel = 'Start time',
-		endDateLabel = 'End date',
-		endTimeLabel = 'End time',
-		endTimezoneLabel = 'End timezone'
+		startDateLabel = m.datetime_start_date_label(),
+		startTimeLabel = m.datetime_start_time_label(),
+		endDateLabel = m.datetime_end_date_label(),
+		endTimeLabel = m.datetime_end_time_label(),
+		endTimezoneLabel = m.datetime_end_timezone_label()
 	}: {
 		errors?: Record<string, string>;
 		titleLabel?: string;
@@ -63,14 +64,14 @@
 <DateTimeRangeFields {errors} {requireEnd} {startDateLabel} {startTimeLabel} {endDateLabel} {endTimeLabel} {endTimezoneLabel} />
 
 <div class="field">
-	<label class="label" for="countryCode">Country</label>
+	<label class="label" for="countryCode">{m.plan_country_label()}</label>
 	<select
 		id="countryCode"
 		name="countryCode"
 		class="input {errors.countryCode ? 'input-error' : ''}"
 		bind:value={countryCode}
 	>
-		<option value="">Select country</option>
+		<option value="">{m.plan_country_placeholder()}</option>
 		{#each COUNTRIES as c (c.code)}
 			<option value={c.code}>{c.name}</option>
 		{/each}
@@ -94,10 +95,10 @@
 
 <TextField name="venue" label={locationLabel} placeholder={locationPlaceholder} value={venue} class="sm:col-span-2" {errors} />
 
-<TextField name="meetingPoint" label="Meeting / rally point" placeholder="e.g. Hotel lobby, gate A12" maxlength="200" class="sm:col-span-2" {errors} />
+<TextField name="meetingPoint" label={m.plan_meeting_point_label()} placeholder={m.plan_meeting_point_placeholder()} maxlength="200" class="sm:col-span-2" {errors} />
 
-<TextField name="meetingAt" label="Rally time" type="datetime-local" {errors} />
+<TextField name="meetingAt" label={m.plan_rally_time_label()} type="datetime-local" {errors} />
 
 <BookedRow {errors} />
 
-<TextAreaField name="detail_notes" label="Notes" rows={3} placeholder="Optional notes" hint="Markdown supported" class="sm:col-span-2" />
+<TextAreaField name="detail_notes" label={m.plan_notes_label()} rows={3} placeholder={m.plan_notes_placeholder()} hint={m.plan_notes_hint()} class="sm:col-span-2" />

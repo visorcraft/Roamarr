@@ -1,15 +1,16 @@
 <script lang="ts">
 	import TimezoneSelect from '$lib/components/TimezoneSelect.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	let {
 		errors = {},
 		idPrefix = 'segment',
 		requireEnd = false,
-		startDateLabel = 'Start date',
-		startTimeLabel = 'Start time',
-		endDateLabel = 'End date',
-		endTimeLabel = 'End time',
-		endTimezoneLabel = 'End timezone'
+		startDateLabel = m.datetime_start_date_label(),
+		startTimeLabel = m.datetime_start_time_label(),
+		endDateLabel = m.datetime_end_date_label(),
+		endTimeLabel = m.datetime_end_time_label(),
+		endTimezoneLabel = m.datetime_end_timezone_label()
 	}: {
 		errors?: Record<string, string>;
 		idPrefix?: string;
@@ -39,7 +40,7 @@
 	{#if errors.localStart}<p class="field-error">{errors.localStart}</p>{/if}
 </div>
 <div class="field">
-	<label class="label" for="{idPrefix}-startTz">Timezone</label>
+	<label class="label" for="{idPrefix}-startTz">{m.datetime_timezone_label()}</label>
 	<TimezoneSelect
 		id="{idPrefix}-startTz"
 		name="startTz"

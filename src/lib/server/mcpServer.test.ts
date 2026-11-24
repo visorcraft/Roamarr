@@ -18,8 +18,8 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
-import { eq as kitEq } from '@visorcraft/mongreldb-kit';
+import { trips, tripCompanions, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
+import { eq as kitEq, and } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
 import { COMPANION_PRIVATE_FIELDS } from './sharing';
@@ -2385,6 +2385,108 @@ describe('mcpServer', () => {
 			const { listPollsForTrip } = await import('./repositories/pollsRepo');
 			const refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
 			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(1);
+		});
+
+		test('read-only viewer voting is rejected and leaves no self-companion row', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Vote?', ['yes', 'no']);
+			const optionYes = poll.options[0]!.id;
+			const { client } = await connect(otherId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes }
+			});
+			expect(res.isError).toBe(true);
+			const selfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(otherId))))
+				.executeSync();
+			expect(selfCompanions).toHaveLength(0);
+			const { listPollsForTrip } = await import('./repositories/pollsRepo');
+			const refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(0);
+		});
+
+		test('outsider voting is rejected and leaves no self-companion row', async () => {
+			const { ownerId, trip } = setupSharedTrip('edit');
+			const outsiderId = makeUser(ctx.kit, { email: 'outsider@x.c' }).id;
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Vote?', ['yes', 'no']);
+			const optionYes = poll.options[0]!.id;
+			const { client } = await connect(outsiderId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes }
+			});
+			expect(res.isError).toBe(true);
+			const selfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(outsiderId))))
+				.executeSync();
+			expect(selfCompanions).toHaveLength(0);
+			const { listPollsForTrip } = await import('./repositories/pollsRepo');
+			const refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(0);
+		});
+
+		test('explicit companionId does not bypass the gate', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Vote?', ['yes', 'no']);
+			const optionYes = poll.options[0]!.id;
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const companion = insertTripCompanion(ownerId, trip.id, { name: 'Visible' });
+			const { client } = await connect(otherId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes, companionId: companion.id }
+			});
+			expect(res.isError).toBe(true);
+			const selfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(otherId))))
+				.executeSync();
+			expect(selfCompanions).toHaveLength(0);
+			const { listPollsForTrip } = await import('./repositories/pollsRepo');
+			const refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(0);
+		});
+
+		test('owner and editor can poll_cast_vote without companionId', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('edit');
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Vote?', ['yes', 'no']);
+			const optionYes = poll.options[0]!.id;
+			const { listPollsForTrip } = await import('./repositories/pollsRepo');
+
+			const ownerClient = await connect(ownerId, ['polls:write']);
+			const ownerRes: any = await ownerClient.client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes }
+			});
+			expect(ownerRes.isError).toBeFalsy();
+			const ownerSelfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(ownerId))))
+				.executeSync();
+			expect(ownerSelfCompanions).toHaveLength(1);
+			let refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(1);
+
+			const editorClient = await connect(otherId, ['polls:write']);
+			const editorRes: any = await editorClient.client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: optionYes }
+			});
+			expect(editorRes.isError).toBeFalsy();
+			const editorSelfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(otherId))))
+				.executeSync();
+			expect(editorSelfCompanions).toHaveLength(1);
+			refreshed = listPollsForTrip(trip.id).find((p) => p.id === poll.id)!;
+			expect(refreshed.options.find((o) => o.id === optionYes)!.voteCount).toBe(2);
 		});
 
 		test('non-share cannot read shared trip via requireViewableTrip', async () => {

@@ -4053,6 +4053,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const pollId = Number(args.pollId);
 				const poll = getPollById(pollId);
 				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
+				// getOrCreateOwnerCompanion writes a self-companion row and bumps
+				// updated_at, so authorization must happen before any of that.
+				requireEditableTrip(userId, poll.tripId);
 				// companionId: positive int = companion id; null/missing =
 				// the trip owner / editor. The self-companion is recorded
 				// against the calling user (via user_id) so the FK and the

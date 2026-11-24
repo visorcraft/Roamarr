@@ -124,6 +124,40 @@ test('verify action accepts a TOTP code and creates a session', async () => {
 	expect(cookies.set).toHaveBeenCalledWith('session', expect.any(String), expect.any(Object));
 });
 
+test('verify action rejects off-site next values and keeps same-site ones', async () => {
+	const kit = kitDb();
+	const password = 'correcthorse';
+	const u = makeUser(kit, { passwordHash: await hashPassword(password), email: 'u5@x.c' });
+	const setup = generateSecret(u.email);
+	const enabled = enableTwoFactor(u.id, setup.secret, validToken(setup.secret));
+	expect(enabled.ok).toBe(true);
+
+	const cookie = createPendingCookie(u.id, '1.1.1.1', undefined).value;
+
+	for (const [nextParam, expected] of [
+		['/%5Cevil.example', '/'],
+		['%2Ftrips%2F42', '/trips/42']
+	] as const) {
+		const form = new FormData();
+		form.set('code', validToken(setup.secret));
+		const cookies = makeCookies(cookie);
+		const url = new URL(`https://app.example.com/login/verify?next=${nextParam}`);
+		try {
+			await actions.default({
+				request: { formData: async () => form, headers: new Headers() },
+				cookies,
+				getClientAddress: () => '1.1.1.1',
+				url
+			} as any);
+			expect.fail('should have redirected');
+		} catch (e: any) {
+			expect(e.status).toBe(303);
+			expect(e.location).toBe(expected);
+		}
+		expect(cookies.set).toHaveBeenCalledWith('session', expect.any(String), expect.any(Object));
+	}
+});
+
 test('verify action accepts a backup code', async () => {
 	const kit = kitDb();
 	const u = makeUser(kit, { email: 'u2@x.c' });

@@ -1,6 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { checkRateLimit } from '$lib/server/rateLimit';
+import { safeNextPath } from '$lib/server/params';
 import { setFlash } from '$lib/server/flash';
 import {
 	buildAuthorizationUrl,
@@ -33,8 +34,7 @@ export const GET: RequestHandler = async ({ cookies, getClientAddress, url }) =>
 
 	// Optional post-login target; only same-origin relative paths (same rule
 	// as the password login form).
-	const rawNext = url.searchParams.get('next');
-	const next = rawNext && rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : null;
+	const next = safeNextPath(url.searchParams.get('next'));
 
 	const flow = createOidcFlow(next);
 	cookies.set('oidc_flow', flow.cookieValue, oidcFlowCookieOptions());

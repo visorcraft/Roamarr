@@ -3,6 +3,7 @@ import { createSession, sessionCookieOptions } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { verifyPendingCookie, verifyTwoFactor } from '$lib/server/twoFactor';
 import { getUserById } from '$lib/server/repositories/usersRepo';
+import { safeNextPath } from '$lib/server/params';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ request, cookies, getClientAddress }) => {
@@ -16,11 +17,7 @@ export const load: PageServerLoad = ({ request, cookies, getClientAddress }) => 
 };
 
 function safeNext(url: URL | undefined): string | null {
-	if (!url) return null;
-	const next = url.searchParams.get('next');
-	if (!next) return null;
-	if (next.startsWith('/') && !next.startsWith('//')) return next;
-	return null;
+	return url ? safeNextPath(url.searchParams.get('next')) : null;
 }
 
 export const actions: Actions = {

@@ -111,6 +111,45 @@ test('start redirects to the provider with PKCE and sets the flow cookie', async
 	expect(verifyOidcFlowCookie(flowCall![1] as string)).not.toBeNull();
 });
 
+test('start stores a null flow next for off-site next values', async () => {
+	configureOidc();
+	vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DISCOVERY_DOC)));
+	for (const nextParam of [
+		'/%5Cevil.example',
+		'/%09/evil.example',
+		'//evil.example',
+		'https://evil.example'
+	]) {
+		const cookies = { set: vi.fn(), get: vi.fn(), delete: vi.fn() };
+		const url = new URL(`https://app.example.com/auth/oidc/start?next=${nextParam}`);
+		try {
+			await startGET(mockEvent({ cookies, url }));
+			expect.unreachable('should have redirected');
+		} catch (e: any) {
+			expect(e.status).toBe(302);
+		}
+		const flowCall = cookies.set.mock.calls.find((c) => c[0] === 'oidc_flow');
+		expect(flowCall).toBeTruthy();
+		expect(verifyOidcFlowCookie(flowCall![1] as string)?.next).toBeNull();
+	}
+});
+
+test('start stores a same-site next value in the flow cookie', async () => {
+	configureOidc();
+	vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(DISCOVERY_DOC)));
+	const cookies = { set: vi.fn(), get: vi.fn(), delete: vi.fn() };
+	const url = new URL('https://app.example.com/auth/oidc/start?next=%2Ftrips%2F42%3Ftab%3Dpacking');
+	try {
+		await startGET(mockEvent({ cookies, url }));
+		expect.unreachable('should have redirected');
+	} catch (e: any) {
+		expect(e.status).toBe(302);
+	}
+	const flowCall = cookies.set.mock.calls.find((c) => c[0] === 'oidc_flow');
+	expect(flowCall).toBeTruthy();
+	expect(verifyOidcFlowCookie(flowCall![1] as string)?.next).toBe('/trips/42?tab=packing');
+});
+
 test('start is rate limited per IP', async () => {
 	configureOidc();
 	const ip = '10.9.9.9';

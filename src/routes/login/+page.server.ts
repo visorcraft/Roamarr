@@ -7,6 +7,7 @@ import { normalizeEmail } from '$lib/server/users';
 import { isTwoFactorEnabled, createPendingCookie } from '$lib/server/twoFactor';
 import { isPasskeyAvailable } from '$lib/server/passkeys';
 import { getOidcPublicInfo } from '$lib/server/oidc';
+import { safeNextPath } from '$lib/server/params';
 
 export async function _authenticate(email: string, password: string) {
 	const u = usersRepo.getUserByEmail(normalizeEmail(email));
@@ -30,12 +31,7 @@ export const load: PageServerLoad = () => {
 };
 
 function safeNext(url: URL | undefined): string | null {
-	if (!url) return null;
-	const next = url.searchParams.get('next');
-	if (!next) return null;
-	// Only allow same-origin relative paths to prevent open redirects.
-	if (next.startsWith('/') && !next.startsWith('//')) return next;
-	return null;
+	return url ? safeNextPath(url.searchParams.get('next')) : null;
 }
 
 export const actions: Actions = {

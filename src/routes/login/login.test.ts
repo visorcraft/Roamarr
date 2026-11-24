@@ -69,6 +69,40 @@ test('load exposes passkey availability and public SSO info', () => {
 	process.env.ORIGIN = ORIGINAL_ORIGIN;
 });
 
+test('login action rejects off-site next values and keeps same-site ones', async () => {
+	resetRateLimit();
+	const kit = kitDb();
+	const password = 'correcthorse';
+	const u = makeUser(kit, { email: 'no2fa@x.c', passwordHash: await hashPassword(password) });
+
+	for (const [nextParam, expected] of [
+		['/%5Cevil.example', '/'],
+		['%2Ftrips%2F42', '/trips/42']
+	] as const) {
+		const form = new FormData();
+		form.set('email', u.email);
+		form.set('password', password);
+		const cookies = { set: vi.fn() };
+		const url = new URL(`https://app.example.com/login?next=${nextParam}`);
+		try {
+			await actions.default({
+				request: {
+					formData: async () => form,
+					headers: new Headers({ 'user-agent': 'TestUA/1.0' })
+				},
+				getClientAddress: () => '1.2.3.4',
+				cookies,
+				url
+			} as any);
+			expect.fail('should have redirected');
+		} catch (e: any) {
+			expect(e.status).toBe(303);
+			expect(e.location).toBe(expected);
+		}
+		expect(cookies.set).toHaveBeenCalledWith('session', expect.any(String), expect.any(Object));
+	}
+});
+
 test('login action issues a fingerprint-bound tfa_pending cookie when 2FA is enabled', async () => {
 	resetRateLimit();
 	const kit = kitDb();

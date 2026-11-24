@@ -1,10 +1,13 @@
 import { render } from 'svelte/server';
+import { readFileSync } from 'node:fs';
 import { test, expect, vi } from 'vitest';
 import LoginPage from './+page.svelte';
 
-vi.mock('$app/state', () => ({ page: { url: new URL('http://x/login') } }));
+const mockPage = vi.hoisted(() => ({ url: new URL('http://x/login') }));
+vi.mock('$app/state', () => ({ page: mockPage }));
 
 test('renders the login copy from the English message catalog', () => {
+	mockPage.url = new URL('http://x/login');
 	const { body } = render(LoginPage, {
 		props: {
 			data: { passkeyAvailable: true, allowRegistration: true, oidc: { enabled: true, displayName: 'Keycloak' } },
@@ -25,4 +28,19 @@ test('renders the login copy from the English message catalog', () => {
 	]) {
 		expect(body).toContain(html);
 	}
+});
+
+test('drops off-site backslash next values from SSO href and uses safeNextPath for passkey redirect', () => {
+	mockPage.url = new URL('http://x/login?next=/%5Cevil.example');
+	const { body } = render(LoginPage, {
+		props: {
+			data: { passkeyAvailable: true, allowRegistration: false, oidc: { enabled: true, displayName: 'Keycloak' } },
+			form: null
+		} as any
+	});
+	expect(body).toContain('href="/auth/oidc/start"');
+	expect(body).not.toContain('evil.example');
+	const src = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+	expect(src).toContain("import { safeNextPath } from '$lib/safeNextPath'");
+	expect(src).not.toContain("startsWith('/')");
 });

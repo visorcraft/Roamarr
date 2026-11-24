@@ -4,6 +4,7 @@
 	import { startAuthentication } from '@simplewebauthn/browser';
 	import TextField from '$lib/components/TextField.svelte';
 	import { m } from '$lib/paraglide/messages';
+	import { safeNextPath } from '$lib/safeNextPath';
 
 	let { data, form } = $props();
 	let submitting = $state(false);
@@ -13,10 +14,8 @@
 	// Preserve the post-login target through the SSO round-trip, with the same
 	// same-origin rule as the password form's `next` handling.
 	const ssoHref = $derived.by(() => {
-		const next = page.url.searchParams.get('next');
-		return next && next.startsWith('/') && !next.startsWith('//')
-			? `/auth/oidc/start?next=${encodeURIComponent(next)}`
-			: '/auth/oidc/start';
+		const next = safeNextPath(page.url.searchParams.get('next'));
+		return next ? `/auth/oidc/start?next=${encodeURIComponent(next)}` : '/auth/oidc/start';
 	});
 
 	async function signInWithPasskey() {
@@ -32,8 +31,8 @@
 				body: JSON.stringify(credential)
 			});
 			if (res.ok) {
-				const next = new URLSearchParams(window.location.search).get('next');
-				window.location.href = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
+				const next = safeNextPath(new URLSearchParams(window.location.search).get('next'));
+				window.location.href = next ?? '/';
 			} else {
 				const body = await res.json().catch(() => ({}));
 				passkeyError = body.message || m.login_passkey_failed();

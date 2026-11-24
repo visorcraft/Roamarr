@@ -5209,6 +5209,47 @@ describe('mcpServer', () => {
 					expect(String(res.content?.[0]?.text ?? '')).toContain('tripId');
 				}
 			});
+
+			test('rejects boolean ids, non-ISO fireAt, and non-string segment dates in MCP tools', async () => {
+				const ownerId = makeUser(ctx.kit).id;
+				const trip = tripsRepo.createTrip(ownerId, { name: 'Strict checks', startDate: '2026-08-01' });
+				const { client } = await connect(ownerId, ['reminders:write', 'segments:write']);
+
+				const badRef: any = await client.callTool({
+					name: 'roamarr_reminder_add',
+					arguments: { name: 'Check', fireAt: '2026-08-01T10:00:00Z', refId: true }
+				});
+				expect(badRef.isError).toBe(true);
+				expect(String(badRef.content?.[0]?.text ?? '')).toContain('refId');
+
+				const badFireAt: any = await client.callTool({
+					name: 'roamarr_reminder_add',
+					arguments: { name: 'Check', fireAt: '2026-02-31T10:00:00Z', refId: trip.id }
+				});
+				expect(badFireAt.isError).toBe(true);
+				expect(String(badFireAt.content?.[0]?.text ?? '')).toContain('fireAt');
+
+				const badOffset: any = await client.callTool({
+					name: 'roamarr_reminder_add',
+					arguments: { tripId: trip.id, offsetMinutes: true }
+				});
+				expect(badOffset.isError).toBe(true);
+				expect(String(badOffset.content?.[0]?.text ?? '')).toContain('offsetMinutes');
+
+				const badDel: any = await client.callTool({
+					name: 'roamarr_reminder_delete',
+					arguments: { reminderId: true, confirm: true }
+				});
+				expect(badDel.isError).toBe(true);
+				expect(String(badDel.content?.[0]?.text ?? '')).toContain('reminderId');
+
+				const badSeg: any = await client.callTool({
+					name: 'roamarr_segment_update',
+					arguments: { segmentId: 1, startAt: 12345 }
+				});
+				expect(badSeg.isError).toBe(true);
+				expect(String(badSeg.content?.[0]?.text ?? '')).toContain('startAt must be a string');
+			});
 		});
 	});
 });

@@ -1,5 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { error } from '@sveltejs/kit';
+import { DateTime } from 'luxon';
 import {
 	ListToolsRequestSchema,
 	CallToolRequestSchema,
@@ -117,6 +118,7 @@ function validateToolInput(args: Record<string, unknown>): { ok: true } | { ok: 
 // themselves. Returns the integer, or null when invalid.
 function parseReminderOffsetMinutes(raw: unknown): number | null {
 	if (raw == null) return null;
+	if (typeof raw !== 'number' && typeof raw !== 'string') return null;
 	if (typeof raw === 'string' && raw.trim() === '') return null;
 	const n = Number(raw);
 	if (!Number.isInteger(n) || n < -10080 || n > 10080) return null;
@@ -285,7 +287,11 @@ function parseSegmentUpdateArgs(args: Record<string, unknown>): SegmentUpdateArg
 			patch[field] = value;
 			continue;
 		}
-		// type, startAt, endAt: validity stays with validateToolInput.
+		// type, startAt, endAt: require string here (Validator.dateTime ignores non-strings);
+		// format/enum validity stays with validateToolInput.
+		if (typeof value !== 'string') {
+			return { ok: false, error: `${field} must be a string` };
+		}
 		patch[field] = value;
 	}
 	if (Object.keys(patch).length === 0) {
@@ -2980,18 +2986,23 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					if (typeof args.name !== 'string' || !args.name.trim()) return { content: [{ type: 'text' as const, text: 'name is required' }], isError: true };
 					if (args.name.length > 200) return { content: [{ type: 'text' as const, text: 'name must be a string up to 200 chars' }], isError: true };
 					if (args.description != null && (typeof args.description !== 'string' || args.description.length > 1000)) return { content: [{ type: 'text' as const, text: 'description must be a string up to 1000 chars' }], isError: true };
-					if (!Number.isFinite(Date.parse(String(args.fireAt)))) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
-					if (args.refId == null || !Number.isSafeInteger(Number(args.refId)) || Number(args.refId) <= 0) return { content: [{ type: 'text' as const, text: 'refId must be a positive integer' }], isError: true };
-					const refId = Number(args.refId);
+					const parsedFireAt =
+						typeof args.fireAt === 'string' && args.fireAt.trim() !== ''
+							? DateTime.fromISO(args.fireAt.trim(), { zone: 'utc' })
+							: null;
+					const fireAtIso = parsedFireAt?.isValid ? parsedFireAt.toUTC().toISO() : null;
+					if (!fireAtIso) return { content: [{ type: 'text' as const, text: 'fireAt must be a valid ISO date and time' }], isError: true };
+					const refId = parseMailHoldId(args.refId);
+					if (refId === null) return { content: [{ type: 'text' as const, text: 'refId must be a positive integer' }], isError: true };
 					if (refType === 'trip') requireViewableTrip(userId, refId);
 					if (refType === 'document') { const { getTravelDocumentById } = await import('./repositories/profileRepo'); if (!getTravelDocumentById(refId, userId)) return { content: [{ type: 'text' as const, text: 'Document not found' }], isError: true }; }
-					const reminder = createReminder({ userId, kind: 'custom', refType, refId, fireAt: new Date(String(args.fireAt)).toISOString(), name: args.name.trim(), description: String(args.description ?? '').trim() || null });
+					const reminder = createReminder({ userId, kind: 'custom', refType, refId, fireAt: fireAtIso, name: args.name.trim(), description: String(args.description ?? '').trim() || null });
 					logAudit(userId, 'mcp_reminder_add', 'reminder', reminder.id, {});
 					return textResult({ id: reminder.id });
 				}
 				const { upsertCustomReminder } = await import('./reminders');
-				if (args.tripId == null || !Number.isSafeInteger(Number(args.tripId)) || Number(args.tripId) <= 0) return { content: [{ type: 'text' as const, text: 'tripId must be a positive integer' }], isError: true };
-				const tripId = Number(args.tripId);
+				const tripId = parseMailHoldId(args.tripId);
+				if (tripId === null) return { content: [{ type: 'text' as const, text: 'tripId must be a positive integer' }], isError: true };
 				let offset: number;
 				if (args.offsetMinutes == null) {
 					offset = 60;
@@ -3316,8 +3327,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'reminders:write')) return scopeError('reminders:write');
 				const confirmErr = requireConfirm(args, 'roamarr_reminder_delete');
 				if (confirmErr) return confirmErr;
-				const id = Number(args.reminderId);
-				if (!Number.isSafeInteger(id) || id <= 0) {
+				const id = parseMailHoldId(args.reminderId);
+				if (id === null) {
 					return { content: [{ type: 'text' as const, text: 'reminderId must be a positive integer' }], isError: true };
 				}
 				const { cancelReminder } = await import('./reminders');

@@ -145,6 +145,27 @@ describe('profile/contacts (client)', () => {
 		expect(saveAfter.getAttribute('aria-busy')).toBe('false');
 	});
 
+	it('keeps the typed edit values when the action returns an error', async () => {
+		mountPage();
+		await openEditor();
+		submitEditForm();
+		await tick();
+
+		expect(submitted.length).toBe(1);
+		await submitted[0]({
+			result: { type: 'error', status: 500, error: { message: 'boom' } },
+			update: async () => undefined
+		});
+		await tick();
+
+		const after = document.querySelector('#ec-name-1') as HTMLInputElement | null;
+		expect(after).toBeTruthy();
+		expect(after!.value).toBe('Ada King');
+		const saveAfter = saveButton();
+		expect(saveAfter.disabled).toBe(false);
+		expect(saveAfter.getAttribute('aria-busy')).toBe('false');
+	});
+
 	it('closes the editor on a successful submit', async () => {
 		mountPage();
 		await openEditor();

@@ -181,6 +181,20 @@ test('returns a no-op disposer when no root resolves (SSR/node)', () => {
 	expect(() => dispose()).not.toThrow();
 });
 
+test('focusout ignores non-Node EventTarget relatedTarget without throwing', () => {
+	const dom = buildDom(1);
+	const doc = dom.window.document;
+	const menu = doc.querySelector<HTMLDetailsElement>('details.app-user-menu')!;
+	const link = doc.getElementById('item-0')!;
+	const disconnect = installDisclosureMenus(doc);
+
+	const event = new dom.window.Event('focusout', { bubbles: true });
+	Object.defineProperty(event, 'relatedTarget', { value: new dom.window.EventTarget() });
+	expect(() => link.dispatchEvent(event)).not.toThrow();
+	expect(menu.open).toBe(true);
+	disconnect();
+});
+
 test('layout wires disclosure menus in onMount', () => {
 	const source = readFileSync(new URL('../routes/+layout.svelte', import.meta.url), 'utf8');
 	expect(source).toContain("import { installDisclosureMenus } from '$lib/disclosureMenu';");

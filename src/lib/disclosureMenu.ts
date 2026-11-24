@@ -21,7 +21,7 @@ export function installDisclosureMenus(root?: Document | HTMLElement): () => voi
 	};
 	const onFocusout = (event: Event) => {
 		const next = (event as FocusEvent).relatedTarget;
-		if (!next) return;
+		if (!next || typeof (next as Node).nodeType !== 'number') return;
 		for (const menu of openMenusOutside(target, next as Node)) menu.open = false;
 	};
 	const onClick = (event: Event) => {

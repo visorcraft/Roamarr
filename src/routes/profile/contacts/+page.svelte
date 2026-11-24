@@ -34,7 +34,7 @@
 								return async ({ update, result }) => {
 									try {
 										await update();
-										if (result.type !== 'failure') editingContactId = null;
+										if (result.type === 'success' || result.type === 'redirect') editingContactId = null;
 									} finally {
 										editingSubmitting = false;
 									}

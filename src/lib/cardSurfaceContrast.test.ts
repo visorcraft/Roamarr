@@ -72,7 +72,7 @@ test('dashboard uses theme tokens', () => {
 	// 'theme tokens are readable on every theme surface' enforces for brand applies.
 	expect(dashboard).toContain("accent: 'text-[var(--theme-brand)]'");
 	expect(dashboard).toContain('class="metric-label group-hover:text-[var(--theme-ink)]"');
-	expect(dashboard).toContain(`<p class="mt-1 text-sm text-[var(--theme-ink)]">{a.body ?? ''}</p>`);
+	expect(dashboard).toContain(`<p class="mt-1 line-clamp-2 text-sm text-[var(--theme-ink)]">{a.body}</p>`);
 	expect(dashboard).toContain(`<p class="mt-0.5 text-xs text-[var(--theme-muted)]">by {a.displayName ?? 'Unknown'}</p>`);
 });
 

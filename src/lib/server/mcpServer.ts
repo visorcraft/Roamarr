@@ -1425,7 +1425,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			},
 			{
 				name: 'roamarr_reminder_update',
-				description: 'Update a custom reminder. Only the three user-safe fields are accepted.',
+				description: 'Update a reminder. Pass either the raw fields (name, description, fireAt, refId) or the custom fields (title, customNote, offsetMinutes) in one call, not a mix of both.',
 				inputSchema: {
 					type: 'object',
 					properties: {
@@ -3294,7 +3294,15 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!Number.isSafeInteger(id) || id <= 0) {
 					return { content: [{ type: 'text' as const, text: 'reminderId must be a positive integer' }], isError: true };
 				}
-				if (args.fireAt != null || args.name != null || args.description != null || args.refId != null) {
+				// title maps to name and customNote to description, and offsetMinutes re-arms
+				// fireAt from the trip start, so a call that mixes both groups is ambiguous.
+				const hasRaw = args.fireAt != null || args.name != null || args.description != null || args.refId != null;
+				const hasCustom = args.title !== undefined || args.customNote !== undefined || args.offsetMinutes !== undefined;
+				if (hasRaw && hasCustom) {
+					return { content: [{ type: 'text' as const, text: 'roamarr_reminder_update takes either name/description/fireAt/refId or title/customNote/offsetMinutes per call, not both. Send the other group in a second call.' }], isError: true };
+				}
+				if (!hasRaw && !hasCustom) return textResult({ ok: true, reminderId: id, updated: false });
+				if (hasRaw) {
 					const { getReminderById } = await import('./repositories/remindersRepo');
 					const reminder = getReminderById(id);
 					if (!reminder || reminder.userId !== userId) return { content: [{ type: 'text' as const, text: 'Reminder not found' }], isError: true };

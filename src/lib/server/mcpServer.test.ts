@@ -62,6 +62,13 @@ function resourceText(res: Awaited<ReturnType<Client['readResource']>>): string 
 describe('mcpServer', () => {
 	let userId: number;
 
+	const countAudit = () =>
+		ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.user_id, BigInt(userId)))
+			.executeSync()
+			.filter((r: any) => r.action === 'mcp_reminder_update').length;
+
 	beforeEach(() => {
 		ctx.kit.deleteFrom(tripChecklistItems).executeSync();
 		ctx.kit.deleteFrom(trips).executeSync();
@@ -1011,12 +1018,6 @@ describe('mcpServer', () => {
 		upsertCustomReminder(userId, 'trip', trip.id, '2026-09-01T09:00:00Z', 60);
 		const reminder = getReminderBySource('custom', 'trip', trip.id)!;
 		const { client } = await connect(userId, ['reminders:write']);
-		const countAudit = () =>
-			ctx.kit
-				.selectFrom(auditLogs)
-				.where(kitEq(auditLogs.user_id, BigInt(userId)))
-				.executeSync()
-				.filter((r: any) => r.action === 'mcp_reminder_update').length;
 
 		const auditBefore = countAudit();
 		const blank: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, offsetMinutes: '' } });
@@ -1028,6 +1029,68 @@ describe('mcpServer', () => {
 		const ok: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, offsetMinutes: 120 } });
 		expect(ok.isError).toBeFalsy();
 		expect(getReminderById(reminder.id)!.fireAt).toBe('2026-09-01T07:00:00.000Z');
+	});
+
+	test('reminder_update rejects mixed raw and custom fields without writing', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Update trip', startDate: '2026-09-01' });
+		upsertCustomReminder(userId, 'trip', trip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', trip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+
+		for (const extra of [
+			{ name: 'Renamed', offsetMinutes: 120 },
+			{ title: 'Pack', fireAt: '2026-09-02T10:00:00Z' },
+			{ customNote: 'note', refId: trip.id },
+			{ description: 'x', offsetMinutes: 0 }
+		]) {
+			const before = getReminderById(reminder.id)!;
+			const auditBefore = countAudit();
+			const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, ...extra } });
+			expect(res.isError, JSON.stringify(extra)).toBe(true);
+			expect(res.content[0].text).toContain('not both');
+			const after = getReminderById(reminder.id)!;
+			expect(after.name).toBe(before.name);
+			expect(after.description).toBe(before.description);
+			expect(after.fireAt).toBe(before.fireAt);
+			expect(after.refId).toBe(before.refId);
+			expect(countAudit()).toBe(auditBefore);
+		}
+	});
+
+	test('reminder_update with no fields is a reported no-op', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Update trip', startDate: '2026-09-01' });
+		upsertCustomReminder(userId, 'trip', trip.id, '2026-09-01T09:00:00Z', 60);
+		const reminder = getReminderBySource('custom', 'trip', trip.id)!;
+		const { client } = await connect(userId, ['reminders:write']);
+
+		const before = getReminderById(reminder.id)!;
+		const auditBefore = countAudit();
+		const res: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id } });
+		expect(res.isError).toBeFalsy();
+		expect(JSON.parse(res.content[0].text)).toEqual({ ok: true, reminderId: reminder.id, updated: false });
+		const after = getReminderById(reminder.id)!;
+		expect(after.name).toBe(before.name);
+		expect(after.description).toBe(before.description);
+		expect(after.fireAt).toBe(before.fireAt);
+		expect(after.refId).toBe(before.refId);
+		expect(countAudit()).toBe(auditBefore);
+
+		const ok: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, offsetMinutes: 120 } });
+		expect(ok.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.fireAt).toBe('2026-09-01T07:00:00.000Z');
+		expect(countAudit()).toBe(auditBefore + 1);
+
+		const raw: any = await client.callTool({ name: 'roamarr_reminder_update', arguments: { reminderId: reminder.id, name: 'Leave now' } });
+		expect(raw.isError).toBeFalsy();
+		expect(getReminderById(reminder.id)!.name).toBe('Leave now');
+	});
+
+	test('reminder_update describes both field groups', async () => {
+		const { client } = await connect(userId, ['reminders:write']);
+		const { tools } = await client.listTools();
+		const tool = tools.find((t) => t.name === 'roamarr_reminder_update')!;
+		expect(tool.description).toContain('not a mix of both');
+		expect(tool.description).not.toContain('Only the three user-safe fields');
 	});
 
 	test('reminder_delete validates id and authorizes ownership', async () => {

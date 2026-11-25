@@ -215,6 +215,95 @@ test('deleteGroup publishes nothing for a group with no members', () => {
 	unsubscribe!();
 });
 
+test('updateShare publishes a shares change to the shared-with user', () => {
+	const owner = makeUser('owner@x.c');
+	const sharee = makeUser('sharee@x.c');
+	const unrelated = makeUser('unrelated@x.c');
+	const t = makeTrip(owner.id, 'Shared');
+	const share = tripsRepo.createShare({ tripId: t.id, sharedWithUserId: sharee.id, permission: 'read' });
+
+	const shareeEvents: Array<{ type: string; kind: string }> = [];
+	const ownerEvents: Array<{ type: string; kind: string }> = [];
+	const unrelatedEvents: Array<{ type: string; kind: string }> = [];
+	const unsubscribeSharee = subscribeUser(sharee.id, (e) => shareeEvents.push(e as never));
+	const unsubscribeOwner = subscribeUser(owner.id, (e) => ownerEvents.push(e as never));
+	const unsubscribeUnrelated = subscribeUser(unrelated.id, (e) => unrelatedEvents.push(e as never));
+
+	const updated = tripsRepo.updateShare(share.id, { permission: 'edit' });
+	expect(updated?.permission).toBe('edit');
+	expect(shareeEvents).toHaveLength(1);
+	expect(shareeEvents).toContainEqual({ type: 'user', kind: 'shares' });
+	expect(ownerEvents).toHaveLength(0);
+	expect(unrelatedEvents).toHaveLength(0);
+	expect(tripsRepo.getShareById(share.id)?.permission).toBe('edit');
+	expect(tripsRepo.getShareById(share.id)?.showDetails).toBe(false);
+	unsubscribeSharee!();
+	unsubscribeOwner!();
+	unsubscribeUnrelated!();
+});
+
+test('updateShare on a group share notifies every current member', () => {
+	const owner = makeUser('owner@x.c');
+	const member1 = makeUser('member1@x.c');
+	const member2 = makeUser('member2@x.c');
+	const nonMember = makeUser('nonmember@x.c');
+	const t = makeTrip(owner.id, 'Shared');
+	const g = tripsRepo.createGroup({ ownerId: owner.id, name: 'team' });
+	tripsRepo.addGroupMember(g.id, member1.id);
+	tripsRepo.addGroupMember(g.id, member2.id);
+	const share = tripsRepo.createShare({ tripId: t.id, sharedWithGroupId: g.id, permission: 'read' });
+
+	const events1: Array<{ type: string; kind: string }> = [];
+	const events2: Array<{ type: string; kind: string }> = [];
+	const nonMemberEvents: Array<{ type: string; kind: string }> = [];
+	const unsubscribe1 = subscribeUser(member1.id, (e) => events1.push(e as never));
+	const unsubscribe2 = subscribeUser(member2.id, (e) => events2.push(e as never));
+	const unsubscribeNonMember = subscribeUser(nonMember.id, (e) => nonMemberEvents.push(e as never));
+
+	const updated = tripsRepo.updateShare(share.id, { showDetails: true });
+	expect(updated?.showDetails).toBe(true);
+	expect(events1).toHaveLength(1);
+	expect(events1).toContainEqual({ type: 'user', kind: 'shares' });
+	expect(events2).toHaveLength(1);
+	expect(events2).toContainEqual({ type: 'user', kind: 'shares' });
+	expect(nonMemberEvents).toHaveLength(0);
+	expect(tripsRepo.getShareById(share.id)?.showDetails).toBe(true);
+	expect(tripsRepo.getShareById(share.id)?.permission).toBe('read');
+	unsubscribe1!();
+	unsubscribe2!();
+	unsubscribeNonMember!();
+});
+
+test('updateShare with an empty patch returns the share without writing or publishing', () => {
+	const owner = makeUser('owner@x.c');
+	const sharee = makeUser('sharee@x.c');
+	const t = makeTrip(owner.id, 'Shared');
+	const share = tripsRepo.createShare({ tripId: t.id, sharedWithUserId: sharee.id, permission: 'read' });
+
+	const events: Array<{ type: string; kind: string }> = [];
+	const unsubscribe = subscribeUser(sharee.id, (e) => events.push(e as never));
+
+	const before = tripsRepo.getShareById(share.id);
+	const after = tripsRepo.updateShare(share.id, {});
+	expect(after).toEqual(before);
+	expect(events).toHaveLength(0);
+	expect(tripsRepo.getShareById(share.id)).toEqual(before);
+	expect(tripsRepo.updateShare(1_000_000_000, {})).toBeNull();
+	unsubscribe!();
+});
+
+test('updateShare on a missing share returns null and publishes nothing', () => {
+	const owner = makeUser('owner@x.c');
+	const sharee = makeUser('sharee@x.c');
+
+	const events: Array<{ type: string; kind: string }> = [];
+	const unsubscribe = subscribeUser(sharee.id, (e) => events.push(e as never));
+
+	expect(tripsRepo.updateShare(1_000_000_000, { permission: 'edit' })).toBeNull();
+	expect(events).toHaveLength(0);
+	unsubscribe!();
+});
+
 test('comments and public/calendar tokens', () => {
 	const kit = kitDb();
 	const owner = makeUser('owner@x.c');

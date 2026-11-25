@@ -572,6 +572,10 @@ export function updateShare(id: number, patch: UpdateTripShareInput): TripShare 
 	if (patch.permission !== undefined) set.permission = patch.permission;
 	if (patch.showDetails !== undefined) set.show_details = patch.showDetails;
 
+	if (Object.keys(set).length === 0) {
+		return getShareById(id);
+	}
+
 	const rows = kit
 		.updateTable(tripShares)
 		.set(set)
@@ -579,7 +583,9 @@ export function updateShare(id: number, patch: UpdateTripShareInput): TripShare 
 		.executeSync();
 	const row = rows[0];
 	if (!row) return null;
-	return toTripShare(row);
+	const share = toTripShare(row);
+	notifyShareGraphChange(share);
+	return share;
 }
 
 export function deleteShare(id: number): number {

@@ -9,7 +9,7 @@ vi.mock('./db', async () => {
 	return ctx;
 });
 
-import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs } from './ownership';
+import { requireOwnedUser, requireOwnedTrip, assertOwnedRefs, ownedCardId } from './ownership';
 import { users, trips, tripHomeTasks, cards } from './db/mongrelSchema';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 
@@ -50,4 +50,13 @@ test('requireOwnedUser returns the user row or throws', () => {
 	const a = makeTestUser({ email: 'u@x.c' });
 	expect(Number(requireOwnedUser(a.id).id)).toBe(a.id);
 	expect(() => requireOwnedUser(999999)).toThrow();
+});
+
+test('ownedCardId returns the id for the card owner and null otherwise', () => {
+	const a = makeTestUser({ email: 'oc-a@x.c' });
+	const b = makeTestUser({ email: 'oc-b@x.c' });
+	const cA = createCard(a.id, { nickname: 'A card', network: 'visa' });
+	expect(ownedCardId(a.id, cA.id)).toBe(cA.id);
+	expect(ownedCardId(b.id, cA.id)).toBeNull();
+	expect(ownedCardId(a.id, 999999)).toBeNull();
 });

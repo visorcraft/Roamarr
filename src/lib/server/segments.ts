@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { DateTime } from 'luxon';
-import { requireEditableTrip, assertOwnedRefs } from '$lib/server/ownership';
+import { requireEditableTrip, assertOwnedRefs, ownedCardId } from '$lib/server/ownership';
 import { canViewDetails } from '$lib/server/sharing';
 import { localToUtc, nowIso } from '$lib/server/tz';
 import { upsertRemindersForSegment, cancelRemindersFor } from '$lib/server/reminders';
@@ -257,7 +257,11 @@ export function moveSegmentToDate(userId: number, tripId: number, segId: number,
 
 export function duplicateSegment(userId: number, tripId: number, segId: number) {
 	const existing = requireSegmentOnTrip(userId, tripId, segId);
-	if (existing.cardId != null) assertOwnedRefs(userId, { cardId: existing.cardId });
+	// The stored card is not caller-supplied, so this is not assertOwnedRefs
+	// territory: an editor may duplicate a segment paid with the owner's card
+	// (and vice versa). The copy keeps the card only when the caller owns it,
+	// because shared editors can reference nothing but their own cards.
+	const cardId = existing.cardId != null ? ownedCardId(userId, existing.cardId) : null;
 
 	const copy = createSegment({
 		trip_id: BigInt(tripId),
@@ -275,7 +279,7 @@ export function duplicateSegment(userId: number, tripId: number, segId: number) 
 		city_lng: existing.cityLng,
 		venue: existing.venue,
 		confirmation_number: null,
-		card_id: existing.cardId != null ? BigInt(existing.cardId) : null,
+		card_id: cardId != null ? BigInt(cardId) : null,
 		details_json: existing.detailsJson,
 		meeting_point: existing.meetingPoint,
 		meeting_at: existing.meetingAt,

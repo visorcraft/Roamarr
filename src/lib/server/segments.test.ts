@@ -101,6 +101,45 @@ test('duplicateSegment rejects a segment from another trip or non-editor', () =>
 	expect(() => duplicateSegment(other.id, t1.id, s.id)).toThrow();
 });
 
+test('duplicateSegment lets a shared editor copy an owner-card segment and drops the card', () => {
+	const owner = makeUser(kit, { email: 'dup-card-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'dup-card-editor@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const ownerCard = makeCard(kit, owner.id, { nickname: 'Owner', network: 'visa', last4: '1111' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-09-01T08:00:00Z',
+		startTz: 'UTC',
+		cardId: ownerCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+
+	const copy = duplicateSegment(editor.id, t.id, s.id);
+	expect(copy.id).not.toBe(s.id);
+	expect(copy.cardId).toBeNull();
+	expect(getSegmentById(s.id)?.cardId).toBe(ownerCard.id);
+});
+
+test('duplicateSegment lets the owner copy an editor-card segment and drops the card', () => {
+	const owner = makeUser(kit, { email: 'dup-ecard-owner@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'dup-ecard-editor@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const editorCard = makeCard(kit, editor.id, { nickname: 'Editor', network: 'visa', last4: '2222' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'A',
+		startAt: '2026-09-02T08:00:00Z',
+		startTz: 'UTC',
+		cardId: editorCard.id
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+
+	const copy = duplicateSegment(owner.id, t.id, s.id);
+	expect(copy.cardId).toBeNull();
+	expect(getSegmentById(s.id)?.cardId).toBe(editorCard.id);
+});
+
 test('addSegment stores meeting point and rally time as UTC', () => {
 	const u = makeUser(kit, { email: 'meet@x.c', passwordHash: 'x', displayName: 'M' });
 	const t = makeTrip(kit, u.id, { name: 'T' });

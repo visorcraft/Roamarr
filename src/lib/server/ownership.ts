@@ -67,6 +67,15 @@ export function requireCompanionsOnTrip(companionIds: number[], tripId: number) 
 	if (foundIds.size !== companionIds.length) throw error(400, 'Companion is not on this trip');
 }
 
+/** Returns the card id when the card belongs to the user, otherwise null. Never throws. */
+export function ownedCardId(userId: number, cardId: number): number | null {
+	const c = kit
+		.selectFrom(cards)
+		.where(and(kitEq(cards.id, BigInt(cardId)), kitEq(cards.user_id, BigInt(userId))))
+		.executeSync()[0];
+	return c ? cardId : null;
+}
+
 export function assertOwnedRefs(
 	userId: number,
 	refs: {
@@ -79,13 +88,7 @@ export function assertOwnedRefs(
 	}
 ) {
 	if (refs.tripId != null) requireOwnedTrip(userId, refs.tripId);
-	if (refs.cardId != null) {
-		const c = kit
-			.selectFrom(cards)
-			.where(and(kitEq(cards.id, BigInt(refs.cardId)), kitEq(cards.user_id, BigInt(userId))))
-			.executeSync()[0];
-		if (!c) throw error(404, 'Not found');
-	}
+	if (refs.cardId != null && ownedCardId(userId, refs.cardId) == null) throw error(404, 'Not found');
 	if (refs.providerId != null) {
 		const p = kit
 			.selectFrom(fareProviders)

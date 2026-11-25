@@ -330,6 +330,14 @@ export function patchSegment(
 	const seg = getSegmentById(segId);
 	if (!seg) throw error(404, 'Segment not found');
 	const verified = requireSegmentOnTrip(userId, seg.tripId, segId);
+	// Same rule as updateSegment and the MCP trip-notes guard: an editor whose
+	// share lacks showDetails can neither see nor replace the owner's private
+	// confirmation number, details, or notes.
+	const touchesPrivateFields =
+		patch.confirmationNumber !== undefined || patch.details !== undefined || patch.notes !== undefined;
+	if (touchesPrivateFields && !canViewDetails(userId, requireEditableTrip(userId, seg.tripId))) {
+		throw error(403, 'confirmationNumber, details, and notes cannot be changed without permission to view private trip details; omit them and retry');
+	}
 	const repoPatch: Record<string, unknown> = { updated_at: nowIso() };
 	if (patch.type !== undefined) repoPatch.type = patch.type;
 	if (patch.title !== undefined) repoPatch.title = patch.title;

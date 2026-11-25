@@ -1691,6 +1691,135 @@ describe('mcpServer', () => {
 		expect(tripsRepo.getTripById(trip.id)).toMatchObject({ name: 'Original', notes: 'OWNER NOTES' });
 	});
 
+	test('segment_update: editor without showDetails cannot change confirmationNumber, details, or notes', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Trip' });
+		const seg = makeSegment(ctx.kit, trip.id, {
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC',
+			confirmationNumber: 'CONF123',
+			detailsJson: JSON.stringify({ note: 'keep', notes: 'OWNER SEG NOTES' })
+		});
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: false });
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		const { client } = await connect(editorId, ['segments:write']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, title: 'Editor rename', confirmationNumber: 'OVERWRITTEN' }
+		});
+		expect(res.isError).toBe(true);
+		expect(String(res.content[0].text)).toContain('Error 403');
+		expect(String(res.content[0].text)).toContain('confirmationNumber, details, and notes cannot be changed');
+		expect(getSegmentById(seg.id)).toMatchObject({ title: 'UA1', confirmationNumber: 'CONF123' });
+
+		const resNull: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, confirmationNumber: null }
+		});
+		expect(resNull.isError).toBe(true);
+		expect(String(resNull.content[0].text)).toContain('Error 403');
+
+		const resNotes: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, notes: 'OVERWRITTEN' }
+		});
+		expect(resNotes.isError).toBe(true);
+		expect(String(resNotes.content[0].text)).toContain('Error 403');
+
+		const after = getSegmentById(seg.id)!;
+		expect(after.title).toBe('UA1');
+		expect(after.confirmationNumber).toBe('CONF123');
+		expect(after.detailsJson).toBe(JSON.stringify({ note: 'keep', notes: 'OWNER SEG NOTES' }));
+
+		const okRes: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, title: 'Editor rename' }
+		});
+		expect(okRes.isError).toBeFalsy();
+		expect(getSegmentById(seg.id)).toMatchObject({ title: 'Editor rename', confirmationNumber: 'CONF123' });
+
+		const auditRows = ctx.kit
+			.selectFrom(auditLogs)
+			.where(kitEq(auditLogs.entity_id, BigInt(seg.id)))
+			.executeSync();
+		expect(auditRows.filter((r: any) => r.action === 'mcp_segment_update')).toHaveLength(1);
+	});
+
+	test('segment_update: rejection holds with private-details:read and allowMcpPii', async () => {
+		updateSettings({ allowMcpPii: true });
+		const trip = tripsRepo.createTrip(userId, { name: 'Trip' });
+		const seg = makeSegment(ctx.kit, trip.id, {
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC',
+			confirmationNumber: 'CONF123',
+			detailsJson: JSON.stringify({ note: 'keep' })
+		});
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: false });
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		const { client } = await connect(editorId, ['segments:write', 'private-details:read']);
+
+		const res: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, title: 'Editor rename', confirmationNumber: 'OVERWRITTEN' }
+		});
+		expect(res.isError).toBe(true);
+		expect(String(res.content[0].text)).toContain('Error 403');
+		expect(String(res.content[0].text)).toContain('confirmationNumber, details, and notes cannot be changed');
+		expect(getSegmentById(seg.id)).toMatchObject({ title: 'UA1', confirmationNumber: 'CONF123' });
+
+		updateSettings({ allowMcpPii: false });
+	});
+
+	test('segment_update: editor with showDetails and the owner can set and clear confirmationNumber', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Trip' });
+		const seg = makeSegment(ctx.kit, trip.id, {
+			type: 'flight',
+			title: 'UA1',
+			startAt: '2026-01-01T10:00:00Z',
+			startTz: 'UTC',
+			confirmationNumber: 'CONF123'
+		});
+		const editorId = makeUser(ctx.kit).id;
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: editorId, permission: 'edit', showDetails: true });
+		const { getSegmentById } = await import('./repositories/segmentsRepo');
+		const { client } = await connect(editorId, ['segments:write']);
+
+		const setRes: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, confirmationNumber: 'NEW' }
+		});
+		expect(setRes.isError).toBeFalsy();
+		expect(getSegmentById(seg.id)?.confirmationNumber).toBe('NEW');
+
+		const clearRes: any = await client.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, confirmationNumber: null }
+		});
+		expect(clearRes.isError).toBeFalsy();
+		expect(getSegmentById(seg.id)?.confirmationNumber).toBeNull();
+
+		const { client: ownerClient } = await connect(userId, ['segments:write']);
+		const ownerSetRes: any = await ownerClient.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, confirmationNumber: 'OWNERSET' }
+		});
+		expect(ownerSetRes.isError).toBeFalsy();
+		expect(getSegmentById(seg.id)?.confirmationNumber).toBe('OWNERSET');
+
+		const ownerClearRes: any = await ownerClient.callTool({
+			name: 'roamarr_segment_update',
+			arguments: { segmentId: seg.id, confirmationNumber: null }
+		});
+		expect(ownerClearRes.isError).toBeFalsy();
+		expect(getSegmentById(seg.id)?.confirmationNumber).toBeNull();
+	});
+
 	test('trip_update rejects malformed fields and writes nothing', async () => {
 		const trip = tripsRepo.createTrip(userId, {
 			name: 'Original',

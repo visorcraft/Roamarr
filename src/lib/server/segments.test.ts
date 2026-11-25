@@ -750,6 +750,130 @@ test('shared editor without details keeps the owner card and stored confirmation
 	expect(row.details_json).toBe(JSON.stringify({ note: 'keep' }));
 });
 
+test('patchSegment: shared editor without showDetails cannot replace or clear private fields', () => {
+	const owner = makeUser(kit, { email: 'patch-priv-owner1@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'patch-priv-editor1@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF123',
+		detailsJson: JSON.stringify({ note: 'keep', notes: 'OWNER SEG NOTES' })
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+	const originalDetailsJson = JSON.stringify({ note: 'keep', notes: 'OWNER SEG NOTES' });
+
+	const badPatches = [
+		{ confirmationNumber: 'HACKED' },
+		{ confirmationNumber: null },
+		{ notes: 'OVERWRITTEN' },
+		{ details: { note: 'hacked' } },
+		{ title: 'Renamed', confirmationNumber: 'HACKED' }
+	];
+	for (const patch of badPatches) {
+		try {
+			patchSegment(editor.id, s.id, patch);
+			expect.unreachable('expected a 403');
+		} catch (e: any) {
+			expect(e.status).toBe(403);
+		}
+	}
+
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.title).toBe('Flight');
+	expect(row.confirmation_number).toBe('CONF123');
+	expect(row.details_json).toBe(originalDetailsJson);
+});
+
+test('patchSegment: shared editor without showDetails can still edit non-private fields', () => {
+	const owner = makeUser(kit, { email: 'patch-priv-owner2@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'patch-priv-editor2@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF123',
+		detailsJson: JSON.stringify({ note: 'keep' })
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: false });
+
+	const updated = patchSegment(editor.id, s.id, { title: 'Renamed', venue: 'Gate 1', paymentStatus: 'fully_paid' });
+	expect(updated.title).toBe('Renamed');
+	expect(updated.venue).toBe('Gate 1');
+	expect(updated.paymentStatus).toBe('fully_paid');
+
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.title).toBe('Renamed');
+	expect(row.venue).toBe('Gate 1');
+	expect(row.payment_status).toBe('fully_paid');
+	expect(row.confirmation_number).toBe('CONF123');
+	expect(row.details_json).toBe(JSON.stringify({ note: 'keep' }));
+});
+
+test('patchSegment: editor with showDetails and the owner can set and clear private fields', () => {
+	const owner = makeUser(kit, { email: 'patch-priv-owner3@x.c', passwordHash: 'x', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'patch-priv-editor3@x.c', passwordHash: 'x', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF123',
+		detailsJson: JSON.stringify({ note: 'keep' })
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: editor.id, permission: 'edit', showDetails: true });
+
+	const updated = patchSegment(editor.id, s.id, {
+		confirmationNumber: 'NEW',
+		notes: 'EDITOR',
+		details: { seat: '12A' }
+	});
+	expect(updated.confirmationNumber).toBe('NEW');
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.confirmation_number).toBe('NEW');
+	expect(JSON.parse(row.details_json as string)).toEqual({ note: 'keep', notes: 'EDITOR', seat: '12A' });
+
+	const cleared = patchSegment(editor.id, s.id, { confirmationNumber: null });
+	expect(cleared.confirmationNumber).toBeNull();
+	const row2 = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row2.confirmation_number).toBeNull();
+
+	const ownerSet = patchSegment(owner.id, s.id, { confirmationNumber: 'OWNERSET' });
+	expect(ownerSet.confirmationNumber).toBe('OWNERSET');
+});
+
+test('patchSegment: read-only viewer and outsider get 404, not 403', () => {
+	const owner = makeUser(kit, { email: 'patch-priv-owner4@x.c', passwordHash: 'x', displayName: 'O' });
+	const viewer = makeUser(kit, { email: 'patch-priv-viewer4@x.c', passwordHash: 'x', displayName: 'V' });
+	const outsider = makeUser(kit, { email: 'patch-priv-outsider4@x.c', passwordHash: 'x', displayName: 'X' });
+	const t = makeTrip(kit, owner.id, { name: 'T' });
+	const s = makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Flight',
+		startAt: '2026-01-01T10:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF123'
+	});
+	tripsRepo.createShare({ tripId: t.id, sharedWithUserId: viewer.id, permission: 'read', showDetails: true });
+
+	for (const user of [viewer, outsider]) {
+		try {
+			patchSegment(user.id, s.id, { confirmationNumber: 'X' });
+			expect.unreachable('expected a 404');
+		} catch (e: any) {
+			expect(e.status).toBe(404);
+		}
+	}
+
+	const row = kit.selectFrom(segments).where(eq(segments.id, BigInt(s.id))).executeSync()[0]!;
+	expect(row.confirmation_number).toBe('CONF123');
+});
+
 test('shared editor with details keeps the owner card', () => {
 	const owner = makeUser(kit, { email: 'card-owner2@x.c', passwordHash: 'x', displayName: 'O' });
 	const editor = makeUser(kit, { email: 'card-editor2@x.c', passwordHash: 'x', displayName: 'E' });

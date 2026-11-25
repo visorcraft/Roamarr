@@ -2,6 +2,8 @@ import { fail, redirect, type Actions } from '@sveltejs/kit';
 import { requireUser } from '$lib/server/auth';
 import { setFlash } from '$lib/server/flash';
 import { logAudit } from '$lib/server/audit';
+import { Validator } from '$lib/server/validation';
+import { todayForUser } from '$lib/server/tripLifecycle';
 import {
 	autoMarkFromAllTrips,
 	clearVisited,
@@ -32,18 +34,11 @@ function optionMap(kind: PlaceKind): Map<string, PlaceOption> {
 	return new Map(optionsFor(kind).map((option) => [option.code, option]));
 }
 
-function todayIso(): string {
-	return new Date().toISOString().slice(0, 10);
-}
-
-function isIsoDate(value: string) {
-	return /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
 function parseDate(value: FormDataEntryValue | null, label: string): string | null {
-	const date = String(value ?? '').trim();
-	if (!date) return null;
-	if (!isIsoDate(date)) throw new Error(`${label} must be a valid date.`);
+	const raw = String(value ?? '').trim();
+	if (!raw) return null;
+	const date = new Validator().date(raw, label);
+	if (!date) throw new Error(`${label} must be a valid date.`);
 	return date;
 }
 
@@ -99,7 +94,7 @@ export function loadVisitedPage(kind: PlaceKind, url: URL, locals: App.Locals) {
 		tab: url.searchParams.get('tab') === 'list' ? 'list' : 'visits',
 		options: optionsFor(kind),
 		visitedCodes: places.map((place) => place.code),
-		today: todayIso(),
+		today: todayForUser(u.id),
 		currentPath: `${url.pathname}${url.search}`,
 		autoMarkVisited: u.autoMarkVisited,
 		countryCount: visited.countries.length,
@@ -119,7 +114,7 @@ export function makeVisitedActions(kind: PlaceKind, fallback: string): Actions {
 			} catch (e) {
 				return fail(400, { error: e instanceof Error ? e.message : 'Invalid visit dates.' });
 			}
-			const visitedOn = dates.firstVisitedOn ?? dates.lastVisitedOn ?? todayIso();
+			const visitedOn = dates.firstVisitedOn ?? dates.lastVisitedOn ?? todayForUser(u.id);
 			const { created } = markVisited(u.id, kind, code, { visitedOn });
 			if (created) updateVisitedDates(u.id, kind, code, dates.firstVisitedOn || dates.lastVisitedOn ? dates : { firstVisitedOn: visitedOn, lastVisitedOn: visitedOn });
 			setFlash(cookies, created ? `Marked ${code.toUpperCase()} as visited.` : `${code.toUpperCase()} was already marked.`);

@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach } from 'vitest';
+import { DateTime } from 'luxon';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('$lib/server/db', async () => {
@@ -11,6 +12,8 @@ import { load as loadCountries, actions as countryActions } from './countries/+p
 import { load as loadStates, actions as stateActions } from './states/+page.server';
 import { users, visitedCountries, visitedUsStates, trips, segments } from '$lib/server/db/mongrelSchema';
 import { makeUser, makeTrip, makeSegment } from '../../../../tests/helpers';
+import { todayInTimezone } from '$lib/tripStatus';
+import { autoMarkFromTrip, autoMarkFromAllTrips } from '$lib/server/visitedPlaces';
 import { eq } from '@visorcraft/mongreldb-kit';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 
@@ -215,4 +218,113 @@ test('toggleAutoMark action flips the user setting', async () => {
 	const row = kitDb().selectFrom(users).where(eq(users.id, BigInt(u.id))).executeSync()[0]!;
 	expect(row.auto_mark_visited).toBe(true);
 	expect(event.cookies.set).toHaveBeenCalledWith('flash', 'Auto-mark enabled.', expect.any(Object));
+});
+
+test('mark rejects impossible first visited dates', async () => {
+	const u = makeUser(kitDb(), { email: 'u@x.c' });
+	const event = makeFormEvent(u, { code: 'de', firstVisitedOn: '2026-02-31' }, 'mark');
+	const result = await countryActions.mark(event);
+	expect(result).toMatchObject({ status: 400, data: { error: 'First visited must be a valid date.' } });
+	expect(kitDb().selectFrom(visitedCountries).executeSync()).toHaveLength(0);
+});
+
+test('update rejects impossible last visited dates and leaves stored dates unchanged', async () => {
+	const u = makeUser(kitDb(), { email: 'u@x.c' });
+	kitDb()
+		.insertInto(visitedCountries)
+		.values({
+			user_id: BigInt(u.id),
+			country_code: 'DE',
+			visited_on: '2023-01-01',
+			first_visited_on: '2023-01-01',
+			last_visited_on: '2023-06-01',
+			source: 'manual'
+		})
+		.executeSync();
+	const event = makeFormEvent(u, { code: 'de', lastVisitedOn: '2026-13-01' }, 'update');
+	const result = await countryActions.update(event);
+	expect(result).toMatchObject({ status: 400, data: { error: 'Last visited must be a valid date.' } });
+	const row = kitDb().selectFrom(visitedCountries).executeSync()[0]!;
+	expect(row.first_visited_on).toBe('2023-01-01');
+	expect(row.last_visited_on).toBe('2023-06-01');
+});
+
+test('mark rejects impossible calendar dates and accepts real ones', async () => {
+	for (const bad of ['2026-00-10', '2026-01-00', '2026-04-31', '2027-02-29']) {
+		const u = makeUser(kitDb(), { email: `u-${bad}@x.c` });
+		const event = makeFormEvent(u, { code: 'de', firstVisitedOn: bad }, 'mark');
+		const result = await countryActions.mark(event);
+		expect(result).toMatchObject({ status: 400, data: { error: 'First visited must be a valid date.' } });
+		expect(kitDb().selectFrom(visitedCountries).executeSync()).toHaveLength(0);
+	}
+	const u = makeUser(kitDb(), { email: 'u-ok@x.c' });
+	const okEvent = makeFormEvent(u, { code: 'de', firstVisitedOn: '2026-02-28' }, 'mark');
+	await expect(countryActions.mark(okEvent)).rejects.toMatchObject({ status: 303 });
+	expect(kitDb().selectFrom(visitedCountries).executeSync()[0]!.first_visited_on).toBe('2026-02-28');
+
+	const u2 = makeUser(kitDb(), { email: 'u-ok2@x.c' });
+	const okEvent2 = makeFormEvent(u2, { code: 'de', firstVisitedOn: '2028-02-29' }, 'mark');
+	await expect(countryActions.mark(okEvent2)).rejects.toMatchObject({ status: 303 });
+	const rows2 = kitDb().selectFrom(visitedCountries).executeSync();
+	const row2 = rows2.find((r) => Number(r.user_id) === u2.id)!;
+	expect(row2.first_visited_on).toBe('2028-02-29');
+});
+
+test('loadVisitedPage and mark use the user local today', async () => {
+	const now = DateTime.now();
+	const zone = now.setZone('utc').hour >= 12 ? 'Etc/GMT-14' : 'Etc/GMT+12';
+	const u = makeUser(kitDb(), { email: 'local@x.c', timezone: zone });
+	const data = loadCountries({
+		locals: makeLocals(u),
+		url: new URL('http://localhost/profile/visited/countries')
+	} as any) as any;
+	const localToday = todayInTimezone(zone, now);
+	expect(data.today).toBe(localToday);
+	expect(data.today).not.toBe(new Date().toISOString().slice(0, 10));
+
+	const event = makeFormEvent(u, { code: 'fr' }, 'mark');
+	await expect(countryActions.mark(event)).rejects.toMatchObject({ status: 303 });
+	const row = kitDb().selectFrom(visitedCountries).executeSync()[0]!;
+	expect(row.first_visited_on).toBe(localToday);
+	expect(row.last_visited_on).toBe(localToday);
+});
+
+test('autoMarkFromTrip gates on the explicit today', () => {
+	const u = makeUser(kitDb(), { email: 'auto@x.c' });
+	const t = makeTrip(kitDb(), u.id, {
+		destinationCountryCode: 'FR',
+		status: 'planning',
+		startDate: '2026-06-10'
+	});
+	expect(autoMarkFromTrip(u.id, t.id, '2026-06-10').countries).toEqual(['FR']);
+
+	const u2 = makeUser(kitDb(), { email: 'auto2@x.c' });
+	const t2 = makeTrip(kitDb(), u2.id, {
+		destinationCountryCode: 'FR',
+		status: 'planning',
+		startDate: '2026-06-10'
+	});
+	expect(autoMarkFromTrip(u2.id, t2.id, '2026-06-09').countries).toEqual([]);
+	expect(kitDb().selectFrom(visitedCountries).executeSync().filter((r) => Number(r.user_id) === u2.id)).toHaveLength(0);
+});
+
+test('autoMarkFromAllTrips passes the explicit today through to every owned trip', () => {
+	const u = makeUser(kitDb(), { email: 'all@x.c' });
+	makeTrip(kitDb(), u.id, {
+		destinationCountryCode: 'FR',
+		status: 'planning',
+		startDate: '2026-06-10'
+	});
+	expect(autoMarkFromAllTrips(u.id, '2026-06-10').countries).toEqual(['FR']);
+
+	// Same fixture with an explicit today one day earlier: nothing may be marked.
+	// If the date were dropped, todayForUser would fall back to the real date and mark it.
+	const u2 = makeUser(kitDb(), { email: 'all2@x.c' });
+	makeTrip(kitDb(), u2.id, {
+		destinationCountryCode: 'FR',
+		status: 'planning',
+		startDate: '2026-06-10'
+	});
+	expect(autoMarkFromAllTrips(u2.id, '2026-06-09').countries).toEqual([]);
+	expect(kitDb().selectFrom(visitedCountries).executeSync().filter((r) => Number(r.user_id) === u2.id)).toHaveLength(0);
 });

@@ -7,6 +7,7 @@ import { COUNTRIES } from '$lib/countries';
 import { isUsStateCode, normalizeUsStateCode } from '$lib/usStates';
 import { logAudit } from '$lib/server/audit';
 import { requireOwnedTrip } from '$lib/server/ownership';
+import { todayForUser } from '$lib/server/tripLifecycle';
 import { lookupUsStateFromLatLng } from './usStateLookup';
 import type { Trip } from './repositories/tripsRepo';
 
@@ -313,12 +314,7 @@ export function clearVisited(userId: number, kind: PlaceKind): number {
 	return n;
 }
 
-function todayIso(): string {
-	return new Date().toISOString().slice(0, 10);
-}
-
-function tripQualifies(trip: Trip): boolean {
-	const today = todayIso();
+function tripQualifies(trip: Trip, today: string): boolean {
 	return (
 		trip.status === 'active' ||
 		trip.status === 'completed' ||
@@ -343,10 +339,9 @@ export interface AutoMarkResult {
  * Idempotent; never overwrites an existing row's `visited_on`. Only considers
  * trips that are completed or already started/past.
  */
-export function autoMarkFromTrip(userId: number, tripId: number): AutoMarkResult {
+export function autoMarkFromTrip(userId: number, tripId: number, today: string = todayForUser(userId)): AutoMarkResult {
 	const trip = requireOwnedTrip(userId, tripId);
-	const considerTrip = tripQualifies(trip);
-	const today = todayIso();
+	const considerTrip = tripQualifies(trip, today);
 
 	const candidateCountries = new Set<string>();
 	const candidateStates = new Set<string>();
@@ -393,7 +388,7 @@ export function autoMarkFromTrip(userId: number, tripId: number): AutoMarkResult
 	return { countries: markedCountries, states: markedStates };
 }
 
-export function autoMarkFromAllTrips(userId: number): AutoMarkResult {
+export function autoMarkFromAllTrips(userId: number, today: string = todayForUser(userId)): AutoMarkResult {
 	// Fullscan + filter (do not trust owner_id index alone).
 	const owned = kit
 		.selectFrom(trips)
@@ -402,7 +397,7 @@ export function autoMarkFromAllTrips(userId: number): AutoMarkResult {
 	const countries = new Set<string>();
 	const states = new Set<string>();
 	for (const t of owned) {
-		const added = autoMarkFromTrip(userId, Number(t.id));
+		const added = autoMarkFromTrip(userId, Number(t.id), today);
 		for (const c of added.countries) countries.add(c);
 		for (const s of added.states) states.add(s);
 	}

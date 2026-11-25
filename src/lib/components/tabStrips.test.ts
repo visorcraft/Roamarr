@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { test, expect, vi } from 'vitest';
 import { checkA11y, formatViolations } from '../../../tests/a11y';
+// Same import shape as the components (`import { m }`), so the tests cover the namespace the app uses.
+import { m } from '$lib/paraglide/messages';
 
 // Mutable stand-in so each test can point $app/state at a different route.
 const route = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
@@ -116,4 +119,76 @@ test('EmailProcessingTabs has no axe violations', async () => {
 test('AdminEmailTabs has no axe violations', async () => {
 	const violations = await checkA11y(AdminEmailTabs, { active: 'access' });
 	expect(violations, formatViolations(violations)).toHaveLength(0);
+});
+
+const expectedEmailTabsMessages: Record<string, string> = {
+	email_tabs_label: 'Email settings',
+	email_tabs_inbound: 'Inbound Emails',
+	email_tabs_parsing: 'AI Parsing',
+	email_tabs_outbound: 'Outbound Emails'
+};
+
+const expectedAdminEmailTabsMessages: Record<string, string> = {
+	admin_email_tabs_label: 'Email configuration',
+	admin_email_tabs_access: 'User Access',
+	admin_email_tabs_inbound: 'Inbound Emails',
+	admin_email_tabs_parsing: 'AI Parsing',
+	admin_email_tabs_outbound: 'Outbound Emails'
+};
+
+test.each(Object.entries({ ...expectedEmailTabsMessages, ...expectedAdminEmailTabsMessages }))(
+	'catalog message %s matches the English string',
+	(key, expected) => {
+		const fn = (m as Record<string, (i?: unknown) => string>)[key];
+		expect(typeof fn).toBe('function');
+		expect(fn()).toBe(expected);
+	}
+);
+
+/** Anchor texts in render order, each paired with its exact href. */
+const anchorTexts = (html: string) =>
+	[...html.matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map(([, attrs, text]) => ({
+		href: attrs.match(/\bhref="([^"]*)"/)?.[1],
+		text
+	}));
+
+test('EmailProcessingTabs renders its labels and landmark label from the catalog', () => {
+	route.url = new URL('http://localhost/profile/email_parsing');
+	const { body } = render(EmailProcessingTabs);
+	expect(body).toContain('<nav class="tab-list visited-tab-list mt-6" aria-label="Email settings">');
+	const anchors = anchorTexts(body);
+	expect(anchors.map((a) => a.text)).toEqual(['Inbound Emails', 'AI Parsing', 'Outbound Emails']);
+	expect(anchors.map((a) => a.href)).toEqual([
+		'/profile/email_processing',
+		'/profile/email_parsing',
+		'/profile/email_sender'
+	]);
+});
+
+test('AdminEmailTabs renders its labels and landmark label from the catalog', () => {
+	const { body } = render(AdminEmailTabs, { props: { active: 'access' } });
+	expect(body).toContain('<nav class="tab-list visited-tab-list" aria-label="Email configuration">');
+	const anchors = anchorTexts(body);
+	expect(anchors.map((a) => a.text)).toEqual(['User Access', 'Inbound Emails', 'AI Parsing', 'Outbound Emails']);
+	expect(anchors.map((a) => a.href)).toEqual([
+		'/general/email?section=access',
+		'/general/email?section=inbound',
+		'/general/email?section=parsing',
+		'/general/email?section=outbound'
+	]);
+});
+
+test('EmailProcessingTabs and AdminEmailTabs read their strings from the catalog, not literals', () => {
+	const cases = [
+		{ name: 'EmailProcessingTabs', table: expectedEmailTabsMessages, prefix: 'email_tabs_' },
+		{ name: 'AdminEmailTabs', table: expectedAdminEmailTabsMessages, prefix: 'admin_email_tabs_' }
+	];
+	for (const { name, table, prefix } of cases) {
+		const source = readFileSync(new URL(`./${name}.svelte`, import.meta.url), 'utf8');
+		expect(source).toContain('from \'$lib/paraglide/messages\'');
+		const matched = [...source.matchAll(new RegExp(`m\\.(${prefix}[a-z_]+)`, 'g'))].map(([, key]) => key);
+		expect([...new Set(matched)].sort()).toEqual(Object.keys(table).sort());
+		expect(source).not.toMatch(/label:\s*['"`]/);
+		expect(source).not.toMatch(/aria-label="[^"]*"/);
+	}
 });

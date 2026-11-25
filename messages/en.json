@@ -484,5 +484,14 @@
 	"mail_holds_status_requested": "Requested",
 	"mail_holds_status_active": "Active",
 	"mail_holds_status_ended": "Ended",
-	"mail_holds_status_cancelled": "Cancelled"
+	"mail_holds_status_cancelled": "Cancelled",
+	"email_tabs_label": "Email settings",
+	"email_tabs_inbound": "Inbound Emails",
+	"email_tabs_parsing": "AI Parsing",
+	"email_tabs_outbound": "Outbound Emails",
+	"admin_email_tabs_label": "Email configuration",
+	"admin_email_tabs_access": "User Access",
+	"admin_email_tabs_inbound": "Inbound Emails",
+	"admin_email_tabs_parsing": "AI Parsing",
+	"admin_email_tabs_outbound": "Outbound Emails"
 }

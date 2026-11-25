@@ -4173,25 +4173,35 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_journal_update': {
 				if (!hasScope(scopes, 'journal:write')) return scopeError('journal:write');
-				const { getJournalEntryById } = await import('./repositories/tripMiscRepo');
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const entryId = toPositiveId(args.entryId);
+				if (entryId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid entryId: expected a positive integer' }], isError: true };
+				// Route through tripJournal.modifyJournalEntry so the entry is
+				// re-read, validated, and requireEditableTrip is enforced, matching the web UI.
 				const { modifyJournalEntry } = await import('./tripJournal');
-				const e = getJournalEntryById(Number(args.entryId));
-				if (!e) return { content: [{ type: 'text' as const, text: 'Entry not found' }], isError: true };
-				modifyJournalEntry(userId, Number(args.entryId), { entryDate: args.entryDate as string | undefined, title: args.title as string | undefined, body: args.body as string | undefined });
-				logAudit(userId, 'mcp_journal_update', 'trip_journal_entry', Number(args.entryId), {});
-				return textResult({ ok: true, entryId: Number(args.entryId) });
+				modifyJournalEntry(userId, entryId, { entryDate: args.entryDate as string | undefined, title: args.title as string | undefined, body: args.body as string | undefined });
+				logAudit(userId, 'mcp_journal_update', 'trip_journal_entry', entryId, {});
+				return textResult({ ok: true, entryId });
 			}
 			case 'roamarr_journal_delete': {
 				if (!hasScope(scopes, 'journal:write')) return scopeError('journal:write');
 				const confirmErr = requireConfirm(args, 'roamarr_journal_delete');
 				if (confirmErr) return confirmErr;
-				const { getJournalEntryById, deleteJournalEntry } = await import('./repositories/tripMiscRepo');
-				const e = getJournalEntryById(Number(args.entryId));
-				if (!e) return { content: [{ type: 'text' as const, text: 'Entry not found' }], isError: true };
-				requireEditableTrip(userId, e.tripId);
-				deleteJournalEntry(Number(args.entryId));
-				logAudit(userId, 'mcp_journal_delete', 'trip_journal_entry', Number(args.entryId), {});
-				return textResult({ ok: true, entryId: Number(args.entryId) });
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const entryId = toPositiveId(args.entryId);
+				if (entryId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid entryId: expected a positive integer' }], isError: true };
+				// Route through tripJournal.removeJournalEntry so the lookup,
+				// requireEditableTrip, delete, and canonical audit apply, matching the web UI.
+				const { removeJournalEntry } = await import('./tripJournal');
+				removeJournalEntry(userId, entryId);
+				logAudit(userId, 'mcp_journal_delete', 'trip_journal_entry', entryId, {});
+				return textResult({ ok: true, entryId });
 			}
 			case 'roamarr_trip_day_notes_list': {
 				if (!hasScope(scopes, 'day-notes:read')) return scopeError('day-notes:read');
@@ -4916,7 +4926,11 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			return await toolHandler();
 		} catch (e) {
 			const status = (e as { status?: number })?.status;
-			const message = (e as Error)?.message ?? String(e);
+			const body = (e as { body?: { message?: unknown } })?.body;
+			const message =
+				typeof body?.message === 'string' && body.message.length > 0
+					? body.message
+					: ((e as Error)?.message ?? String(e));
 			return {
 				content: [{ type: 'text' as const, text: status ? `Error ${status}: ${message}` : `Error: ${message}` }],
 				isError: true

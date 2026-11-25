@@ -24,6 +24,7 @@ import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '
 import { upsertCustomReminder } from './reminders';
 import { COMPANION_PRIVATE_FIELDS } from './sharing';
 import { getReminderBySource, getReminderById, createReminder } from './repositories/remindersRepo';
+import { getJournalEntryById } from './repositories/tripMiscRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { getSettings, updateSettings } from './settings';
 import { currentTripRev } from './eventBus';
@@ -236,6 +237,117 @@ describe('mcpServer', () => {
 		expect((await call('roamarr_important_item_list', { tripId: trip.id })).items[0]).toMatchObject({ name: 'Camera', serialNumber: 'SN1', trackerId: 'AIR1' });
 		expect((await call('roamarr_entry_requirement_list', { tripId: trip.id })).items[0]).toMatchObject({ country: 'JP', requirementType: 'visa', status: 'in_progress', dueDate: '2026-07-01' });
 		expect((await call('roamarr_doc_link_list', { tripId: trip.id })).items[0]).toMatchObject({ label: 'Voucher', notes: 'offline copy' });
+	});
+
+
+	test('roamarr_journal_update rejects malformed entryId values without writing', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Journal validation trip' });
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const created: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' } });
+		expect(created.isError).toBeFalsy();
+		const entryId = JSON.parse(created.content[0].text).id;
+		const before = getJournalEntryById(entryId);
+
+		const countUpdateAudits = () =>
+			ctx.kit.selectFrom(auditLogs).where(and(kitEq(auditLogs.user_id, BigInt(userId)), kitEq(auditLogs.action, 'mcp_journal_update'))).executeSync();
+
+		for (const bad of ['abc', '1.5', 1.5, 0, ''] as const) {
+			const res: any = await client.callTool({ name: 'roamarr_journal_update', arguments: { entryId: bad, title: 'Changed' } });
+			expect(res.isError, JSON.stringify(bad)).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid entryId: expected a positive integer');
+		}
+		const missing: any = await client.callTool({ name: 'roamarr_journal_update', arguments: { title: 'Changed' } });
+		expect(missing.isError).toBe(true);
+		expect(String(missing.content?.[0]?.text ?? '')).toContain('Invalid entryId: expected a positive integer');
+
+		expect(getJournalEntryById(entryId)).toEqual(before);
+		expect(countUpdateAudits()).toHaveLength(0);
+	});
+
+	test('roamarr_journal_update accepts number and numeric string ids', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Journal update trip' });
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const created: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' } });
+		const entryId = JSON.parse(created.content[0].text).id;
+
+		const byNumber: any = await client.callTool({ name: 'roamarr_journal_update', arguments: { entryId, title: 'Renamed' } });
+		expect(byNumber.isError).toBeFalsy();
+		expect(JSON.parse(byNumber.content[0].text)).toMatchObject({ ok: true, entryId });
+		let row = getJournalEntryById(entryId);
+		expect(row?.title).toBe('Renamed');
+		expect(row?.body).toBe('Landed safely');
+		expect(row?.entryDate).toBe('2026-07-12');
+
+		const byString: any = await client.callTool({ name: 'roamarr_journal_update', arguments: { entryId: String(entryId), title: 'Renamed again' } });
+		expect(byString.isError).toBeFalsy();
+		expect(JSON.parse(byString.content[0].text)).toMatchObject({ ok: true, entryId });
+		row = getJournalEntryById(entryId);
+		expect(row?.title).toBe('Renamed again');
+		expect(row?.body).toBe('Landed safely');
+		expect(row?.entryDate).toBe('2026-07-12');
+	});
+
+	test('roamarr_journal_update with an unknown id returns a 404 error', async () => {
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const res: any = await client.callTool({ name: 'roamarr_journal_update', arguments: { entryId: 999999999, title: 'x' } });
+		expect(res.isError).toBe(true);
+		expect(String(res.content?.[0]?.text ?? '')).toContain('Error 404: Not found');
+	});
+
+	test('roamarr_journal_delete without confirm still returns an error and keeps the entry', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Journal delete trip' });
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const created: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' } });
+		const entryId = JSON.parse(created.content[0].text).id;
+
+		const res: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { entryId } });
+		expect(res.isError).toBe(true);
+		expect(getJournalEntryById(entryId)).not.toBeNull();
+	});
+
+	test('roamarr_journal_delete with confirm rejects malformed entryId values without writing', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Journal delete validation trip' });
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const created: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' } });
+		const entryId = JSON.parse(created.content[0].text).id;
+
+		const countDeleteAudits = () =>
+			ctx.kit.selectFrom(auditLogs).where(and(kitEq(auditLogs.user_id, BigInt(userId)), kitEq(auditLogs.action, 'mcp_journal_delete'))).executeSync();
+
+		for (const bad of ['abc', 1.5, ''] as const) {
+			const res: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { entryId: bad, confirm: true } });
+			expect(res.isError, JSON.stringify(bad)).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid entryId: expected a positive integer');
+		}
+		const missing: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { confirm: true } });
+		expect(missing.isError).toBe(true);
+		expect(String(missing.content?.[0]?.text ?? '')).toContain('Invalid entryId: expected a positive integer');
+
+		expect(getJournalEntryById(entryId)).not.toBeNull();
+		expect(countDeleteAudits()).toHaveLength(0);
+	});
+
+	test('roamarr_journal_delete with confirm deletes by number and numeric string id, 404 for unknown id', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Journal delete trip' });
+		const { client } = await connect(userId, ['journal:read', 'journal:write']);
+		const created: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-12', title: 'Arrival', body: 'Landed safely' } });
+		const entryId = JSON.parse(created.content[0].text).id;
+
+		const byNumber: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { entryId, confirm: true } });
+		expect(byNumber.isError).toBeFalsy();
+		expect(JSON.parse(byNumber.content[0].text)).toMatchObject({ ok: true, entryId });
+		expect(getJournalEntryById(entryId)).toBeNull();
+
+		const created2: any = await client.callTool({ name: 'roamarr_journal_create', arguments: { tripId: trip.id, entryDate: '2026-07-13', title: 'Departure', body: 'Gone' } });
+		const entryId2 = JSON.parse(created2.content[0].text).id;
+		const byString: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { entryId: String(entryId2), confirm: true } });
+		expect(byString.isError).toBeFalsy();
+		expect(JSON.parse(byString.content[0].text)).toMatchObject({ ok: true, entryId: entryId2 });
+		expect(getJournalEntryById(entryId2)).toBeNull();
+
+		const unknown: any = await client.callTool({ name: 'roamarr_journal_delete', arguments: { entryId: 999999999, confirm: true } });
+		expect(unknown.isError).toBe(true);
+		expect(String(unknown.content?.[0]?.text ?? '')).toContain('Error 404: Not found');
 	});
 
 	test('entry requirement update validates status, dueDate, and notes', async () => {

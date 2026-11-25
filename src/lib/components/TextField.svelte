@@ -9,6 +9,7 @@
 		placeholder = '',
 		required = false,
 		disabled = false,
+		hint = '',
 		autocomplete = undefined,
 		id = name,
 		class: wrapClass = '',
@@ -23,6 +24,7 @@
 		placeholder?: string;
 		required?: boolean;
 		disabled?: boolean;
+		hint?: string;
 		autocomplete?: string;
 		id?: string;
 		class?: string;
@@ -35,12 +37,16 @@
 	);
 	const invalid = $derived(errorPairs.length > 0);
 	const inputClass = $derived(`input ${invalid ? 'input-error' : ''}`.trim());
-	const describedBy = $derived(errorPairs.map((p) => p.id).join(' '));
+	// Tokens a caller forwards via aria-describedby come first and are never dropped.
+	const foreignIds = $derived(String(rest['aria-describedby'] ?? '').split(/\s+/).filter(Boolean));
+	const hintId = $derived(hint ? `${id}-hint` : undefined);
+	const describedBy = $derived([...foreignIds, hintId, ...errorPairs.map((p) => p.id)].filter(Boolean).join(' '));
 </script>
 
 <div class="field {wrapClass}">
 	<label class="label" for={id}>{label}</label>
 	<input
+		{...rest}
 		{id}
 		{name}
 		{type}
@@ -51,9 +57,9 @@
 		autocomplete={autocomplete as any}
 		class={inputClass}
 		aria-invalid={invalid ? 'true' : undefined}
-		aria-describedby={invalid ? describedBy : undefined}
-		{...rest}
+		aria-describedby={describedBy || undefined}
 	/>
+	{#if hint}<p class="field-help" id={hintId}>{hint}</p>{/if}
 	{#each errorPairs as p (p.id)}
 		<p class="field-error" id={p.id}>{p.msg}</p>
 	{/each}

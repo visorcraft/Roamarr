@@ -9,6 +9,7 @@
 		value = undefined as unknown,
 		required = false,
 		disabled = false,
+		hint = '',
 		id = name,
 		class: wrapClass = '',
 		children,
@@ -21,6 +22,7 @@
 		value?: unknown;
 		required?: boolean;
 		disabled?: boolean;
+		hint?: string;
 		id?: string;
 		class?: string;
 		children?: Snippet;
@@ -33,12 +35,16 @@
 	);
 	const invalid = $derived(errorPairs.length > 0);
 	const controlClass = $derived(`input ${invalid ? 'input-error' : ''}`.trim());
-	const describedBy = $derived(errorPairs.map((p) => p.id).join(' '));
+	// Tokens a caller forwards via aria-describedby come first and are never dropped.
+	const foreignIds = $derived(String(rest['aria-describedby'] ?? '').split(/\s+/).filter(Boolean));
+	const hintId = $derived(hint ? `${id}-hint` : undefined);
+	const describedBy = $derived([...foreignIds, hintId, ...errorPairs.map((p) => p.id)].filter(Boolean).join(' '));
 </script>
 
 <div class="field {wrapClass}">
 	<label class="label" for={id}>{label}</label>
 	<select
+		{...rest}
 		{id}
 		{name}
 		{value}
@@ -46,11 +52,11 @@
 		{disabled}
 		class={controlClass}
 		aria-invalid={invalid ? 'true' : undefined}
-		aria-describedby={invalid ? describedBy : undefined}
-		{...rest}
+		aria-describedby={describedBy || undefined}
 	>
 		{@render children?.()}
 	</select>
+	{#if hint}<p class="field-help" id={hintId}>{hint}</p>{/if}
 	{#each errorPairs as p (p.id)}
 		<p class="field-error" id={p.id}>{p.msg}</p>
 	{/each}

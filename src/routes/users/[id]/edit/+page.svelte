@@ -103,7 +103,7 @@
 
 		<div>
 			<h3 class="subsection-title">Password</h3>
-			<p class="mt-1 field-help">
+			<p class="mt-1 field-help" id="edit-user-password-hint">
 				Set a new password directly, or send a reset link instead. Leave the fields blank to keep
 				the current password.
 			</p>
@@ -114,6 +114,7 @@
 					type="password"
 					autocomplete="new-password"
 					disabled={submitting}
+					aria-describedby="edit-user-password-hint"
 				/>
 				<TextField
 					name="confirmPassword"
@@ -121,6 +122,7 @@
 					type="password"
 					autocomplete="new-password"
 					disabled={submitting}
+					aria-describedby="edit-user-password-hint"
 				/>
 			</div>
 		</div>

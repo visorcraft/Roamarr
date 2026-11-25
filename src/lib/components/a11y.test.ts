@@ -8,6 +8,7 @@ import EmptyState from './EmptyState.svelte';
 import CopyButton from './CopyButton.svelte';
 import TextField from './TextField.svelte';
 import TextAreaField from './TextAreaField.svelte';
+import SelectField from './SelectField.svelte';
 import CityAutocomplete from './segments/CityAutocomplete.svelte';
 import Modal from './Modal.svelte';
 import GlobeModal from './GlobeModal.svelte';
@@ -153,5 +154,100 @@ describe('Field hints', () => {
 			hint: 'Markdown supported'
 		});
 		expect(violations, formatViolations(violations)).toHaveLength(0);
+	});
+});
+
+describe('Shared field hint parity', () => {
+	const roleOptions = createRawSnippet(() => ({ render: () => '<option value="user">User</option>' }));
+
+	test('TextField hint + error links hint and error ids', () => {
+		const html = render(TextField, {
+			props: { name: 'email', label: 'Email', hint: 'We never share this', errors: { email: 'Enter a valid email' } }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="email-hint email-email-error"');
+		expect(tag).toContain('aria-invalid="true"');
+		expect(html).toContain('<p class="field-help" id="email-hint">We never share this</p>');
+		expect(html).toContain('id="email-email-error"');
+	});
+
+	test('TextField hint only links the hint', () => {
+		const html = render(TextField, {
+			props: { name: 'email', label: 'Email', hint: 'We never share this' }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="email-hint"');
+		expect(tag).not.toContain('aria-invalid');
+	});
+
+	test('TextField with nothing extra has no aria-describedby or aria-invalid', () => {
+		const html = render(TextField, { props: { name: 'email', label: 'Email' } }).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).not.toContain('aria-describedby');
+		expect(tag).not.toContain('aria-invalid');
+		expect(html).not.toContain('field-help');
+	});
+
+	test('TextField forwards caller aria-describedby tokens', () => {
+		const html = render(TextField, {
+			props: { name: 'email', label: 'Email', 'aria-describedby': 'edit-user-password-hint' }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="edit-user-password-hint"');
+	});
+
+	test('TextField forwards aria-describedby and still includes error id', () => {
+		const html = render(TextField, {
+			props: { name: 'newPassword', label: 'New password', 'aria-describedby': 'edit-user-password-hint', errors: { newPassword: 'Too short' } }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="edit-user-password-hint newPassword-newPassword-error"');
+		expect(tag).toContain('aria-invalid="true"');
+	});
+
+	test('TextField normalises whitespace in forwarded aria-describedby', () => {
+		const html = render(TextField, {
+			props: { name: 'email', label: 'Email', 'aria-describedby': '  a  b ' }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="a b"');
+	});
+
+	test('TextField with multiple error keys links both error ids', () => {
+		const html = render(TextField, {
+			props: { name: 'email', label: 'Email', errorKey: ['start', 'end'], errors: { start: 'Bad start', end: 'Bad end' } }
+		}).body;
+		const tag = html.match(/<input\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="email-start-error email-end-error"');
+	});
+
+	test('SelectField hint + error links hint and error ids', () => {
+		const html = render(SelectField, {
+			props: { name: 'role', label: 'Role', hint: 'Admins can manage users', errors: { role: 'Pick a role' }, children: roleOptions }
+		}).body;
+		const tag = html.match(/<select\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="role-hint role-role-error"');
+		expect(tag).toContain('aria-invalid="true"');
+		expect(html).toContain('<option value="user">User</option>');
+	});
+
+	test('SelectField forwards aria-describedby and still includes error id', () => {
+		const html = render(SelectField, {
+			props: { name: 'role', label: 'Role', 'aria-describedby': 'x-hint', errors: { role: 'Pick a role' }, children: roleOptions }
+		}).body;
+		const tag = html.match(/<select\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="x-hint role-role-error"');
+	});
+
+	test('TextField and SelectField hints have no axe violations', async () => {
+		const fieldViolations = await checkA11y(TextField, { name: 'email', label: 'Email', hint: 'We never share this' });
+		expect(fieldViolations, formatViolations(fieldViolations)).toHaveLength(0);
+		const selectViolations = await checkA11y(SelectField, {
+			name: 'role',
+			label: 'Role',
+			hint: 'Admins can manage users',
+			children: roleOptions
+		});
+		expect(selectViolations, formatViolations(selectViolations)).toHaveLength(0);
 	});
 });

@@ -21,7 +21,8 @@ import {
 import { currentTripRev, subscribeUser } from '../eventBus';
 import { makeKitUser } from '../../../../tests/kitHelpers';
 import { makeSegment } from '../../../../tests/helpers';
-import { toggleWatch, pauseWatch, resumeWatch, deleteWatch } from './index';
+import { eq as kitEq } from '@visorcraft/mongreldb-kit';
+import { toggleWatch, pauseWatch, resumeWatch, deleteWatch, updateProvider } from './index';
 
 beforeEach(() => {
 	ctx.kit.deleteFrom(fareWatches).executeSync();
@@ -204,4 +205,43 @@ test('toggleWatch with a segment from a different trip throws and publishes noth
 	expect(currentTripRev(trip.id) - before).toBe(0);
 	expect(events).toHaveLength(0);
 	unsubscribe();
+});
+
+test('updateProvider omits enabled and keeps the stored flag', () => {
+	const { ownerId, provider } = setupOwnerTrip();
+
+	const result = updateProvider(ownerId, provider.id, 'Renamed', '');
+	expect(result).toMatchObject({ label: 'Renamed', enabled: true });
+
+	const row = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(provider.id))).executeSync()[0]!;
+	expect(row.label).toBe('Renamed');
+	expect(row.enabled).toBe(true);
+});
+
+test('updateProvider with a null label keeps the stored label', () => {
+	const { ownerId, provider } = setupOwnerTrip();
+
+	const result = updateProvider(ownerId, provider.id, null, '', false);
+	expect(result).toMatchObject({ label: 'Work', enabled: false });
+});
+
+test('updateProvider rejects an invalid label without mutating the row', () => {
+	const { ownerId, provider } = setupOwnerTrip();
+
+	expect(() => updateProvider(ownerId, provider.id, '   ', '', false)).toThrow(/Label is required/);
+
+	const row = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(provider.id))).executeSync()[0]!;
+	expect(row.label).toBe('Work');
+	expect(row.enabled).toBe(true);
+});
+
+test('updateProvider enforces ownership', () => {
+	const { provider } = setupOwnerTrip();
+	const intruder = makeKitUser();
+	const intruderId = Number(intruder.id);
+
+	expect(() => updateProvider(intruderId, provider.id, null, '', false)).toThrow();
+
+	const row = ctx.kit.selectFrom(fareProviders).where(kitEq(fareProviders.id, BigInt(provider.id))).executeSync()[0]!;
+	expect(row.enabled).toBe(true);
 });

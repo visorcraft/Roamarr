@@ -64,18 +64,23 @@ function requireOwnedProvider(userId: number, providerId: number): FareProviderA
 	return p;
 }
 
+/**
+ * `label: null` keeps the stored label and `enabled: undefined` keeps the stored
+ * flag, so callers can send a partial update. A blank `apiKey` keeps the stored key
+ * (see `updateFareProvider`).
+ */
 export function updateProvider(
 	userId: number,
 	providerId: number,
-	label: string,
+	label: string | null,
 	apiKey: string,
-	enabled: boolean
+	enabled?: boolean
 ) {
-	requireOwnedProvider(userId, providerId);
+	const existing = requireOwnedProvider(userId, providerId);
 	const updated = updateFareProvider(providerId, {
-		label: validateLabel(label),
+		label: validateLabel(label ?? existing.label),
 		apiKey,
-		enabled
+		enabled: enabled ?? existing.enabled
 	});
 	if (!updated) throw error(404, 'Not found');
 	return updated;

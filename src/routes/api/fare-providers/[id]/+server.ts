@@ -22,8 +22,18 @@ export const PATCH: RequestHandler = async ({ params, request, locals, getClient
 	if (!Number.isInteger(id) || id < 1) throw error(400, 'Invalid id');
 	const limit = checkRateLimit(getClientAddress(), 'fare-providers:update');
 	if (!limit.allowed) throw error(429, 'Too many requests');
-	const body = await request.json().catch(() => { throw error(400, 'Invalid JSON'); }) as Record<string, unknown>;
-	updateProvider(admin.id, id, String(body.label ?? ''), String(body.apiKey ?? ''), body.enabled === true);
+	const body = await request.json().catch(() => { throw error(400, 'Invalid JSON'); });
+	if (body === null || typeof body !== 'object' || Array.isArray(body)) throw error(400, 'Invalid JSON');
+	const { label, apiKey, enabled } = body as Record<string, unknown>;
+	if (label !== undefined && typeof label !== 'string') throw error(400, 'label must be a string');
+	if (apiKey !== undefined && apiKey !== null && typeof apiKey !== 'string') throw error(400, 'apiKey must be a string');
+	if (enabled !== undefined && typeof enabled !== 'boolean') throw error(400, 'enabled must be a boolean');
+	try {
+		updateProvider(admin.id, id, label ?? null, apiKey ?? '', enabled);
+	} catch (e) {
+		if (e instanceof Error && e.message.includes('Label is required')) throw error(400, e.message);
+		throw e;
+	}
 	logAudit(admin.id, 'fare_provider_update', 'fare_provider', id);
 	return new Response(null, { status: 204 });
 };

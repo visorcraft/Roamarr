@@ -38,8 +38,13 @@ const SEGMENT_LABELS: Record<SegmentType, string> = {
 	shuttle: 'Shuttle'
 };
 
+// Content lines are delimited by CRLF only, so a raw carriage return inside a
+// value (lone CR, or the CR of a CRLF) is read as a line break by CR-tolerant
+// calendar clients and would let trip text inject property lines.
 function escapeText(value: string): string {
 	return value
+		.replace(/\r\n?/g, '\n')
+		.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
 		.replace(/\\/g, '\\\\')
 		.replace(/;/g, '\\;')
 		.replace(/,/g, '\\,')

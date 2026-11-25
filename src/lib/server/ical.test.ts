@@ -373,3 +373,73 @@ test('keeps the aggregate feed valid when a segment time is unparseable', () => 
 	expect(trip2Event).toBeDefined();
 	expect(trip2Event).not.toContain('DTEND');
 });
+
+test('escapes carriage returns so no raw CR reaches the feed', () => {
+	const ics = buildCalendar(
+		{ id: 14, name: 'Trip\rName' },
+		[
+			{
+				type: 'flight',
+				title: 'Flight\rEND:VEVENT\rBEGIN:VEVENT',
+				startAt: '2026-07-01T10:00:00Z',
+				location: 'Gate\r\n5'
+			}
+		]
+	);
+	expect(ics).toContain('X-WR-CALNAME:Trip\\nName');
+	expect(ics).toContain('SUMMARY:Flight: Flight\\nEND:VEVENT\\nBEGIN:VEVENT');
+	expect(ics).toContain('LOCATION:Gate\\n5');
+	// Whole-line counts only: the escaped SUMMARY itself contains the literal
+	// words BEGIN:VEVENT / END:VEVENT, and multiline anchors treat a lone CR as a
+	// line break, the same way CR-tolerant calendar clients do.
+	expect(ics.match(/^BEGIN:VEVENT$/gm)).toHaveLength(1);
+	expect(ics.match(/^END:VEVENT$/gm)).toHaveLength(1);
+	expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+});
+
+test('normalizes CRLF and lone CR to a single escaped line break', () => {
+	const ics = buildCalendar(
+		{ id: 15, name: 'Trip' },
+		[
+			{
+				type: 'flight',
+				title: 'Line one\r\nLine two\rLine three',
+				startAt: '2026-07-01T10:00:00Z'
+			}
+		]
+	);
+	expect(ics).toContain('SUMMARY:Flight: Line one\\nLine two\\nLine three');
+});
+
+test('strips disallowed control characters but keeps tabs and non-ASCII text', () => {
+	const ics = buildCalendar(
+		{ id: 16, name: 'Trip' },
+		[
+			{
+				type: 'flight',
+				title: 'A\tB\u0000C\u001FDEL\u007F → Z',
+				startAt: '2026-07-01T10:00:00Z'
+			}
+		]
+	);
+	expect(ics).toContain('SUMMARY:Flight: A\tBCDEL → Z');
+});
+
+test('escapes carriage returns in the aggregate feed', () => {
+	const ics = buildAggregateCalendar('All\rTrips', [
+		{
+			trip: { id: 17, name: 'Trip\rName', startDate: '2026-07-01' },
+			segments: [
+				{
+					type: 'flight',
+					title: 'Flight\rTitle',
+					startAt: '2026-07-01T10:00:00Z'
+				}
+			]
+		}
+	]);
+	expect(ics).toContain('X-WR-CALNAME:All\\nTrips');
+	expect(ics).toContain('SUMMARY:Trip\\nName');
+	expect(ics).toContain('SUMMARY:Flight: Flight\\nTitle');
+	expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/);
+});

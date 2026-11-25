@@ -509,5 +509,7 @@
 	"grid_table_empty": "No records found",
 	"grid_table_actions": "Actions",
 	"grid_table_search": "Search",
-	"grid_table_search_label": "Search table"
+	"grid_table_search_label": "Search table",
+	"autocomplete_no_results": "No matches",
+	"autocomplete_clear": "Clear selection"
 }

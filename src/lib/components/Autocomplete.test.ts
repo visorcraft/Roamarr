@@ -5,6 +5,10 @@ import { mount, unmount } from '../../../node_modules/svelte/src/internal/client
 // @ts-ignore — internal Svelte client runtime
 import { flushSync } from '../../../node_modules/svelte/src/internal/client/reactivity/batch.js';
 import Autocomplete from './Autocomplete.svelte';
+import { m } from '$lib/paraglide/messages';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 type Suggestion = { id: number; label: string };
 type Deferred<T> = { promise: Promise<T>; resolve: (v: T) => void; reject: (e?: unknown) => void };
@@ -371,6 +375,7 @@ describe('Autocomplete', () => {
 		calls[0].d.resolve([]);
 		await flushLookup();
 
+		expect(m.autocomplete_no_results()).not.toBe('Nothing found');
 		expect(status()).toBe('Nothing found');
 	});
 
@@ -595,5 +600,50 @@ describe('Autocomplete', () => {
 		expect(button!.textContent?.trim()).toBe('');
 		expect(button!.getAttribute('tabindex')).toBe('-1');
 		expect(button!.getAttribute('type')).toBe('button');
+	});
+
+	it('catalog messages back the Autocomplete strings', () => {
+		expect(m.autocomplete_no_results()).toBe('No matches');
+		expect(m.autocomplete_clear()).toBe('Clear selection');
+	});
+
+	it('the default no-results text comes from the message catalog', async () => {
+		mountAutocomplete();
+		type('zzz');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([]);
+		await flushLookup();
+
+		expect(status()).toBe(m.autocomplete_no_results());
+		expect(document.querySelector('p[aria-hidden="true"]')?.textContent).toBe(m.autocomplete_no_results());
+	});
+
+	it('the clear control name comes from the message catalog', () => {
+		mountAutocomplete({ value: 'Paris', valueId: 2 });
+
+		const button = document.querySelector(`button[aria-label="${m.autocomplete_clear()}"]`);
+		expect(button).not.toBeNull();
+		expect(button!.getAttribute('aria-label')).toBe('Clear selection');
+	});
+
+	it('the clear control is not rendered for a required field', () => {
+		mountAutocomplete({ value: 'Paris', valueId: 2, required: true });
+
+		expect(document.querySelector(`button[aria-label="${m.autocomplete_clear()}"]`)).toBeNull();
+	});
+
+	it('Autocomplete has no hardcoded copy of its catalog strings', () => {
+		// In jsdom files Vitest rewrites `new URL(<literal>, import.meta.url)` to resolve
+		// against `self.location` (http://localhost:3000), so locate the source by path.
+		const source = readFileSync(
+			path.join(path.dirname(fileURLToPath(import.meta.url)), 'Autocomplete.svelte'),
+			'utf8'
+		);
+
+		expect(source).toContain("import { m } from '$lib/paraglide/messages'");
+		expect(source).toContain('m.autocomplete_no_results()');
+		expect(source).toContain('m.autocomplete_clear()');
+		expect(source).not.toMatch(/No matches|Clear selection/);
 	});
 });

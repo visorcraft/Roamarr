@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
+	import { m } from '$lib/paraglide/messages';
 
 	export interface AutocompleteSuggestion {
 		id: number;
@@ -20,7 +21,7 @@
 		textName,
 		onselect,
 		id = name,
-		noResultsText = 'No matches'
+		noResultsText = m.autocomplete_no_results()
 	}: {
 		name: string;
 		label: string;
@@ -238,7 +239,7 @@
 			type="button"
 			class="absolute right-2 top-9 text-sm text-muted hover:text-ink"
 			onclick={clearSelection}
-			aria-label="Clear selection"
+			aria-label={m.autocomplete_clear()}
 			tabindex="-1"
 		><Icon name="close" class="h-4 w-4" /></button>
 	{/if}

@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { m } from '$lib/paraglide/messages';
 
 	const tabs = [
-		{ href: '/profile', label: 'Profile' },
-		{ href: '/profile/email', label: 'Email' },
-		{ href: '/profile/sessions', label: 'Sessions' },
-		{ href: '/profile/calendar', label: 'Calendar' },
-		{ href: '/profile/theme', label: 'Theme' }
+		{ href: '/profile', label: m.profile_tabs_profile() },
+		{ href: '/profile/email', label: m.profile_tabs_email() },
+		{ href: '/profile/sessions', label: m.profile_tabs_sessions() },
+		{ href: '/profile/calendar', label: m.profile_tabs_calendar() },
+		{ href: '/profile/theme', label: m.profile_tabs_theme() }
 	];
 
 	function isActive(href: string): boolean {
@@ -16,7 +17,7 @@
 	}
 </script>
 
-<nav class="tab-list visited-tab-list mt-6" aria-label="Profile sections">
+<nav class="tab-list visited-tab-list mt-6" aria-label={m.profile_tabs_label()}>
 	{#each tabs as t (t.href)}
 		<a href={t.href} aria-current={isActive(t.href) ? 'page' : undefined} class="tab-link {isActive(t.href) ? 'tab-link-active' : ''}">{t.label}</a>
 	{/each}

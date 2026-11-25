@@ -493,5 +493,15 @@
 	"admin_email_tabs_access": "User Access",
 	"admin_email_tabs_inbound": "Inbound Emails",
 	"admin_email_tabs_parsing": "AI Parsing",
-	"admin_email_tabs_outbound": "Outbound Emails"
+	"admin_email_tabs_outbound": "Outbound Emails",
+	"profile_tabs_label": "Profile sections",
+	"profile_tabs_profile": "Profile",
+	"profile_tabs_email": "Email",
+	"profile_tabs_sessions": "Sessions",
+	"profile_tabs_calendar": "Calendar",
+	"profile_tabs_theme": "Theme",
+	"security_tabs_label": "Security sections",
+	"security_tabs_password": "Password",
+	"security_tabs_2fa": "2FA",
+	"security_tabs_passkeys": "Passkeys"
 }

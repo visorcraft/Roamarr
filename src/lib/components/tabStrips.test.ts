@@ -136,7 +136,23 @@ const expectedAdminEmailTabsMessages: Record<string, string> = {
 	admin_email_tabs_outbound: 'Outbound Emails'
 };
 
-test.each(Object.entries({ ...expectedEmailTabsMessages, ...expectedAdminEmailTabsMessages }))(
+const expectedProfileTabsMessages: Record<string, string> = {
+	profile_tabs_label: 'Profile sections',
+	profile_tabs_profile: 'Profile',
+	profile_tabs_email: 'Email',
+	profile_tabs_sessions: 'Sessions',
+	profile_tabs_calendar: 'Calendar',
+	profile_tabs_theme: 'Theme'
+};
+
+const expectedSecurityTabsMessages: Record<string, string> = {
+	security_tabs_label: 'Security sections',
+	security_tabs_password: 'Password',
+	security_tabs_2fa: '2FA',
+	security_tabs_passkeys: 'Passkeys'
+};
+
+test.each(Object.entries({ ...expectedEmailTabsMessages, ...expectedAdminEmailTabsMessages, ...expectedProfileTabsMessages, ...expectedSecurityTabsMessages }))(
 	'catalog message %s matches the English string',
 	(key, expected) => {
 		const fn = (m as Record<string, (i?: unknown) => string>)[key];
@@ -191,4 +207,55 @@ test('EmailProcessingTabs and AdminEmailTabs read their strings from the catalog
 		expect(source).not.toMatch(/label:\s*['"`]/);
 		expect(source).not.toMatch(/aria-label="[^"]*"/);
 	}
+});
+
+test('ProfileTabs and SecurityTabs render their labels and landmark labels from the catalog', () => {
+	route.url = new URL('http://localhost/profile');
+	const { body } = render(ProfileTabs);
+	expect(body).toContain('<nav class="tab-list visited-tab-list mt-6" aria-label="Profile sections">');
+	const anchors = anchorTexts(body);
+	expect(anchors.map((a) => a.text)).toEqual(['Profile', 'Email', 'Sessions', 'Calendar', 'Theme']);
+	expect(anchors.map((a) => a.href)).toEqual([
+		'/profile',
+		'/profile/email',
+		'/profile/sessions',
+		'/profile/calendar',
+		'/profile/theme'
+	]);
+
+	route.url = new URL('http://localhost/profile/security');
+	const { body: securityBody } = render(SecurityTabs);
+	expect(securityBody).toContain('<nav class="tab-list visited-tab-list mt-6" aria-label="Security sections">');
+	const securityAnchors = anchorTexts(securityBody);
+	expect(securityAnchors.map((a) => a.text)).toEqual(['Password', '2FA', 'Passkeys']);
+	expect(securityAnchors.map((a) => a.href)).toEqual([
+		'/profile/security?tab=password',
+		'/profile/security?tab=2fa',
+		'/profile/security?tab=passkeys'
+	]);
+});
+
+test('ProfileTabs and SecurityTabs read their strings from the catalog, not literals', () => {
+	const cases = [
+		{ name: 'ProfileTabs', table: expectedProfileTabsMessages, prefix: 'profile_tabs_' },
+		{ name: 'SecurityTabs', table: expectedSecurityTabsMessages, prefix: 'security_tabs_' }
+	];
+	for (const { name, table, prefix } of cases) {
+		const source = readFileSync(new URL(`./${name}.svelte`, import.meta.url), 'utf8');
+		expect(source).toContain('from \'$lib/paraglide/messages\'');
+		const matched = [...source.matchAll(new RegExp(`m\\.(${prefix}[a-z0-9_]+)`, 'g'))].map(([, key]) => key);
+		expect([...new Set(matched)].sort()).toEqual(Object.keys(table).sort());
+		expect(source).not.toMatch(/label:\s*['"`]/);
+		expect(source).not.toMatch(/aria-label="[^"]*"/);
+	}
+});
+
+test('en.json gains each profile and security tab key exactly once in its committed shape', () => {
+	const raw = readFileSync(new URL('../../../messages/en.json', import.meta.url), 'utf8');
+	expect(() => JSON.parse(raw)).not.toThrow();
+	for (const key of [...Object.keys(expectedProfileTabsMessages), ...Object.keys(expectedSecurityTabsMessages)]) {
+		const matches = raw.match(new RegExp('^\\t"' + key + '": "', 'gm'));
+		expect(matches).toHaveLength(1);
+	}
+	expect(raw.endsWith('}')).toBe(true);
 });

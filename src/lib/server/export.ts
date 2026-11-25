@@ -89,7 +89,8 @@ export function exportTripsJson(userId: number): string {
 function csvEscape(value: string | number | undefined): string {
 	if (value == null) return '';
 	const s = String(value);
-	if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+	// A carriage return is a record break for common CSV readers, so it must be quoted even without a line feed.
+	if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
 		return '"' + s.replace(/"/g, '""') + '"';
 	}
 	return s;

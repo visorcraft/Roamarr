@@ -8,6 +8,7 @@ vi.mock('./db', async () => {
 });
 
 import { exportTrips, exportTripsJson, exportTripsCsv } from './export';
+import { parseCsv } from './import';
 import { users, trips, segments, tripMailHolds } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import * as tripsRepo from './repositories/tripsRepo';
@@ -136,4 +137,44 @@ test('exportTrips always includes mail holds and CSV stays segment-only', () => 
 	expect(csv).not.toContain('HOLDSECRET');
 	expect(csv).not.toContain('HOMEADDR');
 	expect(empty.id).toBeGreaterThan(0);
+});
+
+test('exportTripsCsv quotes fields that contain a carriage return', () => {
+	const owner = makeUser('cr@x.c');
+	const t = makeTrip(Number(owner.id), 'CR trip', { notes: 'line one\rline two' });
+	makeSegment(t.id, 'hotel', 'Suite\r7', '2026-08-01T16:00:00Z');
+	const csv = exportTripsCsv(Number(owner.id));
+	expect(csv).toContain('"line one\rline two"');
+	expect(csv).toContain('"Suite\r7"');
+	expect(csv).toContain('\nCR trip,');
+
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.notes).toBe('line one\rline two');
+	expect(parsed.trips[0]!.segments).toHaveLength(1);
+	expect(parsed.trips[0]!.segments![0]!.title).toBe('Suite\r7');
+});
+
+test('exportTripsCsv keeps every line-break form quoted and round-trips it exactly', () => {
+	const owner = makeUser('lb@x.c');
+	const cases: Array<[string, string]> = [
+		['Bare CR', 'a\rb'],
+		['CRLF', 'a\r\nb'],
+		['LF', 'a\nb']
+	];
+	for (const [name, notes] of cases) {
+		makeTrip(Number(owner.id), name, { notes });
+	}
+	const csv = exportTripsCsv(Number(owner.id));
+	expect(csv).toContain('"a\rb"');
+	expect(csv).toContain('"a\r\nb"');
+	expect(csv).toContain('"a\nb"');
+
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(3);
+	for (const [name, notes] of cases) {
+		const trip = parsed.trips.find((t) => t.name === name);
+		expect(trip, `trip ${name}`).toBeDefined();
+		expect(trip!.notes).toBe(notes);
+	}
 });

@@ -5,6 +5,7 @@ import { logAudit } from './audit';
 import { requireEditableTrip, requireCompanionOnTrip } from './ownership';
 import { Validator } from './validation';
 import { bumpTripUpdatedAt } from './tripUpdatedAt';
+import { parsePositiveId } from './params';
 
 export type { Poll } from './repositories/pollsRepo';
 
@@ -112,13 +113,13 @@ export async function createPoll(event: RequestEvent) {
 
 export async function votePoll(event: RequestEvent) {
 	const { user: u, tripId, formData: f } = await withTripAction(event);
-	const pollId = Number(f.get('pollId'));
-	const companionId = Number(f.get('companionId'));
-	const optionId = Number(f.get('optionId'));
+	const pollId = parsePositiveId(f.get('pollId'));
+	const companionId = parsePositiveId(f.get('companionId'));
+	const optionId = parsePositiveId(f.get('optionId'));
 
-	if (!Number.isFinite(pollId) || pollId <= 0) throw error(400, 'Invalid poll');
-	if (!Number.isFinite(companionId) || companionId <= 0) throw error(400, 'Invalid companion');
-	if (!Number.isFinite(optionId) || optionId <= 0) throw error(400, 'Invalid option');
+	if (pollId === null) throw error(400, 'Invalid poll');
+	if (companionId === null) throw error(400, 'Invalid companion');
+	if (optionId === null) throw error(400, 'Invalid option');
 
 	castVote(u.id, pollId, companionId, optionId);
 	throw redirect(303, `/trips/${tripId}`);
@@ -126,8 +127,8 @@ export async function votePoll(event: RequestEvent) {
 
 export async function deletePoll(event: RequestEvent) {
 	const { user: u, tripId, formData: f } = await withTripAction(event);
-	const pollId = Number(f.get('pollId'));
-	if (!Number.isFinite(pollId) || pollId <= 0) throw error(400, 'Invalid poll');
+	const pollId = parsePositiveId(f.get('pollId'));
+	if (pollId === null) throw error(400, 'Invalid poll');
 
 	removeTripPoll(u.id, pollId);
 	throw redirect(303, `/trips/${tripId}`);

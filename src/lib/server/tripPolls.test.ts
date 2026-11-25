@@ -279,3 +279,118 @@ test('deletePoll action removes a poll and redirects', async () => {
 	const kit = getKit();
 	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeUndefined();
 });
+
+test('votePoll rejects fractional poll id with 400 and writes nothing', async () => {
+	const u = makeUser('vp@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const c = makeCompanion(t.id, 'Eve');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+	const option = poll.options.find((o) => o.label === 'Morning')!;
+
+	await expect(
+		votePoll(
+			event({ id: Number(u.id) }, t.id, {
+				pollId: '1.5',
+				companionId: String(c.id),
+				optionId: String(option.id)
+			})
+		)
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid poll' } });
+
+	const kit = getKit();
+	expect(kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
+	const logs = kit.selectFrom(auditLogs).where(eq(auditLogs.entity_type, 'trip_poll')).executeSync();
+	// Only the create audit entry from the setup should exist.
+	expect(logs.filter((l) => l.action === 'vote')).toHaveLength(0);
+});
+
+test('votePoll rejects malformed companion id with 400 and writes no vote', async () => {
+	const u = makeUser('vc@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const c = makeCompanion(t.id, 'Eve');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+	const option = poll.options.find((o) => o.label === 'Morning')!;
+
+	await expect(
+		votePoll(
+			event({ id: Number(u.id) }, t.id, {
+				pollId: String(poll.id),
+				companionId: '2.5',
+				optionId: String(option.id)
+			})
+		)
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid companion' } });
+
+	const kit = getKit();
+	expect(kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
+});
+
+test('votePoll rejects malformed option id with 400 and writes no vote', async () => {
+	const u = makeUser('vo@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const c = makeCompanion(t.id, 'Eve');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+	const option = poll.options.find((o) => o.label === 'Morning')!;
+
+	await expect(
+		votePoll(
+			event({ id: Number(u.id) }, t.id, {
+				pollId: String(poll.id),
+				companionId: String(c.id),
+				optionId: '1e3'
+			})
+		)
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid option' } });
+
+	const kit = getKit();
+	expect(kit.selectFrom(tripPollVotes).where(eq(tripPollVotes.poll_id, BigInt(poll.id))).executeSync()).toHaveLength(0);
+});
+
+test('deletePoll rejects fractional poll id with 400 and keeps the poll', async () => {
+	const u = makeUser('dp@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+
+	await expect(
+		deletePoll(event({ id: Number(u.id) }, t.id, { pollId: '1.5' }))
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid poll' } });
+
+	const kit = getKit();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeDefined();
+});
+
+test('votePoll rejects missing fields with 400', async () => {
+	const u = makeUser('vm@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const c = makeCompanion(t.id, 'Eve');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+	const option = poll.options.find((o) => o.label === 'Morning')!;
+
+	await expect(
+		votePoll(event({ id: Number(u.id) }, t.id, { pollId: String(poll.id) }))
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid companion' } });
+	await expect(
+		votePoll(
+			event({ id: Number(u.id) }, t.id, { pollId: String(poll.id), companionId: String(c.id) })
+		)
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid option' } });
+	await expect(
+		votePoll(
+			event({ id: Number(u.id) }, t.id, { companionId: String(c.id), optionId: String(option.id) })
+		)
+	).rejects.toMatchObject({ status: 400, body: { status: 400, message: 'Invalid poll' } });
+});
+
+test('deletePoll rejects missing pollId with 400', async () => {
+	const u = makeUser('dm@x.c');
+	const t = makeTrip(Number(u.id), 'T');
+	const poll = createTripPoll(Number(u.id), t.id, 'When?', ['Morning', 'Evening']);
+
+	await expect(deletePoll(event({ id: Number(u.id) }, t.id, {}))).rejects.toMatchObject({
+		status: 400,
+		body: { status: 400, message: 'Invalid poll' }
+	});
+
+	const kit = getKit();
+	expect(kit.selectFrom(tripPolls).where(eq(tripPolls.id, BigInt(poll.id))).executeSync()[0]).toBeDefined();
+});

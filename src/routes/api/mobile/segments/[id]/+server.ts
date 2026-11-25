@@ -13,9 +13,11 @@ const load = (raw: string | undefined, userId: number) => { const id = Number(ra
 const editable = (segment: ReturnType<typeof getSegmentById> & {}) => ({ ...segment, localStart: utcToLocal(segment.startAt, segment.startTz), endAt: segment.endAt ? utcToLocal(segment.endAt, segment.endTz ?? segment.startTz) : null, meetingAt: segment.meetingAt ? utcToLocal(segment.meetingAt, segment.startTz) : null });
 export const GET: RequestHandler = ({ params, locals }) => {
 	const user = requireUser(locals), segment = load(params.id, user.id), trip = requireViewableTrip(user.id, segment.tripId);
-	const full = canEdit(user.id, trip) || canViewDetails(user.id, trip);
+	// Private segment details follow the web viewerProjection / MCP rule: show-details consent is required even for editors.
+	const editor = canEdit(user.id, trip);
+	const full = canViewDetails(user.id, trip);
 	const value = editable(segment);
-	return json({ segment: full ? value : { id: value.id, tripId: value.tripId, type: value.type, title: value.title, localStart: value.localStart, startTz: value.startTz, endAt: value.endAt, endTz: value.endTz, location: value.location, cityName: value.cityName, countryCode: value.countryCode, venue: value.venue, meetingPoint: value.meetingPoint, meetingAt: value.meetingAt, status: value.status }, attendees: full ? listAttendeesForSegment(segment.id) : [] });
+	return json({ segment: full ? value : { id: value.id, tripId: value.tripId, type: value.type, title: value.title, localStart: value.localStart, startTz: value.startTz, endAt: value.endAt, endTz: value.endTz, location: value.location, cityName: value.cityName, countryCode: value.countryCode, venue: value.venue, meetingPoint: value.meetingPoint, meetingAt: value.meetingAt, status: value.status }, attendees: editor || full ? listAttendeesForSegment(segment.id) : [] });
 };
 export const PATCH: RequestHandler = async ({ params, locals, request }) => { const user = requireUser(locals), old = load(params.id, user.id), body = await request.json() as Record<string, unknown>; const segment = updateSegment(user.id, old.tripId, old.id, parseMobileSegment({ ...editable(old), ...body, type: old.type }, old.startTz)); logAudit(user.id, 'segment_update', 'segment', old.id, { tripId: old.tripId }); return json({ segment }); };
 export const DELETE: RequestHandler = ({ params, locals }) => { const user = requireUser(locals), segment = load(params.id, user.id); deleteSegment(user.id, segment.tripId, segment.id); return new Response(null, { status: 204 }); };

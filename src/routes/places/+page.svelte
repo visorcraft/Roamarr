@@ -285,6 +285,8 @@
 		<ul class="divide-y divide-(--theme-line)">
 			{#each data.places as place (place.id)}
 				{@const category = place.categoryId != null ? categoryById.get(place.categoryId) : undefined}
+				{@const photoCount = data.galleries[place.id]?.length ?? 0}
+				{@const linkCount = data.linksByPlace[place.id]?.length ?? 0}
 				<li class="flex flex-wrap items-center gap-3 py-3">
 					<span
 						class="inline-block h-3 w-3 shrink-0 rounded-full"
@@ -318,9 +320,10 @@
 							onclick={() => toggleGallery(place.id)}
 							title="Photos"
 							aria-expanded={galleryOpenFor === place.id}
+							aria-label={`Photos (${photoCount}) for ${place.name}`}
 						>
 							<Icon name="image" class="h-4 w-4" />
-							<span class="text-xs">{data.galleries[place.id]?.length ?? 0}</span>
+							<span class="text-xs">{photoCount}</span>
 						</button>
 						<button
 							type="button"
@@ -328,15 +331,17 @@
 							onclick={() => toggleLinks(place.id)}
 							title="Links"
 							aria-expanded={linksOpenFor === place.id}
+							aria-label={`Links (${linkCount}) for ${place.name}`}
 						>
 							<Icon name="link" class="h-4 w-4" />
-							<span class="text-xs">{data.linksByPlace[place.id]?.length ?? 0}</span>
+							<span class="text-xs">{linkCount}</span>
 						</button>
 						{#if place.gpxAttachmentId != null}
 							<a
 								href={`/places/${place.id}/gpx`}
 								class="btn btn-ghost btn-sm"
 								title="Download GPX track"
+								aria-label={`Download GPX track for ${place.name}`}
 								download
 							>
 								<Icon name="download" class="h-4 w-4" />
@@ -346,6 +351,7 @@
 								<ConfirmButton
 									class="btn btn-ghost btn-sm"
 									title="Remove GPX track"
+									aria-label={`Remove GPX track for ${place.name}`}
 									message={`Remove the GPX track from ${place.name}?`}
 									confirmLabel="Remove"
 								>
@@ -355,8 +361,9 @@
 						{:else}
 							<form method="POST" action="?/uploadGpx" enctype="multipart/form-data">
 								<input type="hidden" name="id" value={place.id} />
-								<label class="btn btn-ghost btn-sm cursor-pointer" title="Attach GPX track">
+								<label class="btn btn-ghost btn-sm cursor-pointer focus-within:ring-2 focus-within:ring-(--theme-brand) focus-within:ring-offset-2 focus-within:ring-offset-canvas" title="Attach GPX track">
 									<Icon name="upload" class="h-4 w-4" />
+									<span class="sr-only">Attach GPX track</span>
 									<input
 										type="file"
 										name="file"
@@ -369,17 +376,17 @@
 						{/if}
 						<form method="POST" action="?/toggleFavorite">
 							<input type="hidden" name="id" value={place.id} />
-							<button type="submit" class="btn btn-ghost btn-sm" title={place.favorite ? 'Remove from favorites' : 'Add to favorites'}>
+							<button type="submit" class="btn btn-ghost btn-sm" aria-label={`Favorite ${place.name}`} aria-pressed={place.favorite} title={place.favorite ? 'Remove from favorites' : 'Add to favorites'}>
 								<Icon name="star" class="h-4 w-4" />
 							</button>
 						</form>
 						<form method="POST" action="?/toggleVisited">
 							<input type="hidden" name="id" value={place.id} />
-							<button type="submit" class="btn btn-ghost btn-sm" title={place.status === 'visited' ? 'Mark as planned' : 'Mark as visited'}>
+							<button type="submit" class="btn btn-ghost btn-sm" aria-label={`Visited ${place.name}`} aria-pressed={place.status === 'visited'} title={place.status === 'visited' ? 'Mark as planned' : 'Mark as visited'}>
 								<Icon name="check" class="h-4 w-4" />
 							</button>
 						</form>
-						<button type="button" class="btn btn-ghost btn-sm" onclick={() => openEdit(place)} title="Edit">
+						<button type="button" class="btn btn-ghost btn-sm" onclick={() => openEdit(place)} aria-label={`Edit ${place.name}`} title="Edit">
 							<Icon name="edit" class="h-4 w-4" />
 						</button>
 						<form method="POST" action="?/deletePlace">
@@ -387,6 +394,7 @@
 							<ConfirmButton
 								class="btn btn-ghost btn-sm"
 								title="Delete place"
+								aria-label={`Delete ${place.name}`}
 								message={`Delete ${place.name}? This cannot be undone.`}
 								confirmLabel="Delete"
 							>
@@ -426,6 +434,7 @@
 																type="button"
 																class="btn btn-ghost btn-sm"
 																title="Edit link"
+																aria-label={`Edit link ${link.label ?? ''}`}
 																onclick={() => startEditLink(place.id, link)}
 															>
 																<Icon name="edit" class="h-3 w-3" />
@@ -436,6 +445,7 @@
 																<ConfirmButton
 																	class="btn btn-ghost btn-sm"
 																	title="Delete link"
+																	aria-label={`Delete link ${link.label ?? ''}`}
 																	message={`Delete link ${link.label}?`}
 																	confirmLabel="Delete"
 																>
@@ -519,6 +529,7 @@
 					<ConfirmButton
 						class="btn btn-ghost btn-sm"
 						title="Delete category"
+						aria-label={`Delete category ${c.name}`}
 						message={`Delete category ${c.name}? Places in it are kept but unlinked.`}
 						confirmLabel="Delete"
 					>

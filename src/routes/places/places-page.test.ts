@@ -101,3 +101,79 @@ test('categorized place hides the duplicate dot and keeps the badge', () => {
 	expect(body).not.toMatch(/<span[^>]*role="img"/);
 	expect(body).toContain('Museums');
 });
+
+test('photos and links buttons carry accessible names with counts', () => {
+	const { body } = render(Page, {
+		props: {
+			data: fixture({}, {
+				places: [placeFixture()],
+				galleries: { 1: [{}, {}] },
+				linksByPlace: { 1: [{}] }
+			})
+		} as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Photos \(2\) for Eiffel Tower")(?=[^>]*aria-expanded="false")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Links \(1\) for Eiffel Tower")(?=[^>]*aria-expanded="false")[^>]*>/);
+});
+
+test('photos and links buttons carry accessible names with zero counts', () => {
+	const { body } = render(Page, {
+		props: { data: fixture({}, { places: [placeFixture()] }) } as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Photos \(0\) for Eiffel Tower")(?=[^>]*aria-expanded="false")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Links \(0\) for Eiffel Tower")(?=[^>]*aria-expanded="false")[^>]*>/);
+});
+
+test('favourite and visited toggles expose state via aria-pressed', () => {
+	const { body } = render(Page, {
+		props: {
+			data: fixture({}, { places: [placeFixture({ favorite: true, status: 'visited' })] })
+		} as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Favorite Eiffel Tower")(?=[^>]*aria-pressed="true")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Visited Eiffel Tower")(?=[^>]*aria-pressed="true")[^>]*>/);
+});
+
+test('favourite and visited toggles expose false state by default', () => {
+	const { body } = render(Page, {
+		props: { data: fixture({}, { places: [placeFixture()] }) } as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Favorite Eiffel Tower")(?=[^>]*aria-pressed="false")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Visited Eiffel Tower")(?=[^>]*aria-pressed="false")[^>]*>/);
+});
+
+test('edit and delete controls carry accessible names', () => {
+	const { body } = render(Page, {
+		props: { data: fixture({}, { places: [placeFixture()] }) } as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Edit Eiffel Tower")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Delete Eiffel Tower")[^>]*>/);
+});
+
+test('gpx track branch exposes download link and remove control', () => {
+	const { body } = render(Page, {
+		props: { data: fixture({}, { places: [placeFixture({ gpxAttachmentId: 9 })] }) } as any
+	});
+	expect(body).toMatch(/<a(?=[^>]*href="\/places\/1\/gpx")(?=[^>]*aria-label="Download GPX track for Eiffel Tower")[^>]*>/);
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Remove GPX track for Eiffel Tower")[^>]*>/);
+	expect(body).not.toContain('Attach GPX track');
+});
+
+test('attach gpx label names the file input and shows a focus ring', () => {
+	const { body } = render(Page, {
+		props: { data: fixture({}, { places: [placeFixture()] }) } as any
+	});
+	expect(body).toMatch(/<label(?=[^>]*focus-within:ring-2)(?=[^>]*focus-within:ring-\(--theme-brand\))(?=[^>]*focus-within:ring-offset-canvas)[^>]*>[\s\S]{0,400}?<span class="sr-only">Attach GPX track<\/span>[\s\S]{0,200}?<input(?=[^>]*type="file")(?=[^>]*name="file")[^>]*>/);
+});
+
+test('delete category button carries an accessible name', () => {
+	const { body } = render(Page, {
+		props: {
+			data: fixture({}, {
+				places: [placeFixture()],
+				categories: [{ id: 7, name: 'Museums', color: '#ff0000' }]
+			})
+		} as any
+	});
+	expect(body).toMatch(/<button(?=[^>]*aria-label="Delete category Museums")[^>]*>/);
+});

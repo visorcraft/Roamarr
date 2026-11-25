@@ -39,3 +39,18 @@ test('pins the English default strings', () => {
 	expect(m.common_confirm()).toBe('Confirm');
 	expect(m.common_cancel()).toBe('Cancel');
 });
+
+test('spreads aria-label onto the trigger while title stays a modal heading', () => {
+	const { body } = render(ConfirmButton, {
+		props: {
+			title: 'Delete place',
+			message: 'Delete Eiffel Tower?',
+			'aria-label': 'Delete Eiffel Tower',
+			children: ((r: { push: (markup: string) => void }) =>
+				r.push('<svg aria-hidden="true"><path d="M18 6 6 18"/></svg>')) as unknown as Snippet
+		}
+	});
+	const triggerSlice = body.slice(0, body.indexOf('</button>'));
+	expect(triggerSlice).toMatch(/<button[^>]*aria-label="Delete Eiffel Tower"/);
+	expect(triggerSlice).not.toContain('title=');
+});

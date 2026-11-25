@@ -9,7 +9,8 @@ vi.mock('$lib/server/db', async () => {
 
 import { load } from './+page.server';
 import type { KitDatabase } from '@visorcraft/mongreldb-kit';
-import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../../../tests/helpers';
+import { makeUser, makeTrip, makeSegment, makeCompanion, makeShare } from '../../../../../tests/helpers';
+import { COMPANION_PRIVATE_FIELDS } from '$lib/server/sharing';
 
 function kitDb(): KitDatabase {
 	return (ctx as { kit: KitDatabase }).kit;
@@ -73,6 +74,121 @@ test('load rejects a trip the user cannot view', () => {
 	const t = makeTrip(kit, owner.id, { name: 'Private' });
 
 	expect(() => load(event(other, t.id))).toThrow();
+});
+
+
+test('load withholds private companion fields from read-only viewers', () => {
+	const kit = kitDb();
+	const owner = makeUser(kit, { email: 'privacy-owner-1@x.c', displayName: 'O' });
+	const reader = makeUser(kit, { email: 'privacy-reader-1@x.c', displayName: 'R' });
+	const t = makeTrip(kit, owner.id, { name: 'Privacy read' });
+	makeCompanion(kit, t.id, {
+		name: 'Sam',
+		category: 'adult',
+		dietary: 'Vegetarian',
+		allergies: 'Peanuts',
+		medicalNotes: 'EpiPen',
+		accessibilityNeeds: 'Wheelchair',
+		roomNotes: 'Near lift',
+		needsCarSeat: true,
+		notes: 'Likes windows'
+	});
+	makeShare(kit, { tripId: t.id, sharedWithUserId: reader.id });
+
+	const result = load(event(reader, t.id)) as {
+		owner: boolean;
+		editor: boolean;
+		companions: Record<string, unknown>[];
+	};
+
+	expect(result.owner).toBe(false);
+	expect(result.editor).toBe(false);
+	expect(result.companions).toHaveLength(1);
+	expect(result.companions[0].name).toBe('Sam');
+	expect(result.companions[0].category).toBe('adult');
+	for (const field of COMPANION_PRIVATE_FIELDS) {
+		expect(result.companions[0][field], field).toBeNull();
+	}
+	expect(JSON.stringify(result.companions)).not.toMatch(
+		/EpiPen|Peanuts|Likes windows|Vegetarian|Wheelchair|Near lift/
+	);
+});
+
+test('read-only viewers with showDetails still get projected companions', () => {
+	const kit = kitDb();
+	const owner = makeUser(kit, { email: 'privacy-owner-2@x.c', displayName: 'O' });
+	const reader = makeUser(kit, { email: 'privacy-reader-2@x.c', displayName: 'R' });
+	const t = makeTrip(kit, owner.id, { name: 'Privacy details' });
+	makeSegment(kit, t.id, {
+		type: 'flight',
+		title: 'Outbound flight',
+		startAt: '2026-04-01T09:00:00Z',
+		confirmationNumber: 'ABC123'
+	});
+	makeCompanion(kit, t.id, {
+		name: 'Sam',
+		category: 'adult',
+		dietary: 'Vegetarian',
+		allergies: 'Peanuts',
+		medicalNotes: 'EpiPen',
+		accessibilityNeeds: 'Wheelchair',
+		roomNotes: 'Near lift',
+		needsCarSeat: true,
+		notes: 'Likes windows'
+	});
+	makeShare(kit, { tripId: t.id, sharedWithUserId: reader.id, showDetails: true });
+
+	const result = load(event(reader, t.id)) as {
+		owner: boolean;
+		editor: boolean;
+		segments: { confirmationNumber?: string | null }[];
+		companions: Record<string, unknown>[];
+	};
+
+	expect(result.editor).toBe(false);
+	for (const field of COMPANION_PRIVATE_FIELDS) {
+		expect(result.companions[0][field], field).toBeNull();
+	}
+	expect(result.segments[0].confirmationNumber).toBe('ABC123');
+});
+
+test('owner and edit-share editors keep full companion rows', () => {
+	const kit = kitDb();
+	const owner = makeUser(kit, { email: 'privacy-owner-3@x.c', displayName: 'O' });
+	const editor = makeUser(kit, { email: 'privacy-editor-3@x.c', displayName: 'E' });
+	const t = makeTrip(kit, owner.id, { name: 'Full rows' });
+	makeCompanion(kit, t.id, {
+		name: 'Sam',
+		category: 'adult',
+		dietary: 'Vegetarian',
+		allergies: 'Peanuts',
+		medicalNotes: 'EpiPen',
+		accessibilityNeeds: 'Wheelchair',
+		roomNotes: 'Near lift',
+		needsCarSeat: true,
+		notes: 'Likes windows'
+	});
+	makeShare(kit, { tripId: t.id, sharedWithUserId: editor.id, permission: 'edit' });
+
+	const ownerResult = load(event(owner, t.id)) as {
+		owner: boolean;
+		editor: boolean;
+		companions: Record<string, unknown>[];
+	};
+	expect(ownerResult.editor).toBe(true);
+	expect(ownerResult.owner).toBe(true);
+	expect(ownerResult.companions[0].notes).toBe('Likes windows');
+	expect(ownerResult.companions[0].medicalNotes).toBe('EpiPen');
+
+	const editorResult = load(event(editor, t.id)) as {
+		owner: boolean;
+		editor: boolean;
+		companions: Record<string, unknown>[];
+	};
+	expect(editorResult.editor).toBe(true);
+	expect(editorResult.owner).toBe(false);
+	expect(editorResult.companions[0].notes).toBe('Likes windows');
+	expect(editorResult.companions[0].medicalNotes).toBe('EpiPen');
 });
 
 import { readFileSync } from 'node:fs';

@@ -4096,6 +4096,21 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_poll_cast_vote': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const pollId = toPositiveId(args.pollId);
+				if (pollId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid pollId: expected a positive integer' }], isError: true };
+				const optionId = toPositiveId(args.optionId);
+				if (optionId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid optionId: expected a positive integer' }], isError: true };
+				let companionIdArg: number | null = null;
+				if (args.companionId != null) {
+					companionIdArg = toPositiveId(args.companionId);
+					if (companionIdArg === null)
+						return { content: [{ type: 'text' as const, text: 'Invalid companionId: expected a positive integer' }], isError: true };
+				}
 				// Route through tripPolls.castVote so requireEditableTrip
 				// (owner OR editor) is enforced, matching the web UI.
 				// The previous impl called requireOwnedTrip directly, which
@@ -4104,7 +4119,6 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { castVote } = await import('./tripPolls');
 				const { requireCompanionOnTrip } = await import('./ownership');
 				const { getOrCreateOwnerCompanion } = await import('./tripCompanions');
-				const pollId = Number(args.pollId);
 				const poll = getPollById(pollId);
 				if (!poll) return { content: [{ type: 'text' as const, text: 'Poll not found' }], isError: true };
 				// getOrCreateOwnerCompanion writes a self-companion row and bumps
@@ -4118,10 +4132,10 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (args.companionId == null) {
 					companionId = getOrCreateOwnerCompanion(userId, poll.tripId).id;
 				} else {
-					companionId = Number(args.companionId);
+					companionId = companionIdArg!;
 					requireCompanionOnTrip(companionId, poll.tripId);
 				}
-				castVote(userId, pollId, companionId, Number(args.optionId));
+				castVote(userId, pollId, companionId, optionId);
 				logAudit(userId, 'mcp_poll_vote', 'trip_poll', pollId, { optionId: args.optionId, companionId });
 				return textResult({ ok: true, pollId });
 			}

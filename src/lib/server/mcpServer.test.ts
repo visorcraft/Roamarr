@@ -18,7 +18,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, tripCompanions, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
+import { trips, tripCompanions, tripPollVotes, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
 import { eq as kitEq, and } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
@@ -26,6 +26,7 @@ import { COMPANION_PRIVATE_FIELDS } from './sharing';
 import { getReminderBySource, getReminderById, createReminder } from './repositories/remindersRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { getSettings, updateSettings } from './settings';
+import { currentTripRev } from './eventBus';
 
 async function connect(userId: number, scopes: Scope[]) {
 	const server = createMcpServer(userId, scopes);
@@ -2907,6 +2908,110 @@ describe('mcpServer', () => {
 					expect(text).not.toContain(marker);
 				}
 			}
+		});
+	});
+
+	describe('roamarr_poll_cast_vote input validation', () => {
+		async function makePollTrip() {
+			const trip = tripsRepo.createTrip(userId, { name: 'Poll validation trip' });
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(userId, trip.id, 'Pick?', ['yes', 'no']);
+			return { trip, poll };
+		}
+
+		function voteRowsForPoll(pollId: number) {
+			return ctx.kit
+				.selectFrom(tripPollVotes)
+				.where(kitEq(tripPollVotes.poll_id, BigInt(pollId)))
+				.executeSync();
+		}
+
+		test('malformed pollId returns a tool error and does not throw', async () => {
+			const { poll } = await makePollTrip();
+			const optionId = poll.options[0]!.id;
+			const { client } = await connect(userId, ['polls:write']);
+			for (const badPollId of ['abc', '1.5', 1.5, 0, ''] as const) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_cast_vote',
+					arguments: { pollId: badPollId, optionId }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid pollId: expected a positive integer');
+			}
+			const missing: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { optionId }
+			});
+			expect(missing.isError).toBe(true);
+			expect(String(missing.content?.[0]?.text ?? '')).toContain('Invalid pollId: expected a positive integer');
+			const auditRows = ctx.kit
+				.selectFrom(auditLogs)
+				.where(and(kitEq(auditLogs.user_id, BigInt(userId)), kitEq(auditLogs.action, 'mcp_poll_vote')))
+				.executeSync();
+			expect(auditRows).toHaveLength(0);
+		});
+
+		test('malformed optionId is rejected before any write (no self-companion, no vote, no rev bump)', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { client } = await connect(userId, ['polls:write']);
+			const revBefore = currentTripRev(trip.id);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll.id, optionId: 'abc' }
+			});
+			expect(res.isError).toBe(true);
+			expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid optionId: expected a positive integer');
+			expect(currentTripRev(trip.id)).toBe(revBefore);
+			const selfCompanions = ctx.kit
+				.selectFrom(tripCompanions)
+				.where(and(kitEq(tripCompanions.trip_id, BigInt(trip.id)), kitEq(tripCompanions.user_id, BigInt(userId))))
+				.executeSync();
+			expect(selfCompanions).toHaveLength(0);
+			expect(voteRowsForPoll(poll.id)).toHaveLength(0);
+		});
+
+		test('malformed explicit companionId is rejected', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { insertTripCompanion } = await import('./tripCompanions');
+			insertTripCompanion(userId, trip.id, { name: 'Pat' });
+			const optionId = poll.options[0]!.id;
+			const { client } = await connect(userId, ['polls:write']);
+			for (const badCompanionId of ['1.5', 0] as const) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_cast_vote',
+					arguments: { pollId: poll.id, optionId, companionId: badCompanionId }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid companionId: expected a positive integer');
+			}
+			expect(voteRowsForPoll(poll.id)).toHaveLength(0);
+		});
+
+		test('valid ids (numeric strings and numbers) are unaffected', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const companion = insertTripCompanion(userId, trip.id, { name: 'Pat' });
+			const optionId = poll.options[0]!.id;
+			const { client } = await connect(userId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: String(poll.id), companionId: String(companion.id), optionId: String(optionId) }
+			});
+			expect(res.isError).toBeFalsy();
+			expect(JSON.parse(res.content[0].text)).toMatchObject({ ok: true, pollId: poll.id });
+			const votes = voteRowsForPoll(poll.id);
+			expect(votes).toHaveLength(1);
+			expect(Number(votes[0]!.companion_id)).toBe(companion.id);
+
+			const { poll: poll2 } = await makePollTrip();
+			const option2 = poll2.options[0]!.id;
+			const res2: any = await client.callTool({
+				name: 'roamarr_poll_cast_vote',
+				arguments: { pollId: poll2.id, optionId: option2 }
+			});
+			expect(res2.isError).toBeFalsy();
+			expect(JSON.parse(res2.content[0].text)).toMatchObject({ ok: true, pollId: poll2.id });
+			expect(voteRowsForPoll(poll2.id)).toHaveLength(1);
 		});
 	});
 

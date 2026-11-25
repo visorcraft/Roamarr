@@ -15,8 +15,17 @@ vi.stubGlobal('fetch', fetchMock);
 vi.mock('./reminders', () => ({ runDueReminders: vi.fn(async () => {}) }));
 vi.mock('./fareproviders', () => ({ runFareChecks: vi.fn(async () => {}) }));
 vi.mock('./auth', () => ({ purgeExpiredSessions: vi.fn() }));
+vi.mock('./repositories/remindersRepo', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./repositories/remindersRepo')>();
+	return {
+		...actual,
+		startSchedulerRun: vi.fn(actual.startSchedulerRun),
+		finishSchedulerRun: vi.fn(actual.finishSchedulerRun)
+	};
+});
 
 import { runDueReminders } from './reminders';
+import { startSchedulerRun, finishSchedulerRun } from './repositories/remindersRepo';
 import { startScheduler, runTick } from './scheduler';
 import { schedulerRuns, weatherCache } from './db/mongrelSchema';
 import { makeUser, makeTrip } from '../../../tests/helpers';
@@ -183,4 +192,70 @@ test('runTick prefetches weather for upcoming trips with coordinates', async () 
 
 	// Only one unique coordinate pair should have been fetched.
 	expect(fetchMock).toHaveBeenCalledTimes(1);
+});
+test('runTick still runs the jobs and resolves when the run row cannot be recorded', async () => {
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	vi.mocked(startSchedulerRun).mockImplementationOnce(() => {
+		throw new Error('disk full');
+	});
+
+	await expect(runTick(new Date('2026-06-24T12:00:00.000Z'))).resolves.toBeUndefined();
+
+	expect(runDueReminders).toHaveBeenCalledTimes(1);
+	expect(vi.mocked(finishSchedulerRun)).not.toHaveBeenCalled();
+	expect(getKit().selectFrom(schedulerRuns).executeSync()).toHaveLength(0);
+	expect(errorSpy).toHaveBeenCalledWith('[scheduler] failed to record run start', expect.any(Error));
+	errorSpy.mockRestore();
+});
+
+test('runTick resolves and keeps the original error when recording a failure fails', async () => {
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	(runDueReminders as any).mockImplementationOnce(async () => {
+		throw new Error('reminder boom');
+	});
+	vi.mocked(finishSchedulerRun).mockImplementationOnce(() => {
+		throw new Error('disk full');
+	});
+
+	await expect(runTick(new Date('2026-06-24T12:00:00.000Z'))).resolves.toBeUndefined();
+
+	expect(errorSpy).toHaveBeenCalledWith('[scheduler]', expect.any(Error));
+	expect(errorSpy).toHaveBeenCalledWith('[scheduler] failed to record run result', expect.any(Error));
+	const runs = getKit().selectFrom(schedulerRuns).executeSync();
+	expect(runs).toHaveLength(1);
+	expect(runs[0]!.finished_at).toBeNull();
+	errorSpy.mockRestore();
+});
+
+test('the scheduler interval loop keeps ticking when run bookkeeping fails', async () => {
+	const g = globalThis as { __roamarr_scheduler?: boolean };
+	const previous = g.__roamarr_scheduler;
+	delete g.__roamarr_scheduler;
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	// Stub the timer: nothing is scheduled, but the callback is captured.
+	const intervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation((() => 0) as never);
+	try {
+		startScheduler();
+		expect(intervalSpy).toHaveBeenCalledTimes(1);
+		const tick = intervalSpy.mock.calls[0]![0] as unknown as () => Promise<void>;
+		vi.mocked(startSchedulerRun).mockImplementationOnce(() => {
+			throw new Error('disk full');
+		});
+
+		// First tick: the run row cannot be written, the tick still completes.
+		await expect(tick()).resolves.toBeUndefined();
+		expect(runDueReminders).toHaveBeenCalledTimes(1);
+
+		// Second tick: the loop is still alive and records normally.
+		await expect(tick()).resolves.toBeUndefined();
+		expect(runDueReminders).toHaveBeenCalledTimes(2);
+		const runs = getKit().selectFrom(schedulerRuns).executeSync();
+		expect(runs).toHaveLength(1);
+		expect(runs[0]!.success).toBe(true);
+	} finally {
+		intervalSpy.mockRestore();
+		errorSpy.mockRestore();
+		if (previous === undefined) delete g.__roamarr_scheduler;
+		else g.__roamarr_scheduler = previous;
+	}
 });

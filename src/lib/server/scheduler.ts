@@ -52,10 +52,28 @@ function withDeadline<T>(promise: Promise<T>, ms: number, label: string): Promis
  * the engine healthy over a long uptime — reclaiming in-memory rate-limit
  * buckets, dropping stale weather rows, flushing memtables and (hourly)
  * compacting sorted runs — runs after the jobs and never fails the tick.
+ * Never rejects: run bookkeeping is best-effort, and the scheduled loop has no caller that could observe a rejection.
  */
 export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 	const deadlineMs = opts.deadlineMs ?? SCHEDULER_TICK_DEADLINE_MS;
-	const run = startSchedulerRun();
+	// Recording the run is best-effort. A failing write (full disk, transient
+	// I/O error) must not skip the scheduled work, and runTick must never
+	// reject: the interval loop in startScheduler has no caller that could
+	// observe it, and Node exits on an unhandled rejection.
+	let runId: number | null = null;
+	try {
+		runId = startSchedulerRun().id;
+	} catch (e) {
+		console.error('[scheduler] failed to record run start', e);
+	}
+	const record = (result: Parameters<typeof finishSchedulerRun>[1]) => {
+		if (runId === null) return;
+		try {
+			finishSchedulerRun(runId, result);
+		} catch (e) {
+			console.error('[scheduler] failed to record run result', e);
+		}
+	};
 	try {
 		const jobs = (async () => {
 			const reminders = await runDueReminders(now);
@@ -75,13 +93,10 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 			};
 		})();
 		const summary = await withDeadline(jobs, deadlineMs, 'scheduler tick');
-		finishSchedulerRun(run.id, { success: true, summary });
+		record({ success: true, summary });
 	} catch (e) {
 		console.error('[scheduler]', e);
-		finishSchedulerRun(run.id, {
-			success: false,
-			errorMessage: e instanceof Error ? e.message : String(e)
-		});
+		record({ success: false, errorMessage: e instanceof Error ? e.message : String(e) });
 	}
 
 	// Reclaim in-memory rate-limit state and stale weather rows every tick.
@@ -152,6 +167,9 @@ export function startScheduler() {
 		running = true;
 		try {
 			await runTick(new Date());
+		} catch (e) {
+			// Backstop: an unobserved rejection here would exit the process.
+			console.error('[scheduler] tick crashed', e);
 		} finally {
 			running = false;
 		}

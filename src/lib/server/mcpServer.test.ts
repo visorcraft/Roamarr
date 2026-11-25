@@ -473,6 +473,76 @@ describe('mcpServer', () => {
 		expect(countAudit()).toBe(before + 1);
 	});
 
+	test('home task create rejects invalid text and due dates without writing rows', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Guarded home tasks' });
+		const { client } = await connect(userId, ['home-tasks:read', 'home-tasks:write']);
+		const countAudit = () =>
+			ctx.kit.selectFrom(auditLogs).where(kitEq(auditLogs.user_id, BigInt(userId))).executeSync().length;
+		const before = countAudit();
+
+		const bad = [
+			{ args: { tripId: trip.id }, message: 'text is required' },
+			{ args: { tripId: trip.id, text: '   ' }, message: 'text is required' },
+			{ args: { tripId: trip.id, text: 42 }, message: 'text is required' },
+			{ args: { tripId: trip.id, text: 'x'.repeat(201) }, message: 'String exceeds max length 200' },
+			{ args: { tripId: trip.id, text: 'Stop mail', dueDate: 'July 10' }, message: 'dueDate must be a valid date (YYYY-MM-DD)' },
+			{ args: { tripId: trip.id, text: 'Stop mail', dueDate: '2026-7-10' }, message: 'dueDate must be a valid date (YYYY-MM-DD)' },
+			{ args: { tripId: trip.id, text: 'Stop mail', dueDate: 20260710 }, message: 'dueDate must be a valid date (YYYY-MM-DD)' }
+		];
+		for (const { args, message } of bad) {
+			const result: any = await client.callTool({ name: 'roamarr_home_task_create', arguments: args });
+			expect(result.isError, JSON.stringify(args)).toBe(true);
+			expect(result.content[0].text).toContain(message);
+		}
+
+		const listed: any = await client.callTool({ name: 'roamarr_home_task_list', arguments: { tripId: trip.id } });
+		expect(JSON.parse(listed.content[0].text).items).toHaveLength(0);
+		expect(countAudit()).toBe(before);
+	});
+
+	test('home task create writes one audit row and keeps the mcp action name', async () => {
+		const trip = tripsRepo.createTrip(userId, { name: 'Audit home tasks' });
+		const { client } = await connect(userId, ['home-tasks:read', 'home-tasks:write']);
+		const call = async (name: string, arguments_: Record<string, unknown>) => {
+			const result: any = await client.callTool({ name, arguments: arguments_ });
+			expect(result.isError, result.content?.[0]?.text).toBeFalsy();
+			return JSON.parse(result.content[0].text);
+		};
+		const countAudit = () =>
+			ctx.kit.selectFrom(auditLogs).where(kitEq(auditLogs.user_id, BigInt(userId))).executeSync().length;
+		const before = countAudit();
+
+		await call('roamarr_home_task_create', { tripId: trip.id, text: 'x'.repeat(200) });
+		await call('roamarr_home_task_create', { tripId: trip.id, text: 'Stop mail', dueDate: '' });
+
+		const listed: any = await client.callTool({ name: 'roamarr_home_task_list', arguments: { tripId: trip.id } });
+		const items = JSON.parse(listed.content[0].text).items;
+		expect(items).toHaveLength(2);
+		const longTask = items.find((i: any) => i.text === 'x'.repeat(200));
+		const mailTask = items.find((i: any) => i.text === 'Stop mail');
+		expect(longTask).toMatchObject({ text: 'x'.repeat(200), dueDate: null, done: false });
+		expect(mailTask).toMatchObject({ text: 'Stop mail', dueDate: null });
+
+		expect(countAudit()).toBe(before + 2);
+		const rows = ctx.kit.selectFrom(auditLogs).where(kitEq(auditLogs.user_id, BigInt(userId))).executeSync();
+		const newest = rows.reduce((a: any, b: any) => (Number(b.id) > Number(a.id) ? b : a));
+		expect(newest.action).toBe('mcp_home_task_create');
+	});
+
+	test('home task create refuses read-only collaborators', async () => {
+		const viewerId = makeUser(ctx.kit).id;
+		const trip = tripsRepo.createTrip(userId, { name: 'Shared home tasks' });
+		tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read' });
+		const { client } = await connect(viewerId, ['home-tasks:read', 'home-tasks:write']);
+		const result: any = await client.callTool({ name: 'roamarr_home_task_create', arguments: { tripId: trip.id, text: 'Sneaky' } });
+		expect(result.isError).toBe(true);
+
+		const { client: ownerClient } = await connect(userId, ['home-tasks:read']);
+		const listed: any = await ownerClient.callTool({ name: 'roamarr_home_task_list', arguments: { tripId: trip.id } });
+		const items = JSON.parse(listed.content[0].text).items;
+		expect(items.find((i: any) => i.text === 'Sneaky')).toBeUndefined();
+	});
+
 	test('read-only collaborators can load every native planning workflow', async () => {
 		const viewerId = makeUser(ctx.kit).id;
 		const trip = tripsRepo.createTrip(userId, { name: 'Shared planning' });

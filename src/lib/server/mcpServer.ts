@@ -2357,8 +2357,8 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					type: 'object',
 					properties: {
 						tripId: { type: 'number' },
-						text: { type: 'string' },
-						dueDate: { type: 'string' }
+						text: { type: 'string', description: 'Task text, 1-200 characters' },
+						dueDate: { type: 'string', description: 'Optional due date, YYYY-MM-DD' }
 					},
 					required: ['tripId', 'text']
 				}
@@ -4213,16 +4213,21 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_home_task_create': {
 				if (!hasScope(scopes, 'home-tasks:write')) return scopeError('home-tasks:write');
-				const { createHomeTask } = await import('./repositories/tripMiscRepo');
-				const tripId = Number(args.tripId);
-				requireEditableTrip(userId, tripId);
-				const t = createHomeTask({
-					tripId,
-					text: String(args.text ?? ''),
-					dueDate: (args.dueDate as string) ?? null
-				});
-				logAudit(userId, 'mcp_home_task_create', 'trip_home_task', t.id, { tripId });
-				return textResult({ id: t.id });
+				if (args.dueDate != null && typeof args.dueDate !== 'string') {
+					throw error(400, 'dueDate must be a valid date (YYYY-MM-DD)');
+				}
+				const text = reqString(args.text, 'text', 200);
+				const v = new Validator();
+				const dueDate = v.date(args.dueDate, 'dueDate') ?? null;
+				if (!v.ok()) throw error(400, 'dueDate must be a valid date (YYYY-MM-DD)');
+				const { addHomeTask } = await import('./tripHomeTasks');
+				const task = addHomeTask(
+					userId,
+					Number(args.tripId),
+					{ text, dueDate },
+					'mcp_home_task_create'
+				);
+				return textResult({ id: task.id });
 			}
 			case 'roamarr_home_task_toggle_done': {
 				if (!hasScope(scopes, 'home-tasks:write')) return scopeError('home-tasks:write');

@@ -18,7 +18,8 @@ export function listHomeTasks(tripId: number) {
 export function addHomeTask(
 	userId: number,
 	tripId: number,
-	input: { text: string; dueDate?: string | null }
+	input: { text: string; dueDate?: string | null },
+	auditAction = 'create'
 ) {
 	requireEditableTrip(userId, tripId);
 	const v = new Validator();
@@ -27,7 +28,7 @@ export function addHomeTask(
 	if (!v.ok()) throw error(400, v.failMessage());
 
 	const task = repoCreateHomeTask({ tripId, text: input.text, dueDate: input.dueDate ?? null });
-	logAudit(userId, 'create', 'trip_home_task', task.id, { tripId });
+	logAudit(userId, auditAction, 'trip_home_task', task.id, { tripId });
 	return task;
 }
 

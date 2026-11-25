@@ -4,6 +4,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, unmount } from '../../../node_modules/svelte/src/internal/client/render.js';
 // @ts-ignore — internal Svelte client runtime
 import { flushSync } from '../../../node_modules/svelte/src/internal/client/reactivity/batch.js';
+import { m } from '$lib/paraglide/messages';
 import GridTable from './GridTable.svelte';
 
 const renderFn = vi.fn();
@@ -438,6 +439,104 @@ describe('GridTable', () => {
 			to: '-',
 			results: '\u00a0'
 		});
+	});
+
+	it('catalog copy for the grid table keeps the original English strings', () => {
+		expect(m.grid_table_add()).toBe('Add');
+		expect(m.grid_table_empty()).toBe('No records found');
+		expect(m.grid_table_actions()).toBe('Actions');
+		expect(m.grid_table_search()).toBe('Search');
+		expect(m.grid_table_search_label()).toBe('Search table');
+		expect(m.common_confirm()).toBe('Confirm');
+		expect(m.common_confirm_title()).toBe('Are you sure?');
+	});
+
+	it('renders the toolbar search strings from the catalog', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 })
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const label = document.body.querySelector('.grid-table-search .label');
+		expect(label?.textContent?.trim()).toBe('Search');
+		const input = document.body.querySelector('input[type="search"]') as HTMLInputElement;
+		expect(input.getAttribute('placeholder')).toBe('Search');
+		expect(input.getAttribute('aria-label')).toBe('Search table');
+	});
+
+	it('defaults the add label and empty message to catalog copy', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [], total: 0 }),
+			addHref: '/new'
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(document.body.querySelector('.btn-primary')?.textContent?.trim()).toBe('Add');
+		expect(lastConfig().language.noRecordsFound).toBe('No records found');
+
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [], total: 0 }),
+			addHref: '/new',
+			addLabel: 'New card',
+			emptyMessage: 'No cards'
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const buttons = [...document.body.querySelectorAll('.btn-primary')];
+		expect(buttons.at(-1)?.textContent?.trim()).toBe('New card');
+		expect(lastConfig().language.noRecordsFound).toBe('No cards');
+	});
+
+	it('falls back to catalog copy when an action omits confirm fields', async () => {
+		const onaction = vi.fn();
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
+			actions: [{ id: 'archive', label: 'Archive', confirm: true }],
+			onaction
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		await config.server.data({ url: {} });
+
+		const container = renderFn.mock.lastCall![0] as HTMLDivElement;
+		const actionColumn = config.columns[config.columns.length - 1];
+		const htmlResult = actionColumn.formatter(null, { id: 1, name: 'A' }) as { __html: string };
+		container.innerHTML = htmlResult.__html;
+
+		const select = container.querySelector('[data-grid-action-select]') as HTMLSelectElement;
+		select.value = 'archive';
+		select.dispatchEvent(new Event('change', { bubbles: true }));
+		flushSync();
+
+		expect(document.body.querySelector('.modal-title')?.textContent?.trim()).toBe('Confirm');
+		expect(document.body.querySelector('.modal-body')?.textContent?.trim()).toBe('Are you sure?');
+		expect(document.body.querySelector('.btn-danger')?.textContent?.trim()).toBe('Archive');
+
+		(document.body.querySelector('.btn-danger') as HTMLButtonElement).click();
+
+		expect(onaction.mock.calls[0][0].detail).toEqual({ action: 'archive', row: { id: 1, name: 'A' } });
+	});
+
+	it('uses the catalog for the actions column header and control label', async () => {
+		mountTable({
+			columns: [{ id: 'name', name: 'Name' }],
+			fetchData: async () => ({ rows: [{ id: 1, name: 'A' }], total: 1 }),
+			actions: [{ id: 'edit', label: 'Edit' }]
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const config = lastConfig();
+		const actionColumn = config.columns[config.columns.length - 1];
+		expect(actionColumn.name).toBe('Actions');
+
+		const result = actionColumn.formatter(null, { id: 1, name: 'A' }) as { __html: string };
+		expect(result.__html).toContain('aria-label="Actions"');
+		expect(result.__html).toContain('<option value="" selected>Actions</option>');
 	});
 });
 

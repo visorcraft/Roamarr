@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Grid, html } from 'gridjs';
+	import { m } from '$lib/paraglide/messages';
 	import ConfirmModal from './ConfirmModal.svelte';
 
 	export interface GridColumn {
@@ -72,8 +73,8 @@
 		pageSize = 10,
 		filters = [],
 		addHref,
-		addLabel = 'Add',
-		emptyMessage = 'No records found',
+		addLabel = m.grid_table_add(),
+		emptyMessage = m.grid_table_empty(),
 		getRowId = (row: Record<string, unknown>) => row.id,
 		onadd,
 		onaction,
@@ -96,7 +97,7 @@
 		actions.length
 			? {
 					id: '__actions',
-					name: 'Actions',
+					name: m.grid_table_actions(),
 					width: '136px',
 					sort: false,
 					data: (row: Record<string, unknown>) => row,
@@ -109,7 +110,7 @@
 							)
 							.join('');
 						return html(
-							`<select class="select select-compact grid-table-action-select" aria-label="Actions" data-grid-action-select="true" data-row-id="${escapeHtml(rowId)}"><option value="" selected>Actions</option>${options}</select>`
+							`<select class="select select-compact grid-table-action-select" aria-label="${escapeHtml(m.grid_table_actions())}" data-grid-action-select="true" data-row-id="${escapeHtml(rowId)}"><option value="" selected>${escapeHtml(m.grid_table_actions())}</option>${options}</select>`
 						);
 					}
 				}
@@ -440,7 +441,7 @@
 			const pa = getPendingAction();
 			if (!pa) return '';
 			const action = actions.find((a) => a.id === pa.action);
-			return action?.confirmTitle ?? 'Confirm';
+			return action?.confirmTitle ?? m.common_confirm();
 		})()
 	);
 
@@ -449,16 +450,16 @@
 			const pa = getPendingAction();
 			if (!pa) return '';
 			const action = actions.find((a) => a.id === pa.action);
-			return action?.confirmMessage?.(pa.row) ?? 'Are you sure?';
+			return action?.confirmMessage?.(pa.row) ?? m.common_confirm_title();
 		})()
 	);
 
 	const pendingConfirmLabel = $derived(
 		(() => {
 			const pa = getPendingAction();
-			if (!pa) return 'Confirm';
+			if (!pa) return m.common_confirm();
 			const action = actions.find((a) => a.id === pa.action);
-			return action?.confirmLabel ?? action?.label ?? 'Confirm';
+			return action?.confirmLabel ?? action?.label ?? m.common_confirm();
 		})()
 	);
 </script>
@@ -466,12 +467,12 @@
 <div class="space-y-4">
 	<div class="grid-table-toolbar flex flex-wrap items-center justify-start gap-3">
 		<label class="gridjs-search grid-table-search">
-			<span class="label">Search</span>
+			<span class="label">{m.grid_table_search()}</span>
 			<input
 				type="search"
 				value={searchInput}
-				placeholder="Search"
-				aria-label="Search table"
+				placeholder={m.grid_table_search()}
+				aria-label={m.grid_table_search_label()}
 				class="gridjs-search-input"
 				oninput={handleSearchInput}
 			/>

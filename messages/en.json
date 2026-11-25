@@ -503,5 +503,10 @@
 	"security_tabs_label": "Security sections",
 	"security_tabs_password": "Password",
 	"security_tabs_2fa": "2FA",
-	"security_tabs_passkeys": "Passkeys"
+	"security_tabs_passkeys": "Passkeys",
+	"grid_table_add": "Add",
+	"grid_table_empty": "No records found",
+	"grid_table_actions": "Actions",
+	"grid_table_search": "Search",
+	"grid_table_search_label": "Search table"
 }

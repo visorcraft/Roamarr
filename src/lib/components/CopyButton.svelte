@@ -2,7 +2,7 @@
 	import type { HTMLButtonAttributes } from 'svelte/elements';
 	import { onDestroy } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
-	import { copyToClipboard } from '$lib/copy';
+	import { copyToClipboard, createCopyFeedback, type CopyStatus } from '$lib/copy';
 	import Icon from './Icon.svelte';
 	import type { IconName } from '$lib/icons';
 
@@ -10,6 +10,7 @@
 		text: string;
 		label?: string;
 		copiedLabel?: string;
+		failedLabel?: string;
 		icon?: IconName;
 	}
 
@@ -17,26 +18,21 @@
 		text,
 		label = m.common_copy(),
 		copiedLabel = m.common_copied(),
+		failedLabel = m.common_copy_failed(),
 		icon,
 		class: className = 'btn btn-ghost',
 		...rest
 	}: Props = $props();
 
-	let copied = $state(false);
-	let timeoutId: ReturnType<typeof setTimeout> | null = null;
+	let status = $state<CopyStatus>('idle');
+	const feedback = createCopyFeedback((next) => (status = next));
 
 	onDestroy(() => {
-		if (timeoutId) clearTimeout(timeoutId);
+		feedback.dispose();
 	});
 
 	async function copy() {
-		const ok = await copyToClipboard(text);
-		if (!ok) return;
-		copied = true;
-		timeoutId = setTimeout(() => {
-			copied = false;
-			timeoutId = null;
-		}, 2000);
+		feedback.report(await copyToClipboard(text));
 	}
 </script>
 
@@ -44,5 +40,5 @@
 	{#if icon}
 		<Icon name={icon} class="h-4.5 w-4.5" />
 	{/if}
-	<span>{#if copied}{copiedLabel}{:else}{label}{/if}</span>
+	<span>{status === 'copied' ? copiedLabel : status === 'failed' ? failedLabel : label}</span>
 </button>

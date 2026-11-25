@@ -109,6 +109,7 @@
 	"common_confirm_title": "Are you sure?",
 	"common_copy": "Copy",
 	"common_copied": "Copied!",
+	"common_copy_failed": "Copy failed",
 	"common_discard_title": "Discard changes?",
 	"common_discard_message": "Any unsaved changes will be lost.",
 	"common_discard_confirm": "Discard changes",

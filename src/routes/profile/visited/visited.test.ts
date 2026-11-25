@@ -271,22 +271,29 @@ test('mark rejects impossible calendar dates and accepts real ones', async () =>
 });
 
 test('loadVisitedPage and mark use the user local today', async () => {
-	const now = DateTime.now();
-	const zone = now.setZone('utc').hour >= 12 ? 'Etc/GMT-14' : 'Etc/GMT+12';
-	const u = makeUser(kitDb(), { email: 'local@x.c', timezone: zone });
-	const data = loadCountries({
-		locals: makeLocals(u),
-		url: new URL('http://localhost/profile/visited/countries')
-	} as any) as any;
-	const localToday = todayInTimezone(zone, now);
-	expect(data.today).toBe(localToday);
-	expect(data.today).not.toBe(new Date().toISOString().slice(0, 10));
+	vi.useFakeTimers();
+	vi.setSystemTime(new Date('2026-06-15T18:00:00Z'));
+	try {
+		const now = DateTime.now();
+		const zone = 'Etc/GMT-14';
+		const u = makeUser(kitDb(), { email: 'local@x.c', timezone: zone });
+		const data = loadCountries({
+			locals: makeLocals(u),
+			url: new URL('http://localhost/profile/visited/countries')
+		} as any) as any;
+		const localToday = todayInTimezone(zone, now);
+		expect(localToday).toBe('2026-06-16');
+		expect(data.today).toBe(localToday);
+		expect(data.today).not.toBe('2026-06-15');
 
-	const event = makeFormEvent(u, { code: 'fr' }, 'mark');
-	await expect(countryActions.mark(event)).rejects.toMatchObject({ status: 303 });
-	const row = kitDb().selectFrom(visitedCountries).executeSync()[0]!;
-	expect(row.first_visited_on).toBe(localToday);
-	expect(row.last_visited_on).toBe(localToday);
+		const event = makeFormEvent(u, { code: 'fr' }, 'mark');
+		await expect(countryActions.mark(event)).rejects.toMatchObject({ status: 303 });
+		const row = kitDb().selectFrom(visitedCountries).executeSync()[0]!;
+		expect(row.first_visited_on).toBe(localToday);
+		expect(row.last_visited_on).toBe(localToday);
+	} finally {
+		vi.useRealTimers();
+	}
 });
 
 test('autoMarkFromTrip gates on the explicit today', () => {

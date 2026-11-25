@@ -88,8 +88,9 @@ export function exportTripsJson(userId: number): string {
 
 // Spreadsheet programs evaluate a cell that starts with one of these as a
 // formula, so user text could run =HYPERLINK(...) or a DDE payload when the
-// export is opened. A leading apostrophe keeps the cell literal text.
-const FORMULA_LEAD = /^'?[=+\-@\t]/;
+// export is opened. Prefixing an apostrophe on any 0+ leading apostrophes
+// followed by a trigger makes the export/import pair a lossless bijection.
+const FORMULA_LEAD = /^'*[=+\-@\t]/;
 
 function csvEscape(value: string | number | undefined): string {
 	if (value == null) return '';

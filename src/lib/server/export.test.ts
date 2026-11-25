@@ -216,16 +216,22 @@ test('exportTripsCsv leaves benign cells and leading apostrophes untouched', () 
 	const owner = makeUser('ba@x.c');
 	makeTrip(Number(owner.id), 'Plain');
 	makeTrip(Number(owner.id), "'Alps 2026");
+	makeTrip(Number(owner.id), "''Double quote text");
 	makeTrip(Number(owner.id), 'Notes trip', { notes: "'=x" });
+	makeTrip(Number(owner.id), 'Double formula trip', { notes: "''=x" });
 	const csv = exportTripsCsv(Number(owner.id));
 	expect(csv).not.toContain("'Plain");
+	expect(csv).toContain("'''=x");
 
 	const parsed = parseCsv(csv);
 	const names = parsed.trips.map((t) => t.name);
 	expect(names).toContain('Plain');
 	expect(names).toContain("'Alps 2026");
+	expect(names).toContain("''Double quote text");
 	const third = parsed.trips.find((t) => t.name === 'Notes trip');
 	expect(third?.notes).toBe("'=x");
+	const fourth = parsed.trips.find((t) => t.name === 'Double formula trip');
+	expect(fourth?.notes).toBe("''=x");
 });
 
 test('exportTripsCsv guard composes with quoting', () => {

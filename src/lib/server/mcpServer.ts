@@ -4183,7 +4183,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 					requireCompanionOnTrip(companionId, poll.tripId);
 				}
 				castVote(userId, pollId, companionId, optionId);
-				logAudit(userId, 'mcp_poll_vote', 'trip_poll', pollId, { optionId: args.optionId, companionId });
+				logAudit(userId, 'mcp_poll_vote', 'trip_poll', pollId, { optionId, companionId });
 				return textResult({ ok: true, pollId });
 			}
 			case 'roamarr_poll_delete': {
@@ -4287,6 +4287,9 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_home_task_create': {
 				if (!hasScope(scopes, 'home-tasks:write')) return scopeError('home-tasks:write');
+				const tripId = await toPositiveIdArg(args.tripId);
+				if (tripId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid tripId: expected a positive integer' }], isError: true };
 				if (args.dueDate != null && typeof args.dueDate !== 'string') {
 					throw error(400, 'dueDate must be a valid date (YYYY-MM-DD)');
 				}
@@ -4297,7 +4300,7 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				const { addHomeTask } = await import('./tripHomeTasks');
 				const task = addHomeTask(
 					userId,
-					Number(args.tripId),
+					tripId,
 					{ text, dueDate },
 					'mcp_home_task_create'
 				);

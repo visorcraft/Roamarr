@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { GET } from './+server';
+import { GET, PATCH } from './+server';
 import { kit } from '$lib/server/db';
 import { makeUser, makeTrip, makeSegment, makeCompanion } from '../../../../../../tests/helpers';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
@@ -118,6 +118,36 @@ test('group shares gate private details on showDetails', async () => {
 	expect(JSON.stringify(reducedBody)).not.toContain('CONF-SECRET-4242');
 	expect(JSON.stringify(reducedBody)).not.toContain('SEAT-SECRET');
 	expect(Object.keys(reducedBody.segment).sort()).toEqual(EXPECTED_KEYS);
+});
+
+test('PATCH from an edit share without details returns the reduced projection without leaking secrets', async () => {
+	const patchSeg = makeSegment(kit, fx.trip.id, {
+		type: 'flight',
+		title: 'UA2',
+		startAt: '2026-07-02T15:00:00Z',
+		startTz: 'UTC',
+		confirmationNumber: 'CONF-PATCH-9999',
+		detailsJson: JSON.stringify({ seat: 'SEAT-PATCH-SECRET' })
+	});
+	const req = new Request(`http://localhost/api/mobile/segments/${patchSeg.id}`, {
+		method: 'PATCH',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ title: 'UA2 Updated' })
+	});
+	const res = await PATCH({ locals: { user: fx.editorNoDetails as AppUser }, params: { id: String(patchSeg.id) }, request: req } as never);
+	const body = await res.json();
+	expect(body.segment.title).toBe('UA2 Updated');
+	expect('confirmationNumber' in body.segment).toBe(false);
+	expect('detailsJson' in body.segment).toBe(false);
+	expect(JSON.stringify(body)).not.toContain('CONF-PATCH-9999');
+	expect(JSON.stringify(body)).not.toContain('SEAT-PATCH-SECRET');
+	expect(Object.keys(body.segment).sort()).toEqual(EXPECTED_KEYS);
+
+	// Stored private fields stay intact for the owner.
+	const ownerRes = await GET(event(fx.owner as AppUser, String(patchSeg.id)));
+	const ownerBody = await ownerRes.json();
+	expect(ownerBody.segment.confirmationNumber).toBe('CONF-PATCH-9999');
+	expect(String(ownerBody.segment.detailsJson)).toContain('SEAT-PATCH-SECRET');
 });
 
 test('load rejects malformed and unknown ids with 404', async () => {

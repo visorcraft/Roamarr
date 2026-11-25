@@ -135,9 +135,10 @@ function splitCsvRecords(text: string): string[] {
 	return records;
 }
 
-// Inverse of the export guard in export.ts: drop the apostrophe that keeps
-// spreadsheet programs from evaluating the cell as a formula.
-const GUARDED_FORMULA_LEAD = /^'['=+\-@\t]/;
+// Inverse of the export guard in export.ts: drop one leading apostrophe only
+// when 1+ leading apostrophes precede a formula trigger, preserving plain text
+// like "''quoted" verbatim.
+const GUARDED_FORMULA_LEAD = /^'+[=+\-@\t]/;
 function unguardFormula(value: string): string {
 	return GUARDED_FORMULA_LEAD.test(value) ? value.slice(1) : value;
 }

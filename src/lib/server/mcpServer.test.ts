@@ -687,6 +687,164 @@ describe('mcpServer', () => {
 		}
 	});
 
+	describe('packing item input validation', () => {
+		async function makeTripWithItem(text = 'Passport') {
+			const trip = tripsRepo.createTrip(userId, { name: 'Packing validation trip' });
+			const item = addChecklistItem(userId, trip.id, text);
+			return { trip, item };
+		}
+
+		function itemState(itemId: number) {
+			const row = ctx.kit
+				.selectFrom(tripChecklistItems)
+				.where(kitEq(tripChecklistItems.id, BigInt(itemId)))
+				.executeSync()[0];
+			return {
+				text: row?.text,
+				packed: row?.packed,
+				assignedToCompanionId: row?.assigned_to_companion_id == null ? null : Number(row.assigned_to_companion_id)
+			};
+		}
+
+		function auditCount(action: string, uid: number = userId) {
+			return ctx.kit
+				.selectFrom(auditLogs)
+				.where(and(kitEq(auditLogs.user_id, BigInt(uid)), kitEq(auditLogs.action, action)))
+				.executeSync().length;
+		}
+
+		test('malformed itemId is rejected by update, toggle and delete without side effects', async () => {
+			const { item } = await makeTripWithItem('Passport');
+			const before = itemState(item.id);
+			const { client } = await connect(userId, ['packing:read', 'packing:write']);
+			for (const bad of ['abc', 1.5, 0, -1, true, {}, [5], ''] as const) {
+				const updateRes: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: bad, text: 'Hijack' } });
+				expect(updateRes.isError, `update ${JSON.stringify(bad)}`).toBe(true);
+				expect(String(updateRes.content?.[0]?.text ?? '')).toContain('itemId must be a positive integer');
+				const toggleRes: any = await client.callTool({ name: 'roamarr_packing_item_toggle', arguments: { itemId: bad } });
+				expect(toggleRes.isError, `toggle ${JSON.stringify(bad)}`).toBe(true);
+				expect(String(toggleRes.content?.[0]?.text ?? '')).toContain('itemId must be a positive integer');
+				const deleteRes: any = await client.callTool({ name: 'roamarr_packing_item_delete', arguments: { itemId: bad, confirm: true } });
+				expect(deleteRes.isError, `delete ${JSON.stringify(bad)}`).toBe(true);
+				expect(String(deleteRes.content?.[0]?.text ?? '')).toContain('itemId must be a positive integer');
+			}
+			expect(itemState(item.id)).toEqual(before);
+			expect(auditCount('mcp_packing_update')).toBe(0);
+			expect(auditCount('mcp_packing_toggle')).toBe(0);
+			expect(auditCount('mcp_packing_delete')).toBe(0);
+
+			const missing: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: 'abc' } });
+			expect(missing.isError).toBe(true);
+			expect(String(missing.content?.[0]?.text ?? '')).toContain('itemId must be a positive integer');
+			expect(auditCount('mcp_packing_update')).toBe(0);
+		});
+
+		test('digit-string itemId still works', async () => {
+			const { item } = await makeTripWithItem('Passport');
+			const { client } = await connect(userId, ['packing:read', 'packing:write']);
+			const res: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: String(item.id), text: 'Passport copy' } });
+			expect(res.isError).toBeFalsy();
+			expect(itemState(item.id).text).toBe('Passport copy');
+		});
+
+		test('non-string text is rejected, not coerced', async () => {
+			const { item } = await makeTripWithItem('Passport');
+			const { client } = await connect(userId, ['packing:read', 'packing:write']);
+			for (const badText of [123, true, {}, ['a', 'b']] as const) {
+				const res: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: item.id, text: badText } });
+				expect(res.isError, `text ${JSON.stringify(badText)}`).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('text must be a string');
+			}
+			expect(itemState(item.id).text).toBe('Passport');
+			expect(auditCount('mcp_packing_update')).toBe(0);
+		});
+
+		test('empty update is an error, not a phantom success', async () => {
+			const { item } = await makeTripWithItem('Passport');
+			const { client } = await connect(userId, ['packing:read', 'packing:write']);
+
+			const own: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: item.id } });
+			expect(own.isError).toBe(true);
+			expect(String(own.content?.[0]?.text ?? '')).toContain('Provide text or assignedToCompanionId to update');
+			expect(auditCount('mcp_packing_update')).toBe(0);
+
+			const otherId = makeUser(ctx.kit).id;
+			const otherTrip = tripsRepo.createTrip(otherId, { name: 'Other trip' });
+			const otherItem = addChecklistItem(otherId, otherTrip.id, 'Passport');
+			const foreign: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: otherItem.id } });
+			expect(foreign.isError).toBe(true);
+			expect(auditCount('mcp_packing_update')).toBe(0);
+		});
+
+		test('assignee is validated before the rename is written', async () => {
+			const { trip, item } = await makeTripWithItem('Passport');
+			const { insertTripCompanion } = await import('./tripCompanions');
+			const onTrip = insertTripCompanion(userId, trip.id, { name: 'Pat' });
+			const secondTrip = tripsRepo.createTrip(userId, { name: 'Second trip' });
+			const offTrip = insertTripCompanion(userId, secondTrip.id, { name: 'Pat' });
+			const { client } = await connect(userId, ['packing:read', 'packing:write']);
+
+			const offTripRes: any = await client.callTool({
+				name: 'roamarr_packing_item_update',
+				arguments: { itemId: item.id, text: 'Visa', assignedToCompanionId: offTrip.id }
+			});
+			expect(offTripRes.isError).toBe(true);
+			expect(itemState(item.id).text).toBe('Passport');
+			expect(itemState(item.id).assignedToCompanionId).toBeNull();
+			expect(auditCount('mcp_packing_update')).toBe(0);
+
+			for (const badAssignee of ['abc', 1.5, true, {}] as const) {
+				const res: any = await client.callTool({
+					name: 'roamarr_packing_item_update',
+					arguments: { itemId: item.id, text: 'Visa', assignedToCompanionId: badAssignee }
+				});
+				expect(res.isError, `assignee ${JSON.stringify(badAssignee)}`).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('assignedToCompanionId must be a positive integer or null');
+			}
+			expect(itemState(item.id).text).toBe('Passport');
+			expect(itemState(item.id).assignedToCompanionId).toBeNull();
+			expect(auditCount('mcp_packing_update')).toBe(0);
+
+			const okRes: any = await client.callTool({
+				name: 'roamarr_packing_item_update',
+				arguments: { itemId: item.id, text: 'Visa', assignedToCompanionId: onTrip.id }
+			});
+			expect(okRes.isError).toBeFalsy();
+			expect(itemState(item.id).text).toBe('Visa');
+			expect(itemState(item.id).assignedToCompanionId).toBe(onTrip.id);
+
+			const unassignRes: any = await client.callTool({
+				name: 'roamarr_packing_item_update',
+				arguments: { itemId: item.id, assignedToCompanionId: null }
+			});
+			expect(unassignRes.isError).toBeFalsy();
+			expect(itemState(item.id).text).toBe('Visa');
+			expect(itemState(item.id).assignedToCompanionId).toBeNull();
+
+			const digitRes: any = await client.callTool({
+				name: 'roamarr_packing_item_update',
+				arguments: { itemId: item.id, assignedToCompanionId: String(onTrip.id) }
+			});
+			expect(digitRes.isError).toBeFalsy();
+			expect(itemState(item.id).assignedToCompanionId).toBe(onTrip.id);
+		});
+
+		test('edit rights are still enforced for both paths', async () => {
+			const { trip, item } = await makeTripWithItem('Passport');
+			const viewerId = makeUser(ctx.kit).id;
+			tripsRepo.createShare({ tripId: trip.id, sharedWithUserId: viewerId, permission: 'read' });
+			const { client } = await connect(viewerId, ['packing:read', 'packing:write']);
+
+			const textRes: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: item.id, text: 'Hijack' } });
+			expect(textRes.isError).toBe(true);
+			const assigneeRes: any = await client.callTool({ name: 'roamarr_packing_item_update', arguments: { itemId: item.id, assignedToCompanionId: null } });
+			expect(assigneeRes.isError).toBe(true);
+			expect(itemState(item.id).text).toBe('Passport');
+			expect(itemState(item.id).assignedToCompanionId).toBeNull();
+			expect(auditCount('mcp_packing_update', viewerId)).toBe(0);
+		});
+	});
+
 	test('mobile custom reminders preserve exact user fields', async () => {
 		const trip = tripsRepo.createTrip(userId, { name: 'Reminder trip' });
 		const { client } = await connect(userId, ['reminders:read', 'reminders:write']);

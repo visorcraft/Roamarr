@@ -3224,24 +3224,49 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_packing_item_toggle': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const itemId = toPositiveId(args.itemId);
+				if (itemId === null)
+					return { content: [{ type: 'text' as const, text: 'itemId must be a positive integer' }], isError: true };
 				const { toggleItemById } = await import('./tripChecklists');
-				const itemId = Number(args.itemId);
 				const updated = toggleItemById(userId, itemId);
 				logAudit(userId, 'mcp_packing_toggle', 'trip_checklist_item', itemId, { packed: updated.packed });
 				return textResult({ ok: true, itemId, packed: updated.packed });
 			}
 			case 'roamarr_packing_item_update': {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
-				const { renameItem } = await import('./tripChecklists');
-				const { getChecklistItemTripId, updateChecklistItem } = await import('./repositories/tripMiscRepo');
-				const itemId = Number(args.itemId);
-				if (args.text != null) renameItem(userId, itemId, String(args.text));
-				if (args.assignedToCompanionId !== undefined) {
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const itemId = toPositiveId(args.itemId);
+				if (itemId === null)
+					return { content: [{ type: 'text' as const, text: 'itemId must be a positive integer' }], isError: true };
+				const text = args.text;
+				const hasText = text != null;
+				const hasAssignee = args.assignedToCompanionId !== undefined;
+				if (!hasText && !hasAssignee)
+					return { content: [{ type: 'text' as const, text: 'Provide text or assignedToCompanionId to update' }], isError: true };
+				if (hasText && typeof text !== 'string')
+					return { content: [{ type: 'text' as const, text: 'text must be a string' }], isError: true };
+				let assignee: number | null = null;
+				if (hasAssignee && args.assignedToCompanionId !== null) {
+					assignee = toPositiveId(args.assignedToCompanionId);
+					if (assignee === null)
+						return { content: [{ type: 'text' as const, text: 'assignedToCompanionId must be a positive integer or null' }], isError: true };
+				}
+				if (hasAssignee) {
+					const { getChecklistItemTripId, updateChecklistItem } = await import('./repositories/tripMiscRepo');
+					const { requireCompanionOnTrip } = await import('./ownership');
 					const tripId = getChecklistItemTripId(itemId);
 					if (tripId == null) throw error(404, 'Item not found');
 					requireEditableTrip(userId, tripId);
-					const { requireCompanionOnTrip } = await import('./ownership');
-					updateChecklistItem(itemId, { assignedToCompanionId: requireCompanionOnTrip(args.assignedToCompanionId == null ? null : Number(args.assignedToCompanionId), tripId) });
+					requireCompanionOnTrip(assignee, tripId);
+					if (typeof text === 'string') (await import('./tripChecklists')).renameItem(userId, itemId, text);
+					updateChecklistItem(itemId, { assignedToCompanionId: assignee });
+				} else if (typeof text === 'string') {
+					(await import('./tripChecklists')).renameItem(userId, itemId, text);
 				}
 				logAudit(userId, 'mcp_packing_update', 'trip_checklist_item', itemId, {});
 				return textResult({ ok: true, itemId });
@@ -3250,8 +3275,13 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'packing:write')) return scopeError('packing:write');
 				const confirmErr = requireConfirm(args, 'roamarr_packing_item_delete');
 				if (confirmErr) return confirmErr;
+				const { parsePositiveId } = await import('./params');
+				const toPositiveId = (value: unknown): number | null =>
+					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+				const itemId = toPositiveId(args.itemId);
+				if (itemId === null)
+					return { content: [{ type: 'text' as const, text: 'itemId must be a positive integer' }], isError: true };
 				const { deleteItemById } = await import('./tripChecklists');
-				const itemId = Number(args.itemId);
 				deleteItemById(userId, itemId);
 				logAudit(userId, 'mcp_packing_delete', 'trip_checklist_item', itemId, {});
 				return textResult({ ok: true, itemId });

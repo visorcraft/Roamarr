@@ -86,14 +86,20 @@ export function exportTripsJson(userId: number): string {
 	return JSON.stringify({ trips: exportTrips(userId) }, null, 2);
 }
 
+// Spreadsheet programs evaluate a cell that starts with one of these as a
+// formula, so user text could run =HYPERLINK(...) or a DDE payload when the
+// export is opened. A leading apostrophe keeps the cell literal text.
+const FORMULA_LEAD = /^'?[=+\-@\t]/;
+
 function csvEscape(value: string | number | undefined): string {
 	if (value == null) return '';
 	const s = String(value);
+	const cell = FORMULA_LEAD.test(s) ? `'${s}` : s;
 	// A carriage return is a record break for common CSV readers, so it must be quoted even without a line feed.
-	if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
-		return '"' + s.replace(/"/g, '""') + '"';
+	if (cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes('\r')) {
+		return '"' + cell.replace(/"/g, '""') + '"';
 	}
-	return s;
+	return cell;
 }
 
 export function exportTripsCsv(userId: number): string {

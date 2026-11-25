@@ -37,13 +37,14 @@ function makeTrip(ownerId: number, name: string, extra: Record<string, unknown> 
 	return tripsRepo.createTrip(ownerId, { name, ...extra } as any);
 }
 
-function makeSegment(tripId: number, type: string, title: string, startAt: string) {
+function makeSegment(tripId: number, type: string, title: string, startAt: string, extra: Record<string, unknown> = {}) {
 	return segmentsRepo.createSegment({
 		trip_id: BigInt(tripId),
 		type: type as any,
 		title,
 		start_at: startAt,
-		start_tz: 'UTC'
+		start_tz: 'UTC',
+		...extra
 	});
 }
 
@@ -177,4 +178,63 @@ test('exportTripsCsv keeps every line-break form quoted and round-trips it exact
 		expect(trip, `trip ${name}`).toBeDefined();
 		expect(trip!.notes).toBe(notes);
 	}
+});
+
+test('exportTripsCsv neutralizes formula-leading cells in every user-authored column', () => {
+	const owner = makeUser('fc@x.c');
+	const t = makeTrip(Number(owner.id), '=1+1', {
+		notes: '+2+2',
+		tags: '["@cmd"]'
+	});
+	makeSegment(t.id, 'flight', '-2+3', '2026-08-01T10:00:00Z', {
+		location: "=cmd|' /C calc'!A0",
+		confirmation_number: '\t=1+1'
+	});
+	const csv = exportTripsCsv(Number(owner.id));
+	const lines = csv.trimEnd().split('\n');
+	expect(lines).toHaveLength(2); // header + one data row
+	const cells = lines[1]!.split(',');
+	expect(cells).toHaveLength(16);
+	expect(cells[0]).toBe("'=1+1");
+	expect(cells[6]).toBe("'+2+2");
+	expect(cells[7]).toBe("'@cmd");
+	expect(cells[10]).toBe("'-2+3");
+	expect(cells[14]).toBe("'=cmd|' /C calc'!A0");
+	expect(cells[15]).toBe("'\t=1+1");
+
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.name).toBe('=1+1');
+	expect(parsed.trips[0]!.notes).toBe('+2+2');
+	expect(parsed.trips[0]!.segments).toHaveLength(1);
+	expect(parsed.trips[0]!.segments![0]!.title).toBe('-2+3');
+	expect(parsed.trips[0]!.segments![0]!.location).toBe("=cmd|' /C calc'!A0");
+	expect(parsed.trips[0]!.segments![0]!.confirmationNumber).toBe('\t=1+1');
+});
+
+test('exportTripsCsv leaves benign cells and leading apostrophes untouched', () => {
+	const owner = makeUser('ba@x.c');
+	makeTrip(Number(owner.id), 'Plain');
+	makeTrip(Number(owner.id), "'Alps 2026");
+	makeTrip(Number(owner.id), 'Notes trip', { notes: "'=x" });
+	const csv = exportTripsCsv(Number(owner.id));
+	expect(csv).not.toContain("'Plain");
+
+	const parsed = parseCsv(csv);
+	const names = parsed.trips.map((t) => t.name);
+	expect(names).toContain('Plain');
+	expect(names).toContain("'Alps 2026");
+	const third = parsed.trips.find((t) => t.name === 'Notes trip');
+	expect(third?.notes).toBe("'=x");
+});
+
+test('exportTripsCsv guard composes with quoting', () => {
+	const owner = makeUser('q@x.c');
+	makeTrip(Number(owner.id), 'Quote trip', { notes: '=HYPERLINK("http://evil.example","Open")' });
+	const csv = exportTripsCsv(Number(owner.id));
+	expect(csv).toContain('"\'=HYPERLINK(""http://evil.example"",""Open"")"');
+
+	const parsed = parseCsv(csv);
+	expect(parsed.trips).toHaveLength(1);
+	expect(parsed.trips[0]!.notes).toBe('=HYPERLINK("http://evil.example","Open")');
 });

@@ -135,6 +135,13 @@ function splitCsvRecords(text: string): string[] {
 	return records;
 }
 
+// Inverse of the export guard in export.ts: drop the apostrophe that keeps
+// spreadsheet programs from evaluating the cell as a formula.
+const GUARDED_FORMULA_LEAD = /^'['=+\-@\t]/;
+function unguardFormula(value: string): string {
+	return GUARDED_FORMULA_LEAD.test(value) ? value.slice(1) : value;
+}
+
 export function parseCsv(text: string): { trips: ImportTrip[] } {
 	const lines = splitCsvRecords(text).filter((l) => l.trim());
 	if (lines.length < 2) throw new Error('CSV must have a header and at least one data row');
@@ -144,7 +151,7 @@ export function parseCsv(text: string): { trips: ImportTrip[] } {
 		const row = parseCsvLine(lines[i]!);
 		const obj: Record<string, string> = {};
 		for (let j = 0; j < headers.length; j++) {
-			obj[headers[j]!] = row[j] ?? '';
+			obj[headers[j]!] = unguardFormula(row[j] ?? '');
 		}
 		const key = `${obj.name}|${obj.startDate}|${obj.endDate}`;
 		let trip = groups.get(key);

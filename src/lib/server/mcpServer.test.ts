@@ -18,7 +18,7 @@ import * as tripsRepo from './repositories/tripsRepo';
 import * as tripsShared from '../../routes/trips/shared';
 import * as travelDataRepo from './repositories/travelDataRepo';
 import { addItem as addChecklistItem } from './tripChecklists';
-import { trips, tripCompanions, tripPollVotes, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
+import { trips, tripCompanions, tripPolls, tripPollOptions, tripPollVotes, visitedCountries, visitedUsStates, tripChecklistItems, users, places, placeCategories, placeLinks, reminders, auditLogs, SEGMENT_PAYMENT_STATUSES } from './db/mongrelSchema';
 import { eq as kitEq, and } from '@visorcraft/mongreldb-kit';
 import { makeUser, makeTrip, makeSegment, makeShare, makeTravelDocument } from '../../../tests/helpers';
 import { upsertCustomReminder } from './reminders';
@@ -2929,24 +2929,25 @@ describe('mcpServer', () => {
 		});
 	});
 
+	// Sets up: owner creates a trip with content; shares it with another
+	// user (editor or viewer) via direct trip_share. Returns the editor/
+	// viewer user id and the trip.
+	let shareCounter = 0;
+	function setupSharedTrip(permission: 'read' | 'edit', showDetails = false) {
+		const n = ++shareCounter;
+		const ownerId = makeUser(ctx.kit, { email: `owner-${n}@x.c` }).id;
+		const otherId = makeUser(ctx.kit, { email: `other-${n}@x.c` }).id;
+		const trip = tripsRepo.createTrip(ownerId, { name: `Shared-${n}` });
+		tripsRepo.createShare({
+			tripId: trip.id,
+			sharedWithUserId: otherId,
+			permission,
+			showDetails
+		});
+		return { ownerId, otherId, trip };
+	}
+
 	describe('shared-trip access (editors and viewers)', () => {
-		// Sets up: owner creates a trip with content; shares it with another
-		// user (editor or viewer) via direct trip_share. Returns the editor/
-		// viewer user id and the trip.
-		let shareCounter = 0;
-		function setupSharedTrip(permission: 'read' | 'edit', showDetails = false) {
-			const n = ++shareCounter;
-			const ownerId = makeUser(ctx.kit, { email: `owner-${n}@x.c` }).id;
-			const otherId = makeUser(ctx.kit, { email: `other-${n}@x.c` }).id;
-			const trip = tripsRepo.createTrip(ownerId, { name: `Shared-${n}` });
-			tripsRepo.createShare({
-				tripId: trip.id,
-				sharedWithUserId: otherId,
-				permission,
-				showDetails
-			});
-			return { ownerId, otherId, trip };
-		}
 
 		test('editor can poll_list / expense_list / companion_list on shared trip', async () => {
 			const { otherId, trip } = setupSharedTrip('edit');
@@ -3474,6 +3475,195 @@ describe('mcpServer', () => {
 			expect(res2.isError).toBeFalsy();
 			expect(JSON.parse(res2.content[0].text)).toMatchObject({ ok: true, pollId: poll2.id });
 			expect(voteRowsForPoll(poll2.id)).toHaveLength(1);
+		});
+	});
+
+
+	describe('roamarr_poll_list, poll_create, and poll_delete input validation', () => {
+		async function makePollTrip() {
+			const trip = tripsRepo.createTrip(userId, { name: 'Poll validation trip' });
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(userId, trip.id, 'Pick?', ['yes', 'no']);
+			return { trip, poll };
+		}
+
+		function pollRowsForTrip(tripId: number) {
+			return ctx.kit
+				.selectFrom(tripPolls)
+				.where(kitEq(tripPolls.trip_id, BigInt(tripId)))
+				.executeSync();
+		}
+
+		function auditRowsForAction(action: string) {
+			return ctx.kit
+				.selectFrom(auditLogs)
+				.where(and(kitEq(auditLogs.user_id, BigInt(userId)), kitEq(auditLogs.action, action)))
+				.executeSync();
+		}
+
+		test('roamarr_poll_delete rejects malformed ids and changes nothing', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { client } = await connect(userId, ['polls:write']);
+			const revBefore = currentTripRev(trip.id);
+			const badIds: unknown[] = ['abc', '1.5', 1.5, 0, '', -1, ' 5 ', '0x10', true, [poll.id], null];
+			for (const badId of badIds) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_delete',
+					arguments: { pollId: badId, confirm: true }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid pollId: expected a positive integer');
+			}
+			const omitted: any = await client.callTool({
+				name: 'roamarr_poll_delete',
+				arguments: { confirm: true }
+			});
+			expect(omitted.isError).toBe(true);
+			expect(String(omitted.content?.[0]?.text ?? '')).toContain('Invalid pollId: expected a positive integer');
+			expect(pollRowsForTrip(trip.id)).toHaveLength(1);
+			expect(auditRowsForAction('mcp_poll_delete')).toHaveLength(0);
+			expect(currentTripRev(trip.id)).toBe(revBefore);
+		});
+
+		test('roamarr_poll_delete ordering and success path', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { client } = await connect(userId, ['polls:write']);
+			const noConfirm: any = await client.callTool({
+				name: 'roamarr_poll_delete',
+				arguments: { pollId: poll.id }
+			});
+			expect(noConfirm.isError).toBe(true);
+			expect(String(noConfirm.content?.[0]?.text ?? '')).toContain('confirm');
+			const noConfirmBadId: any = await client.callTool({
+				name: 'roamarr_poll_delete',
+				arguments: { pollId: 'abc' }
+			});
+			expect(noConfirmBadId.isError).toBe(true);
+			expect(String(noConfirmBadId.content?.[0]?.text ?? '')).not.toContain('Invalid pollId');
+			expect(pollRowsForTrip(trip.id)).toHaveLength(1);
+			const ok: any = await client.callTool({
+				name: 'roamarr_poll_delete',
+				arguments: { pollId: String(poll.id), confirm: true }
+			});
+			expect(ok.isError).toBeFalsy();
+			expect(JSON.parse(ok.content[0].text)).toMatchObject({ ok: true, pollId: poll.id });
+			expect(pollRowsForTrip(trip.id)).toHaveLength(0);
+			expect(auditRowsForAction('mcp_poll_delete')).toHaveLength(1);
+		});
+
+		test('roamarr_poll_delete still enforces authorization', async () => {
+			const { ownerId, otherId, trip } = setupSharedTrip('read');
+			const { createTripPoll } = await import('./tripPolls');
+			const poll = createTripPoll(ownerId, trip.id, 'Pick?', ['yes', 'no']);
+			const { client } = await connect(otherId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_delete',
+				arguments: { pollId: poll.id, confirm: true }
+			});
+			expect(res.isError).toBe(true);
+			expect(pollRowsForTrip(trip.id)).toHaveLength(1);
+		});
+
+		test('roamarr_poll_list rejects malformed tripId', async () => {
+			const { trip, poll } = await makePollTrip();
+			const { client } = await connect(userId, ['polls:read']);
+			const badIds: unknown[] = ['abc', 1.5, 0, '', true, [trip.id]];
+			for (const badId of badIds) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_list',
+					arguments: { tripId: badId }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid tripId: expected a positive integer');
+			}
+			const omitted: any = await client.callTool({
+				name: 'roamarr_poll_list',
+				arguments: {}
+			});
+			expect(omitted.isError).toBe(true);
+			expect(String(omitted.content?.[0]?.text ?? '')).toContain('Invalid tripId: expected a positive integer');
+			const ok: any = await client.callTool({
+				name: 'roamarr_poll_list',
+				arguments: { tripId: String(trip.id) }
+			});
+			expect(ok.isError).toBeFalsy();
+			const parsed = JSON.parse(ok.content[0].text);
+			expect(Array.isArray(parsed.polls)).toBe(true);
+			expect(parsed.polls.some((p: any) => p.id === poll.id)).toBe(true);
+		});
+
+		test('roamarr_poll_create rejects malformed arguments in order and writes nothing', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'Poll validation trip' });
+			const { client } = await connect(userId, ['polls:write']);
+			const revBefore = currentTripRev(trip.id);
+			const badTripId: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: 'abc', question: 123, options: 'a,b' }
+			});
+			expect(badTripId.isError).toBe(true);
+			expect(String(badTripId.content?.[0]?.text ?? '')).toContain('Invalid tripId: expected a positive integer');
+			for (const badQuestion of [123, true, null, {}] as const) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_create',
+					arguments: { tripId: trip.id, question: badQuestion, options: ['a', 'b'] }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid question: expected a string');
+			}
+			const omittedQuestion: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, options: ['a', 'b'] }
+			});
+			expect(omittedQuestion.isError).toBe(true);
+			expect(String(omittedQuestion.content?.[0]?.text ?? '')).toContain('Invalid question: expected a string');
+			const questionWins: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, question: 123, options: 'nope' }
+			});
+			expect(questionWins.isError).toBe(true);
+			expect(String(questionWins.content?.[0]?.text ?? '')).toContain('Invalid question: expected a string');
+			for (const badOptions of ['a,b', null, ['a', 1], [null, 'b'], [true, false], [['x'], 'b']] as const) {
+				const res: any = await client.callTool({
+					name: 'roamarr_poll_create',
+					arguments: { tripId: trip.id, question: 'Q?', options: badOptions }
+				});
+				expect(res.isError).toBe(true);
+				expect(String(res.content?.[0]?.text ?? '')).toContain('Invalid options: expected an array of strings');
+			}
+			const omittedOptions: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, question: 'Q?' }
+			});
+			expect(omittedOptions.isError).toBe(true);
+			expect(String(omittedOptions.content?.[0]?.text ?? '')).toContain('Invalid options: expected an array of strings');
+			expect(pollRowsForTrip(trip.id)).toHaveLength(0);
+			expect(auditRowsForAction('mcp_poll_create')).toHaveLength(0);
+			expect(currentTripRev(trip.id)).toBe(revBefore);
+		});
+
+		test('roamarr_poll_create success path is unaffected', async () => {
+			const trip = tripsRepo.createTrip(userId, { name: 'Poll validation trip' });
+			const { client } = await connect(userId, ['polls:write']);
+			const res: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: String(trip.id), question: 'Q?', options: ['a', 'b'] }
+			});
+			expect(res.isError).toBeFalsy();
+			const parsed = JSON.parse(res.content[0].text);
+			const rows = pollRowsForTrip(trip.id);
+			expect(rows).toHaveLength(1);
+			expect(parsed.id).toBe(Number(rows[0]!.id));
+			expect(parsed.options).toHaveLength(2);
+			const optionRows = ctx.kit
+				.selectFrom(tripPollOptions)
+				.where(kitEq(tripPollOptions.poll_id, BigInt(parsed.id)))
+				.executeSync();
+			expect(optionRows).toHaveLength(2);
+			const bad: any = await client.callTool({
+				name: 'roamarr_poll_create',
+				arguments: { tripId: trip.id, question: 'Q?', options: ['', '  '] }
+			});
+			expect(bad.isError).toBe(true);
 		});
 	});
 

@@ -60,6 +60,11 @@ function textResult(obj: unknown) {
 	};
 }
 
+async function toPositiveIdArg(value: unknown): Promise<number | null> {
+	const { parsePositiveId } = await import('./params');
+	return typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
+}
+
 function withDerivedStatus<T extends { status?: string | null; startDate?: string | null; endDate?: string | null }>(
 	userId: number,
 	trip: T
@@ -4113,39 +4118,43 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 			}
 			case 'roamarr_poll_list': {
 				if (!hasScope(scopes, 'polls:read')) return scopeError('polls:read');
+				const tripId = await toPositiveIdArg(args.tripId);
+				if (tripId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid tripId: expected a positive integer' }], isError: true };
 				const { listPollsForTrip } = await import('./repositories/pollsRepo');
-				const tripId = Number(args.tripId);
 				requireViewableTrip(userId, tripId);
 				return textResult({ tripId, polls: listPollsForTrip(tripId) });
 			}
 			case 'roamarr_poll_create': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
+				const tripId = await toPositiveIdArg(args.tripId);
+				if (tripId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid tripId: expected a positive integer' }], isError: true };
+				if (typeof args.question !== 'string')
+					return { content: [{ type: 'text' as const, text: 'Invalid question: expected a string' }], isError: true };
+				if (!Array.isArray(args.options) || !args.options.every((o) => typeof o === 'string'))
+					return { content: [{ type: 'text' as const, text: 'Invalid options: expected an array of strings' }], isError: true };
 				// Route through createTripPoll so the same validation as the
 				// web UI applies (question length, 2-10 options, per-option
 				// length, bumpTripUpdatedAt, audit). The previous impl
 				// called the low-level repo createPoll directly and let
 				// callers mint polls with empty questions or 1 option.
 				const { createTripPoll } = await import('./tripPolls');
-				const tripId = Number(args.tripId);
-				const options = Array.isArray(args.options) ? args.options.map((o) => String(o)) : [];
-				const p = createTripPoll(userId, tripId, String(args.question ?? ''), options);
+				const p = createTripPoll(userId, tripId, args.question, args.options);
 				logAudit(userId, 'mcp_poll_create', 'trip_poll', p.id, { tripId });
 				return textResult({ id: p.id, options: p.options });
 			}
 			case 'roamarr_poll_cast_vote': {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
-				const { parsePositiveId } = await import('./params');
-				const toPositiveId = (value: unknown): number | null =>
-					typeof value === 'number' || typeof value === 'string' ? parsePositiveId(String(value)) : null;
-				const pollId = toPositiveId(args.pollId);
+				const pollId = await toPositiveIdArg(args.pollId);
 				if (pollId === null)
 					return { content: [{ type: 'text' as const, text: 'Invalid pollId: expected a positive integer' }], isError: true };
-				const optionId = toPositiveId(args.optionId);
+				const optionId = await toPositiveIdArg(args.optionId);
 				if (optionId === null)
 					return { content: [{ type: 'text' as const, text: 'Invalid optionId: expected a positive integer' }], isError: true };
 				let companionIdArg: number | null = null;
 				if (args.companionId != null) {
-					companionIdArg = toPositiveId(args.companionId);
+					companionIdArg = await toPositiveIdArg(args.companionId);
 					if (companionIdArg === null)
 						return { content: [{ type: 'text' as const, text: 'Invalid companionId: expected a positive integer' }], isError: true };
 				}
@@ -4181,14 +4190,17 @@ export function createMcpServer(userId: number, scopes: Scope[]): Server {
 				if (!hasScope(scopes, 'polls:write')) return scopeError('polls:write');
 				const confirmErr = requireConfirm(args, 'roamarr_poll_delete');
 				if (confirmErr) return confirmErr;
+				const pollId = await toPositiveIdArg(args.pollId);
+				if (pollId === null)
+					return { content: [{ type: 'text' as const, text: 'Invalid pollId: expected a positive integer' }], isError: true };
 				// Route through tripPolls.removeTripPoll so requireEditableTrip
 				// + bumpTripUpdatedAt + canonical audit apply, matching the
 				// web UI. The previous impl used requireOwnedTrip and skipped
 				// bumpTripUpdatedAt.
 				const { removeTripPoll } = await import('./tripPolls');
-				removeTripPoll(userId, Number(args.pollId));
-				logAudit(userId, 'mcp_poll_delete', 'trip_poll', Number(args.pollId), {});
-				return textResult({ ok: true, pollId: Number(args.pollId) });
+				removeTripPoll(userId, pollId);
+				logAudit(userId, 'mcp_poll_delete', 'trip_poll', pollId, {});
+				return textResult({ ok: true, pollId });
 			}
 			case 'roamarr_journal_list': {
 				if (!hasScope(scopes, 'journal:read')) return scopeError('journal:read');

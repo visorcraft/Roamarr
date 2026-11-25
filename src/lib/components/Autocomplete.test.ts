@@ -494,4 +494,106 @@ describe('Autocomplete', () => {
 		expect(status()).toBe('');
 		expect(getInput().getAttribute('aria-controls')).toBe('city-listbox');
 	});
+
+	it('ignores keys while an IME composition is in progress', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Palma' },
+			{ id: 2, label: 'Paris' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+		expect(activeOptionId()).toBe('city-option-0');
+
+		getInput().dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'ArrowDown', isComposing: true, bubbles: true, cancelable: true })
+		);
+		flushSync();
+		expect(activeOptionId()).toBe('city-option-0');
+
+		const composingEnter = new KeyboardEvent('keydown', {
+			key: 'Enter',
+			isComposing: true,
+			bubbles: true,
+			cancelable: true
+		});
+		getInput().dispatchEvent(composingEnter);
+		flushSync();
+		expect(composingEnter.defaultPrevented).toBe(false);
+		let hidden = document.querySelector('input[type="hidden"]') as HTMLInputElement;
+		expect(hidden.value).toBe('');
+		expect(listbox()).not.toBeNull();
+
+		keydown('ArrowDown');
+		expect(activeOptionId()).toBe('city-option-1');
+		keydown('Enter');
+		hidden = document.querySelector('input[type="hidden"]') as HTMLInputElement;
+		expect(hidden.value).toBe('2');
+		expect(listbox()).toBeNull();
+	});
+
+	it('a held option press keeps the list open and still selects', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Palma' },
+			{ id: 2, label: 'Paris' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+
+		const optionButton = Array.from(
+			document.querySelectorAll<HTMLElement>('[role="option"] button')
+		)[0];
+		const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+		optionButton.dispatchEvent(mousedown);
+		expect(mousedown.defaultPrevented).toBe(true);
+
+		await vi.advanceTimersByTimeAsync(500);
+		flushSync();
+		expect(listbox()).not.toBeNull();
+
+		optionButton.click();
+		flushSync();
+		const hidden = document.querySelector('input[type="hidden"]') as HTMLInputElement;
+		expect(hidden.value).toBe('1');
+		expect(listbox()).toBeNull();
+	});
+
+	it('a quick blur then refocus does not close the list', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve([
+			{ id: 1, label: 'Palma' },
+			{ id: 2, label: 'Paris' }
+		]);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+
+		getInput().dispatchEvent(new Event('blur'));
+		getInput().dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+
+		expect(listbox()).not.toBeNull();
+		expect(getInput().getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('the clear control uses the shared close icon and keeps its name', () => {
+		mountAutocomplete({ value: 'Paris', valueId: 2 });
+
+		const button = document.querySelector('button[aria-label="Clear selection"]');
+		expect(button).not.toBeNull();
+		expect(button!.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+		expect(button!.textContent?.trim()).toBe('');
+		expect(button!.getAttribute('tabindex')).toBe('-1');
+		expect(button!.getAttribute('type')).toBe('button');
+	});
 });

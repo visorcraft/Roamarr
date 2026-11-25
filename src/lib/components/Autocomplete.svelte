@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
+
 	export interface AutocompleteSuggestion {
 		id: number;
 		label: string;
@@ -47,6 +49,7 @@
 	let open = $state(false);
 	let activeIndex = $state(-1);
 	let timer: ReturnType<typeof setTimeout> | null = null;
+	let blurTimer: ReturnType<typeof setTimeout> | null = null;
 	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
@@ -65,6 +68,13 @@
 		if (!open || activeIndex < 0) return;
 		document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
 	});
+
+	function cancelBlurClose() {
+		if (blurTimer) {
+			clearTimeout(blurTimer);
+			blurTimer = null;
+		}
+	}
 
 	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
 	function cancelPendingLookup() {
@@ -126,6 +136,9 @@
 	}
 
 	function onKeydown(event: KeyboardEvent) {
+		// Enter/arrows that belong to an IME composition must not move or pick an option.
+		// Safari reports isComposing === false with keyCode 229 for the Enter that commits.
+		if (event.isComposing || event.keyCode === 229) return;
 		if (suggestions.length === 0) {
 			if (event.key === 'Escape' && open) open = false;
 			return;
@@ -179,9 +192,15 @@
 
 	function onBlur() {
 		cancelPendingLookup();
-		setTimeout(() => {
+		cancelBlurClose();
+		blurTimer = setTimeout(() => {
+			blurTimer = null;
 			open = false;
 		}, 150);
+	}
+
+	function onFocus() {
+		cancelBlurClose();
 	}
 </script>
 
@@ -212,6 +231,7 @@
 		oninput={(e) => onInput(e.currentTarget.value)}
 		onkeydown={onKeydown}
 		onblur={onBlur}
+		onfocus={onFocus}
 	/>
 	{#if selectedLabel && !required}
 		<button
@@ -220,7 +240,7 @@
 			onclick={clearSelection}
 			aria-label="Clear selection"
 			tabindex="-1"
-		>×</button>
+		><Icon name="close" class="h-4 w-4" /></button>
 	{/if}
 	{#if errors[name]}<p class="field-error" id={`${name}-error`}>{errors[name]}</p>{/if}
 	{#if listboxVisible}
@@ -243,6 +263,7 @@
 							? 'bg-surface2'
 							: ''}"
 						onmouseenter={() => (activeIndex = i)}
+						onmousedown={(e) => e.preventDefault()}
 						onclick={() => selectOption(s)}
 					>
 						<span class="text-ink">{s.label}</span>

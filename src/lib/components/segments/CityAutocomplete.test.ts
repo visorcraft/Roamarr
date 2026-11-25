@@ -324,4 +324,91 @@ describe('CityAutocomplete', () => {
 		expect(box!.className).toContain('ring-[var(--theme-line)]');
 		expect(box!.className).not.toContain('ring-white');
 	});
+
+	it('ignores Enter while an IME composition is in progress', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve(
+			resolveWith([
+				{ name: 'Paris', lat: 48.85, lng: 2.35 },
+				{ name: 'Parma', lat: 44.8, lng: 10.33 }
+			])
+		);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+		expect(activeOptionId()).toBe('city-option-0');
+
+		getInput().dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'ArrowDown', isComposing: true, bubbles: true, cancelable: true })
+		);
+		flushSync();
+		expect(activeOptionId()).toBe('city-option-0');
+
+		const composingEnter = new KeyboardEvent('keydown', {
+			key: 'Enter',
+			isComposing: true,
+			bubbles: true,
+			cancelable: true
+		});
+		getInput().dispatchEvent(composingEnter);
+		flushSync();
+		expect(composingEnter.defaultPrevented).toBe(false);
+		expect((document.querySelector('#lat') as HTMLInputElement).value).toBe('');
+		expect((document.querySelector('#lng') as HTMLInputElement).value).toBe('');
+		expect(listbox()).not.toBeNull();
+
+		keydown('Enter');
+		expect((document.querySelector('#lat') as HTMLInputElement).value).toBe('48.85');
+		expect((document.querySelector('#lng') as HTMLInputElement).value).toBe('2.35');
+	});
+
+	it('a held option press keeps the list open and still selects', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve(
+			resolveWith([
+				{ name: 'Paris', lat: 48.85, lng: 2.35 },
+				{ name: 'Parma', lat: 44.8, lng: 10.33 }
+			])
+		);
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+
+		const optionButton = Array.from(
+			document.querySelectorAll<HTMLElement>('[role="option"] button')
+		)[0];
+		const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+		optionButton.dispatchEvent(mousedown);
+		expect(mousedown.defaultPrevented).toBe(true);
+
+		await vi.advanceTimersByTimeAsync(500);
+		flushSync();
+		expect(listbox()).not.toBeNull();
+
+		optionButton.click();
+		flushSync();
+		expect((document.querySelector('#lat') as HTMLInputElement).value).toBe('48.85');
+	});
+
+	it('a quick blur then refocus does not close the list', async () => {
+		mountAutocomplete();
+		type('par');
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+		calls[0].d.resolve(resolveWith([{ name: 'Paris', lat: 48.85, lng: 2.35 }]));
+		await flushLookup();
+		expect(listbox()).not.toBeNull();
+
+		getInput().dispatchEvent(new Event('blur'));
+		getInput().dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(150);
+		flushSync();
+
+		expect(listbox()).not.toBeNull();
+		expect(getInput().getAttribute('aria-expanded')).toBe('true');
+	});
 });

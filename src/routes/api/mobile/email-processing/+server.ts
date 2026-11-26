@@ -2,14 +2,12 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireUser } from '$lib/server/auth';
 import { getSettings } from '$lib/server/settings';
-import { getEmailProcessingConfig, pollUserInbox, saveEmailProcessingConfig, type EmailProcessingPatch, type MailSecurity } from '$lib/server/emailProcessing';
+import { getEmailProcessingConfig, normalizeMailSecurity, parseOptionalPort, pollUserInbox, saveEmailProcessingConfig, type EmailProcessingPatch } from '$lib/server/emailProcessing';
 import { sendMail } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { logAudit } from '$lib/server/audit';
 
-const security = (value: unknown, fallback: MailSecurity): MailSecurity => value === 'none' || value === 'starttls' || value === 'ssl/tls' ? value : fallback;
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
-const port = (value: unknown) => { if (value == null || value === '') return null; const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error('Port must be between 1 and 65535'); return n; };
 
 export const GET: RequestHandler = ({ locals }) => {
 	const user = requireUser(locals), settings = getSettings();
@@ -25,15 +23,15 @@ export const PATCH: RequestHandler = async ({ locals, request }) => {
 		const patch: EmailProcessingPatch = {
 			enabled: section === 'inbound' ? values.enabled === true : old?.enabled ?? false,
 			imapHost: section === 'inbound' ? text(values.imapHost) : old?.imapHost ?? null,
-			imapPort: section === 'inbound' ? port(values.imapPort) : old?.imapPort ?? null,
-			imapSecurity: section === 'inbound' ? security(values.imapSecurity, 'ssl/tls') : old?.imapSecurity ?? 'ssl/tls',
+			imapPort: section === 'inbound' ? parseOptionalPort(values.imapPort) : old?.imapPort ?? null,
+			imapSecurity: section === 'inbound' ? normalizeMailSecurity(values.imapSecurity, 'ssl/tls') : old?.imapSecurity ?? 'ssl/tls',
 			imapUsername: section === 'inbound' ? text(values.imapUsername) : old?.imapUsername ?? null,
 			imapPassword: section === 'inbound' && typeof values.imapPassword === 'string' ? values.imapPassword || null : undefined,
 			imapMailbox: section === 'inbound' ? text(values.imapMailbox) ?? 'INBOX' : old?.imapMailbox ?? 'INBOX',
 			useImapForSmtp: section === 'sender' ? values.useImapForSmtp === true : old?.useImapForSmtp ?? true,
 			smtpHost: section === 'sender' ? text(values.smtpHost) : old?.smtpHost ?? null,
-			smtpPort: section === 'sender' ? port(values.smtpPort) : old?.smtpPort ?? null,
-			smtpSecurity: section === 'sender' ? security(values.smtpSecurity, 'starttls') : old?.smtpSecurity ?? 'starttls',
+			smtpPort: section === 'sender' ? parseOptionalPort(values.smtpPort) : old?.smtpPort ?? null,
+			smtpSecurity: section === 'sender' ? normalizeMailSecurity(values.smtpSecurity, 'starttls') : old?.smtpSecurity ?? 'starttls',
 			smtpUsername: section === 'sender' ? text(values.smtpUsername) : old?.smtpUsername ?? null,
 			smtpPassword: section === 'sender' && typeof values.smtpPassword === 'string' ? values.smtpPassword || null : undefined,
 			smtpFrom: section === 'sender' ? text(values.smtpFrom) : old?.smtpFrom ?? null,

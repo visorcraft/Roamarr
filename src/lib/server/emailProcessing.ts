@@ -78,17 +78,32 @@ export interface EmailProcessingPatch {
 
 type ConfigRow = Row<typeof userEmailProcessingConfigs>;
 
-function security(value: string | null): MailSecurity {
-	return value === 'none' || value === 'starttls' || value === 'ssl/tls' ? value : 'ssl/tls';
+export const MAIL_SECURITY_VALUES: readonly MailSecurity[] = ['none', 'starttls', 'ssl/tls'];
+
+export function normalizeMailSecurity(value: unknown, fallback: MailSecurity = 'ssl/tls'): MailSecurity {
+	return value === 'none' || value === 'starttls' || value === 'ssl/tls' ? value : fallback;
+}
+
+export function parseMailSecurityStrict(value: unknown, fallback: MailSecurity): MailSecurity {
+	if (value == null || value === '') return fallback;
+	if (MAIL_SECURITY_VALUES.includes(value as MailSecurity)) return value as MailSecurity;
+	throw new Error('Invalid transport security');
+}
+
+export function parseOptionalPort(value: unknown, label = 'Port'): number | null {
+	if (value == null || (typeof value === 'string' && value.trim() === '')) return null;
+	const n = Number(value);
+	if (!Number.isInteger(n) || n < 1 || n > 65535) throw new Error(`${label} must be between 1 and 65535`);
+	return n;
 }
 
 function publicConfig(row: ConfigRow): EmailProcessingConfig {
 	return {
 		userId: Number(row.user_id), enabled: row.enabled, imapHost: row.imap_host,
-		imapPort: row.imap_port == null ? null : Number(row.imap_port), imapSecurity: security(row.imap_security),
+		imapPort: row.imap_port == null ? null : Number(row.imap_port), imapSecurity: normalizeMailSecurity(row.imap_security),
 		imapUsername: row.imap_username, imapPasswordSet: !!row.imap_password, imapMailbox: row.imap_mailbox,
 		useImapForSmtp: row.use_imap_for_smtp, smtpHost: row.smtp_host,
-		smtpPort: row.smtp_port == null ? null : Number(row.smtp_port), smtpSecurity: security(row.smtp_security),
+		smtpPort: row.smtp_port == null ? null : Number(row.smtp_port), smtpSecurity: normalizeMailSecurity(row.smtp_security),
 		smtpUsername: row.smtp_username, smtpPasswordSet: !!row.smtp_password, smtpFrom: row.smtp_from,
 		aiEnabled: row.ai_enabled, aiBaseUrl: row.ai_base_url, aiModel: row.ai_model,
 		aiTokenSet: !!row.ai_token, aiTokenUrl: row.ai_token_url, aiClientId: row.ai_client_id,
@@ -144,7 +159,7 @@ export function getEmailSmtpConfig(userId: number) {
 	return {
 		host,
 		port: Number(same ? 587n : (row.smtp_port ?? 587n)),
-		security: same ? 'starttls' : security(row.smtp_security),
+		security: same ? 'starttls' : normalizeMailSecurity(row.smtp_security),
 		user: username,
 		pass: encryptedPassword ? decrypt(encryptedPassword) : null,
 		from

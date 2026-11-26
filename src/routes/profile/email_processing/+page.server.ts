@@ -6,31 +6,17 @@ import { sendMail } from '$lib/server/notify';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import {
 	getEmailProcessingConfig,
+	parseMailSecurityStrict,
+	parseOptionalPort,
 	pollUserInbox,
-	saveEmailProcessingConfig,
-	type MailSecurity
+	saveEmailProcessingConfig
 } from '$lib/server/emailProcessing';
 import type { PageServerLoad } from './$types';
 import { getSettings } from '$lib/server/settings';
 
-const SECURITY_VALUES: MailSecurity[] = ['none', 'starttls', 'ssl/tls'];
 const text = (form: FormData, name: string) => String(form.get(name) || '').trim() || null;
 const secret = (form: FormData, name: string, clearName: string) =>
 	form.get(clearName) === 'on' ? null : text(form, name) === '********' ? undefined : text(form, name) ?? undefined;
-
-function port(form: FormData, name: string): number | null {
-	const raw = text(form, name);
-	if (!raw) return null;
-	const value = Number(raw);
-	if (!Number.isInteger(value) || value < 1 || value > 65535) throw new Error(`${name} must be between 1 and 65535`);
-	return value;
-}
-
-function security(form: FormData, name: string, fallback: MailSecurity): MailSecurity {
-	const value = String(form.get(name) || fallback) as MailSecurity;
-	if (!SECURITY_VALUES.includes(value)) throw new Error('Invalid transport security');
-	return value;
-}
 
 export const load: PageServerLoad = ({ locals }) => {
 	const user = requireUser(locals);
@@ -66,10 +52,10 @@ export const actions: Actions = {
 			if (editAi && aiEnabled && aiAuthMode === 'token' && !tokenPresent) throw new Error('API/subscription key is required');
 			if (editAi && aiEnabled && aiAuthMode === 'oauth' && (!text(form, 'aiTokenUrl') || !text(form, 'aiClientId') || !oauthSecretPresent)) throw new Error('OAuth requires token URL, client ID, and client secret');
 			saveEmailProcessingConfig(user.id, {
-				enabled, imapHost, imapPort: editImap ? port(form, 'imapPort') : existing?.imapPort ?? null, imapSecurity: editImap ? security(form, 'imapSecurity', 'ssl/tls') : existing?.imapSecurity ?? 'ssl/tls',
+				enabled, imapHost, imapPort: editImap ? parseOptionalPort(text(form, 'imapPort'), 'imapPort') : existing?.imapPort ?? null, imapSecurity: editImap ? parseMailSecurityStrict(form.get('imapSecurity'), 'ssl/tls') : existing?.imapSecurity ?? 'ssl/tls',
 				imapUsername, imapPassword: editImap ? secret(form, 'imapPassword', 'clearImapPassword') : undefined, imapMailbox: editImap ? text(form, 'imapMailbox') || 'INBOX' : existing?.imapMailbox ?? 'INBOX',
-				useImapForSmtp, smtpHost: editSmtp ? text(form, 'smtpHost') : existing?.smtpHost ?? null, smtpPort: editSmtp ? port(form, 'smtpPort') : existing?.smtpPort ?? null,
-				smtpSecurity: editSmtp ? security(form, 'smtpSecurity', 'starttls') : existing?.smtpSecurity ?? 'starttls', smtpUsername: editSmtp ? text(form, 'smtpUsername') : existing?.smtpUsername ?? null,
+				useImapForSmtp, smtpHost: editSmtp ? text(form, 'smtpHost') : existing?.smtpHost ?? null, smtpPort: editSmtp ? parseOptionalPort(text(form, 'smtpPort'), 'smtpPort') : existing?.smtpPort ?? null,
+				smtpSecurity: editSmtp ? parseMailSecurityStrict(form.get('smtpSecurity'), 'starttls') : existing?.smtpSecurity ?? 'starttls', smtpUsername: editSmtp ? text(form, 'smtpUsername') : existing?.smtpUsername ?? null,
 				smtpPassword: editSmtp ? secret(form, 'smtpPassword', 'clearSmtpPassword') : undefined, smtpFrom: editSmtp ? text(form, 'smtpFrom') || existing?.imapUsername || null : existing?.smtpFrom ?? null,
 				aiEnabled, aiBaseUrl: editAi && aiEnabled ? text(form, 'aiBaseUrl') : existing?.aiBaseUrl ?? null, aiModel: editAi && aiEnabled ? text(form, 'aiModel') : existing?.aiModel ?? null, aiToken: editAi && aiEnabled ? aiAuthMode === 'token' ? aiToken : null : undefined,
 				aiTokenUrl: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiTokenUrl') : null : existing?.aiTokenUrl ?? null, aiClientId: editAi && aiEnabled ? aiAuthMode === 'oauth' ? text(form, 'aiClientId') : null : existing?.aiClientId ?? null,

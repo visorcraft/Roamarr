@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return context;
 });
 
-import { buildEmailIngestionReply, findUserForEmailSender, getEmailProcessingConfig, matchTrip, parseAiJson, parseEmailForUser, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
+import { buildEmailIngestionReply, findUserForEmailSender, getEmailProcessingConfig, matchTrip, normalizeMailSecurity, parseAiJson, parseEmailForUser, parseMailSecurityStrict, parseOptionalPort, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
 import { updateSettings } from './settings';
 import { encrypt } from './crypto';
 import { userEmailProcessingConfigs } from './db/mongrelSchema';
@@ -116,4 +116,55 @@ test('local parser keeps same-line labelled dates ahead of forwarded headers', (
 	const parsed = parseTravelEmailLocal('Hotel confirmation', 'Date: Sep 24 2026\nCheck-in: Oct 3 2026 3:00 PM\nCheck-out: Oct 12 2026 11:00 AM');
 	expect(parsed.startAt).toBe(new Date('Oct 3 2026 3:00 PM').toISOString());
 	expect(parsed.endAt).toBe(new Date('Oct 12 2026 11:00 AM').toISOString());
+});
+
+test('normalizeMailSecurity returns valid values and falls back otherwise', () => {
+	expect(normalizeMailSecurity('none')).toBe('none');
+	expect(normalizeMailSecurity('starttls')).toBe('starttls');
+	expect(normalizeMailSecurity('ssl/tls')).toBe('ssl/tls');
+	expect(normalizeMailSecurity('bogus')).toBe('ssl/tls');
+	expect(normalizeMailSecurity('bogus', 'starttls')).toBe('starttls');
+	expect(normalizeMailSecurity(null)).toBe('ssl/tls');
+	expect(normalizeMailSecurity(undefined, 'none')).toBe('none');
+	expect(normalizeMailSecurity('')).toBe('ssl/tls');
+});
+
+test('parseMailSecurityStrict returns fallback for empty values and valid values as-is', () => {
+	expect(parseMailSecurityStrict(null, 'starttls')).toBe('starttls');
+	expect(parseMailSecurityStrict(undefined, 'ssl/tls')).toBe('ssl/tls');
+	expect(parseMailSecurityStrict('', 'none')).toBe('none');
+	expect(parseMailSecurityStrict('none', 'starttls')).toBe('none');
+	expect(parseMailSecurityStrict('starttls', 'ssl/tls')).toBe('starttls');
+	expect(parseMailSecurityStrict('ssl/tls', 'none')).toBe('ssl/tls');
+});
+
+test('parseMailSecurityStrict throws on invalid values', () => {
+	expect(() => parseMailSecurityStrict('bogus', 'starttls')).toThrow('Invalid transport security');
+	expect(() => parseMailSecurityStrict(42, 'starttls')).toThrow('Invalid transport security');
+});
+
+test('parseOptionalPort returns null for empty values', () => {
+	expect(parseOptionalPort(null)).toBeNull();
+	expect(parseOptionalPort(undefined)).toBeNull();
+	expect(parseOptionalPort('')).toBeNull();
+	expect(parseOptionalPort('   ')).toBeNull();
+});
+
+test('parseOptionalPort parses integers in range 1..65535', () => {
+	expect(parseOptionalPort(1)).toBe(1);
+	expect(parseOptionalPort(65535)).toBe(65535);
+	expect(parseOptionalPort('993')).toBe(993);
+});
+
+test('parseOptionalPort throws for out-of-range, float, and non-numeric values', () => {
+	expect(() => parseOptionalPort(0)).toThrow('Port must be between 1 and 65535');
+	expect(() => parseOptionalPort(65536)).toThrow('Port must be between 1 and 65535');
+	expect(() => parseOptionalPort(1.5)).toThrow('Port must be between 1 and 65535');
+	expect(() => parseOptionalPort('abc')).toThrow('Port must be between 1 and 65535');
+	expect(() => parseOptionalPort('1.5')).toThrow('Port must be between 1 and 65535');
+});
+
+test('parseOptionalPort uses the custom label in the error message', () => {
+	expect(() => parseOptionalPort(0, 'imapPort')).toThrow('imapPort must be between 1 and 65535');
+	expect(() => parseOptionalPort('nope', 'smtpPort')).toThrow('smtpPort must be between 1 and 65535');
 });

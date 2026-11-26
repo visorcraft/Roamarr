@@ -1,5 +1,10 @@
-import { kit } from '../db';
-import { eq, type ColumnSpec, type Insert } from '@visorcraft/mongreldb-kit';
+import { kit, getDb } from '../db';
+import { eq, type ColumnSpec, type Insert, type ConstraintKit } from '@visorcraft/mongreldb-kit';
+
+export function getConstraintKit(): ConstraintKit {
+	const db = getDb();
+	return { db: db.nativeDb, schema: db.schema };
+}
 
 export function toBigInt(id: number): bigint {
 	return BigInt(id);

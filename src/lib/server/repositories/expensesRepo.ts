@@ -16,7 +16,7 @@ import {
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
-import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber } from './kitHelpers';
+import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber, getConstraintKit as constraintKit } from './kitHelpers';
 
 export type KitExpense = Row<typeof tripExpenses>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
@@ -255,11 +255,6 @@ export function listAttachmentsForExpenses(expenseIds: number[]): Map<number, At
 		map.get(expenseId)?.push(att);
 	}
 	return map;
-}
-
-function constraintKit() {
-	const db = getDb();
-	return { db: db.nativeDb, schema: db.schema };
 }
 
 export function createExpenseAttachmentLink(

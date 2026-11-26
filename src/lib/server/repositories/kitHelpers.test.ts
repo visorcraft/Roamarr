@@ -1,5 +1,16 @@
-import { test, expect } from 'vitest';
+import { test, expect, vi } from 'vitest';
+import type { KitDatabase } from '@visorcraft/mongreldb-kit';
+
+const ctx = vi.hoisted(() => ({ kit: null as unknown as KitDatabase }));
+vi.mock('$lib/server/db', async () => {
+	const { freshDb } = await import('../../../../tests/helpers');
+	Object.assign(ctx, freshDb());
+	return ctx;
+});
+
+import { kit } from '$lib/server/db';
 import {
+	getConstraintKit,
 	toBigInt,
 	idFromBigInt,
 	optionalBigInt,
@@ -7,6 +18,12 @@ import {
 	optionalFkNumber,
 	nullableText
 } from './kitHelpers';
+
+test('getConstraintKit returns { db, schema } matching kit', () => {
+	const ck = getConstraintKit();
+	expect(ck.db).toBe(kit.nativeDb);
+	expect(ck.schema).toBe(kit.schema);
+});
 
 test('toBigInt converts a number to bigint', () => {
 	expect(toBigInt(42)).toBe(42n);

@@ -1,5 +1,6 @@
 import { attachments } from '../db/mongrelSchema';
 import { getDb } from '../db';
+import { getConstraintKit as constraintKit } from '../repositories/kitHelpers';
 import { nowIso } from '../tz';
 import {
 	eq,
@@ -58,11 +59,6 @@ function mapRow(row: Record<string, unknown>): AttachmentRecord {
 		context: parseContext(row.context),
 		createdAt: row.created_at as Date | string
 	};
-}
-
-function constraintKit() {
-	const db = getDb();
-	return { db: db.nativeDb, schema: db.schema };
 }
 
 export function createAttachment(input: AttachmentInsert): AttachmentRecord {

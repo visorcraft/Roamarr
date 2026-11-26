@@ -14,10 +14,10 @@ import {
 	deleteUniqueGuards,
 	planDelete,
 	runSyncTxn,
-	type TableSpec,
-	type ConstraintKit
+	type TableSpec
 } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
+import { getConstraintKit as constraintKit } from './repositories/kitHelpers';
 import { userTwoFactor, twoFactorBackupCodes } from './db/mongrelSchema';
 import { encrypt, decrypt } from './crypto';
 import { logAudit } from './audit';
@@ -124,10 +124,6 @@ export function getTwoFactorState(userId: number): TwoFactorState {
 // --- Kit transaction helpers -------------------------------------------------
 // Use kit `runSyncTxn` (retrying on snapshot conflicts) rather than a raw
 // begin/commit — matches attachment/expense repos and the kit production path.
-
-function constraintKit(): ConstraintKit {
-	return { db: kit.nativeDb, schema: kit.schema };
-}
 
 function runKitTransaction(fn: (txn: Transaction) => void): void {
 	runSyncTxn(kit, fn);

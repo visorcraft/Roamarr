@@ -11,7 +11,7 @@ import { kit, getDb } from '$lib/server/db';
 import { tripDocuments, attachments } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
 import { publishTripChanged } from '$lib/server/eventBus';
-import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber } from './kitHelpers';
+import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber, getConstraintKit as constraintKit } from './kitHelpers';
 
 export interface TripDocumentRow {
 	/** Link row id (use in download/delete URLs). */
@@ -53,11 +53,6 @@ function mapJoinedRow(row: Record<string, Record<string, unknown> | null>): Trip
 		sizeBytes: Number(att.size_bytes),
 		createdAt: link.created_at as Date | string
 	};
-}
-
-function constraintKit() {
-	const db = getDb();
-	return { db: db.nativeDb, schema: db.schema };
 }
 
 export function listDocumentsForTrip(tripId: number): TripDocumentRow[] {

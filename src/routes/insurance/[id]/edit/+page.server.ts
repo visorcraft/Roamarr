@@ -7,16 +7,11 @@ import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { getInsurancePolicyById } from '$lib/server/repositories/profileRepo';
 import { updatePolicy } from '$lib/server/insurancePolicies';
 import type { PageServerLoad } from './$types';
-
-function parseId(params: { id?: string }): number {
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	return id;
-}
+import { requirePositiveId } from '$lib/server/params';
 
 export const load: PageServerLoad = ({ params, locals }) => {
 	const u = requireUser(locals);
-	const id = parseId(params);
+	const id = requirePositiveId(params.id);
 	const policy = getInsurancePolicyById(id, u.id);
 	if (!policy) throw error(404, 'Not found');
 	return {
@@ -28,7 +23,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 export const actions: Actions = {
 	update: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const id = parseId(params);
+		const id = requirePositiveId(params.id);
 		const limit = checkRateLimit(getClientAddress(), 'insurance:update');
 		if (!limit.allowed) {
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });

@@ -13,19 +13,14 @@ import { Validator, sanitizeLast4, positiveIdFromForm, currency } from '$lib/ser
 import { logAudit } from '$lib/server/audit';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import type { PageServerLoad } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 
 const allowedNetworks = ['visa', 'mc', 'amex', 'disc', 'other'] as const;
 const allowedBenefitTypes = ['trip_delay', 'baggage_delay', 'trip_cancellation', 'other'] as const;
 
-function parseId(params: { id?: string }): number {
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	return id;
-}
-
 export const load: PageServerLoad = ({ params, locals }) => {
 	const u = requireUser(locals);
-	const id = parseId(params);
+	const id = requirePositiveId(params.id);
 	const card = getCardById(id, u.id);
 	if (!card) throw error(404, 'Not found');
 	return {
@@ -38,7 +33,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 export const actions: Actions = {
 	updateCard: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const id = parseId(params);
+		const id = requirePositiveId(params.id);
 
 		const limit = checkRateLimit(getClientAddress(), 'cards:update');
 		if (!limit.allowed) {
@@ -74,7 +69,7 @@ export const actions: Actions = {
 	},
 	addBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const cardId = parseId(params);
+		const cardId = requirePositiveId(params.id);
 
 		const limit = checkRateLimit(getClientAddress(), 'cards:addBenefit');
 		if (!limit.allowed) {
@@ -147,7 +142,7 @@ export const actions: Actions = {
 	},
 	updateBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const cardId = parseId(params);
+		const cardId = requirePositiveId(params.id);
 
 		const limit = checkRateLimit(getClientAddress(), 'cards:updateBenefit');
 		if (!limit.allowed) {
@@ -205,7 +200,7 @@ export const actions: Actions = {
 	},
 	deleteBenefit: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const cardId = parseId(params);
+		const cardId = requirePositiveId(params.id);
 
 		const limit = checkRateLimit(getClientAddress(), 'cards:deleteBenefit');
 		if (!limit.allowed) {

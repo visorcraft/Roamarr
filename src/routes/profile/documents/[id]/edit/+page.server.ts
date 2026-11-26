@@ -11,12 +11,7 @@ import { kit } from '$lib/server/db';
 import { tripCompanions } from '$lib/server/db/mongrelSchema';
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import type { PageServerLoad } from './$types';
-
-function parseId(params: { id?: string }): number {
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	return id;
-}
+import { requirePositiveId } from '$lib/server/params';
 
 function loadCompanions(userId: number) {
 	const ownedTrips = tripsRepo.listTripsForUser(userId);
@@ -48,7 +43,7 @@ function requireOwnedCompanion(userId: number, companionId: number) {
 
 export const load: PageServerLoad = ({ params, locals }) => {
 	const u = requireUser(locals);
-	const id = parseId(params);
+	const id = requirePositiveId(params.id);
 	const doc = getTravelDocumentById(id, u.id);
 	if (!doc) throw error(404, 'Not found');
 	return {
@@ -60,7 +55,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 export const actions: Actions = {
 	update: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const id = parseId(params);
+		const id = requirePositiveId(params.id);
 		const existing = getTravelDocumentById(id, u.id);
 		if (!existing) throw error(404, 'Not found');
 

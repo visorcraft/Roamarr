@@ -5,16 +5,11 @@ import { Validator } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
 import { getLoyaltyProgramById, updateLoyaltyProgram } from '$lib/server/repositories/profileRepo';
 import type { PageServerLoad } from './$types';
-
-function parseId(params: { id?: string }): number {
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	return id;
-}
+import { requirePositiveId } from '$lib/server/params';
 
 export const load: PageServerLoad = ({ params, locals }) => {
 	const u = requireUser(locals);
-	const id = parseId(params);
+	const id = requirePositiveId(params.id);
 	const program = getLoyaltyProgramById(id, u.id);
 	if (!program) throw error(404, 'Not found');
 	return { program };
@@ -23,7 +18,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 export const actions: Actions = {
 	update: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const id = parseId(params);
+		const id = requirePositiveId(params.id);
 		const limit = checkRateLimit(getClientAddress(), 'loyalty:update');
 		if (!limit.allowed) {
 			return fail(429, { error: 'Too many attempts. Try again later.', retryAfter: limit.retryAfter });

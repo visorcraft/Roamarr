@@ -11,12 +11,7 @@ import {
 import * as tripsRepo from '$lib/server/repositories/tripsRepo';
 import { listTravelDocuments } from '$lib/server/repositories/profileRepo';
 import type { PageServerLoad } from './$types';
-
-function parseId(params: { id?: string }): number {
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
-	return id;
-}
+import { requirePositiveId } from '$lib/server/params';
 
 function resolveLinkedName(refType: string, refId: number, userId: number): string | null {
 	if (!refId) return null;
@@ -33,7 +28,7 @@ function resolveLinkedName(refType: string, refId: number, userId: number): stri
 
 export const load: PageServerLoad = ({ params, locals }) => {
 	const u = requireUser(locals);
-	const id = parseId(params);
+	const id = requirePositiveId(params.id);
 	const reminder = getReminderById(id);
 	if (!reminder || reminder.userId !== u.id) throw error(404, 'Not found');
 	return {
@@ -46,7 +41,7 @@ export const load: PageServerLoad = ({ params, locals }) => {
 export const actions: Actions = {
 	update: async ({ params, request, locals, getClientAddress }) => {
 		const u = requireUser(locals);
-		const id = parseId(params);
+		const id = requirePositiveId(params.id);
 		const existing = getReminderById(id);
 		if (!existing || existing.userId !== u.id) throw error(404, 'Not found');
 

@@ -1,6 +1,12 @@
 <script lang="ts">
 	import Icon from './Icon.svelte';
 	import { m } from '$lib/paraglide/messages';
+	import {
+		comboboxOptionId,
+		createBlurCloseTimer,
+		createDebouncedLookup,
+		resolveComboboxKeydown
+	} from '$lib/combobox';
 
 	export interface AutocompleteSuggestion {
 		id: number;
@@ -49,16 +55,33 @@
 	let suggestions: AutocompleteSuggestion[] = $state([]);
 	let open = $state(false);
 	let activeIndex = $state(-1);
-	let timer: ReturnType<typeof setTimeout> | null = null;
-	let blurTimer: ReturnType<typeof setTimeout> | null = null;
-	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
 	const listboxVisible = $derived(open && suggestions.length > 0);
 	const noResults = $derived(open && suggestions.length === 0);
-	function optionId(i: number): string {
-		return `${name}-option-${i}`;
-	}
+
+	const blurClose = createBlurCloseTimer(() => {
+		open = false;
+	});
+
+	const lookup = createDebouncedLookup<string>(async (query, isCurrent) => {
+		if (typeof window === 'undefined') return;
+		if (query.trim().length < 1) {
+			suggestions = [];
+			open = false;
+			return;
+		}
+		try {
+			const rows = await fetchSuggestions(query);
+			if (!isCurrent()) return;
+			suggestions = rows;
+			open = true;
+		} catch {
+			if (!isCurrent()) return;
+			suggestions = [];
+			open = false;
+		}
+	});
 
 	$effect(() => {
 		activeIndex = open && suggestions.length > 0 ? 0 : -1;
@@ -67,23 +90,12 @@
 	// Keep the keyboard-highlighted option visible inside the capped, scrollable listbox.
 	$effect(() => {
 		if (!open || activeIndex < 0) return;
-		document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+		document.getElementById(comboboxOptionId(name, activeIndex))?.scrollIntoView?.({ block: 'nearest' });
 	});
-
-	function cancelBlurClose() {
-		if (blurTimer) {
-			clearTimeout(blurTimer);
-			blurTimer = null;
-		}
-	}
 
 	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
 	function cancelPendingLookup() {
-		if (timer) {
-			clearTimeout(timer);
-			timer = null;
-		}
-		requestSeq++;
+		lookup.cancel();
 	}
 
 	function selectOption(s: AutocompleteSuggestion) {
@@ -107,101 +119,33 @@
 		onselect?.(null);
 	}
 
-	async function runFetch(query: string, seq: number) {
-		if (typeof window === 'undefined') return;
-		if (query.trim().length < 1) {
-			suggestions = [];
-			open = false;
-			return;
-		}
-		try {
-			const rows = await fetchSuggestions(query);
-			if (seq !== requestSeq) return;
-			suggestions = rows;
-			open = true;
-		} catch {
-			if (seq !== requestSeq) return;
-			suggestions = [];
-			open = false;
-		}
-	}
-
 	function onInput(next: string) {
 		inputValue = next;
 		selectedId = '';
 		selectedLabel = '';
 		onselect?.(null);
-		if (timer) clearTimeout(timer);
-		const seq = ++requestSeq;
-		timer = setTimeout(() => runFetch(next, seq), 150);
+		lookup.schedule(next);
 	}
 
 	function onKeydown(event: KeyboardEvent) {
-		// Enter/arrows that belong to an IME composition must not move or pick an option.
-		// Safari reports isComposing === false with keyCode 229 for the Enter that commits.
-		if (event.isComposing || event.keyCode === 229) return;
-		if (suggestions.length === 0) {
-			if (event.key === 'Escape' && open) open = false;
+		const result = resolveComboboxKeydown(event, { open, activeIndex, count: suggestions.length });
+		if (result.kind === 'ignore') return;
+		if (result.preventDefault) event.preventDefault();
+		if (result.kind === 'select') {
+			selectOption(suggestions[result.index]);
 			return;
 		}
-		switch (event.key) {
-			case 'ArrowDown':
-				event.preventDefault();
-				if (!open) {
-					open = true;
-					activeIndex = 0;
-				} else {
-					activeIndex = (activeIndex + 1) % suggestions.length;
-				}
-				break;
-			case 'ArrowUp':
-				event.preventDefault();
-				if (!open) {
-					open = true;
-					activeIndex = suggestions.length - 1;
-				} else {
-					activeIndex = (activeIndex - 1 + suggestions.length) % suggestions.length;
-				}
-				break;
-			case 'Home':
-				if (open) {
-					event.preventDefault();
-					activeIndex = 0;
-				}
-				break;
-			case 'End':
-				if (open) {
-					event.preventDefault();
-					activeIndex = suggestions.length - 1;
-				}
-				break;
-			case 'Enter':
-				if (open && activeIndex >= 0) {
-					event.preventDefault();
-					selectOption(suggestions[activeIndex]);
-				}
-				break;
-			case 'Escape':
-				if (open) {
-					event.preventDefault();
-					open = false;
-					activeIndex = -1;
-				}
-				break;
-		}
+		open = result.open;
+		activeIndex = result.activeIndex;
 	}
 
 	function onBlur() {
 		cancelPendingLookup();
-		cancelBlurClose();
-		blurTimer = setTimeout(() => {
-			blurTimer = null;
-			open = false;
-		}, 150);
+		blurClose.schedule();
 	}
 
 	function onFocus() {
-		cancelBlurClose();
+		blurClose.cancel();
 	}
 </script>
 
@@ -222,7 +166,7 @@
 		aria-autocomplete="list"
 		aria-expanded={open ? 'true' : 'false'}
 		aria-controls={listboxVisible ? listboxId : undefined}
-		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+		aria-activedescendant={open && activeIndex >= 0 ? comboboxOptionId(name, activeIndex) : undefined}
 		aria-invalid={errors[name] ? 'true' : undefined}
 		aria-describedby={errors[name] ? `${name}-error` : undefined}
 		{disabled}
@@ -253,7 +197,7 @@
 		>
 			{#each suggestions as s, i (s.id)}
 				<li
-					id={optionId(i)}
+					id={comboboxOptionId(name, i)}
 					role="option"
 					aria-selected={i === activeIndex ? 'true' : 'false'}
 				>

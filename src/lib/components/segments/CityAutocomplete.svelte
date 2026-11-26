@@ -1,4 +1,11 @@
 <script lang="ts">
+	import {
+		comboboxOptionId,
+		createBlurCloseTimer,
+		createDebouncedLookup,
+		resolveComboboxKeydown
+	} from '$lib/combobox';
+
 	interface CitySuggestion {
 		name: string;
 		lat: number;
@@ -54,53 +61,14 @@
 	let suggestions: CitySuggestion[] = $state([]);
 	let open = $state(false);
 	let activeIndex = $state(-1);
-	let timer: ReturnType<typeof setTimeout> | null = null;
-	let blurTimer: ReturnType<typeof setTimeout> | null = null;
-	let requestSeq = 0;
 
 	const listboxId = $derived(`${name}-listbox`);
-	function optionId(i: number): string {
-		return `${name}-option-${i}`;
-	}
 
-	// Keep the keyboard-highlighted option visible inside the capped, scrollable listbox.
-	$effect(() => {
-		if (!open || activeIndex < 0) return;
-		document.getElementById(optionId(activeIndex))?.scrollIntoView?.({ block: 'nearest' });
-	});
-
-	$effect(() => {
-		// reset active option when the suggestion set or visibility changes
-		activeIndex = open && suggestions.length > 0 ? 0 : -1;
-	});
-
-	function cancelBlurClose() {
-		if (blurTimer) {
-			clearTimeout(blurTimer);
-			blurTimer = null;
-		}
-	}
-
-	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
-	function cancelPendingLookup() {
-		if (timer) {
-			clearTimeout(timer);
-			timer = null;
-		}
-		requestSeq++;
-	}
-
-	function selectCity(city: CitySuggestion) {
-		cancelPendingLookup();
-		overrideName = city.name;
-		overrideLat = String(city.lat);
-		overrideLng = String(city.lng);
-		suggestions = [];
+	const blurClose = createBlurCloseTimer(() => {
 		open = false;
-		activeIndex = -1;
-	}
+	});
 
-	async function fetchSuggestions(query: string, seq: number) {
+	const lookup = createDebouncedLookup<string>(async (query, isCurrent) => {
 		if (typeof window === 'undefined') return;
 		if (!countryCode || query.length < 2) {
 			suggestions = [];
@@ -116,14 +84,40 @@
 			const res = await fetch(`/api/cities?${params}`);
 			if (!res.ok) return;
 			const data = await res.json();
-			if (seq !== requestSeq) return;
+			if (!isCurrent()) return;
 			suggestions = (data.cities ?? []) as CitySuggestion[];
 			open = suggestions.length > 0;
 		} catch {
-			if (seq !== requestSeq) return;
+			if (!isCurrent()) return;
 			suggestions = [];
 			open = false;
 		}
+	});
+
+	// Keep the keyboard-highlighted option visible inside the capped, scrollable listbox.
+	$effect(() => {
+		if (!open || activeIndex < 0) return;
+		document.getElementById(comboboxOptionId(name, activeIndex))?.scrollIntoView?.({ block: 'nearest' });
+	});
+
+	$effect(() => {
+		// reset active option when the suggestion set or visibility changes
+		activeIndex = open && suggestions.length > 0 ? 0 : -1;
+	});
+
+	/** Drop the queued debounce and invalidate any in-flight lookup so it cannot repopulate the list. */
+	function cancelPendingLookup() {
+		lookup.cancel();
+	}
+
+	function selectCity(city: CitySuggestion) {
+		cancelPendingLookup();
+		overrideName = city.name;
+		overrideLat = String(city.lat);
+		overrideLng = String(city.lng);
+		suggestions = [];
+		open = false;
+		activeIndex = -1;
 	}
 
 	function onInput(next: string) {
@@ -131,79 +125,28 @@
 		// Typing invalidates a prior picker selection; backend can re-resolve exact matches.
 		overrideLat = '';
 		overrideLng = '';
-		if (timer) clearTimeout(timer);
-		const seq = ++requestSeq;
-		timer = setTimeout(() => fetchSuggestions(next, seq), 150);
+		lookup.schedule(next);
 	}
 
 	function onKeydown(event: KeyboardEvent) {
-		// Enter/arrows that belong to an IME composition must not move or pick an option.
-		// Safari reports isComposing === false with keyCode 229 for the Enter that commits.
-		if (event.isComposing || event.keyCode === 229) return;
-		if (suggestions.length === 0) {
-			if (event.key === 'Escape' && open) {
-				open = false;
-			}
+		const result = resolveComboboxKeydown(event, { open, activeIndex, count: suggestions.length });
+		if (result.kind === 'ignore') return;
+		if (result.preventDefault) event.preventDefault();
+		if (result.kind === 'select') {
+			selectCity(suggestions[result.index]);
 			return;
 		}
-		switch (event.key) {
-			case 'ArrowDown':
-				event.preventDefault();
-				if (!open) {
-					open = true;
-					activeIndex = 0;
-				} else {
-					activeIndex = (activeIndex + 1) % suggestions.length;
-				}
-				break;
-			case 'ArrowUp':
-				event.preventDefault();
-				if (!open) {
-					open = true;
-					activeIndex = suggestions.length - 1;
-				} else {
-					activeIndex = (activeIndex - 1 + suggestions.length) % suggestions.length;
-				}
-				break;
-			case 'Home':
-				if (open) {
-					event.preventDefault();
-					activeIndex = 0;
-				}
-				break;
-			case 'End':
-				if (open) {
-					event.preventDefault();
-					activeIndex = suggestions.length - 1;
-				}
-				break;
-			case 'Enter':
-				if (open && activeIndex >= 0) {
-					event.preventDefault();
-					selectCity(suggestions[activeIndex]);
-				}
-				break;
-			case 'Escape':
-				if (open) {
-					event.preventDefault();
-					open = false;
-					activeIndex = -1;
-				}
-				break;
-		}
+		open = result.open;
+		activeIndex = result.activeIndex;
 	}
 
 	function onBlur() {
 		cancelPendingLookup();
-		cancelBlurClose();
-		blurTimer = setTimeout(() => {
-			blurTimer = null;
-			open = false;
-		}, 150);
+		blurClose.schedule();
 	}
 
 	function onFocus() {
-		cancelBlurClose();
+		blurClose.cancel();
 	}
 </script>
 
@@ -219,7 +162,7 @@
 		aria-autocomplete="list"
 		aria-expanded={open ? 'true' : 'false'}
 		aria-controls={listboxId}
-		aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+		aria-activedescendant={open && activeIndex >= 0 ? comboboxOptionId(name, activeIndex) : undefined}
 		aria-invalid={errors[name] ? 'true' : undefined}
 		aria-describedby={errors[name] ? `${name}-error` : undefined}
 		{disabled}
@@ -241,7 +184,7 @@
 		>
 			{#each suggestions as city, i (city.name + city.lat + city.lng)}
 				<li
-					id={optionId(i)}
+					id={comboboxOptionId(name, i)}
 					role="option"
 					aria-selected={i === activeIndex ? 'true' : 'false'}
 				>

@@ -3,28 +3,7 @@ import type { RequestHandler } from './$types';
 import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { deleteTripDocument, readTripDocument } from '$lib/server/tripDocuments';
-
-function sanitizeFilename(name: string): string {
-	let sanitized = name
-		.replace(/[\x00-\x1f\x7f\\/"'\[\]\{\};:|<>?*]/g, '_')
-		.replace(/\.{2,}/g, '_')
-		.trim();
-	sanitized = sanitized.replace(/^[.\s]+/, '') || 'download';
-	const utf8 = Buffer.from(sanitized, 'utf8');
-	if (utf8.length > 255) {
-		let end = 255;
-		while (end > 0 && (utf8[end]! & 0xc0) === 0x80) end--;
-		return utf8.subarray(0, end).toString('utf8');
-	}
-	return sanitized;
-}
-
-function contentDisposition(filename: string, inline: boolean): string {
-	const ascii = filename.replace(/[^\x20-\x7e]/g, '_');
-	const encoded = encodeURIComponent(filename).replace(/['()]/g, escape);
-	const kind = inline ? 'inline' : 'attachment';
-	return `${kind}; filename="${ascii}"; filename*=UTF-8''${encoded}`;
-}
+import { buildContentDisposition, canServeInline, sanitizeDownloadFilename } from '$lib/server/httpDownload';
 
 export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const user = requireUser(locals);
@@ -34,15 +13,14 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	if (actualTripId !== tripId) throw error(404, 'Document not found');
 
 	const displayName = label?.trim() || record.filename;
-	const safeFilename = sanitizeFilename(displayName);
+	const safeFilename = sanitizeDownloadFilename(displayName);
 	// Only images and PDFs may open inline; GPX and anything else downloads.
-	const canInline = record.contentType === 'application/pdf' || record.contentType.startsWith('image/');
-	const inline = canInline && url.searchParams.get('inline') === '1';
+	const inline = canServeInline(record.contentType) && url.searchParams.get('inline') === '1';
 	return new Response(stream, {
 		headers: {
 			'Content-Type': record.contentType,
 			'Content-Length': String(record.sizeBytes),
-			'Content-Disposition': contentDisposition(safeFilename, inline),
+			'Content-Disposition': buildContentDisposition(safeFilename, inline),
 			'Cache-Control': 'private, no-store'
 		}
 	});

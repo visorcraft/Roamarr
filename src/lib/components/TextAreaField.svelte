@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { resolveFieldAria } from '$lib/fieldAria';
+
 	let {
 		name,
 		label,
@@ -29,19 +31,16 @@
 		[key: string]: unknown;
 	} = $props();
 
-	const keys = $derived(Array.from(new Set(Array.isArray(errorKey) ? errorKey : [errorKey])));
-	const errorPairs = $derived(
-		keys.map((k) => ({ id: `${id}-${k}-error`, msg: errors[k] })).filter((p): p is { id: string; msg: string } => Boolean(p.msg))
+	const aria = $derived(
+		resolveFieldAria({ id, errors, errorKey, hint, describedBy: rest['aria-describedby'] })
 	);
-	const invalid = $derived(errorPairs.length > 0);
-	const controlClass = $derived(`textarea ${invalid ? 'input-error' : ''}`.trim());
-	const hintId = $derived(hint ? `${id}-hint` : undefined);
-	const describedBy = $derived([hintId, ...errorPairs.map((p) => p.id)].filter(Boolean).join(' '));
+	const controlClass = $derived(`textarea ${aria.invalid ? 'input-error' : ''}`.trim());
 </script>
 
 <div class="field {wrapClass}">
 	<label class="label" for={id}>{label}</label>
 	<textarea
+		{...rest}
 		{id}
 		{name}
 		{rows}
@@ -49,12 +48,11 @@
 		{required}
 		{disabled}
 		class={controlClass}
-		aria-invalid={invalid ? 'true' : undefined}
-		aria-describedby={describedBy || undefined}
-		{...rest}
+		aria-invalid={aria.invalid ? 'true' : undefined}
+		aria-describedby={aria.describedBy}
 	>{value as string | undefined}</textarea>
-	{#if hint}<p class="field-help" id={hintId}>{hint}</p>{/if}
-	{#each errorPairs as p (p.id)}
+	{#if hint}<p class="field-help" id={aria.hintId}>{hint}</p>{/if}
+	{#each aria.errorPairs as p (p.id)}
 		<p class="field-error" id={p.id}>{p.msg}</p>
 	{/each}
 </div>

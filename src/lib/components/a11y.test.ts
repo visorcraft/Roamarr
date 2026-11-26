@@ -251,3 +251,66 @@ describe('Shared field hint parity', () => {
 		expect(selectViolations, formatViolations(selectViolations)).toHaveLength(0);
 	});
 });
+
+describe('TextAreaField parity', () => {
+	test('TextAreaField forwards caller aria-describedby tokens', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', 'aria-describedby': 'edit-user-password-hint' }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="edit-user-password-hint"');
+	});
+
+	test('TextAreaField forwards aria-describedby and still includes hint and error ids', () => {
+		const html = render(TextAreaField, {
+			props: {
+				name: 'notes',
+				label: 'Notes',
+				hint: 'Markdown supported',
+				'aria-describedby': 'edit-user-password-hint',
+				errors: { notes: 'Required' }
+			}
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="edit-user-password-hint notes-hint notes-notes-error"');
+		expect(tag).toContain('aria-invalid="true"');
+	});
+
+	test('TextAreaField normalises whitespace in forwarded aria-describedby', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', 'aria-describedby': '  a  b ' }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="a b"');
+	});
+
+	test('TextAreaField with multiple error keys links both error ids', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', errorKey: ['start', 'end'], errors: { start: 'Bad start', end: 'Bad end' } }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="notes-start-error notes-end-error"');
+	});
+
+	test('TextAreaField computed aria-invalid wins over forwarded aria-invalid', () => {
+		const html = render(TextAreaField, {
+			props: { name: 'notes', label: 'Notes', 'aria-invalid': 'false', errors: { notes: 'Required' } }
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-invalid="true"');
+	});
+
+	test('TextAreaField computed aria-describedby wins over forwarded aria-describedby', () => {
+		const html = render(TextAreaField, {
+			props: {
+				name: 'notes',
+				label: 'Notes',
+				'aria-describedby': 'forwarded-hint',
+				errors: { notes: 'Required' }
+			}
+		}).body;
+		const tag = html.match(/<textarea\b[^>]*>/)?.[0] ?? '';
+		expect(tag).toContain('aria-describedby="forwarded-hint notes-notes-error"');
+		expect(tag).not.toContain('aria-describedby="forwarded-hint"');
+	});
+});

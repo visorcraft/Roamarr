@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { getGroupById, deleteGroup, updateGroup } from '$lib/server/repositories/tripsRepo';
@@ -8,8 +9,7 @@ import { logAudit } from '$lib/server/audit';
 import { Validator } from '$lib/server/validation';
 
 export const PATCH: RequestHandler = async ({ params, locals, request, getClientAddress }) => {
-	const u = requireUser(locals), id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
+	const u = requireUser(locals), id = requirePositiveId(params.id);
 	requireOwnedGroup(u.id, id);
 	const limit = checkRateLimit(getClientAddress(), 'api:groups:update');
 	if (!limit.allowed) throw error(429, 'Too many requests');
@@ -23,8 +23,7 @@ export const PATCH: RequestHandler = async ({ params, locals, request, getClient
 
 export const DELETE: RequestHandler = async ({ params, locals, getClientAddress }) => {
 	const u = requireUser(locals);
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
+	const id = requirePositiveId(params.id);
 
 	const limit = checkRateLimit(getClientAddress(), 'api:groups:delete');
 	if (!limit.allowed) throw error(429, 'Too many requests');

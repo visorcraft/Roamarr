@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { getSegmentById, listAttendeesForSegment } from '$lib/server/repositories/segmentsRepo';
 import { requireViewableTrip } from '$lib/server/ownership';
@@ -9,7 +10,7 @@ import { logAudit } from '$lib/server/audit';
 import { utcToLocal } from '$lib/server/tz';
 import { canEdit, canViewDetails } from '$lib/server/sharing';
 
-const load = (raw: string | undefined, userId: number) => { const id = Number(raw); if (!Number.isSafeInteger(id) || id < 1) throw error(404, 'Not found'); const segment = getSegmentById(id); if (!segment) throw error(404, 'Not found'); requireViewableTrip(userId, segment.tripId); return segment; };
+const load = (raw: string | undefined, userId: number) => { const id = requirePositiveId(raw); const segment = getSegmentById(id); if (!segment) throw error(404, 'Not found'); requireViewableTrip(userId, segment.tripId); return segment; };
 const editable = (segment: ReturnType<typeof getSegmentById> & {}) => ({ ...segment, localStart: utcToLocal(segment.startAt, segment.startTz), endAt: segment.endAt ? utcToLocal(segment.endAt, segment.endTz ?? segment.startTz) : null, meetingAt: segment.meetingAt ? utcToLocal(segment.meetingAt, segment.startTz) : null });
 const projectSegment = (segment: ReturnType<typeof getSegmentById> & {}, full: boolean) => {
 	const value = editable(segment);

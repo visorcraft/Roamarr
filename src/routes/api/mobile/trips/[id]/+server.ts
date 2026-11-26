@@ -1,13 +1,12 @@
-import { error, json } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { loadTripFor } from '../../../../trips/shared';
 import { effectiveTripStatus, todayForUser } from '$lib/server/tripLifecycle';
 
-const id = (raw: string | undefined) => { const value = Number(raw); if (!Number.isSafeInteger(value) || value < 1) throw error(404, 'Not found'); return value; };
-
 export const GET: RequestHandler = ({ locals, params }) => {
-	const user = requireUser(locals), view = loadTripFor(user.id, id(params.id));
+	const user = requireUser(locals), view = loadTripFor(user.id, requirePositiveId(params.id));
 	const today = todayForUser(user.id);
 	if (!view.editor) return json({ trip: { ...view.trip, status: effectiveTripStatus(view.trip, today), canEdit: false, owner: false } });
 	const trip = view.trip;

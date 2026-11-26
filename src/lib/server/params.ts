@@ -8,8 +8,12 @@ export function parsePositiveId(value: unknown): number | null {
 	return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+export function requirePositiveId(value: unknown, status = 404, message = 'Not found'): number {
+	const id = parsePositiveId(value);
+	if (id === null) throw error(status, message);
+	return id;
+}
+
 export function parseTripId(params: Record<string, string>) {
-	const tripId = parsePositiveId(params.id);
-	if (tripId === null) throw error(404, 'Not found');
-	return tripId;
+	return requirePositiveId(params.id);
 }

@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { requireViewableTrip } from '$lib/server/ownership';
 import { canViewDetails } from '$lib/server/sharing';
@@ -8,23 +9,16 @@ import {
 	listTripDocuments
 } from '$lib/server/tripDocuments';
 
-const tripIdParam = (value: string | undefined) => {
-	const id = Number(value);
-	if (!Number.isSafeInteger(id) || id < 1) throw error(400, 'Invalid trip id');
-	return id;
-};
-
 export const GET: RequestHandler = ({ params, locals, url }) => {
 	const user = requireUser(locals);
-	const tripId = tripIdParam(params.id);
+	const tripId = requirePositiveId(params.id, 400, 'Invalid trip id');
 	const trip = requireViewableTrip(user.id, tripId);
 	const showNotes = canViewDetails(user.id, trip);
 
 	const segmentRaw = url.searchParams.get('segmentId');
 	let rows = listTripDocuments(tripId);
 	if (segmentRaw != null && segmentRaw.trim() !== '') {
-		const segmentId = Number(segmentRaw);
-		if (!Number.isSafeInteger(segmentId) || segmentId < 1) throw error(400, 'Invalid segment id');
+		const segmentId = requirePositiveId(segmentRaw.trim(), 400, 'Invalid segment id');
 		rows = rows.filter((row) => row.segmentId === segmentId);
 	}
 
@@ -45,7 +39,7 @@ export const GET: RequestHandler = ({ params, locals, url }) => {
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireUser(locals);
-	const tripId = tripIdParam(params.id);
+	const tripId = requirePositiveId(params.id, 400, 'Invalid trip id');
 	const form = await request.formData();
 	const file = form.get('file');
 	if (!(file instanceof File) || file.size === 0) throw error(400, 'File required');
@@ -55,9 +49,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const segmentRaw = form.get('segmentId');
 	let segmentId: number | null = null;
 	if (segmentRaw != null && String(segmentRaw).trim() !== '') {
-		const parsed = Number(segmentRaw);
-		if (!Number.isSafeInteger(parsed) || parsed < 1) throw error(400, 'Invalid segment id');
-		segmentId = parsed;
+		segmentId = requirePositiveId(String(segmentRaw).trim(), 400, 'Invalid segment id');
 	}
 
 	const result = await addTripDocument(user.id, tripId, {

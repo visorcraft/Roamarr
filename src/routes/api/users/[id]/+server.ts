@@ -1,13 +1,13 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireAdmin } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { adminDeleteUser } from '$lib/server/users';
 
 export const DELETE: RequestHandler = async ({ params, locals, getClientAddress }) => {
 	const admin = requireAdmin(locals);
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id <= 0) throw error(400, 'Invalid user.');
+	const id = requirePositiveId(params.id, 400, 'Invalid user.');
 
 	const limit = checkRateLimit(getClientAddress(), 'api:users:delete');
 	if (!limit.allowed) {

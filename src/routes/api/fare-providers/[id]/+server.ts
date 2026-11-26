@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireAdmin } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { deleteProvider, updateProvider } from '$lib/server/fareproviders';
@@ -7,8 +8,7 @@ import { logAudit } from '$lib/server/audit';
 
 export const DELETE: RequestHandler = async ({ params, locals, getClientAddress }) => {
 	const admin = requireAdmin(locals);
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(400, 'Invalid id');
+	const id = requirePositiveId(params.id, 400, 'Invalid id');
 	const limit = checkRateLimit(getClientAddress(), 'api:fare-providers:delete');
 	if (!limit.allowed) throw error(429, 'Too many requests');
 	deleteProvider(admin.id, id);
@@ -18,8 +18,7 @@ export const DELETE: RequestHandler = async ({ params, locals, getClientAddress 
 
 export const PATCH: RequestHandler = async ({ params, request, locals, getClientAddress }) => {
 	const admin = requireAdmin(locals);
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(400, 'Invalid id');
+	const id = requirePositiveId(params.id, 400, 'Invalid id');
 	const limit = checkRateLimit(getClientAddress(), 'fare-providers:update');
 	if (!limit.allowed) throw error(429, 'Too many requests');
 	const body = await request.json().catch(() => { throw error(400, 'Invalid JSON'); });

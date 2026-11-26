@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { safeNextPath, parsePositiveId, parseTripId } from './params';
+import { safeNextPath, parsePositiveId, parseTripId, requirePositiveId } from './params';
 
 test('safeNextPath keeps same-site paths unchanged', () => {
 	expect(safeNextPath('/')).toBe('/');
@@ -69,4 +69,21 @@ test('parseTripId throws 404 Not found for malformed ids', () => {
 	for (const id of ['abc', '', '0', '-3', '1.5', '1e3', '0x10', ' 12', '99999999999999999999']) {
 		expect(() => parseTripId({ id })).toThrowError(expect.objectContaining({ status: 404, body: { status: 404, message: 'Not found' } }));
 	}
+});
+
+test('requirePositiveId returns parsed integer for valid plain decimal strings', () => {
+	expect(requirePositiveId('42')).toBe(42);
+	expect(requirePositiveId('007')).toBe(7);
+	expect(requirePositiveId('9007199254740991')).toBe(9007199254740991);
+});
+
+test('requirePositiveId throws 404 Not found by default for invalid inputs', () => {
+	for (const value of ['abc', '', '0', '-3', '1.5', '0x10', '1e3', ' 12', undefined, null]) {
+		expect(() => requirePositiveId(value)).toThrowError(expect.objectContaining({ status: 404, body: { status: 404, message: 'Not found' } }));
+	}
+});
+
+test('requirePositiveId throws custom status and message when supplied', () => {
+	expect(() => requirePositiveId('abc', 400, 'Invalid id')).toThrowError(expect.objectContaining({ status: 400, body: { status: 400, message: 'Invalid id' } }));
+	expect(() => requirePositiveId('abc', 404, 'Segment not found')).toThrowError(expect.objectContaining({ status: 404, body: { status: 404, message: 'Segment not found' } }));
 });

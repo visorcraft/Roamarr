@@ -1,13 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { deleteTripDocument, readTripDocument } from '$lib/server/tripDocuments';
-
-const positiveId = (value: string | undefined, label: string) => {
-	const id = Number(value);
-	if (!Number.isSafeInteger(id) || id < 1) throw error(400, `Invalid ${label}`);
-	return id;
-};
 
 function sanitizeFilename(name: string): string {
 	let sanitized = name
@@ -33,8 +28,8 @@ function contentDisposition(filename: string, inline: boolean): string {
 
 export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const user = requireUser(locals);
-	const tripId = positiveId(params.id, 'trip id');
-	const docId = positiveId(params.docId, 'document id');
+	const tripId = requirePositiveId(params.id, 400, 'Invalid trip id');
+	const docId = requirePositiveId(params.docId, 400, 'Invalid document id');
 	const { stream, record, tripId: actualTripId, label } = await readTripDocument(user.id, docId);
 	if (actualTripId !== tripId) throw error(404, 'Document not found');
 
@@ -55,8 +50,8 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const user = requireUser(locals);
-	const tripId = positiveId(params.id, 'trip id');
-	const docId = positiveId(params.docId, 'document id');
+	const tripId = requirePositiveId(params.id, 400, 'Invalid trip id');
+	const docId = requirePositiveId(params.docId, 400, 'Invalid document id');
 	const { tripId: actualTripId } = await readTripDocument(user.id, docId);
 	if (actualTripId !== tripId) throw error(404, 'Document not found');
 	await deleteTripDocument(user.id, docId);

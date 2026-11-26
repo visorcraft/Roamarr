@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { requirePositiveId } from '$lib/server/params';
 import { requireUser } from '$lib/server/auth';
 import { checkRateLimit } from '$lib/server/rateLimit';
 import { getReminderById, deleteReminder } from '$lib/server/repositories/remindersRepo';
@@ -7,8 +8,7 @@ import { logAudit } from '$lib/server/audit';
 
 export const DELETE: RequestHandler = async ({ params, locals, getClientAddress }) => {
 	const u = requireUser(locals);
-	const id = Number(params.id);
-	if (!Number.isInteger(id) || id < 1) throw error(404, 'Not found');
+	const id = requirePositiveId(params.id);
 
 	const limit = checkRateLimit(getClientAddress(), 'api:reminders:delete');
 	if (!limit.allowed) throw error(429, 'Too many requests');

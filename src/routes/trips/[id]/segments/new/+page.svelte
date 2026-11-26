@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { ADD_SEGMENT_WIZARD_TYPES, SEG } from '$lib/segmentLabels';
+	import { ADD_SEGMENT_WIZARD_TYPES } from '$lib/segmentLabels';
+	import SegmentIcon from '$lib/components/SegmentIcon.svelte';
 	import CancelButton from '$lib/components/CancelButton.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { goto } from '$app/navigation';
@@ -27,7 +28,7 @@
 			class="choice-card"
 		>
 			<span class="choice-icon">
-				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">{@html SEG[option.type].icon}</svg>
+				<SegmentIcon type={option.type} class="h-5 w-5" />
 			</span>
 			<span class="choice-title">{option.label}</span>
 		</a>

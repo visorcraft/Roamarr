@@ -3,6 +3,7 @@
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
 	import { formatDestination } from '$lib/tripDestination';
 	import Icon from '$lib/components/Icon.svelte';
+	import SegmentIcon from '$lib/components/SegmentIcon.svelte';
 
 	let { data } = $props();
 	const { formatDateTime } = useDateFormat();
@@ -30,7 +31,7 @@
 			{#each data.trip.segments as s, i (i)}
 				<li class="list-item flex items-start gap-3">
 					<span class="list-icon">
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4.5 w-4.5">{@html SEG[s.type as keyof typeof SEG]?.icon ?? ''}</svg>
+						<SegmentIcon type={s.type} class="h-4.5 w-4.5" />
 					</span>
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2">

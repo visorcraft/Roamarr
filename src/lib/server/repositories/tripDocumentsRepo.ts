@@ -11,19 +11,7 @@ import { kit, getDb } from '$lib/server/db';
 import { tripDocuments, attachments } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
 import { publishTripChanged } from '$lib/server/eventBus';
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function num(v: bigint | number): number {
-	return Number(v);
-}
-
-function nullableIntToNumber(id: bigint | null | undefined): number | null {
-	if (id == null || id === 0n) return null;
-	return Number(id);
-}
+import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber } from './kitHelpers';
 
 export interface TripDocumentRow {
 	/** Link row id (use in download/delete URLs). */

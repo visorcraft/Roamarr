@@ -13,6 +13,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { publishSharesChanged, publishTripChanged } from '$lib/server/eventBus';
+import { toBigInt as kitId, idFromBigInt as num } from './kitHelpers';
 
 export type KitTrip = Row<typeof trips>;
 export type KitTripComment = Row<typeof tripComments>;
@@ -81,14 +82,6 @@ export interface Group {
 export interface GroupMember {
 	groupId: number;
 	userId: number;
-}
-
-function kitId(id: number): bigint {
-	return BigInt(id);
-}
-
-function num(id: bigint): number {
-	return Number(id);
 }
 
 export function toTrip(row: KitTrip): Trip {

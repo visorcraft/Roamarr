@@ -2,6 +2,7 @@ import { eq as kitEq, and as kitAnd, inList as kitInList, asc as kitAsc } from '
 import { kit } from '$lib/server/db';
 import { tripPolls, tripPollOptions, tripPollVotes } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert } from '@visorcraft/mongreldb-kit';
+import { toBigInt, idFromBigInt } from './kitHelpers';
 
 export type KitPoll = Row<typeof tripPolls>;
 export type KitPollOption = Row<typeof tripPollOptions>;
@@ -27,14 +28,6 @@ export interface Poll {
 	createdAt: string;
 	options: PollOption[];
 	votes: PollVote[];
-}
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function idFromBigInt(id: bigint): number {
-	return Number(id);
 }
 
 function toPoll(row: KitPoll): Poll {

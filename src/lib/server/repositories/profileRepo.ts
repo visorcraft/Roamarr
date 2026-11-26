@@ -15,41 +15,8 @@ import { sanitizeLast4 } from '$lib/server/validation';
 import { logAudit } from '$lib/server/audit';
 import { compareRows } from '$lib/server/sortUtils';
 import { nowIso } from '$lib/server/tz';
-import type { Row, Insert, Update, ColumnSpec } from '@visorcraft/mongreldb-kit';
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function idFromBigInt(id: bigint): number {
-	return Number(id);
-}
-
-function optionalBigInt(value: number | null | undefined): bigint | null {
-	return value == null ? null : BigInt(value);
-}
-
-function optionalNumber(value: bigint | null | undefined): number | null {
-	return value == null ? null : Number(value);
-}
-
-function optionalFkNumber(value: bigint | null | undefined): number | null {
-	return value == null || value === 0n ? null : Number(value);
-}
-
-function nullableText(value: string | null | undefined): string | null {
-	return value == null || value === '' ? null : value;
-}
-
-function kitReinsertWithId(
-	table: { id: ColumnSpec; columns: readonly ColumnSpec[] },
-	existing: Record<string, unknown>,
-	patch: Record<string, unknown>
-): Record<string, unknown> {
-	const updated = { ...existing, ...patch };
-	kit.deleteFrom(table as never).where(eq(table.id, existing.id as bigint)).executeSync();
-	return kit.insertInto(table as never).values(updated as Insert<never>).executeSync();
-}
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { toBigInt, idFromBigInt, optionalBigInt, optionalNumber, optionalFkNumber, nullableText, kitReinsertWithId } from './kitHelpers';
 
 // ============================================================================
 // Travel documents

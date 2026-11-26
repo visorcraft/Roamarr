@@ -16,6 +16,7 @@ import {
 import { countNotifications } from './remindersRepo';
 import { countSegments } from './segmentsRepo';
 import type { Row, Insert } from '@visorcraft/mongreldb-kit';
+import { toBigInt, idFromBigInt } from './kitHelpers';
 
 interface AuditMeta {
 	[key: string]: unknown;
@@ -64,16 +65,6 @@ export interface AdminStats {
 // MongrelDB Kit 0.52.2+ removed the JS Kit's 10000-row iterator cap, so this
 // is no longer capped by the engine.
 export const AUDIT_SEARCH_SCAN_LIMIT = 9_500;
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function idFromBigInt(id: bigint): number {
-	return Number(id);
-}
-
-
 
 export function logAudit(
 	userId: number,

@@ -5,6 +5,7 @@ import { placeLinks } from '$lib/server/db/mongrelSchema';
 import { getPlaceById } from './places';
 import { logAudit } from './audit';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { toBigInt } from './repositories/kitHelpers';
 
 // Mirrors tripDocumentLinks.ts at place scope. Places are owner-only (no
 // sharing), so every mutation verifies the place belongs to the user.
@@ -29,10 +30,6 @@ export type PlaceLinkPatch = Partial<PlaceLinkInput>;
 export const PLACE_LINK_LABEL_MAX = 200;
 export const PLACE_LINK_URL_MAX = 2000;
 export const PLACE_LINK_NOTES_MAX = 2000;
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
 
 function toPlaceLink(row: Row<typeof placeLinks>): PlaceLink {
 	return {

@@ -9,32 +9,9 @@ import {
 	deleteAttachment
 } from '$lib/server/attachments/attachmentService';
 import { logAudit } from '$lib/server/audit';
-import type { Row, Insert, Update, ColumnSpec } from '@visorcraft/mongreldb-kit';
+import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import type { PlaceStatus } from '$lib/server/db/mongrelSchema';
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function idFromBigInt(id: bigint): number {
-	return Number(id);
-}
-
-function optionalBigInt(value: number | null | undefined): bigint | null {
-	return value == null ? null : BigInt(value);
-}
-
-function optionalNumber(value: bigint | null | undefined): number | null {
-	return value == null ? null : Number(value);
-}
-
-function optionalFkNumber(value: bigint | null | undefined): number | null {
-	return value == null || value === 0n ? null : Number(value);
-}
-
-function nullableText(value: string | null | undefined): string | null {
-	return value == null || value === '' ? null : value;
-}
+import { toBigInt, idFromBigInt, optionalBigInt, optionalNumber, optionalFkNumber, nullableText, kitReinsertWithId } from './repositories/kitHelpers';
 
 /** Fire-and-forget semantic index refresh; no-op when embeddings are disabled. */
 function schedulePlaceIndex(placeId: number): void {
@@ -57,18 +34,6 @@ function scheduleCategoryPlacesReindex(categoryId: number, userId: number): void
 		.executeSync()
 		.map((r) => idFromBigInt(r.id));
 	for (const id of ids) schedulePlaceIndex(id);
-}
-
-// updateTable cannot clear nullable FK columns to NULL (see profileRepo);
-// delete + reinsert with the merged row instead.
-function kitReinsertWithId(
-	table: { id: ColumnSpec; columns: readonly ColumnSpec[] },
-	existing: Record<string, unknown>,
-	patch: Record<string, unknown>
-): Record<string, unknown> {
-	const updated = { ...existing, ...patch };
-	kit.deleteFrom(table as never).where(eq(table.id, existing.id as bigint)).executeSync();
-	return kit.insertInto(table as never).values(updated as Insert<never>).executeSync();
 }
 
 // ============================================================================

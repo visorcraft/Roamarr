@@ -17,6 +17,7 @@ import {
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import { nowIso } from '$lib/server/tz';
 import { compareRows } from '$lib/server/sortUtils';
+import { toBigInt, idFromBigInt as num } from './kitHelpers';
 
 export interface ReminderRow {
 	id: number;
@@ -62,14 +63,6 @@ export interface SchedulerRunRow {
 type KitReminder = Row<typeof kitReminders>;
 type KitNotification = Row<typeof kitNotifications>;
 type KitSchedulerRun = Row<typeof kitSchedulerRuns>;
-
-function num(id: bigint): number {
-	return Number(id);
-}
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
 
 function toReminderRow(row: KitReminder): ReminderRow {
 	return {

@@ -3,6 +3,7 @@ import { kit } from '$lib/server/db';
 import { users, sessions, passwordResetTokens } from '$lib/server/db/mongrelSchema';
 import { compareRows } from '$lib/server/sortUtils';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { toBigInt } from './kitHelpers';
 
 export type KitUser = Row<typeof users>;
 export type KitSession = Row<typeof sessions>;
@@ -12,10 +13,6 @@ export type CreateUserInput = Omit<Insert<typeof users>, 'id' | 'created_at'>;
 export type UpdateUserInput = Update<typeof users>;
 export type CreateSessionInput = Omit<Insert<typeof sessions>, 'id' | 'created_at'>;
 export type CreatePasswordResetTokenInput = Omit<Insert<typeof passwordResetTokens>, 'id' | 'created_at'>;
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
 
 export function getUserByEmail(email: string): KitUser | null {
 	const rows = kit.selectFrom(users).where(kitEq(users.email, email)).executeSync();

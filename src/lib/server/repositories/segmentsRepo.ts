@@ -4,6 +4,7 @@ import { segments, segmentAttendees, tripCompanions } from '$lib/server/db/mongr
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
 import type { SegmentType, SegmentStatus, SegmentAttendeeStatus, CompanionCategory } from '$lib/server/db/mongrelSchema';
 import { publishTripChanged } from '$lib/server/eventBus';
+import { toBigInt, optionalFkNumber as nullableIntToNumber } from './kitHelpers';
 
 export type KitSegment = Row<typeof segments>;
 export type KitSegmentAttendee = Row<typeof segmentAttendees>;
@@ -23,15 +24,6 @@ export type AttendeeWithCompanion = {
 	category: CompanionCategory;
 	status: SegmentAttendeeStatus;
 };
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function nullableIntToNumber(id: bigint | null | undefined): number | null {
-	if (id == null || id === 0n) return null;
-	return Number(id);
-}
 
 function serializeDetailsJson(value: unknown): string | null {
 	if (value == null) return null;

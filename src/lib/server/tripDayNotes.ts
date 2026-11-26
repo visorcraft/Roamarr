@@ -1,6 +1,6 @@
 import { error, redirect, type RequestEvent } from '@sveltejs/kit';
 import { and, eq } from '@visorcraft/mongreldb-kit';
-import type { ColumnSpec, Insert, Row, Update } from '@visorcraft/mongreldb-kit';
+import type { Insert, Row, Update } from '@visorcraft/mongreldb-kit';
 import { kit } from '$lib/server/db';
 import { tripDayNotes } from '$lib/server/db/mongrelSchema';
 import { ICON_PATHS, type IconName } from '$lib/icons';
@@ -9,6 +9,7 @@ import { publishTripChanged } from './eventBus';
 import { requireEditableTrip, requireViewableTrip } from './ownership';
 import { Validator, formFail } from './validation';
 import { withTripAction } from './actions';
+import { kitReinsertWithId } from './repositories/kitHelpers';
 
 const BODY_MAX = 10000;
 
@@ -57,18 +58,6 @@ function findDayNoteRow(tripId: number, date: string): Row<typeof tripDayNotes> 
 		.selectFrom(tripDayNotes)
 		.where(and(eq(tripDayNotes.trip_id, BigInt(tripId)), eq(tripDayNotes.date, date)))
 		.executeSync()[0];
-}
-
-// updateTable cannot clear a nullable column to NULL (see places.ts);
-// delete + reinsert with the merged row instead.
-function kitReinsertWithId(
-	table: { id: ColumnSpec; columns: readonly ColumnSpec[] },
-	existing: Record<string, unknown>,
-	patch: Record<string, unknown>
-): Record<string, unknown> {
-	const updated = { ...existing, ...patch };
-	kit.deleteFrom(table as never).where(eq(table.id, existing.id as bigint)).executeSync();
-	return kit.insertInto(table as never).values(updated as Insert<never>).executeSync();
 }
 
 export function listDayNotes(userId: number, tripId: number): DayNote[] {

@@ -6,6 +6,7 @@ import {
 	packingTemplateItems
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
+import { toBigInt, idFromBigInt } from './kitHelpers';
 
 export type KitTripTemplate = Row<typeof tripTemplates>;
 export type KitPackingTemplate = Row<typeof packingTemplates>;
@@ -35,14 +36,6 @@ export interface PackingTemplateItem {
 	label: string;
 	category: string;
 	createdAt: string;
-}
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function idFromBigInt(id: bigint): number {
-	return Number(id);
 }
 
 function parseSnapshot(json: unknown): Record<string, unknown> {

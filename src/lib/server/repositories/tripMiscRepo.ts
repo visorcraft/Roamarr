@@ -22,27 +22,7 @@ import {
 } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
 import { publishTripChanged } from '$lib/server/eventBus';
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function kitId(id: number): bigint {
-	return BigInt(id);
-}
-
-function num(id: bigint): number {
-	return Number(id);
-}
-
-function nullableText(value: string | null | undefined): string | null {
-	return value == null || value === '' ? null : value;
-}
-
-function nullableInt(value: number | null | undefined): bigint | null {
-	if (value == null) return null;
-	return BigInt(value);
-}
+import { toBigInt as kitId, idFromBigInt as num, nullableText, optionalBigInt as nullableInt } from './kitHelpers';
 
 // ============================================================================
 // Checklists

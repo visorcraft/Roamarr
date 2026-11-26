@@ -16,6 +16,7 @@ import {
 	tripBudgetCategories
 } from '$lib/server/db/mongrelSchema';
 import { nowIso } from '$lib/server/tz';
+import { toBigInt, idFromBigInt as num, optionalFkNumber as nullableIntToNumber } from './kitHelpers';
 
 export type KitExpense = Row<typeof tripExpenses>;
 export type KitBudgetCategory = Row<typeof tripBudgetCategories>;
@@ -67,19 +68,6 @@ export type CreateBudgetCategoryInput = Pick<BudgetCategoryRow, 'tripId' | 'cate
 	Partial<Pick<BudgetCategoryRow, 'currency'>>;
 
 export type UpdateBudgetCategoryInput = Partial<Pick<BudgetCategoryRow, 'amount' | 'currency'>>;
-
-function toBigInt(id: number): bigint {
-	return BigInt(id);
-}
-
-function num(id: bigint): number {
-	return Number(id);
-}
-
-function nullableIntToNumber(id: bigint | null | undefined): number | null {
-	if (id == null || id === 0n) return null;
-	return Number(id);
-}
 
 function serializeSplitAmong(value: unknown): string {
 	if (value == null) return '[]';

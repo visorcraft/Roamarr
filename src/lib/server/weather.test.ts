@@ -58,7 +58,7 @@ describe('weather', () => {
 	test('weatherIconForCode maps WMO codes to icon names', () => {
 		expect(weatherIconForCode(0)).toBe('sun');
 		expect(weatherIconForCode(1)).toBe('cloud-sun');
-		expect(weatherIconForCode(3)).toBe('cloud-sun');
+		expect(weatherIconForCode(3)).toBe('cloud');
 		expect(weatherIconForCode(45)).toBe('fog');
 		expect(weatherIconForCode(51)).toBe('cloud-drizzle');
 		expect(weatherIconForCode(61)).toBe('cloud-rain');

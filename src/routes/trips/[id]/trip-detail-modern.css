@@ -25,7 +25,6 @@
 	position: sticky;
 	top: 4rem;
 	z-index: 15;
-	margin-inline: calc(var(--spacing, 0.25rem) * -4);
 	background: color-mix(in oklab, var(--theme-canvas) 88%, transparent);
 	border-bottom: 1px solid var(--trip-modern-line);
 	backdrop-filter: blur(16px);
@@ -83,11 +82,19 @@
 }
 
 .trip-modern-toolbar {
-	display: grid;
-	grid-template-columns: minmax(12rem, 17rem) minmax(12rem, 1fr) auto;
-	align-items: start;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: 0.8rem;
 	padding: 1rem 0 1.25rem;
+}
+
+.trip-modern-date-range {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--trip-modern-muted);
+	font-weight: 650;
 }
 
 .trip-modern-control,
@@ -113,6 +120,8 @@
 
 .trip-modern-search {
 	display: flex;
+	flex: 1 1 14rem;
+	min-width: 0;
 	align-items: center;
 	gap: 0.65rem;
 	padding: 0 0.85rem;
@@ -136,8 +145,8 @@
 .trip-modern-toolbar-actions {
 	display: flex;
 	flex-wrap: wrap;
+	min-width: 0;
 	align-items: center;
-	justify-content: flex-end;
 	gap: 0.65rem;
 }
 
@@ -200,9 +209,15 @@
 
 .trip-modern-content {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) minmax(19rem, 30rem);
+	grid-template-columns: minmax(0, 1fr);
 	gap: 1.35rem;
 	align-items: start;
+}
+
+@media (width > 1180px) {
+	.trip-modern-content:has(> .trip-modern-side-panel-open) {
+		grid-template-columns: minmax(0, 1fr) minmax(19rem, 30rem);
+	}
 }
 
 .trip-modern-main {
@@ -463,14 +478,6 @@
 	overscroll-behavior: contain;
 }
 
-.trip-modern-selected-empty {
-	display: grid;
-	min-height: 20rem;
-	place-items: center;
-	text-align: center;
-	color: var(--trip-modern-muted);
-}
-
 .trip-modern-selected-head {
 	display: flex;
 	align-items: start;
@@ -728,10 +735,6 @@
 }
 
 @media (max-width: 1180px) {
-	.trip-modern-content {
-		grid-template-columns: minmax(0, 1fr);
-	}
-
 	.trip-modern-side-panel {
 		position: static;
 	}
@@ -756,45 +759,21 @@
 
 	.trip-modern-tabs-wrap {
 		top: 0;
-		margin-inline: -1rem;
 	}
 
-	.trip-modern-toolbar {
-		grid-template-columns: 1fr;
+	.trip-modern-date-range,
+	.trip-modern-search {
+		flex-basis: 100%;
 	}
 
-	.trip-modern-toolbar-actions {
-		justify-content: stretch;
-	}
-
-	.trip-modern-view-toggle,
-	.trip-modern-control {
+	.trip-modern-view-toggle {
 		width: 100%;
 	}
 
 	.trip-modern-view-button {
 		flex: 1;
-	}
-
-	.trip-modern-day-body::before {
-		left: 4.2rem;
-	}
-
-	.trip-modern-segment {
-		grid-template-columns: 3.4rem minmax(0, 1fr) auto;
-		gap: 0.75rem;
-		padding-left: 0;
-	}
-
-	.trip-modern-time {
-		grid-column: 1 / -1;
-		padding: 0 0 0.1rem 0.2rem;
-		text-align: left;
-	}
-
-	.trip-modern-type-node {
-		height: 3.2rem;
-		width: 3.2rem;
+		justify-content: center;
+		padding-inline: 0.35rem;
 	}
 
 	.trip-modern-detail-row {

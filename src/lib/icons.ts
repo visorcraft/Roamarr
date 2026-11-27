@@ -45,6 +45,7 @@ export type IconName =
 	| 'budget'
 	| 'attachment'
 	| 'sun'
+	| 'cloud'
 	| 'cloud-sun'
 	| 'cloud-drizzle'
 	| 'cloud-rain'
@@ -120,6 +121,7 @@ export const ICON_PATHS: Record<IconName, string> = {
 	attachment:
 		'<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
 	sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>',
+	cloud: '<path d="M17.5 17c2.48 0 4.5-2.02 4.5-4.5S19.98 8 17.5 8c-.24 0-.47.02-.7.06A6.5 6.5 0 0 0 4.5 11.5C4.5 14.54 7.02 17 10.5 17h7z"/>',
 	'cloud-sun':
 		'<path d="M17.5 19c2.48 0 4.5-2.02 4.5-4.5S19.98 10 17.5 10c-.24 0-.47.02-.7.06A6.5 6.5 0 0 0 4.5 13.5C4.5 16.54 7.02 19 10.5 19h7z"/><circle cx="8" cy="8" r="2.5"/><path d="M8 4.5v1m0 5v1M5.5 8h1m3 0h1"/>',
 	'cloud-drizzle':

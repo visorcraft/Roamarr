@@ -38,7 +38,8 @@ export function weatherCodeSummary(code: number): string {
 export function weatherIconForCode(code: number | null): IconName | null {
 	if (code == null) return null;
 	if (code === 0) return 'sun';
-	if (code <= 3) return 'cloud-sun';
+	if (code <= 2) return 'cloud-sun';
+	if (code === 3) return 'cloud';
 	if (code <= 48) return 'fog';
 	if (code <= 57) return 'cloud-drizzle';
 	if (code <= 67) return 'cloud-rain';

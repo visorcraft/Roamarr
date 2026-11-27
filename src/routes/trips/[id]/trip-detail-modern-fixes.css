@@ -1,14 +1,5 @@
 /* Refinements for the mockup-style trip workspace. Kept separate so the
    redesigned area can evolve without touching the preserved hero styles. */
-.trip-modern .trip-modern-toolbar {
-	grid-template-columns: minmax(15rem, 18rem) minmax(18rem, 1fr) auto;
-}
-
-.trip-modern .trip-modern-control > span,
-.trip-modern .trip-modern-control > span span {
-	white-space: nowrap;
-}
-
 .trip-modern .trip-modern-day-card {
 	position: relative;
 	anchor-scope: --trip-timeline-start, --trip-timeline-end;
@@ -310,8 +301,13 @@
 }
 
 @media (max-width: 860px) {
-	.trip-modern .trip-modern-toolbar {
-		grid-template-columns: 1fr;
+	.trip-modern .trip-modern-day-head,
+	.trip-modern .trip-modern-day-head > .flex {
+		gap: 0.5rem;
+	}
+
+	.trip-modern .trip-modern-day-count {
+		white-space: nowrap;
 	}
 
 	.trip-modern .trip-modern-day-body::before {
@@ -321,6 +317,21 @@
 	.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-before::before,
 	.trip-modern .trip-modern-main-timeline .trip-modern-day-card-connects-after::after {
 		left: 3rem;
+	}
+
+	.trip-modern .trip-modern-segment {
+		grid-template-columns: 3.3rem minmax(0, 1fr) auto;
+		gap: 0.75rem;
+		padding-left: 0;
+	}
+
+	.trip-modern .trip-modern-time {
+		grid-column: 1 / -1;
+		padding: 0 0 0.1rem 0.2rem;
+	}
+
+	.trip-modern .trip-modern-segment-side {
+		gap: 0.35rem;
 	}
 
 	.trip-modern .trip-modern-segment:not(.trip-modern-segment-active)::after {

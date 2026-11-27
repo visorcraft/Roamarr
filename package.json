@@ -1,7 +1,7 @@
 {
 	"name": "roamarr",
 	"private": true,
-	"version": "0.53.0",
+	"version": "0.54.0",
 	"license": "GPL-3.0-only",
 	"type": "module",
 	"engines": {
@@ -49,7 +49,7 @@
 		"svelte-check": "^4.7.8",
 		"tailwindcss": "^4.3.5",
 		"typescript": "~6.0.3",
-		"vite": "^8.3.8",
+		"vite": "^8.4.0",
 		"vitest": "^5.1.2"
 	},
 	"dependencies": {
@@ -64,7 +64,7 @@
 		"imapflow": "^2.12.2",
 		"luxon": "^3.7.2",
 		"mailparser": "^3.15.0",
-		"maplibre-gl": "^6.19.0",
+		"maplibre-gl": "^6.20.0",
 		"nodemailer": "^10.6.1",
 		"otpauth": "^9.6.0",
 		"qrcode": "^1.5.4",

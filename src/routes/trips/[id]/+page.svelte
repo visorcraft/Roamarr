@@ -28,7 +28,6 @@
 	import MarkdownText from '$lib/components/MarkdownText.svelte';
 	import { formatArrivalLocal, formatZoneLabel } from '$lib/dateFormat';
 	import { useDateFormat } from '$lib/dateFormatContext.svelte';
-	import { weatherIconForCode } from '$lib/weatherCodes';
 	import { formatDestination } from '$lib/tripDestination';
 	import { formatCents } from '$lib/money';
 	import { REMINDER_OFFSETS } from '$lib/reminderOffsets';
@@ -49,6 +48,7 @@
 	import TripDocumentsTable from '$lib/components/TripDocumentsTable.svelte';
 	import Gallery from '$lib/components/Gallery.svelte';
 	import MailHoldsPanel from '$lib/components/MailHoldsPanel.svelte';
+	import TripWeather from './TripWeather.svelte';
 
 	let { data, form }: { data: PageData; form?: { error?: string; errors?: Record<string, string> } } = $props();
 
@@ -741,11 +741,6 @@
 		return dt.isValid ? formatDate(dt.toISODate()!) : value;
 	}
 
-	function weatherDayChip(date: string) {
-		const dt = DateTime.fromISO(date);
-		return dt.isValid ? dt.toFormat('EEE, MMM d') : date;
-	}
-
 	function formatUpdatedDate(value: string) {
 		const dt = DateTime.fromISO(value);
 		if (!dt.isValid) return value;
@@ -828,7 +823,7 @@
 
 		{#if activeTab === 'itinerary'}
 			<div class="trip-modern-toolbar">
-				<div class="trip-modern-control" aria-label="Trip date range"><span class="inline-flex items-center gap-2"><Icon name="calendar" class="h-4 w-4" /><span>{dateRangeText}</span></span><Icon name="chevron-down" class="h-4 w-4" /></div>
+				<div class="trip-modern-date-range"><Icon name="calendar" class="h-4 w-4 shrink-0" /><span>{dateRangeText}</span></div>
 				<label class="trip-modern-search"><Icon name="search" class="h-4.5 w-4.5" /><span class="sr-only">Search itinerary</span><input type="search" placeholder="Search itinerary…" bind:value={segmentQuery} /></label>
 				<div class="trip-modern-toolbar-actions"><button type="button" class="trip-modern-control" aria-expanded={showTypeFilters} onclick={() => (showTypeFilters = !showTypeFilters)}><Icon name="settings" class="h-4 w-4" /><span>Filters</span></button><button type="button" class="trip-modern-control" aria-label={sortToggleState(sortAscending).label} onclick={() => (sortAscending = !sortAscending)}><span aria-hidden="true">{sortToggleState(sortAscending).glyph}</span><span>Sort</span></button><button type="button" class="trip-modern-control" aria-pressed={showDayNotes} onclick={() => (showDayNotes = !showDayNotes)}><Icon name="document" class="h-4 w-4" /><span>Day notes</span></button><div class="trip-modern-view-toggle" role="group" aria-label="Itinerary view">{#each VIEW_MODES as mode}<button type="button" class="trip-modern-view-button {viewMode === mode ? 'trip-modern-view-button-active' : ''}" aria-pressed={viewMode === mode} onclick={() => (viewMode = mode)}><Icon name={mode === 'timeline' ? 'trips' : mode === 'list' ? 'document' : 'card'} class="h-4 w-4" /><span>{viewModeLabel(mode)}</span></button>{/each}</div>{#if isEditor}<a href={`/trips/${trip.id}/segments/new`} class="btn btn-primary flex items-center gap-2"><Icon name="plus" class="h-4 w-4" /><span>Add segment</span></a>{/if}</div>
 			</div>
@@ -838,24 +833,7 @@
 			<div class="trip-modern-content">
 				<main class="trip-modern-main trip-modern-main-{viewMode}" id="trip-panel-itinerary">
 					{#if ownerTrip?.notes}<section class="trip-modern-panel"><div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Overview</h2></div><MarkdownText text={ownerTrip.notes} class="max-w-none text-sm leading-relaxed" /></section>{/if}
-					{#if data.weather && data.weather.days.length > 0}
-						{@const weather = data.weather}
-						<section class="trip-modern-panel" aria-label="Trip weather">
-							<div class="trip-modern-panel-head"><h2 class="trip-modern-panel-title">Weather</h2></div>
-							{#if weather.advisory}<p class="notice notice-warning mb-3">{weather.advisory}</p>{/if}
-							<div class="flex flex-wrap gap-2">
-								{#each weather.days as day (day.date)}
-									{@const icon = weatherIconForCode(day.code)}
-									<div class="badge badge-brand" title={day.locationLabel ? `${day.summary} — ${day.locationLabel}` : day.summary}>
-										{#if icon}<Icon name={icon} class="h-3.5 w-3.5" />{/if}
-										<span>{weatherDayChip(day.date)}</span>
-										{#if day.tempMax != null && day.tempMin != null}<span class="font-mono">{Math.round(day.tempMax)}{weather.tempUnit} / {Math.round(day.tempMin)}{weather.tempUnit}</span>{:else}<span>{day.summary}</span>{/if}
-										{#if day.typical}<span class="text-xs opacity-70">typical</span>{:else if day.degraded}<span class="text-xs opacity-70">stale</span>{/if}
-									</div>
-								{/each}
-							</div>
-						</section>
-					{/if}
+					{#if data.weather?.days.length}<TripWeather weather={data.weather} />{/if}
 					{#if dayGroups.length}
 						{#each dayGroups as group, groupIndex (group.key)}
 							{@const connectsBefore = viewMode === 'timeline' && groupIndex > 0 && sameFlightBooking(dayGroups[groupIndex - 1]?.segments.at(-1), group.segments[0])}
@@ -936,7 +914,7 @@
 					{:else}<div class="trip-modern-empty">No itinerary segments match your filters.</div>{/if}
 				</main>
 
-				<aside bind:this={sidePanelEl} class="trip-modern-side-panel" class:trip-modern-side-panel-open={selectedSegment} aria-labelledby={selectedSegment ? sidePanelTitleId : undefined} aria-label={selectedSegment ? undefined : 'Selected segment details'} role={selectedSegment ? 'dialog' : undefined} aria-modal={selectedSegment && sidePanelModal ? 'true' : undefined}>
+			<aside bind:this={sidePanelEl} hidden={!selectedSegment} class="trip-modern-side-panel" class:trip-modern-side-panel-open={selectedSegment} aria-labelledby={selectedSegment ? sidePanelTitleId : undefined} role={selectedSegment ? 'dialog' : undefined} aria-modal={selectedSegment && sidePanelModal ? 'true' : undefined}>
 					{#if selectedSegment}
 						<header class="trip-modern-selected-head"><h2 class="trip-modern-selected-title" id={sidePanelTitleId}>Selected segment{#if selectedSegment.title}<span class="sr-only">: {selectedSegment.title}</span>{/if}</h2><button type="button" class="icon-button icon-button-sm" aria-label="Close selected segment" bind:this={sidePanelCloseEl} onclick={closeSidePanel}><Icon name="close" class="h-4 w-4" /></button></header>
 						<div class="trip-modern-selected-summary {segmentTypeClass(selectedSegment.type)}"><span class="trip-modern-selected-node" aria-hidden="true"><SegmentIcon type={selectedSegment.type} /></span><div class="min-w-0 flex-1"><h3 class="trip-modern-selected-name">{selectedSegment.title}</h3><div class="mt-2 flex flex-wrap gap-1.5">{#if selectedSegment.status}<span class="badge badge-compact {segmentStatusClass(selectedSegment.status)}">{segmentStatusLabel(selectedSegment.status)}</span>{/if}{#if selectedSegment.paymentStatus}<span class="badge badge-compact badge-green">{paymentStatusLabel(selectedSegment.paymentStatus)}</span>{/if}</div>{#if selectedPlaceLines.place}<p class="trip-modern-selected-place">{selectedPlaceLines.place}</p>{/if}{#if selectedPlaceLines.address}<p class="trip-modern-selected-address">{selectedPlaceLines.address}</p>{/if}</div></div>
@@ -946,7 +924,7 @@
 
 						{#if isEditor && selectedSegment.id}<div class="trip-modern-selected-actions"><button type="button" class="btn btn-primary" onclick={() => { editingId = selectedSegment.id ?? null; focusedSegmentId = null; }}><Icon name="edit" class="h-4 w-4" />Edit</button><form method="POST" action="?/duplicateSegment" use:enhance={refreshTripAction}><input type="hidden" name="segmentId" value={selectedSegment.id} /><button class="btn btn-secondary"><Icon name="duplicate" class="h-4 w-4" />Duplicate</button></form>{#if selectedSegment.type === 'poi'}<form method="POST" action="?/saveSegmentToPlace" use:enhance={refreshTripAction}><input type="hidden" name="segmentId" value={selectedSegment.id} /><button class="btn btn-secondary"><Icon name="location" class="h-4 w-4" />Save to places</button></form>{/if}<button type="button" class="btn btn-danger" onclick={() => requestDeleteSegment(selectedSegment)}><Icon name="close" class="h-4 w-4" />Delete</button><button type="button" class="btn btn-secondary" onclick={() => (segmentPanelTab = 'reminders')}><Icon name="notification" class="h-4 w-4" />Add reminder</button></div>{/if}
 						{#if selectedSegment.createdAt || selectedSegment.updatedAt}<p class="trip-modern-selected-footer">{#if selectedSegment.createdAt}<span>Created by {selectedCreatorName()} on {formatCreatedDate(selectedSegment.createdAt)}</span>{/if}{#if selectedSegment.createdAt && selectedSegment.updatedAt}<span> · </span>{/if}{#if selectedSegment.updatedAt}<span>Updated {formatUpdatedDate(selectedSegment.updatedAt)}</span>{/if}</p>{/if}
-					{:else}<div class="trip-modern-selected-empty"><div><Icon name="trips" class="mx-auto mb-3 h-8 w-8" /><p>Select a segment to see its details.</p></div></div>{/if}
+					{/if}
 				</aside>
 			</div>
 		{:else if activeTab === 'prep'}

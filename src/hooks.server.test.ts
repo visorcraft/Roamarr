@@ -18,7 +18,7 @@ vi.mock('./lib/server/boot', async () => ({
 	getBootError: () => bootMock.bootError
 }));
 
-import { handle, handleError, isForbiddenCrossSiteForm, requiredApiScope } from './hooks.server';
+import { handle, handleError, isForbiddenCrossSiteForm, requiredApiScope, extractCspScriptTokens } from './hooks.server';
 import { createSession, validateSession } from './lib/server/auth';
 import { updateSettings } from './lib/server/settings';
 import { makeKitUser } from '../tests/kitHelpers';
@@ -326,7 +326,7 @@ test('sets baseline security and CSP headers on a public response', async () => 
 	expect(csp).toBeTruthy();
 	const parsed = parseCsp(csp);
 	expect(parsed.get('default-src')).toContain("'self'");
-	expect(parsed.get('script-src')).toEqual(["'self'", "'unsafe-inline'"]);
+	expect(parsed.get('script-src')).toEqual(["'self'"]);
 	expect(parsed.get('style-src')).toContain("'unsafe-inline'");
 	expect(parsed.get('style-src')).toContain('https://fonts.googleapis.com');
 	expect(parsed.get('font-src')).toContain('https://fonts.gstatic.com');
@@ -337,6 +337,64 @@ test('sets baseline security and CSP headers on a public response', async () => 
 	expect(parsed.get('worker-src')).toContain('blob:');
 	expect(parsed.get('img-src')).toContain('blob:');
 	expect(parsed.get('connect-src')).toContain('https://tile.openstreetmap.org');
+});
+
+test('preserves SvelteKit script nonces while keeping Roamarr CSP directives', async () => {
+	updateSettings({ setupComplete: true });
+	const res = (await handle({
+		event: ev('/login') as any,
+		resolve: async () => new Response('ok', {
+			headers: { 'Content-Security-Policy': "script-src 'self' 'nonce-abc123=='" }
+		})
+	})) as Response;
+	expect(res.status).toBe(200);
+	const parsed = parseCsp(res.headers.get('Content-Security-Policy'));
+	// The per-request nonce is preserved (and 'unsafe-inline' is not added).
+	expect(parsed.get('script-src')).toEqual(["'self'", "'nonce-abc123=='"]);
+	// All Roamarr directives are still applied.
+	expect(parsed.get('default-src')).toEqual(["'self'"]);
+	expect(parsed.get('connect-src')).toContain('https://tile.openstreetmap.org');
+	expect(parsed.get('img-src')).toContain('https://tile.openstreetmap.org');
+	expect(parsed.get('frame-ancestors')).toEqual(["'none'"]);
+	expect(parsed.get('object-src')).toEqual(["'none'"]);
+	expect(parsed.get('form-action')).toEqual(["'self'"]);
+	expect(parsed.get('style-src')).toContain("'unsafe-inline'");
+});
+
+test('extractCspScriptTokens keeps only valid cryptographic nonce/hash tokens', () => {
+	// No header, no script-src, empty header: all yield no tokens.
+	expect(extractCspScriptTokens(null)).toEqual([]);
+	expect(extractCspScriptTokens('')).toEqual([]);
+	expect(extractCspScriptTokens("default-src 'self'")).toEqual([]);
+
+	// Valid nonce and hash tokens are kept, deduplicated, in order.
+	expect(
+		extractCspScriptTokens("script-src 'self' 'nonce-abc123==' 'sha256-deadbeef' 'nonce-abc123=='")
+	).toEqual(["'nonce-abc123=='", "'sha256-deadbeef'"]);
+	expect(
+		extractCspScriptTokens("script-src 'sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==' 'sha512-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=='")
+	).toEqual([
+		"'sha384-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='",
+		"'sha512-BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=='"
+	]);
+
+	// Directive name matching is case-insensitive; tokens before/after it are ignored.
+	expect(
+		extractCspScriptTokens("default-src 'self'; SCRIPT-SRC 'nonce-xyz=='")
+	).toEqual(["'nonce-xyz=='"]);
+
+	// Untrusted and non-crypto tokens are dropped: unsafe-inline, origins,
+	// unquoted hashes, malformed quotes, and empty tokens.
+	expect(
+		extractCspScriptTokens(
+			"script-src 'self' 'unsafe-inline' https://evil.example nonce-abc123== 'nonce-abc123"
+		)
+	).toEqual([]);
+	expect(
+		extractCspScriptTokens(
+			"script-src 'nonce-abc123==' https://evil.example 'self' 'nonce-abc123=='"
+		)
+	).toEqual(["'nonce-abc123=='"]);
 });
 
 test('allows OAuth consent to redirect to the validated client callback', async () => {

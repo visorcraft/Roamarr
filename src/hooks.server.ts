@@ -84,13 +84,39 @@ function jsonError(status: number, message: string) {
 	}));
 }
 
-function contentSecurityPolicy(path = '') {
+const CSP_NONCE_TOKEN = /^'(?:nonce|sha(?:256|384|512))-[A-Za-z0-9+/=_-]+'$/;
+
+/**
+ * Pull strict cryptographic nonce/hash tokens out of an existing CSP header
+ * (e.g. the one SvelteKit sets on rendered HTML when csp mode is 'nonce').
+ * Only nonce/sha256/384/512 tokens in single quotes survive; everything else
+ * — 'unsafe-inline', origins, malformed quotes — is dropped. Order is kept,
+ * duplicates are removed.
+ */
+export function extractCspScriptTokens(existingCsp: string | null): string[] {
+	if (!existingCsp) return [];
+	for (const part of existingCsp.split(';')) {
+		const [directive, ...tokens] = part.trim().split(/\s+/);
+		if (directive?.toLowerCase() !== 'script-src') continue;
+		const seen = new Set<string>();
+		const kept: string[] = [];
+		for (const token of tokens) {
+			if (!CSP_NONCE_TOKEN.test(token) || seen.has(token)) continue;
+			seen.add(token);
+			kept.push(token);
+		}
+		return kept;
+	}
+	return [];
+}
+
+function contentSecurityPolicy(path = '', scriptTokens: string[] = []) {
 	// Allow the configured map tile provider (origin only) so MapLibre can fetch tiles,
 	// and blob: workers since MapLibre runs its renderer in a blob-sourced Web Worker.
 	const tiles = tileCspOrigins();
 	const directives: Record<string, string[]> = {
 		'default-src': ["'self'"],
-		'script-src': ["'self'", "'unsafe-inline'"],
+		'script-src': ["'self'", ...scriptTokens],
 		'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
 		'font-src': ["'self'", 'https://fonts.gstatic.com'],
 		'img-src': ["'self'", 'data:', 'blob:', ...tiles],
@@ -156,10 +182,13 @@ function safeIsSetupComplete(): boolean {
 }
 
 function applySecurityHeaders(response: Response, path = '') {
+	// Preserve SvelteKit's per-request script nonces (rendered HTML carries them in
+	// the Content-Security-Policy header SvelteKit set) before we overwrite it.
+	const scriptTokens = extractCspScriptTokens(response.headers.get('Content-Security-Policy'));
 	response.headers.set('X-Frame-Options', 'DENY');
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-	response.headers.set('Content-Security-Policy', contentSecurityPolicy(path));
+	response.headers.set('Content-Security-Policy', contentSecurityPolicy(path, scriptTokens));
 	// HSTS is ignored by browsers over plain HTTP, so it is safe to send in dev,
 	// but only meaningful when the app is served over HTTPS.
 	response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');

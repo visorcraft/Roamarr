@@ -15,7 +15,16 @@ export default defineConfig({
 			adapter: adapter(),
 			preprocess: vitePreprocess(),
 			// hooks.server.ts enforces CSRF except for OAuth token clients.
-			csrf: { trustedOrigins: ['*'] }
+			csrf: { trustedOrigins: ['*'] },
+			// Setting only 'script-src' enables SvelteKit's per-request script nonces on
+			// rendered HTML; it does not add style nonces, which would disable
+			// style-src 'unsafe-inline' needed by Tailwind and inline styles.
+			csp: {
+				mode: 'nonce',
+				directives: {
+					'script-src': ['self']
+				}
+			}
 		})
 	],
 	resolve: { alias: { $lib: fileURLToPath(new URL('./src/lib', import.meta.url)) } },

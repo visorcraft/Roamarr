@@ -21,7 +21,7 @@ test('add a note segment to a trip', async ({ page }) => {
 	await expect(segment).toBeVisible();
 
 	// The card click needs client-side hydration; retry until the dialog opens.
-	const details = page.getByRole('dialog', { name: 'Selected segment details' });
+	const details = page.getByRole('dialog', { name: /^Selected segment/ });
 	await expect(async () => {
 		if (!(await details.isVisible().catch(() => false))) await segment.click();
 		await expect(details).toBeVisible({ timeout: 2000 });

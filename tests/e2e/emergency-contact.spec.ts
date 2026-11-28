@@ -13,5 +13,5 @@ test('add an emergency contact', async ({ page }) => {
 	await form.getByRole('button', { name: 'Add contact', exact: true }).click();
 	await page.waitForLoadState('networkidle');
 
-	await expect(page.getByText(name)).toBeVisible();
+	await expect(page.getByText(name, { exact: true })).toBeVisible();
 });

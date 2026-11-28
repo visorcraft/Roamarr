@@ -92,8 +92,10 @@ test('MCP endpoint over personal API key', async ({ page, playwright, baseURL })
 		});
 		expect([200, 204]).toContain(del.status());
 
-		const trips = await api.get('/api/trips', { headers: { 'X-Api-Token': token } });
+		const trips = await api.get('/api/trips/autocomplete', { headers: { 'X-Api-Token': token } });
 		expect(trips.status()).toBe(200);
+		const tripsBody = await trips.json();
+		expect(Array.isArray(tripsBody.trips)).toBe(true);
 
 		const cards = await api.get('/api/cards', { headers: { 'X-Api-Token': token } });
 		expect(cards.status()).toBe(403);

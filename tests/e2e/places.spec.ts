@@ -13,7 +13,7 @@ async function addPlace(page: Page, name: string, opts: { category?: string; sta
 	// The place form is long; give the fixed-position modal room so the
 	// submit button lands inside the viewport.
 	await page.setViewportSize({ width: 1440, height: 1600 });
-	await page.getByRole('button', { name: 'Add place' }).click();
+	await page.getByRole('button', { name: 'Add place' }).first().click();
 	const dialog = page.locator('dialog[open]');
 	await expect(dialog).toBeVisible();
 	await dialog.getByLabel('Name').fill(name);

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, createWriteStream, unlinkSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, unlinkSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
 import { Transform } from 'node:stream';
 import { createGzip, createGunzip } from 'node:zlib';
@@ -81,7 +81,12 @@ export async function createBackupArchive(
 	const resolvedDbPath = resolve(dbPath);
 	const attachmentsInsideDb =
 		resolvedAttachments === resolvedDbPath || resolvedAttachments.startsWith(resolvedDbPath + sep);
-	const attachmentsEntryName = attachmentsInsideDb ? null : basename(attachmentsPath);
+	const attachmentsEntryName =
+		!attachmentsInsideDb &&
+		existsSync(resolvedAttachments) &&
+		dirname(resolvedAttachments) === resolve(parentDir)
+			? basename(attachmentsPath)
+			: null;
 	if (attachmentsEntryName) {
 		entries.push(attachmentsEntryName);
 	}

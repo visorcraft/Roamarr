@@ -75,3 +75,19 @@ test('verifyBackupArchive rejects a valid archive missing CATALOG', async () => 
 		'Backup archive verification failed: missing database CATALOG'
 	);
 });
+
+test('createBackupArchive succeeds when ATTACHMENTS_PATH does not exist yet', async () => {
+	const prev = process.env.ATTACHMENTS_PATH;
+	const dbDir = makeDbDir();
+	const missingAttachments = join(testRoot, 'attachments-not-created-yet');
+	process.env.ATTACHMENTS_PATH = missingAttachments;
+	try {
+		const archivePath = join(testRoot, 'no-attachments.mongreldb.tar.gz');
+		const created = await createBackupArchive(archivePath, dbDir);
+		expect(created.hasCatalog).toBe(true);
+		expect(created.entryCount).toBeGreaterThan(0);
+	} finally {
+		if (prev === undefined) delete process.env.ATTACHMENTS_PATH;
+		else process.env.ATTACHMENTS_PATH = prev;
+	}
+});

@@ -23,8 +23,11 @@ import {
 	createSession,
 	validateSession,
 	invalidateSession,
-	sessionCookieOptions
+	sessionCookieOptions,
+	updateSessionMetadata,
+	SESSION_RENEWAL_THRESHOLD_MS
 } from './auth';
+import * as usersRepo from './repositories/usersRepo';
 import { users, sessions } from './db/mongrelSchema';
 import { updateSettings } from './settings';
 import { makeKitUser } from '../../../tests/kitHelpers';
@@ -89,6 +92,38 @@ test('sessionCookieOptions reflects settings value', () => {
 	expect(sessionCookieOptions().sameSite).toBe('strict');
 	updateSettings({ sessionCookieSameSite: 'lax' });
 	expect(sessionCookieOptions().sameSite).toBe('lax');
+});
+
+test('updateSessionMetadata skips DB writes when metadata unchanged and expiry fresh', () => {
+	expect(SESSION_RENEWAL_THRESHOLD_MS).toBeGreaterThan(0);
+	const u = makeKitUser({ email: 'meta@b.c' });
+	const token = createSession(Number(u.id), '127.0.0.1', 'TestAgent/1.0');
+	const spy = vi.spyOn(usersRepo, 'updateSessionByTokenHash');
+	try {
+		expect(updateSessionMetadata(token, '127.0.0.1', 'TestAgent/1.0')).toBe(false);
+		expect(spy).not.toHaveBeenCalled();
+
+		expect(updateSessionMetadata(token, '10.0.0.2', 'TestAgent/1.0')).toBe(false);
+		expect(spy).toHaveBeenCalledTimes(1);
+		const row = ctx.kit.selectFrom(sessions).executeSync()[0];
+		expect(row!.last_ip).toBe('10.0.0.2');
+	} finally {
+		spy.mockRestore();
+	}
+});
+
+test('updateSessionMetadata extends expires_at when remaining lifetime is below renewal threshold', () => {
+	const u = makeKitUser({ email: 'renew@b.c' });
+	const token = createSession(Number(u.id), '127.0.0.1', 'TestAgent/1.0');
+	ctx.kit
+		.updateTable(sessions)
+		.set({ expires_at: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() })
+		.executeSync();
+
+	expect(updateSessionMetadata(token, '127.0.0.1', 'TestAgent/1.0')).toBe(true);
+
+	const row = ctx.kit.selectFrom(sessions).executeSync()[0];
+	expect(new Date(String(row!.expires_at)).getTime()).toBeGreaterThan(Date.now() + 25 * 24 * 60 * 60 * 1000);
 });
 
 

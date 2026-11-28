@@ -12,6 +12,9 @@ import { nowIso, utcIsoAfter } from './tz';
 const ARGON = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const th = (t: string) => createHash('sha256').update(t).digest('hex');
 
+export const SESSION_DURATION_DAYS = 30;
+export const SESSION_RENEWAL_THRESHOLD_MS = 15 * 24 * 60 * 60 * 1000;
+
 export interface AppUser {
 	id: number;
 	email: string;
@@ -81,7 +84,7 @@ export async function verifyPassword(h: string, pw: string) {
 
 export function createSession(userId: number, ip?: string, userAgent?: string) {
 	const token = randomBytes(32).toString('base64url');
-	const expiresAt = utcIsoAfter({ days: 30 });
+	const expiresAt = utcIsoAfter({ days: SESSION_DURATION_DAYS });
 	const tokenHash = th(token);
 	usersRepo.createSession({
 		token_hash: tokenHash,
@@ -102,13 +105,28 @@ export function validateSession(token?: string) {
 	return toAppUser(u);
 }
 
-export function updateSessionMetadata(token: string, ip?: string, userAgent?: string) {
-	if (!ip && !userAgent) return;
+export function updateSessionMetadata(token: string, ip?: string, userAgent?: string): boolean {
 	const tokenHash = th(token);
-	usersRepo.updateSessionByTokenHash(tokenHash, {
-		last_ip: ip ?? null,
-		user_agent: userAgent ?? null
-	});
+	const existing = usersRepo.getSessionByTokenHash(tokenHash);
+	if (!existing) return false;
+	const nextIp = ip !== undefined ? ip : existing.last_ip;
+	const nextUa = userAgent !== undefined ? userAgent : existing.user_agent;
+	const metadataChanged =
+		(existing.last_ip ?? null) !== (nextIp ?? null) ||
+		(existing.user_agent ?? null) !== (nextUa ?? null);
+	const expiresMs = Date.parse(existing.expires_at);
+	const needsRenewal = Number.isFinite(expiresMs) && expiresMs - Date.now() < SESSION_RENEWAL_THRESHOLD_MS;
+	if (!metadataChanged && !needsRenewal) return false;
+	const patch: { last_ip?: string | null; user_agent?: string | null; expires_at?: string } = {};
+	if (metadataChanged) {
+		patch.last_ip = nextIp ?? null;
+		patch.user_agent = nextUa ?? null;
+	}
+	if (needsRenewal) {
+		patch.expires_at = utcIsoAfter({ days: SESSION_DURATION_DAYS });
+	}
+	usersRepo.updateSessionByTokenHash(tokenHash, patch);
+	return needsRenewal;
 }
 
 export function invalidateSession(token: string) {
@@ -159,6 +177,6 @@ export function sessionCookieOptions() {
 		httpOnly: true,
 		secure,
 		sameSite,
-		maxAge: 60 * 60 * 24 * 30
+		maxAge: SESSION_DURATION_DAYS * 24 * 60 * 60
 	};
 }

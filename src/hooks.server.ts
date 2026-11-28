@@ -1,7 +1,7 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
 import { redirect, error, isRedirect, type Redirect } from '@sveltejs/kit';
 import { dev } from '$app/env';
-import { validateOAuthUser, validateSession, updateSessionMetadata } from '$lib/server/auth';
+import { validateOAuthUser, validateSession, updateSessionMetadata, sessionCookieOptions } from '$lib/server/auth';
 import { verifyAccessToken, type Scope } from '$lib/server/oauth';
 import { API_KEY_CLIENT_ID, extractApiKeyToken, verifyApiKey } from '$lib/server/apiKeys';
 import { checkRateLimit } from '$lib/server/rateLimit';
@@ -305,10 +305,19 @@ const appHandle: Handle = async ({ event, resolve }) => {
 			}
 		}
 		if (sessionToken && event.locals.user) {
+			let ip: string | undefined;
 			try {
-				updateSessionMetadata(sessionToken, event.getClientAddress(), event.request.headers.get('user-agent') ?? undefined);
+				ip = event.getClientAddress();
 			} catch {
 				// best-effort; getClientAddress may throw in some environments
+			}
+			const renewed = updateSessionMetadata(
+				sessionToken,
+				ip,
+				event.request.headers.get('user-agent') ?? undefined
+			);
+			if (renewed && typeof event.cookies.set === 'function') {
+				event.cookies.set('session', sessionToken, sessionCookieOptions());
 			}
 		}
 

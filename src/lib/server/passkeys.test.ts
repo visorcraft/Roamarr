@@ -563,6 +563,39 @@ describe('passkeys', () => {
 		expect(logs[3].meta.name).toBe('Renamed Key');
 	});
 
+	test('duplicate credential_id registration is rejected', async () => {
+		let challengeCounter = 0;
+		swa.generateRegistrationOptions.mockImplementation(async () => {
+			challengeCounter += 1;
+			return makeRegOptions(`reg-challenge-${challengeCounter}`);
+		});
+
+		const registerOnce = async (uid: number, email: string) => {
+			await createRegistrationOptions(uid, email);
+			const challenge = `reg-challenge-${challengeCounter}`;
+			swa.verifyRegistrationResponse.mockImplementation(async (opts: any) => {
+				await opts.expectedChallenge(challenge);
+				return makeRegVerificationInfo();
+			});
+			const response = makeRegResponse(challenge);
+			return verifyRegistration(uid, response, 'YubiKey');
+		};
+
+		const first = await registerOnce(userId, 'user@example.com');
+		expect(first.ok).toBe(true);
+
+		// Same credential_id again for the same user
+		const dupSameUser = await registerOnce(userId, 'user@example.com');
+		expect(dupSameUser).toEqual({ ok: false, error: 'This passkey is already registered' });
+
+		// Same credential_id again for a different user
+		const otherUser = makeUser(ctx.kit, { email: 'dup-pk@x.c' });
+		const dupOtherUser = await registerOnce(otherUser.id, 'dup-pk@x.c');
+		expect(dupOtherUser).toEqual({ ok: false, error: 'This passkey is already registered' });
+
+		expect(ctx.kit.selectFrom(passkeys).executeSync()).toHaveLength(1);
+	});
+
 	afterEach(() => {
 		process.env.ORIGIN = ORIGINAL_ORIGIN;
 	});

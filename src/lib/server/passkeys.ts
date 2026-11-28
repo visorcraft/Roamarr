@@ -181,6 +181,13 @@ export async function verifyRegistration(
 
 	const info = verification.registrationInfo;
 	const cred = info.credential;
+	const existing = kit
+		.selectFrom(passkeys)
+		.where(kitEq(passkeys.credential_id, cred.id))
+		.executeSync();
+	if (existing.length > 0) {
+		return { ok: false, error: 'This passkey is already registered' };
+	}
 	kit.insertInto(passkeys).values({
 		user_id: BigInt(userId),
 		credential_id: cred.id,

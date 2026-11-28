@@ -20,7 +20,8 @@ import {
 	verifyAccessToken,
 	revokeTokensForUser,
 	isClientAllowed,
-	assertClientAllowed
+	assertClientAllowed,
+	OAUTH_LAST_USED_THROTTLE_MS
 } from './oauth';
 import { updateSettings, getSettings } from './settings';
 import * as usersRepo from './repositories/usersRepo';
@@ -221,6 +222,30 @@ describe('oauth', () => {
 
 		expect(revokeTokensForUser(userId)).toBeGreaterThan(0);
 		expect(verifyAccessToken(result.accessToken)).toBeNull();
+	});
+
+	test('verifyAccessToken throttles last_used_at DB writes', () => {
+		const { result } = issueTokens();
+		if ('error' in result) throw new Error('exchange failed');
+
+		expect(verifyAccessToken(result.accessToken)?.userId).toBe(userId);
+		let row = ctx.kit.selectFrom(oauthTokens).executeSync()[0];
+		expect(row.last_used_at).toBeTruthy();
+
+		// inside the throttle window: write is skipped, value stays unchanged
+		const recent = new Date(Date.now() - 10_000).toISOString();
+		ctx.kit.updateTable(oauthTokens).set({ last_used_at: recent }).executeSync();
+		expect(verifyAccessToken(result.accessToken)?.userId).toBe(userId);
+		row = ctx.kit.selectFrom(oauthTokens).executeSync()[0];
+		expect(row.last_used_at).toBe(recent);
+
+		// stale: write happens, last_used_at is refreshed to a fresh timestamp
+		const stale = new Date(Date.now() - OAUTH_LAST_USED_THROTTLE_MS - 10_000).toISOString();
+		ctx.kit.updateTable(oauthTokens).set({ last_used_at: stale }).executeSync();
+		expect(verifyAccessToken(result.accessToken)?.userId).toBe(userId);
+		row = ctx.kit.selectFrom(oauthTokens).executeSync()[0];
+		expect(row.last_used_at).not.toBe(stale);
+		expect(new Date(row.last_used_at as string).getTime()).toBeGreaterThan(Date.now() - 60_000);
 	});
 
 	describe('client allow-list', () => {

@@ -169,6 +169,7 @@ const CODE_TTL_SEC = 5 * 60;
 // OAuth grants remain valid until the user revokes them. Keep expires_in for
 // client compatibility, but authorization is controlled by revoked_at.
 const ACCESS_TTL_SEC = 2_147_483_647;
+export const OAUTH_LAST_USED_THROTTLE_MS = 5 * 60_000;
 
 export interface OAuthClient {
 	clientId: string;
@@ -377,11 +378,12 @@ export function exchangeAuthorizationCode(params: {
 
 	if (!verifyPkce(params.codeVerifier, row.code_challenge as string)) return { error: 'invalid_grant' };
 
-	kit
+	const consumed = kit
 		.updateTable(oauthCodes)
 		.set({ used_at: nowIso() })
-		.where(kitEq(oauthCodes.id, row.id))
+		.where(kitAnd(kitEq(oauthCodes.id, row.id), kitIsNull(oauthCodes.used_at)))
 		.executeSync();
+	if (consumed.length !== 1) return { error: 'invalid_grant' };
 
 	// Successful exchange clears the reauth gate.
 	kit
@@ -413,11 +415,12 @@ export function refreshAccessToken(params: {
 	const clientAuth = authenticateClient(params.clientId, params.clientSecret ?? null);
 	if ('error' in clientAuth) return clientAuth;
 
-	kit
+	const revoked = kit
 		.updateTable(oauthTokens)
 		.set({ revoked_at: nowIso() })
-		.where(kitEq(oauthTokens.id, row.id))
+		.where(kitAnd(kitEq(oauthTokens.id, row.id), kitIsNull(oauthTokens.revoked_at)))
 		.executeSync();
+	if (revoked.length !== 1) return { error: 'invalid_grant' };
 
 	const scopes = JSON.parse(row.scopes as string) as Scope[];
 	return issueTokens({
@@ -485,11 +488,15 @@ export function verifyAccessToken(token: string): AuthenticatedToken | null {
 		.executeSync()[0];
 	if (clientRow?.requires_reauth) return null;
 
-	kit
-		.updateTable(oauthTokens)
-		.set({ last_used_at: nowIso() })
-		.where(kitEq(oauthTokens.id, row.id))
-		.executeSync();
+	const lastUsedRaw = row.last_used_at as string | null | undefined;
+	const lastUsedParsed = lastUsedRaw ? Date.parse(lastUsedRaw) : NaN;
+	if (!lastUsedRaw || Number.isNaN(lastUsedParsed) || Date.now() - lastUsedParsed >= OAUTH_LAST_USED_THROTTLE_MS) {
+		kit
+			.updateTable(oauthTokens)
+			.set({ last_used_at: nowIso() })
+			.where(kitEq(oauthTokens.id, row.id))
+			.executeSync();
+	}
 
 	return {
 		userId: Number(row.user_id),

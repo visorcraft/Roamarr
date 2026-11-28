@@ -7,7 +7,7 @@ vi.mock('./db', async () => {
 	return context;
 });
 
-import { buildEmailIngestionReply, findUserForEmailSender, getEmailProcessingConfig, matchTrip, normalizeMailSecurity, parseAiJson, parseEmailForUser, parseMailSecurityStrict, parseOptionalPort, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
+import { buildEmailIngestionReply, clearAiTokenCacheForTests, findUserForEmailSender, getEmailProcessingConfig, matchTrip, MAX_AI_JSON_CHARS, MAX_AI_RESPONSE_BYTES, normalizeMailSecurity, parseAiJson, parseEmailForUser, parseMailSecurityStrict, parseOptionalPort, parseTravelEmailLocal, saveEmailProcessingConfig } from './emailProcessing';
 import { updateSettings } from './settings';
 import { encrypt } from './crypto';
 import { userEmailProcessingConfigs } from './db/mongrelSchema';
@@ -17,6 +17,7 @@ import type { KitDatabase } from '@visorcraft/mongreldb-kit';
 const db = () => (context as { kit: KitDatabase }).kit;
 
 beforeEach(() => {
+	clearAiTokenCacheForTests();
 	db().deleteFrom(userEmailProcessingConfigs).executeSync();
 });
 
@@ -167,4 +168,71 @@ test('parseOptionalPort throws for out-of-range, float, and non-numeric values',
 test('parseOptionalPort uses the custom label in the error message', () => {
 	expect(() => parseOptionalPort(0, 'imapPort')).toThrow('imapPort must be between 1 and 65535');
 	expect(() => parseOptionalPort('nope', 'smtpPort')).toThrow('smtpPort must be between 1 and 65535');
+});
+
+test('OAuth client-credentials token is cached across parser calls and fetch uses redirect manual', async () => {
+	const user = makeUser(db(), { email: 'oauth-cache@example.com' });
+	updateSettings({ allowUserParsingProviders: true, globalAiEnabled: false });
+	saveEmailProcessingConfig(user.id, {
+		enabled: false, imapHost: null, imapPort: null, imapSecurity: 'ssl/tls', imapUsername: null,
+		imapMailbox: 'INBOX', useImapForSmtp: false, smtpHost: null, smtpPort: null,
+		smtpSecurity: 'starttls', smtpUsername: null, smtpFrom: null, aiEnabled: true,
+		aiBaseUrl: 'https://ai.example/v1', aiModel: 'travel', aiTokenUrl: 'https://auth.example/token',
+		aiClientId: 'client', aiClientSecret: 'secret', aiScope: 'parse'
+	});
+	const aiPayload = JSON.stringify({ choices: [{ message: { content: JSON.stringify({ isTravel: true, tripName: 'Paris', type: 'flight', title: 'Flight', startAt: '2027-05-03T10:00:00Z' }) } }] });
+	const fetchMock = vi.spyOn(globalThis, 'fetch')
+		.mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'cached-tok', expires_in: 600 }), { status: 200 }))
+		.mockResolvedValueOnce(new Response(aiPayload, { status: 200 }))
+		.mockResolvedValueOnce(new Response(aiPayload, { status: 200 }));
+	try {
+		await expect(parseEmailForUser(user.id, 'Flight', 'May 3, 2027')).resolves.toMatchObject({ tripName: 'Paris' });
+		await expect(parseEmailForUser(user.id, 'Flight', 'May 3, 2027')).resolves.toMatchObject({ tripName: 'Paris' });
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		for (const call of fetchMock.mock.calls) {
+			expect(call[1]?.redirect).toBe('manual');
+		}
+	} finally {
+		fetchMock.mockRestore();
+	}
+});
+
+test.each(['https://user:pass@ai.example/v1', 'ftp://ai.example/v1'])('invalid AI endpoint URL %s falls back to local parsing without calling fetch', async (aiBaseUrl) => {
+	const user = makeUser(db(), { email: `bad-url-${Math.random().toString(36).slice(2)}@example.com` });
+	updateSettings({ allowUserParsingProviders: true, globalAiEnabled: false });
+	saveEmailProcessingConfig(user.id, {
+		enabled: false, imapHost: null, imapPort: null, imapSecurity: 'ssl/tls', imapUsername: null,
+		imapMailbox: 'INBOX', useImapForSmtp: false, smtpHost: null, smtpPort: null,
+		smtpSecurity: 'starttls', smtpUsername: null, smtpFrom: null, aiEnabled: true,
+		aiBaseUrl, aiModel: 'travel', aiToken: 'tok', aiTokenUrl: null, aiClientId: null, aiClientSecret: null, aiScope: null
+	});
+	const fetchMock = vi.spyOn(globalThis, 'fetch');
+	try {
+		const parsed = await parseEmailForUser(user.id, 'Flight confirmation to Tokyo', 'Departure: May 3, 2027 at 10:30 AM\nConfirmation: ABC123');
+		expect(parsed).toMatchObject({ isTravel: true, type: 'flight' });
+		expect(fetchMock).not.toHaveBeenCalled();
+	} finally {
+		fetchMock.mockRestore();
+	}
+});
+
+test('parseAiJson throws beyond MAX_AI_JSON_CHARS and oversized AI response falls back to local parsing', async () => {
+	expect(() => parseAiJson('x'.repeat(MAX_AI_JSON_CHARS + 1))).toThrow();
+
+	const user = makeUser(db(), { email: 'oversized@example.com' });
+	updateSettings({ allowUserParsingProviders: true, globalAiEnabled: false });
+	saveEmailProcessingConfig(user.id, {
+		enabled: false, imapHost: null, imapPort: null, imapSecurity: 'ssl/tls', imapUsername: null,
+		imapMailbox: 'INBOX', useImapForSmtp: false, smtpHost: null, smtpPort: null,
+		smtpSecurity: 'starttls', smtpUsername: null, smtpFrom: null, aiEnabled: true,
+		aiBaseUrl: 'https://ai.example/v1', aiModel: 'travel', aiToken: 'tok', aiTokenUrl: null, aiClientId: null, aiClientSecret: null, aiScope: null
+	});
+	const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('x'.repeat(MAX_AI_RESPONSE_BYTES + 1), { status: 200 }));
+	try {
+		const parsed = await parseEmailForUser(user.id, 'Flight confirmation to Tokyo', 'Departure: May 3, 2027 at 10:30 AM\nConfirmation: ABC123');
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(parsed).toMatchObject({ isTravel: true, type: 'flight' });
+	} finally {
+		fetchMock.mockRestore();
+	}
 });

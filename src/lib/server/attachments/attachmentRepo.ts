@@ -4,6 +4,7 @@ import { getConstraintKit as constraintKit } from '../repositories/kitHelpers';
 import { nowIso } from '../tz';
 import {
 	eq,
+	inList,
 	runSyncTxn,
 	toCells,
 	enforceForeignKeys,
@@ -95,6 +96,19 @@ export function getAttachmentById(id: number): AttachmentRecord | null {
 		.executeSync()[0];
 	if (!row) return null;
 	return mapRow(row);
+}
+
+export function getAttachmentsByIds(ids: number[]): Map<number, AttachmentRecord> {
+	const db = getDb();
+	const uniqueIds = [...new Set(ids)];
+	if (uniqueIds.length === 0) return new Map();
+	const rows = db.selectFrom(attachments).where(inList(attachments.id, uniqueIds.map((id) => BigInt(id)))).executeSync();
+	const result = new Map<number, AttachmentRecord>();
+	for (const row of rows) {
+		const record = mapRow(row);
+		result.set(record.id, record);
+	}
+	return result;
 }
 
 export function deleteAttachment(id: number): void {

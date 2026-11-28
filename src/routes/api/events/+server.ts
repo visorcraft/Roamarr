@@ -5,6 +5,8 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 import { HEARTBEAT_MS, subscribeUser, type LiveEvent } from '$lib/server/eventBus';
 import { listViewableTripIdsForUser } from '$lib/server/repositories/tripsRepo';
 
+export const MAX_STREAM_DURATION_MS = 6 * 60 * 60_000;
+
 /**
  * Live invalidation stream (Server-Sent Events). Emits `{type:'trip', id,
  * rev, origin}` events for trips the subscriber can view, plus a `shares`
@@ -51,11 +53,13 @@ export const GET: RequestHandler = async ({ locals, request, getClientAddress })
 	if (!unsubscribe) throw error(429, 'Too many open event streams');
 
 	let heartbeat: ReturnType<typeof setInterval> | null = null;
+	let maxDurationTimer: ReturnType<typeof setTimeout> | null = null;
 	let cleanedUp = false;
 	const cleanup = () => {
 		if (cleanedUp) return;
 		cleanedUp = true;
 		if (heartbeat) clearInterval(heartbeat);
+		if (maxDurationTimer) clearTimeout(maxDurationTimer);
 		unsubscribe();
 	};
 
@@ -70,7 +74,27 @@ export const GET: RequestHandler = async ({ locals, request, getClientAddress })
 				}
 			};
 			// Heartbeat comment keeps proxies and browsers from idling the socket out.
-			heartbeat = setInterval(() => send(': hb\n\n'), HEARTBEAT_MS);
+			heartbeat = setInterval(() => {
+				if (controller.desiredSize !== null && controller.desiredSize < -16) {
+					cleanup();
+					try {
+						controller.close();
+					} catch {
+						/* already closed */
+					}
+					return;
+				}
+				send(': hb\n\n');
+			}, HEARTBEAT_MS);
+			// Lifetime backstop so a wedged stream cannot live forever.
+			maxDurationTimer = setTimeout(() => {
+				cleanup();
+				try {
+					controller.close();
+				} catch {
+					/* already closed */
+				}
+			}, MAX_STREAM_DURATION_MS);
 			// Hint the browser's reconnect delay for dropped connections.
 			send('retry: 3000\n\n');
 		},
@@ -84,7 +108,8 @@ export const GET: RequestHandler = async ({ locals, request, getClientAddress })
 		headers: {
 			'content-type': 'text/event-stream',
 			'cache-control': 'no-cache',
-			connection: 'keep-alive'
+			connection: 'keep-alive',
+			'x-accel-buffering': 'no'
 		}
 	});
 };

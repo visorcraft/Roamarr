@@ -10,7 +10,7 @@ import {
 	deleteAttachment,
 	readAttachmentStream
 } from './attachments/attachmentService';
-import { getAttachmentById } from './attachments/attachmentRepo';
+import { getAttachmentsByIds, type AttachmentRecord, getAttachmentById } from './attachments/attachmentRepo';
 import { withTripAction } from './actions';
 import { logAudit } from './audit';
 import { publishTripChanged } from './eventBus';
@@ -40,8 +40,11 @@ export interface GalleryImage {
 	sizeBytes: number;
 }
 
-function toGalleryImage(row: Row<typeof galleryImages>): GalleryImage {
-	const attachment = getAttachmentById(Number(row.attachment_id));
+function toGalleryImage(
+	row: Row<typeof galleryImages>,
+	attachment?: AttachmentRecord | null
+): GalleryImage {
+	const resolved = attachment === undefined ? getAttachmentById(Number(row.attachment_id)) : attachment;
 	return {
 		id: Number(row.id),
 		ownerType: row.owner_type as GalleryOwnerType,
@@ -50,10 +53,16 @@ function toGalleryImage(row: Row<typeof galleryImages>): GalleryImage {
 		caption: row.caption ?? null,
 		sortOrder: Number(row.sort_order),
 		createdAt: row.created_at,
-		filename: attachment?.filename ?? 'image',
-		contentType: attachment?.contentType ?? 'image/jpeg',
-		sizeBytes: attachment?.sizeBytes ?? 0
+		filename: resolved?.filename ?? 'image',
+		contentType: resolved?.contentType ?? 'image/jpeg',
+		sizeBytes: resolved?.sizeBytes ?? 0
 	};
+}
+
+function hydrateGalleryRows(rows: Row<typeof galleryImages>[]): GalleryImage[] {
+	if (rows.length === 0) return [];
+	const attachmentsById = getAttachmentsByIds(rows.map((r) => Number(r.attachment_id)));
+	return rows.map((r) => toGalleryImage(r, attachmentsById.get(Number(r.attachment_id)) ?? null));
 }
 
 function sortImages(images: GalleryImage[]): GalleryImage[] {
@@ -66,7 +75,7 @@ export function listGalleryImages(ownerType: GalleryOwnerType, ownerId: number):
 		.selectFrom(galleryImages)
 		.where(and(eq(galleryImages.owner_type, ownerType), eq(galleryImages.owner_id, BigInt(ownerId))))
 		.executeSync();
-	return sortImages(rows.map(toGalleryImage));
+	return sortImages(hydrateGalleryRows(rows));
 }
 
 /** Batch listing for index pages (e.g. the Places page). Callers enforce access. */
@@ -85,8 +94,7 @@ export function listGalleriesForOwners(
 			)
 		)
 		.executeSync();
-	for (const row of rows) {
-		const image = toGalleryImage(row);
+	for (const image of hydrateGalleryRows(rows)) {
 		const list = result.get(image.ownerId) ?? [];
 		list.push(image);
 		result.set(image.ownerId, list);
@@ -170,28 +178,36 @@ export async function addGalleryImages(
 
 	let sortOrder = nextSortOrder(ownerType, ownerId);
 	const added: GalleryImage[] = [];
-	for (const file of files) {
-		const attachment = await createAttachment({
-			ownerId: userId,
-			file,
-			context: { kind: 'gallery_image', ownerType, ownerId }
-		});
-		try {
-			const row = kit
-				.insertInto(galleryImages)
-				.values({
-					owner_type: ownerType,
-					owner_id: BigInt(ownerId),
-					attachment_id: BigInt(attachment.id),
-					sort_order: BigInt(sortOrder)
-				} as Insert<typeof galleryImages>)
-				.executeSync();
-			added.push(toGalleryImage(row));
-			sortOrder += 1;
-		} catch (e) {
-			await deleteAttachment(attachment.id);
-			throw e;
+	try {
+		for (const file of files) {
+			const attachment = await createAttachment({
+				ownerId: userId,
+				file,
+				context: { kind: 'gallery_image', ownerType, ownerId }
+			});
+			try {
+				const row = kit
+					.insertInto(galleryImages)
+					.values({
+						owner_type: ownerType,
+						owner_id: BigInt(ownerId),
+						attachment_id: BigInt(attachment.id),
+						sort_order: BigInt(sortOrder)
+					} as Insert<typeof galleryImages>)
+					.executeSync();
+				added.push(toGalleryImage(row, attachment));
+				sortOrder += 1;
+			} catch (e) {
+				await deleteAttachment(attachment.id);
+				throw e;
+			}
 		}
+	} catch (e) {
+		for (const image of added) {
+			kit.deleteFrom(galleryImages).where(eq(galleryImages.id, BigInt(image.id))).executeSync();
+			await deleteAttachment(image.attachmentId).catch(() => undefined);
+		}
+		throw e;
 	}
 
 	// A place's cover is its first gallery image; only set when not already set.

@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { GET } from './+server';
+import { GET, MAX_STREAM_DURATION_MS } from './+server';
 import { tripShares, trips, users } from '$lib/server/db/mongrelSchema';
 import { makeUser, makeTrip } from '../../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -79,6 +79,7 @@ test('streams SSE headers for a signed-in user', async () => {
 	expect(res.status).toBe(200);
 	expect(res.headers.get('content-type')).toBe('text/event-stream');
 	expect(res.headers.get('cache-control')).toBe('no-cache');
+	expect(res.headers.get('x-accel-buffering')).toBe('no');
 	await res.body!.cancel();
 });
 
@@ -139,6 +140,30 @@ test('heartbeats keep the stream alive and abort cleans up the subscription', as
 
 		controller.abort();
 		expect(streamCounts().total).toBe(0);
+	} finally {
+		vi.useRealTimers();
+	}
+});
+
+test('closes the stream and cleans up after MAX_STREAM_DURATION_MS', async () => {
+	vi.useFakeTimers();
+	try {
+		const user = makeUser(ctx.kit);
+		const res = await GET(makeEvent(user));
+		expect(res.status).toBe(200);
+		const reader = res.body!.getReader() as ReadableStreamDefaultReader<Uint8Array>;
+		openReaders.push(reader);
+		await reader.read(); // prologue
+		expect(streamCounts().total).toBe(1);
+
+		await vi.advanceTimersByTimeAsync(MAX_STREAM_DURATION_MS);
+		expect(streamCounts().total).toBe(0);
+		// Drain any buffered heartbeats; the stream must reach EOF without hanging.
+		let done = false;
+		for (let i = 0; i < 64 && !done; i++) {
+			done = (await reader.read()).done;
+		}
+		expect(done).toBe(true);
 	} finally {
 		vi.useRealTimers();
 	}

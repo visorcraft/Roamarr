@@ -46,6 +46,7 @@ afterAll(() => {
 import {
 	listGallery,
 	listGalleryImages,
+	listGalleriesForOwners,
 	addGalleryImages,
 	removeGalleryImage,
 	reorderGallery,
@@ -55,6 +56,7 @@ import {
 	projectGalleryImage,
 	MAX_GALLERY_IMAGES
 } from './gallery';
+import * as attachmentRepo from './attachments/attachmentRepo';
 import { getPlaceById, createPlace, deletePlace } from './places';
 import { viewerProjection } from './sharing';
 import {
@@ -434,4 +436,64 @@ test('moveGalleryImage on a place gallery rejects non-owners on the edge no-op',
 		'b.png',
 		'a.png'
 	]);
+});
+
+function collectReturnedImages(result: unknown) {
+	const out: Array<{ filename?: string; contentType?: string; sizeBytes?: unknown }> = [];
+	if (Array.isArray(result)) {
+		for (const item of result) {
+			if (item && typeof item === 'object' && Array.isArray((item as { images?: unknown[] }).images)) {
+				out.push(...(item as { images: typeof out }).images);
+			} else if (item && typeof item === 'object') {
+				out.push(item as never);
+			}
+		}
+	} else if (result instanceof Map) {
+		for (const value of result.values()) {
+			if (Array.isArray(value)) out.push(...(value as typeof out));
+		}
+	}
+	return out;
+}
+
+test('batch attachment loading does not issue per-image getAttachmentById calls', async () => {
+	const user = makeUser(ctx.kit);
+	const trip = makeTrip(ctx.kit, user.id);
+	await addGalleryImages(user.id, 'trip', trip.id, [pngFile('a.png'), pngFile('b.png')]);
+
+	const byIdSpy = vi.spyOn(attachmentRepo, 'getAttachmentById');
+	const byIdsSpy = vi.spyOn(attachmentRepo, 'getAttachmentsByIds');
+	try {
+		const listed = listGalleryImages('trip', trip.id);
+		expect(listed).toHaveLength(2);
+
+		const perOwner = listGalleriesForOwners('trip', [trip.id]);
+
+		expect(byIdSpy).not.toHaveBeenCalled();
+		expect(byIdsSpy).toHaveBeenCalled();
+
+		for (const image of [...listed, ...collectReturnedImages(perOwner)]) {
+			expect(image.filename).toBeTruthy();
+			expect(image.contentType).toBe('image/png');
+			expect(Number(image.sizeBytes)).toBeGreaterThan(0);
+		}
+	} finally {
+		byIdSpy.mockRestore();
+		byIdsSpy.mockRestore();
+	}
+});
+
+test('multi-file upload rolls back the first attachment when a later file fails validation', async () => {
+	const user = makeUser(ctx.kit);
+	const trip = makeTrip(ctx.kit, user.id);
+	// Valid image MIME type but corrupt magic bytes: createAttachment rejects on this file.
+	const badFile = new File([new Uint8Array([1, 2, 3, 4])], 'bad.png', { type: 'image/png' });
+
+	await expect(
+		addGalleryImages(user.id, 'trip', trip.id, [pngFile('good.png'), badFile])
+	).rejects.toThrow();
+
+	expect(listGalleryImages('trip', trip.id)).toHaveLength(0);
+	// The first file's attachment row was rolled back/deleted as well.
+	expect(ctx.kit.selectFrom(attachments).executeSync()).toHaveLength(0);
 });

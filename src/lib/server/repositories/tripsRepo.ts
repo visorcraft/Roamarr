@@ -296,7 +296,7 @@ export function deleteTrip(id: number): number {
 		publishTripChanged(id);
 		void import('$lib/server/embeddings/index')
 			.then((m) => {
-				m.removeSearchDocument('trip', id);
+				m.removeTripSearchDocuments(id);
 			})
 			.catch(() => {});
 	}

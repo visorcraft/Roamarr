@@ -31,6 +31,8 @@ export type SearchHit = {
 	title: string;
 	body: string;
 	href: string;
+	/** Trip the hit belongs to: the trip itself for 'trip' hits, the parent trip for 'segment' hits. Absent for 'place' hits. */
+	tripId?: number;
 };
 
 export type SearchDocumentInput = {
@@ -169,6 +171,20 @@ export function removeSearchDocument(entityType: SearchEntityType, entityId: num
 		.executeSync();
 }
 
+/** Remove the trip's own document plus every segment document for that trip. */
+export function removeTripSearchDocuments(tripId: number): void {
+	removeSearchDocument('trip', tripId);
+	kit
+		.deleteFrom(searchDocuments)
+		.where(
+			and(
+				eq(searchDocuments.entity_type, 'segment'),
+				eq(searchDocuments.href, `/trips/${tripId}`)
+			)
+		)
+		.executeSync();
+}
+
 function tripSearchDoc(trip: tripsRepo.Trip): SearchDocumentInput {
 	const tags = (() => {
 		try {
@@ -272,22 +288,26 @@ export async function indexTrip(tripId: number): Promise<void> {
 	if (!embeddingsReady()) return;
 	const trip = tripsRepo.getTripById(tripId);
 	if (!trip) {
-		removeSearchDocument('trip', tripId);
+		removeTripSearchDocuments(tripId);
 		return;
 	}
 	await writeSearchDocument(tripSearchDoc(trip));
 	const segs = segmentsRepo.listSegmentsForTrip(tripId);
 	const keep = new Set(segs.map((s) => s.id));
-	// Drop segment docs that no longer exist for this trip.
+	// Drop segment docs that no longer exist for this trip. Match on the stored
+	// href (and the live segment when it still exists) so deleted segments are
+	// caught too — getSegmentById returns null for rows already gone.
 	const existingSegs = kit
 		.selectFrom(searchDocuments)
 		.where(eq(searchDocuments.entity_type, 'segment'))
 		.executeSync()
 		.filter((r) => Number(r.owner_id) === trip.ownerId);
 	for (const row of existingSegs) {
-		const seg = segmentsRepo.getSegmentById(Number(row.entity_id));
-		if (!seg || seg.tripId !== tripId) continue;
-		if (!keep.has(seg.id)) removeSearchDocument('segment', seg.id);
+		const entityId = Number(row.entity_id);
+		const seg = segmentsRepo.getSegmentById(entityId);
+		const belongsToTrip = row.href === `/trips/${tripId}` || seg?.tripId === tripId;
+		if (!belongsToTrip) continue;
+		if (!keep.has(entityId)) removeSearchDocument('segment', entityId);
 	}
 	for (const s of segs) {
 		await writeSearchDocument(segmentSearchDoc(s, trip.ownerId));
@@ -353,14 +373,17 @@ export async function semanticSearch(
 		const key = `${entityType}:${entityId}`;
 		if (seen.has(key)) continue;
 
+		let tripId: number | undefined;
 		if (entityType === 'trip') {
 			const trip = tripsRepo.getTripById(entityId);
 			if (!trip || !canView(userId, trip)) continue;
+			tripId = entityId;
 		} else if (entityType === 'segment') {
 			const seg = segmentsRepo.getSegmentById(entityId);
 			if (!seg) continue;
 			const trip = tripsRepo.getTripById(seg.tripId);
 			if (!trip || !canView(userId, trip)) continue;
+			tripId = seg.tripId;
 		} else if (entityType === 'place') {
 			// Saved places are owner-only (no sharing), so ownership is the whole check.
 			if (Number(row.owner_id) !== userId) continue;
@@ -380,7 +403,8 @@ export async function semanticSearch(
 			ownerId: Number(row.owner_id),
 			title: row.title as string,
 			body: row.body as string,
-			href: row.href as string
+			href: row.href as string,
+			...(tripId !== undefined ? { tripId } : {})
 		});
 		if (hits.length >= limit) break;
 	}

@@ -1,5 +1,4 @@
-import { listViewableTrips } from '../sharing';
-import type { Trip } from '../repositories/tripsRepo';
+import { listViewableTrips, canView, viewerProjection } from '../sharing';
 import * as tripsRepo from '../repositories/tripsRepo';
 import {
 	embeddingsReady,
@@ -7,12 +6,11 @@ import {
 	type SearchHit
 } from './index';
 
+export type GlobalSearchTrip = ReturnType<typeof listViewableTrips>[number];
+
 export type GlobalSearchResult = {
 	/** Trip cards for the existing search UI (semantic and/or lexical). */
-	trips: Array<
-		| (Trip & { isShared: false })
-		| (ReturnType<typeof listViewableTrips>[number] & { isShared?: boolean })
-	>;
+	trips: GlobalSearchTrip[];
 	/** Flattened ANN hits (trips + segments + places) when embeddings are ready. */
 	hits: SearchHit[];
 	/** Whether ANN semantic ranking was used. */
@@ -32,46 +30,27 @@ export async function globalSearch(userId: number, rawQuery: string): Promise<Gl
 
 	if (embeddingsReady()) {
 		const hits = await semanticSearch(userId, q, 40);
-		const tripIds = new Set<number>();
-		for (const h of hits) {
-			if (h.entityType === 'trip') tripIds.add(h.entityId);
-			else if (h.entityType === 'segment') {
-				// href is /trips/{id}; resolve via trip list below
-			}
-		}
-		// Collect trip ids from segment hits via href or entity re-fetch.
-		const tripsMap = new Map<number, GlobalSearchResult['trips'][number]>();
-		const viewable = listViewableTrips(userId, { filter: 'active' });
-		const byId = new Map(viewable.map((t) => [t.id, t]));
-
-		for (const h of hits) {
-			if (h.entityType === 'trip') {
-				const t = byId.get(h.entityId);
-				if (t) tripsMap.set(t.id, t);
-			} else if (h.entityType === 'segment') {
-				const m = h.href.match(/\/trips\/(\d+)/);
-				const tripId = m ? Number(m[1]) : 0;
-				const t = byId.get(tripId);
-				if (t) tripsMap.set(t.id, t);
-			}
-		}
-
-		// Preserve ANN order for trips as first-seen in hits.
-		const ordered: GlobalSearchResult['trips'] = [];
+		// Hydrate only the matched trip IDs, in ANN order, deduplicated.
+		const ordered: GlobalSearchTrip[] = [];
 		const added = new Set<number>();
 		for (const h of hits) {
-			let tripId = 0;
-			if (h.entityType === 'trip') tripId = h.entityId;
-			else {
+			let tripId: number | undefined;
+			if (h.tripId !== undefined) {
+				tripId = h.tripId;
+			} else {
 				const m = h.href.match(/\/trips\/(\d+)/);
-				tripId = m ? Number(m[1]) : 0;
+				tripId = m ? Number(m[1]) : undefined;
 			}
-			if (!tripId || added.has(tripId)) continue;
-			const t = tripsMap.get(tripId);
-			if (!t) continue;
-			// Skip archived unless already filtered by listViewableTrips active filter.
+			if (tripId === undefined || added.has(tripId)) continue;
 			added.add(tripId);
-			ordered.push(t);
+			const trip = tripsRepo.getTripById(tripId);
+			if (!trip || trip.archived) continue;
+			if (!canView(userId, trip)) continue;
+			ordered.push(
+				trip.ownerId === userId
+					? { ...trip, isShared: false }
+					: { ...viewerProjection(trip, [], false), isShared: true }
+			);
 		}
 
 		// If ANN found nothing viewable, fall back to lexical for empty-corpus safety.
@@ -97,9 +76,7 @@ export function scheduleIndexTrip(tripId: number): void {
 export function scheduleRemoveTrip(tripId: number): void {
 	void import('./index')
 		.then((m) => {
-			m.removeSearchDocument('trip', tripId);
-			// Segments cascade-deleted from DB; leftover segment docs are cleaned on reindex.
-			void tripId;
+			m.removeTripSearchDocuments(tripId);
 		})
 		.catch(() => {});
 }

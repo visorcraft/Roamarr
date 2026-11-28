@@ -28,6 +28,8 @@ import { getJournalEntryById } from './repositories/tripMiscRepo';
 import * as segmentsRepo from './repositories/segmentsRepo';
 import { getSettings, updateSettings } from './settings';
 import { currentTripRev } from './eventBus';
+import { MCP_TOOL_REGISTRY } from './mcpTools';
+import { MCP_TOOL_DEFINITIONS } from './mcpToolDefinitions';
 
 async function connect(userId: number, scopes: Scope[]) {
 	const server = createMcpServer(userId, scopes);
@@ -6078,5 +6080,25 @@ describe('mcpServer', () => {
 				expect(String(badSeg.content?.[0]?.text ?? '')).toContain('startAt must be a string');
 			});
 		});
+	});
+});
+
+describe('mcpTools registry', () => {
+	test('registry matches MCP_TOOL_DEFINITIONS 1-to-1', () => {
+		const registryNames = [...MCP_TOOL_REGISTRY.keys()];
+		const definitionNames = MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
+
+		// No duplicates on either side.
+		expect(new Set(registryNames).size).toBe(registryNames.length);
+		expect(new Set(definitionNames).size).toBe(definitionNames.length);
+
+		// Exactly one registry entry per documented tool, and vice versa.
+		expect([...registryNames].sort()).toEqual([...definitionNames].sort());
+	});
+
+	test('every registry entry declares a handler', () => {
+		for (const [name, spec] of MCP_TOOL_REGISTRY) {
+			expect(typeof spec.handler, `registry entry ${name}`).toBe('function');
+		}
 	});
 });

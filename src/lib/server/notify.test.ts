@@ -1,4 +1,4 @@
-import { test, expect, vi } from 'vitest';
+import { test, expect, vi, beforeEach } from 'vitest';
 
 const ctx = vi.hoisted(() => ({ kit: null as never }));
 vi.mock('./db', async () => {
@@ -18,13 +18,17 @@ vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) =
 	return new Response('ok', { status: 200 });
 });
 
-import { deliver, isAllowedWebhookUrl, isValidNtfyServerUrl, isValidNtfyTopic, sendMail, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
+import { deliver, isAllowedWebhookTarget, isAllowedWebhookUrl, isValidNtfyServerUrl, isValidNtfyTopic, sendMail, setWebhookDnsLookupForTests, withDeadline, SMTP_SEND_DEADLINE_MS } from './notify';
 import { SMTP_SOCKET_TIMEOUT_MS } from './smtpConfig';
 import { notifications } from './db/mongrelSchema';
 import * as usersRepo from './repositories/usersRepo';
 import { decrypt, encrypt } from './crypto';
 import { getSettings, updateSettings } from './settings';
 import { upsertUserSmtpOverride } from './smtpConfig';
+
+beforeEach(() => {
+	setWebhookDnsLookupForTests(async () => [{ address: '93.184.216.34', family: 4 }]);
+});
 
 type MakeUserOver = Partial<import('./repositories/usersRepo').CreateUserInput> & {
 	email_notifications?: boolean;
@@ -353,4 +357,92 @@ test('skips ntfy when the user disabled the channel or the topic is invalid', as
 
 	// Clean up so no later suite in this process sees a configured topic.
 	updateSettings({ ntfyTopic: null });
+});
+
+test('webhook URL validation blocks special-use hostnames and reserved ranges', () => {
+	for (const url of [
+		'https://metadata.google.internal/hook',
+		'https://api.internal/hook',
+		'https://nas.local/hook',
+		'https://router.lan/hook',
+		'http://ip6-localhost/hook',
+		'http://100.64.0.1/hook',
+		'http://224.0.0.1/hook',
+		'http://[ff02::1]/hook',
+		'http://[2001::1]/hook',
+		'http://[64:ff9b::127.0.0.1]/hook',
+		'http://[2002:7f00:1::1]/hook'
+	]) {
+		expect(isAllowedWebhookUrl(url)).toBe(false);
+	}
+});
+
+test('isAllowedWebhookTarget rejects public-looking hostnames resolving to reserved addresses and fails closed on DNS errors', async () => {
+	setWebhookDnsLookupForTests(async () => [{ address: '127.0.0.1', family: 4 }]);
+	await expect(isAllowedWebhookTarget('https://public.example.com/hook')).resolves.toBe(false);
+
+	setWebhookDnsLookupForTests(async () => [{ address: '169.254.169.254', family: 4 }]);
+	await expect(isAllowedWebhookTarget('https://public.example.com/hook')).resolves.toBe(false);
+
+	setWebhookDnsLookupForTests(async () => [{ address: 'fd00::1', family: 6 }]);
+	await expect(isAllowedWebhookTarget('https://public.example.com/hook')).resolves.toBe(false);
+
+	setWebhookDnsLookupForTests(async () => {
+		throw new Error('DNS failure');
+	});
+	await expect(isAllowedWebhookTarget('https://public.example.com/hook')).resolves.toBe(false);
+});
+
+test('deliver skips the webhook channel when DNS resolution is reserved or fails', async () => {
+	const u = makeUser({ email: 'dns@x.c', display_name: 'DNS' });
+	updateSettings({ webhookUrl: 'https://public.example.com/hook' });
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		setWebhookDnsLookupForTests(async () => [{ address: '127.0.0.1', family: 4 }]);
+		let before = fetches.length;
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(fetches.length).toBe(before);
+
+		setWebhookDnsLookupForTests(async () => [{ address: '169.254.169.254', family: 4 }]);
+		before = fetches.length;
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(fetches.length).toBe(before);
+
+		setWebhookDnsLookupForTests(async () => [{ address: 'fd00::1', family: 6 }]);
+		before = fetches.length;
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(fetches.length).toBe(before);
+
+		setWebhookDnsLookupForTests(async () => {
+			throw new Error('DNS failure');
+		});
+		before = fetches.length;
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(fetches.length).toBe(before);
+	} finally {
+		errorSpy.mockRestore();
+		updateSettings({ webhookUrl: null });
+	}
+});
+
+test('non-2xx webhook and ntfy responses log an error while deliver resolves cleanly', async () => {
+	const u = makeUser({ email: 'err@x.c', display_name: 'Err' });
+	const originalFetch = globalThis.fetch;
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		updateSettings({ webhookUrl: 'https://hooks.example.com/roamarr', ntfyServerUrl: null, ntfyTopic: null });
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = async () => new Response('err', { status: 500 });
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(errorSpy).toHaveBeenCalled();
+
+		errorSpy.mockClear();
+		updateSettings({ webhookUrl: null, ntfyServerUrl: null, ntfyTopic: 'roamarr-alerts' });
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = async () => new Response('redirect', { status: 302 });
+		await deliver(Number(u.id), { title: 'T', body: 'B' });
+		expect(errorSpy).toHaveBeenCalled();
+	} finally {
+		(globalThis as unknown as { fetch: typeof fetch }).fetch = originalFetch;
+		errorSpy.mockRestore();
+		updateSettings({ webhookUrl: null, ntfyTopic: null });
+	}
 });

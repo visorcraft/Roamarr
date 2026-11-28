@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { eq as kitEq } from '@visorcraft/mongreldb-kit';
 import { kit } from './db';
@@ -15,6 +16,8 @@ function isPrivateIPv4Octets(a: number, b: number, c: number, d: number): boolea
 	if (a === 169 && b === 254) return true; // link-local
 	if (a === 172 && b >= 16 && b <= 31) return true;
 	if (a === 192 && b === 168) return true;
+	if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+	if (a >= 224) return true; // multicast/reserved 224.0.0.0/4
 	return false;
 }
 
@@ -103,16 +106,45 @@ function isPrivateOrLocalHostname(hostname: string): boolean {
 			const low = groups[6] * 0x10000 + groups[7];
 			return isPrivateIPv4Octets((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
 		}
+		// multicast ff00::/8
+		if ((groups[0] & 0xff00) === 0xff00) return true;
+		// NAT64 well-known prefix 64:ff9b::/96 — block when embedded IPv4 is private
+		if (groups[0] === 0x0064 && groups[1] === 0xff9b && groups[2] === 0 && groups[3] === 0 && groups[4] === 0 && groups[5] === 0) {
+			const low = groups[6] * 0x10000 + groups[7];
+			return isPrivateIPv4Octets((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
+		}
+		// 6to4 2002::/16 — block when embedded IPv4 is private
+		if (groups[0] === 0x2002) {
+			const low = groups[1] * 0x10000 + groups[2];
+			return isPrivateIPv4Octets((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
+		}
+		// Teredo 2001::/32
+		if (groups[0] === 0x2001 && groups[1] === 0x0000) return true;
 		// fc00::/7 unique local
 		if ((groups[0] & 0xfe00) === 0xfc00) return true;
 		// fe80::/10 link-local
 		if ((groups[0] & 0xffc0) === 0xfe80) return true;
 		return false;
 	}
-	// DNS name — drop a single trailing dot, block only localhost and *.localhost.
+	// DNS name — drop a single trailing dot, block localhost-like and internal names.
 	if (lower.endsWith('.')) lower = lower.slice(0, -1);
-	if (lower === 'localhost') return true;
-	if (lower.endsWith('.localhost')) return true;
+	if (
+		lower === 'localhost' ||
+		lower === 'ip6-localhost' ||
+		lower === 'ip6-loopback' ||
+		lower === 'broadcasthost' ||
+		lower === 'metadata' ||
+		lower === 'metadata.google.internal'
+	) return true;
+	if (
+		lower.endsWith('.localhost') ||
+		lower.endsWith('.local') ||
+		lower.endsWith('.internal') ||
+		lower.endsWith('.lan') ||
+		lower.endsWith('.home') ||
+		lower.endsWith('.corp') ||
+		lower.endsWith('.arpa')
+	) return true;
 	return false;
 }
 
@@ -127,6 +159,29 @@ export function isAllowedWebhookUrl(urlString: string): boolean {
 	if (url.username || url.password) return false;
 	if (isPrivateOrLocalHostname(url.hostname)) return false;
 	return true;
+}
+
+export type DnsLookupFn = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
+
+let dnsLookup: DnsLookupFn = (hostname) => lookup(hostname, { all: true, verbatim: true });
+
+export function setWebhookDnsLookupForTests(fn: DnsLookupFn | null): void {
+	dnsLookup = fn ?? ((hostname) => lookup(hostname, { all: true, verbatim: true }));
+}
+
+export async function isAllowedWebhookTarget(urlString: string): Promise<boolean> {
+	if (!isAllowedWebhookUrl(urlString)) return false;
+	let host = new URL(urlString).hostname;
+	if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+	if (isIP(host) !== 0) return true;
+	let addrs: Array<{ address: string; family: number }>;
+	try {
+		addrs = await dnsLookup(host);
+	} catch {
+		return false;
+	}
+	if (!Array.isArray(addrs) || addrs.length === 0) return false;
+	return addrs.every((a) => !isPrivateOrLocalHostname(a.address));
 }
 
 /** ntfy server base URL: https only, no embedded credentials. Self-hosted
@@ -184,8 +239,14 @@ function mailHtml(msg: NotificationMessage): string | undefined {
 	return `<p>${escapeHtml(msg.body).replaceAll('\n', '<br>')}</p><p><a href="${escapeHtml(msg.link)}">${escapeHtml(msg.linkLabel ?? msg.link)}</a></p>`;
 }
 
+function loadNotifyUser(userId: number) {
+	return kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
+}
+
+type NotifyUserRow = ReturnType<typeof loadNotifyUser>;
+
 interface Channel {
-	send(userId: number, msg: NotificationMessage): Promise<void>;
+	send(userId: number, msg: NotificationMessage, user?: NotifyUserRow): Promise<void>;
 }
 
 const inAppChannel: Channel = {
@@ -194,21 +255,10 @@ const inAppChannel: Channel = {
 	}
 };
 
-function getUserPreferences(userId: number) {
-	const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
-	return {
-		email: u?.email_notifications ?? true,
-		webhook: u?.webhook_notifications ?? true,
-		ntfy: u?.ntfy_notifications ?? true
-	};
-}
-
 const smtpChannel: Channel = {
-	async send(userId, msg) {
-		const prefs = getUserPreferences(userId);
-		if (!prefs.email) return;
-		const u = kit.selectFrom(users).where(kitEq(users.id, BigInt(userId))).executeSync()[0];
-		if (!u) return;
+	async send(userId, msg, user) {
+		const u = user ?? loadNotifyUser(userId);
+		if (u?.email_notifications === false || !u) return;
 		const resolved = resolveSmtpTransport(userId);
 		if (!resolved) return;
 		await withDeadline(
@@ -234,14 +284,14 @@ function signWebhookBody(body: string): { signature: string; timestamp: number }
 }
 
 const webhookChannel: Channel = {
-	async send(userId, msg) {
-		const prefs = getUserPreferences(userId);
-		if (!prefs.webhook) return;
+	async send(userId, msg, user) {
+		const u = user ?? loadNotifyUser(userId);
+		if (u?.webhook_notifications === false) return;
 		const s = getSettings();
-		if (!s.webhookUrl || !isAllowedWebhookUrl(s.webhookUrl)) return;
+		if (!s.webhookUrl || !(await isAllowedWebhookTarget(s.webhookUrl))) return;
 		const body = JSON.stringify({ title: msg.title, body: msg.body, link: msg.link ?? null });
 		const { signature, timestamp } = signWebhookBody(body);
-		await fetch(s.webhookUrl, {
+		const res = await fetch(s.webhookUrl, {
 			method: 'POST',
 			redirect: 'manual',
 			headers: {
@@ -252,13 +302,14 @@ const webhookChannel: Channel = {
 			body,
 			signal: AbortSignal.timeout(10_000)
 		});
+		if (!res.ok) throw new Error(`Webhook returned HTTP ${res.status}`);
 	}
 };
 
 const ntfyChannel: Channel = {
-	async send(userId, msg) {
-		const prefs = getUserPreferences(userId);
-		if (!prefs.ntfy) return;
+	async send(userId, msg, user) {
+		const u = user ?? loadNotifyUser(userId);
+		if (u?.ntfy_notifications === false) return;
 		const s = getSettings();
 		if (!s.ntfyTopic || !isValidNtfyTopic(s.ntfyTopic)) return;
 		const server = (s.ntfyServerUrl || DEFAULT_NTFY_SERVER_URL).replace(/\/+$/, '');
@@ -269,13 +320,14 @@ const ntfyChannel: Channel = {
 		};
 		if (msg.link) headers.Click = msg.link;
 		if (s.ntfyToken) headers.Authorization = `Bearer ${decrypt(s.ntfyToken)}`;
-		await fetch(`${server}/${s.ntfyTopic}`, {
+		const res = await fetch(`${server}/${s.ntfyTopic}`, {
 			method: 'POST',
 			redirect: 'manual',
 			headers,
 			body: msg.body,
 			signal: AbortSignal.timeout(10_000)
 		});
+		if (!res.ok) throw new Error(`ntfy returned HTTP ${res.status}`);
 	}
 };
 
@@ -285,7 +337,8 @@ export async function deliver(userId: number, msg: NotificationMessage) {
 	await inAppChannel.send(userId, msg);
 	// One failing/slow channel (notably SMTP) must not abort the others or fail the
 	// whole scheduler tick. Bound each channel and absorb per-channel failures.
-	const results = await Promise.allSettled(externalChannels.map((c) => c.send(userId, msg)));
+	const user = loadNotifyUser(userId);
+	const results = await Promise.allSettled(externalChannels.map((c) => c.send(userId, msg, user)));
 	for (const r of results) {
 		if (r.status === 'rejected') console.error('[notify] channel delivery failed:', r.reason);
 	}

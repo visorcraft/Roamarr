@@ -1,5 +1,6 @@
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { freshPlainDbDir } from '../../../tests/helpers';
@@ -92,10 +93,22 @@ test('pruneAutoBackups removes only the oldest auto- archives beyond retention',
 		'notes.txt'
 	];
 	for (const name of names) writeFileSync(join(dir, name), 'x');
+	// Sibling .sha256 sidecars must be pruned alongside their archives.
+	for (const name of names.filter((n) => n.startsWith('auto-') && n.endsWith('.mongreldb.tar.gz'))) {
+		writeFileSync(join(dir, `${name}.sha256`), 'x');
+	}
 
 	const deleted = pruneAutoBackups(dir, 2);
 	expect(deleted).toEqual(['auto-roamarr-backup-2026-07-01T00-00-00.mongreldb.tar.gz']);
-	expect(readdirSync(dir).sort()).toEqual(names.slice(1).sort());
+	const remaining = [
+		'auto-roamarr-backup-2026-07-02T00-00-00.mongreldb.tar.gz',
+		'auto-roamarr-backup-2026-07-02T00-00-00.mongreldb.tar.gz.sha256',
+		'auto-roamarr-backup-2026-07-03T00-00-00.mongreldb.tar.gz',
+		'auto-roamarr-backup-2026-07-03T00-00-00.mongreldb.tar.gz.sha256',
+		'roamarr-backup-2026-06-01T00-00-00.mongreldb.tar.gz',
+		'notes.txt'
+	];
+	expect(readdirSync(dir).sort()).toEqual(remaining.sort());
 });
 
 test('runAutoBackupIfDue enforces retention across runs', async () => {
@@ -139,15 +152,20 @@ test('removeStaleAutoBackupTempFiles removes only orphaned auto- temp files', ()
 	mkdirSync(dir, { recursive: true });
 	const kept = [
 		'auto-roamarr-backup-2026-07-30T00-00-00.mongreldb.tar.gz',
+		'auto-roamarr-backup-2026-07-30T00-00-00.mongreldb.tar.gz.sha256',
 		'roamarr-backup-2026-07-01T00-00-00.mongreldb.tar.gz.tmp',
 		'auto-roamarr-backup-2026-07-29T00-00-00.mongreldb.tar.gz.tmp.bak',
 		'notes.txt'
 	];
 	writeFileSync(join(dir, 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp'), 'x');
+	writeFileSync(join(dir, 'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.sha256.tmp'), 'x');
 	for (const name of kept) writeFileSync(join(dir, name), 'x');
 
 	const removed = removeStaleAutoBackupTempFiles(dir);
-	expect(removed).toEqual(['auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp']);
+	expect([...removed].sort()).toEqual([
+		'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.sha256.tmp',
+		'auto-roamarr-backup-2026-07-31T00-00-00.mongreldb.tar.gz.tmp'
+	]);
 	expect(readdirSync(dir).sort()).toEqual(kept.sort());
 
 	expect(removeStaleAutoBackupTempFiles(join(testRoot, 'missing'))).toEqual([]);
@@ -161,7 +179,13 @@ test('a .tmp left by a killed run is removed by the next due run', async () => {
 
 	const result = await runAutoBackupIfDue(new Date('2026-08-01T06:00:00Z'), dbDir);
 	expect(result.ran).toBe(true);
-	expect(readdirSync(dir).sort()).toEqual(['auto-roamarr-backup-2026-08-01T06-00-00.mongreldb.tar.gz']);
+	if (!result.ran) return;
+	const archiveName = 'auto-roamarr-backup-2026-08-01T06-00-00.mongreldb.tar.gz';
+	expect(readdirSync(dir).sort()).toEqual([archiveName, `${archiveName}.sha256`]);
+	// Sidecar matches sha256sum format and the real file's SHA-256.
+	const realHash = createHash('sha256').update(readFileSync(result.file)).digest('hex');
+	expect(result.sha256).toBe(realHash);
+	expect(readFileSync(`${result.file}.sha256`, 'utf8')).toBe(`${realHash}  ${archiveName}\n`);
 });
 
 test('orphan cleanup does not run when disabled or not due', async () => {

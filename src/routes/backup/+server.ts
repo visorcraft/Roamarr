@@ -31,8 +31,9 @@ export const GET: RequestHandler = async ({ locals, getClientAddress }) => {
 		`roamarr-backup-${process.hrtime.bigint().toString(36)}-${Date.now()}.tar.gz`
 	);
 
+	let sha256: string;
 	try {
-		await createBackupArchive(tmpPath);
+		({ sha256 } = await createBackupArchive(tmpPath));
 	} catch (err) {
 		cleanupTemp(tmpPath);
 		throw err;
@@ -60,7 +61,8 @@ export const GET: RequestHandler = async ({ locals, getClientAddress }) => {
 	return new Response(stream, {
 		headers: {
 			'Content-Type': 'application/gzip',
-			'Content-Disposition': `attachment; filename="${backupFilename()}"`
+			'Content-Disposition': `attachment; filename="${backupFilename()}"`,
+			'X-Backup-SHA256': sha256
 		}
 	});
 };

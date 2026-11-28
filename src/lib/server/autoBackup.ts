@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { getDatabasePath } from './db/paths';
 import { getSettings, updateSettings } from './settings';
-import { createBackupArchive } from './backupArchive';
+import { createBackupArchive, type BackupVerificationResult } from './backupArchive';
 
 /**
  * Scheduled automatic backups (admin-configured). Auto-backups are written to
@@ -18,6 +18,8 @@ import { createBackupArchive } from './backupArchive';
 export const AUTO_BACKUP_PREFIX = 'auto-roamarr-backup-';
 export const AUTO_BACKUP_SUFFIX = '.mongreldb.tar.gz';
 export const AUTO_BACKUP_TEMP_SUFFIX = `${AUTO_BACKUP_SUFFIX}.tmp`;
+export const AUTO_BACKUP_SHA256_SUFFIX = `${AUTO_BACKUP_SUFFIX}.sha256`;
+export const AUTO_BACKUP_SHA256_TEMP_SUFFIX = `${AUTO_BACKUP_SHA256_SUFFIX}.tmp`;
 
 export function getAutoBackupDir(dbPath: string = getDatabasePath()): string {
 	return join(dirname(resolve(dbPath)), 'backups');
@@ -36,17 +38,19 @@ export function listAutoBackups(dir: string): string[] {
 }
 
 /**
- * Best-effort removal of orphaned `auto-*.tmp` files left behind by a hard-killed
- * run. Only files matching the auto-backup temp naming scheme are removed;
- * completed `auto-` archives, non-`auto-` files, and anything else are left
- * alone. Per-file failures are logged and skipped; cleanup never throws.
- * Returns the names actually removed.
+ * Best-effort removal of orphaned `auto-*.tmp` and `auto-*.sha256.tmp` files
+ * left behind by a hard-killed run. Only files matching the auto-backup temp
+ * naming scheme are removed; completed `auto-` archives, completed `.sha256`
+ * sidecars, non-`auto-` files, and anything else are left alone. Per-file
+ * failures are logged and skipped; cleanup never throws. Returns the names
+ * actually removed.
  */
 export function removeStaleAutoBackupTempFiles(dir: string): string[] {
 	if (!existsSync(dir)) return [];
 	const removed: string[] = [];
 	for (const name of readdirSync(dir)) {
-		if (!name.startsWith(AUTO_BACKUP_PREFIX) || !name.endsWith(AUTO_BACKUP_TEMP_SUFFIX)) continue;
+		if (!name.startsWith(AUTO_BACKUP_PREFIX)) continue;
+		if (!name.endsWith(AUTO_BACKUP_TEMP_SUFFIX) && !name.endsWith(AUTO_BACKUP_SHA256_TEMP_SUFFIX)) continue;
 		try {
 			unlinkSync(join(dir, name));
 			removed.push(name);
@@ -58,9 +62,11 @@ export function removeStaleAutoBackupTempFiles(dir: string): string[] {
 }
 
 /**
- * Delete the oldest `auto-` archives beyond `retentionCount`. Files that do
- * not match the auto-backup naming scheme (e.g. anything an admin placed in
- * the directory manually) are left alone. Returns the deleted filenames.
+ * Delete the oldest `auto-` archives beyond `retentionCount`. Sibling `.sha256`
+ * sidecars are removed alongside their archives (best-effort, ENOENT ignored).
+ * Files that do not match the auto-backup naming scheme (e.g. anything an
+ * admin placed in the directory manually) are left alone. Returns the deleted
+ * archive filenames.
  */
 export function pruneAutoBackups(dir: string, retentionCount: number): string[] {
 	const keep = Math.max(0, Math.floor(retentionCount));
@@ -71,6 +77,13 @@ export function pruneAutoBackups(dir: string, retentionCount: number): string[] 
 			unlinkSync(join(dir, name));
 		} catch (e) {
 			console.error('[auto-backup] failed to prune', name, e);
+		}
+		try {
+			unlinkSync(join(dir, `${name}.sha256`));
+		} catch (e) {
+			if (!e || (e as NodeJS.ErrnoException).code !== 'ENOENT') {
+				console.error('[auto-backup] failed to prune sidecar', `${name}.sha256`, e);
+			}
 		}
 	}
 	return excess;
@@ -116,7 +129,7 @@ export function autoBackupStatus(
 
 export type AutoBackupResult =
 	| { ran: false; reason: 'disabled' | 'not-due' }
-	| { ran: true; file: string; pruned: string[] };
+	| { ran: true; file: string; sha256: string; pruned: string[] };
 
 /**
  * Run one scheduled auto-backup when enabled and the configured interval has
@@ -125,8 +138,11 @@ export type AutoBackupResult =
  * A hard-killed run can leave a `.tmp` sibling behind; the next due run removes
  * those orphans before writing its own archive. A future-dated or unparseable
  * `backupLastAutoAt` stamp is treated as due so backups resume.
- * Throws on failure; the scheduler wraps this in its per-maintenance try/catch
- * so a backup failure can never fail the tick.
+ *
+ * Each archive is written together with a `sha256sum`-compatible `.sha256`
+ * sidecar, both renamed into place atomically. Throws on failure; the
+ * scheduler wraps this in its per-maintenance try/catch so a backup failure
+ * can never fail the tick.
  */
 export async function runAutoBackupIfDue(
 	now: Date = new Date(),
@@ -148,12 +164,22 @@ export async function runAutoBackupIfDue(
 	removeStaleAutoBackupTempFiles(dir);
 	const dest = join(dir, autoBackupFilename(now));
 	const tmp = join(dir, autoBackupFilename(now, AUTO_BACKUP_TEMP_SUFFIX));
+	const sidecarTmp = join(dir, autoBackupFilename(now, AUTO_BACKUP_SHA256_TEMP_SUFFIX));
+	const sidecar = `${dest}.sha256`;
+	let verified: BackupVerificationResult;
 	try {
-		await createBackupArchive(tmp, dbPath);
+		verified = await createBackupArchive(tmp, dbPath);
+		writeFileSync(sidecarTmp, `${verified.sha256}  ${basename(dest)}\n`);
 		renameSync(tmp, dest);
+		renameSync(sidecarTmp, sidecar);
 	} catch (e) {
 		try {
 			unlinkSync(tmp);
+		} catch {
+			// ignore best-effort cleanup failures
+		}
+		try {
+			unlinkSync(sidecarTmp);
 		} catch {
 			// ignore best-effort cleanup failures
 		}
@@ -161,5 +187,5 @@ export async function runAutoBackupIfDue(
 	}
 	updateSettings({ backupLastAutoAt: now.toISOString() });
 	const pruned = pruneAutoBackups(dir, s.backupRetentionCount);
-	return { ran: true, file: dest, pruned };
+	return { ran: true, file: dest, sha256: verified.sha256, pruned };
 }

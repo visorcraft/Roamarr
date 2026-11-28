@@ -1,11 +1,56 @@
-import { createWriteStream, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { createReadStream, createWriteStream, unlinkSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'node:path';
-import { createGzip } from 'node:zlib';
+import { Transform } from 'node:stream';
+import { createGzip, createGunzip } from 'node:zlib';
 import { pipeline } from 'node:stream/promises';
+import tar from 'tar-fs';
+import { extract as tarExtract } from 'tar-stream';
 import { getDatabasePath } from './db/paths';
 import { getAttachmentsPath } from './restore';
 import { findGeonamesTableIds, shouldExcludeFromBackup } from './backupFilter';
-import tar from 'tar-fs';
+
+export interface BackupVerificationResult {
+	sha256: string;
+	entryCount: number;
+	hasCatalog: boolean;
+}
+
+/**
+ * Verify a `.mongreldb.tar.gz` archive: it must gunzip and parse as a tar
+ * stream containing at least one entry and a database CATALOG file. Returns
+ * the SHA-256 of the compressed bytes (the file as written), the number of
+ * tar entries seen, and whether the CATALOG was detected. Rejects cleanly on
+ * truncated/corrupt archives without leaking file descriptors.
+ */
+export async function verifyBackupArchive(archivePath: string): Promise<BackupVerificationResult> {
+	const hash = createHash('sha256');
+	let entryCount = 0;
+	let hasCatalog = false;
+
+	const hasher = new Transform({
+		transform(chunk, _encoding, callback) {
+			hash.update(chunk);
+			callback(null, chunk);
+		}
+	});
+
+	const extract = tarExtract();
+	extract.on('entry', (header, stream, next) => {
+		entryCount += 1;
+		if (header.name === 'CATALOG' || header.name.endsWith('/CATALOG')) hasCatalog = true;
+		stream.on('end', next);
+		stream.resume();
+	});
+
+	await pipeline(createReadStream(archivePath), hasher, createGunzip(), extract);
+
+	if (entryCount === 0 || !hasCatalog) {
+		throw new Error('Backup archive verification failed: missing database CATALOG');
+	}
+
+	return { sha256: hash.digest('hex'), entryCount, hasCatalog };
+}
 
 /**
  * Write a full `.mongreldb.tar.gz` backup of the database (plus attachments
@@ -15,11 +60,14 @@ import tar from 'tar-fs';
  *
  * The GeoNames city catalog is re-importable reference data (~30 MB): the
  * table shell is kept so CATALOG opens, but run/index payloads are omitted.
+ *
+ * The archive is verified immediately after writing; on any failure the
+ * partial archive is removed and the error is rethrown.
  */
 export async function createBackupArchive(
 	destPath: string,
 	dbPath: string = getDatabasePath()
-): Promise<void> {
+): Promise<BackupVerificationResult> {
 	const attachmentsPath = getAttachmentsPath(dbPath);
 
 	const parentDir = dirname(dbPath);
@@ -59,6 +107,7 @@ export async function createBackupArchive(
 		const gzip = createGzip();
 		const out = createWriteStream(destPath);
 		await pipeline(pack, gzip, out);
+		return await verifyBackupArchive(destPath);
 	} catch (err) {
 		try {
 			unlinkSync(destPath);

@@ -1,4 +1,5 @@
 import { test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, sep } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -101,8 +102,13 @@ test('backup downloads a tar.gz archive of the database directory and attachment
 	expect(res.status).toBe(200);
 	expect(res.headers.get('Content-Disposition')).toContain('.mongreldb.tar.gz');
 
+	const archiveBody = Buffer.from(await res.arrayBuffer());
+	const shaHeader = res.headers.get('X-Backup-SHA256');
+	expect(shaHeader).toMatch(/^[0-9a-f]{64}$/);
+	expect(shaHeader).toBe(createHash('sha256').update(archiveBody).digest('hex'));
+
 	const archivePath = join(testRoot, 'downloaded.tar.gz');
-	writeFileSync(archivePath, Buffer.from(await res.arrayBuffer()));
+	writeFileSync(archivePath, archiveBody);
 
 	const extractDir = join(testRoot, 'extracted');
 	await extractArchive(archivePath, extractDir);

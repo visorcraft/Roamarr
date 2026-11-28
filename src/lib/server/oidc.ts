@@ -26,6 +26,7 @@ export const OIDC_DISCOVERY_TTL_MS = 10 * 60_000;
 export const OIDC_JWKS_TTL_MS = 10 * 60_000;
 export const OIDC_FETCH_TIMEOUT_MS = 8_000;
 export const OIDC_FLOW_MAX_AGE_S = 10 * 60;
+export const MAX_OIDC_RESPONSE_BYTES = 256 * 1024;
 const CLOCK_SKEW_S = 60;
 
 export interface OidcConfig {
@@ -127,10 +128,64 @@ export function normalizeDiscoveryUrl(raw: string): string {
 }
 
 function requireHttpsUrl(value: unknown, field: string): string {
-	if (typeof value !== 'string' || !/^https?:\/\//.test(value)) {
-		throw new OidcError(`OIDC discovery document has an invalid ${field}`);
+	const fail = () => new OidcError(`OIDC discovery document has an invalid ${field}`);
+	if (typeof value !== 'string' || !value) throw fail();
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		throw fail();
 	}
+	if (url.username || url.password) throw fail();
+	const isLoopbackHttp =
+		url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+	if (url.protocol !== 'https:' && !isLoopbackHttp) throw fail();
 	return value;
+}
+
+async function readBoundedOidcJson(res: Response, label: string): Promise<unknown> {
+	const contentLength = res.headers.get('content-length');
+	if (contentLength !== null) {
+		const n = Number(contentLength);
+		if (Number.isFinite(n) && n > MAX_OIDC_RESPONSE_BYTES) {
+			throw new OidcError(`${label} response is too large`);
+		}
+	}
+	let text: string;
+	if (res.body) {
+		const reader = res.body.getReader();
+		const chunks: Uint8Array[] = [];
+		let total = 0;
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (value && value.byteLength > 0) {
+				total += value.byteLength;
+				if (total > MAX_OIDC_RESPONSE_BYTES) {
+					await reader.cancel();
+					throw new OidcError(`${label} response is too large`);
+				}
+				chunks.push(value);
+			}
+		}
+		const merged = new Uint8Array(total);
+		let offset = 0;
+		for (const chunk of chunks) {
+			merged.set(chunk, offset);
+			offset += chunk.byteLength;
+		}
+		text = new TextDecoder().decode(merged);
+	} else {
+		text = await res.text();
+		if (Buffer.byteLength(text, 'utf8') > MAX_OIDC_RESPONSE_BYTES) {
+			throw new OidcError(`${label} response is too large`);
+		}
+	}
+	try {
+		return JSON.parse(text);
+	} catch {
+		return null;
+	}
 }
 
 export function parseDiscovery(data: unknown): OidcDiscovery {
@@ -154,6 +209,7 @@ export async function fetchDiscovery(
 	let res: Response;
 	try {
 		res = await fetchImpl(url, {
+			redirect: 'manual',
 			signal: AbortSignal.timeout(OIDC_FETCH_TIMEOUT_MS),
 			headers: { accept: 'application/json' }
 		});
@@ -161,7 +217,7 @@ export async function fetchDiscovery(
 		throw new OidcError(`OIDC discovery request failed: ${e instanceof Error ? e.message : e}`);
 	}
 	if (!res.ok) throw new OidcError(`OIDC discovery failed with HTTP ${res.status}`);
-	const value = parseDiscovery(await res.json().catch(() => null));
+	const value = parseDiscovery(await readBoundedOidcJson(res, 'OIDC discovery'));
 	discoveryCache.set(url, { value, expiresAt: Date.now() + OIDC_DISCOVERY_TTL_MS });
 	return value;
 }
@@ -175,6 +231,7 @@ export async function fetchJwks(
 	let res: Response;
 	try {
 		res = await fetchImpl(jwksUri, {
+			redirect: 'manual',
 			signal: AbortSignal.timeout(OIDC_FETCH_TIMEOUT_MS),
 			headers: { accept: 'application/json' }
 		});
@@ -182,7 +239,7 @@ export async function fetchJwks(
 		throw new OidcError(`OIDC JWKS request failed: ${e instanceof Error ? e.message : e}`);
 	}
 	if (!res.ok) throw new OidcError(`OIDC JWKS fetch failed with HTTP ${res.status}`);
-	const data = (await res.json().catch(() => null)) as { keys?: unknown } | null;
+	const data = (await readBoundedOidcJson(res, 'OIDC JWKS')) as { keys?: unknown } | null;
 	if (!data || !Array.isArray(data.keys)) throw new OidcError('OIDC JWKS document has no keys');
 	const keys = data.keys as OidcJwk[];
 	jwksCache.set(jwksUri, { keys, expiresAt: Date.now() + OIDC_JWKS_TTL_MS });
@@ -328,13 +385,14 @@ export async function exchangeCode(
 			method: 'POST',
 			headers,
 			body,
+			redirect: 'manual',
 			signal: AbortSignal.timeout(OIDC_FETCH_TIMEOUT_MS)
 		});
 	} catch (e) {
 		throw new OidcError(`OIDC token request failed: ${e instanceof Error ? e.message : e}`);
 	}
 	if (!res.ok) throw new OidcError(`OIDC token exchange failed with HTTP ${res.status}`);
-	const data = (await res.json().catch(() => null)) as { id_token?: unknown } | null;
+	const data = (await readBoundedOidcJson(res, 'OIDC token')) as { id_token?: unknown } | null;
 	if (!data || typeof data.id_token !== 'string' || !data.id_token) {
 		throw new OidcError('OIDC token response did not contain an id_token');
 	}
@@ -371,7 +429,9 @@ export function verifyIdToken(
 	if (header.alg !== 'RS256') throw new OidcError('OIDC id_token uses an unexpected algorithm');
 
 	const kid = typeof header.kid === 'string' ? header.kid : null;
-	const candidates = opts.jwks.filter((k) => k.kty === 'RSA' && (!kid || k.kid === kid));
+	const candidates = opts.jwks.filter(
+		(k) => k.kty === 'RSA' && (!k.use || k.use === 'sig') && (!kid || k.kid === kid)
+	);
 	if (candidates.length === 0) throw new OidcError('OIDC id_token signed by an unknown key');
 
 	const signingInput = `${parts[0]}.${parts[1]}`;

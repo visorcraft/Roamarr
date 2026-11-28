@@ -10,12 +10,14 @@ vi.mock('$lib/server/db', async () => {
 });
 
 import {
+	MAX_OIDC_RESPONSE_BYTES,
 	_testSignRs256,
 	buildAuthorizationUrl,
 	clearOidcCaches,
 	createOidcFlow,
 	exchangeCode,
 	fetchDiscovery,
+	fetchJwks,
 	getOidcConfig,
 	getOidcPublicInfo,
 	normalizeDiscoveryUrl,
@@ -411,4 +413,92 @@ test('getOidcConfig decrypts the secret; public info hides it', () => {
 
 test('oidcRedirectUri builds from the origin', () => {
 	expect(oidcRedirectUri('https://app.example.com/')).toBe('https://app.example.com/auth/oidc/callback');
+});
+
+// --- Hardening (R2-2) ---------------------------------------------------------
+
+test('parseDiscovery rejects plaintext non-loopback http URLs and embedded credentials', () => {
+	const base = {
+		issuer: ISSUER,
+		authorization_endpoint: `${ISSUER}/authorize`,
+		token_endpoint: `${ISSUER}/token`,
+		jwks_uri: `${ISSUER}/jwks`
+	};
+	expect(() => parseDiscovery({ ...base, token_endpoint: 'http://idp.internal/token' })).toThrow();
+	expect(() => parseDiscovery({ ...base, jwks_uri: 'http://169.254.169.254/jwks' })).toThrow();
+	expect(() =>
+		parseDiscovery({ ...base, token_endpoint: 'https://user:pass@idp.example.com/token' })
+	).toThrow();
+	const ok = parseDiscovery({
+		...base,
+		token_endpoint: 'http://localhost:8080/token',
+		jwks_uri: 'http://localhost:8080/jwks'
+	});
+	expect(ok.issuer).toBe(ISSUER);
+	expect(ok.jwksUri).toBe('http://localhost:8080/jwks');
+	expect(parseDiscovery(base).tokenEndpoint).toBe(`${ISSUER}/token`);
+});
+
+test('fetchDiscovery, fetchJwks, and exchangeCode pass redirect manual and reject 302 responses', async () => {
+	const cfg = { discoveryUrl: ISSUER, clientId: CLIENT_ID, clientSecret: null, displayName: 'SSO' };
+	const mkFetch = () => vi.fn(async (_url: string, _init?: RequestInit) => new Response('', { status: 302 }));
+
+	const discoveryFetch = mkFetch();
+	await expect(fetchDiscovery(ISSUER, discoveryFetch as never)).rejects.toThrow(/HTTP 302/);
+	expect(discoveryFetch).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ redirect: 'manual' })
+	);
+
+	const jwksFetch = mkFetch();
+	await expect(fetchJwks(`${ISSUER}/jwks`, jwksFetch as never)).rejects.toThrow(/HTTP 302/);
+	expect(jwksFetch).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ redirect: 'manual' })
+	);
+
+	const exchangeFetch = mkFetch();
+	await expect(exchangeCode(DISCOVERY, cfg, 'c', 'r', 'v', exchangeFetch as never)).rejects.toThrow(/HTTP 302/);
+	expect(exchangeFetch).toHaveBeenCalledWith(
+		expect.any(String),
+		expect.objectContaining({ redirect: 'manual' })
+	);
+});
+
+test('fetchDiscovery, fetchJwks, and exchangeCode reject oversized responses', async () => {
+	const cfg = { discoveryUrl: ISSUER, clientId: CLIENT_ID, clientSecret: null, displayName: 'SSO' };
+	const big = 'x'.repeat(MAX_OIDC_RESPONSE_BYTES + 1);
+	const bigResponse = () =>
+		new Response(big, {
+			status: 200,
+			headers: { 'content-type': 'application/json', 'content-length': String(big.length) }
+		});
+
+	await expect(fetchDiscovery(ISSUER, (async () => bigResponse()) as never)).rejects.toThrow(/too large/);
+	await expect(fetchJwks(`${ISSUER}/jwks`, (async () => bigResponse()) as never)).rejects.toThrow(/too large/);
+	await expect(exchangeCode(DISCOVERY, cfg, 'c', 'r', 'v', (async () => bigResponse()) as never)).rejects.toThrow(
+		/too large/
+	);
+});
+
+test('verifyIdToken ignores RSA keys with use enc and accepts sig or omitted use', () => {
+	const encPair = generateKeyPairSync('rsa', { modulusLength: 2048 });
+	const encJwk = {
+		...(encPair.publicKey.export({ format: 'jwk' }) as object),
+		kid: 'enc-key',
+		use: 'enc'
+	};
+
+	// Matching kid in the token header.
+	expect(() =>
+		verify(signClaims(validClaims(), encPair.privateKey, 'enc-key'), { jwks: [encJwk] as never })
+	).toThrow();
+	// No kid in the token header.
+	expect(() => verify(signClaims(validClaims(), encPair.privateKey, null), { jwks: [encJwk] as never })).toThrow();
+
+	const sigJwk = { ...(publicKey.export({ format: 'jwk' }) as object), kid: 'sig-key', use: 'sig' };
+	expect(verify(signClaims(validClaims(), privateKey, 'sig-key'), { jwks: [sigJwk] as never }).sub).toBe('sub-1');
+
+	// Omitted use (existing fixture) is accepted.
+	expect(verify(signClaims(validClaims())).sub).toBe('sub-1');
 });

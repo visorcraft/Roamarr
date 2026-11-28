@@ -5,7 +5,7 @@ import { checkRateLimit } from '$lib/server/rateLimit';
 import { HEARTBEAT_MS, subscribeUser, type LiveEvent } from '$lib/server/eventBus';
 import { listViewableTripIdsForUser } from '$lib/server/repositories/tripsRepo';
 
-export const MAX_STREAM_DURATION_MS = 6 * 60 * 60_000;
+export const _MAX_STREAM_DURATION_MS = 6 * 60 * 60_000;
 
 /**
  * Live invalidation stream (Server-Sent Events). Emits `{type:'trip', id,
@@ -94,7 +94,7 @@ export const GET: RequestHandler = async ({ locals, request, getClientAddress })
 				} catch {
 					/* already closed */
 				}
-			}, MAX_STREAM_DURATION_MS);
+			}, _MAX_STREAM_DURATION_MS);
 			// Hint the browser's reconnect delay for dropped connections.
 			send('retry: 3000\n\n');
 		},

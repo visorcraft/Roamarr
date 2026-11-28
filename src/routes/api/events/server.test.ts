@@ -7,7 +7,7 @@ vi.mock('$lib/server/db', async () => {
 	return ctx;
 });
 
-import { GET, MAX_STREAM_DURATION_MS } from './+server';
+import { GET, _MAX_STREAM_DURATION_MS } from './+server';
 import { tripShares, trips, users } from '$lib/server/db/mongrelSchema';
 import { makeUser, makeTrip } from '../../../../tests/helpers';
 import { resetRateLimit } from '$lib/server/rateLimit';
@@ -145,7 +145,7 @@ test('heartbeats keep the stream alive and abort cleans up the subscription', as
 	}
 });
 
-test('closes the stream and cleans up after MAX_STREAM_DURATION_MS', async () => {
+test('closes the stream and cleans up after _MAX_STREAM_DURATION_MS', async () => {
 	vi.useFakeTimers();
 	try {
 		const user = makeUser(ctx.kit);
@@ -156,7 +156,7 @@ test('closes the stream and cleans up after MAX_STREAM_DURATION_MS', async () =>
 		await reader.read(); // prologue
 		expect(streamCounts().total).toBe(1);
 
-		await vi.advanceTimersByTimeAsync(MAX_STREAM_DURATION_MS);
+		await vi.advanceTimersByTimeAsync(_MAX_STREAM_DURATION_MS);
 		expect(streamCounts().total).toBe(0);
 		// Drain any buffered heartbeats; the stream must reach EOF without hanging.
 		let done = false;

@@ -14,7 +14,8 @@ import {
 	startSchedulerRun,
 	finishSchedulerRun,
 	listRecentSchedulerRuns,
-	pruneOldSchedulerRuns
+	pruneOldSchedulerRuns,
+	type SchedulerRunSummary
 } from './repositories/remindersRepo';
 
 const SCHEDULER_FLAG = '__roamarr_scheduler';
@@ -28,9 +29,17 @@ const KEEP_RUNS = 100;
  */
 export const SCHEDULER_TICK_DEADLINE_MS = 55_000;
 
+/** Per-job default cap: a single slow or hung job cannot starve the others. */
+export const SCHEDULER_JOB_DEADLINE_MS = 20_000;
+
 /** Compact every table at most this often. Clean tables skip themselves. */
 const COMPACT_INTERVAL_MS = 60 * 60_000;
 let lastCompactAt = 0;
+
+/** Test hook: reset module-level scheduler state between tests. */
+export function resetSchedulerStateForTests() {
+	lastCompactAt = 0;
+}
 
 /** Race a promise against a deadline; clears its timer once settled (no leaks). */
 function withDeadline<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -43,19 +52,56 @@ function withDeadline<T>(promise: Promise<T>, ms: number, label: string): Promis
 	}) as Promise<T>;
 }
 
+function toError(e: unknown): Error {
+	return e instanceof Error ? e : new Error(String(e));
+}
+
+/**
+ * Compact every table one at a time, yielding to the event loop between
+ * tables so hourly compaction does not block the loop in one giant stall.
+ * A failing table is logged and skipped; the rest still compact. Falls back
+ * to a single blocking compactAll() when tableNames() is unavailable.
+ */
+async function compactTablesYielding(): Promise<void> {
+	const tableNames = typeof kit.tableNames === 'function' ? kit.tableNames() : null;
+	if (!tableNames) {
+		kit.compactAll();
+		return;
+	}
+	for (let i = 0; i < tableNames.length; i++) {
+		try {
+			kit.compactTable(tableNames[i]);
+		} catch (e) {
+			console.error('[scheduler] compact table failed', tableNames[i], e);
+		}
+		if (i < tableNames.length - 1) {
+			await new Promise<void>((resolve) => setImmediate(resolve));
+		}
+	}
+}
+
 /**
  * Execute one scheduler tick, recording the result in `scheduler_runs`.
  * Exported so tests can invoke it directly.
  *
- * The job pipeline runs under `deadlineMs` (default {@link SCHEDULER_TICK_DEADLINE_MS})
- * so a slow external dependency cannot stall the loop. Maintenance that keeps
- * the engine healthy over a long uptime — reclaiming in-memory rate-limit
- * buckets, dropping stale weather rows, flushing memtables and (hourly)
- * compacting sorted runs — runs after the jobs and never fails the tick.
- * Never rejects: run bookkeeping is best-effort, and the scheduled loop has no caller that could observe a rejection.
+ * Each async job runs under its own deadline (bounded by `deadlineMs`) via
+ * Promise.allSettled, so a slow, hung, or throwing job (e.g. a wedged IMAP
+ * server, an SMTP timeout, a slow fare provider) cannot starve or cancel the
+ * other jobs. The fast synchronous purges always run, individually guarded,
+ * so an async failure never prevents expired sessions/OAuth tokens/invitations
+ * from being purged. Maintenance that keeps the engine healthy over a long
+ * uptime — reclaiming in-memory rate-limit buckets, dropping stale weather
+ * rows, flushing memtables and (hourly) compacting sorted runs — runs after
+ * the jobs and never fails the tick. Never rejects: run bookkeeping is
+ * best-effort, and the scheduled loop has no caller that could observe a
+ * rejection.
  */
-export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
+export async function runTick(
+	now: Date,
+	opts: { deadlineMs?: number; jobDeadlineMs?: number } = {}
+) {
 	const deadlineMs = opts.deadlineMs ?? SCHEDULER_TICK_DEADLINE_MS;
+	const jobDeadlineMs = Math.min(opts.jobDeadlineMs ?? SCHEDULER_JOB_DEADLINE_MS, deadlineMs);
 	// Recording the run is best-effort. A failing write (full disk, transient
 	// I/O error) must not skip the scheduled work, and runTick must never
 	// reject: the interval loop in startScheduler has no caller that could
@@ -75,25 +121,69 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 		}
 	};
 	try {
-		const jobs = (async () => {
-			const reminders = await runDueReminders(now);
-			const fareChecks = await runFareChecks(now);
-			const weatherCache = await refreshWeatherCache(now);
-			const emailProcessing = await pollDueInboxes(now);
-			const sessions = purgeExpiredSessions();
-			const challenges = purgeExpiredChallenges();
-			const oauth = purgeExpiredOauth();
-			const tripInvitations = purgeExpiredTripInvitations();
-			return {
-				reminders,
-				fareChecks,
-				weatherCache,
-				emailProcessing,
-				purges: { sessions, challenges, oauth, tripInvitations }
-			};
-		})();
-		const summary = await withDeadline(jobs, deadlineMs, 'scheduler tick');
-		record({ success: true, summary });
+		const jobSpecs: Array<{ name: string; run: () => Promise<unknown> }> = [
+			{ name: 'reminders', run: () => runDueReminders(now) },
+			{ name: 'fareChecks', run: () => runFareChecks(now) },
+			{ name: 'weatherCache', run: () => refreshWeatherCache(now) },
+			{ name: 'emailProcessing', run: () => pollDueInboxes(now) }
+		];
+		const settled = await Promise.allSettled(
+			jobSpecs.map(({ name, run }) =>
+				withDeadline(Promise.resolve().then(run), jobDeadlineMs, name)
+			)
+		);
+		const failures: Array<{ label: string; error: Error }> = [];
+		const outputs: Record<string, unknown> = {};
+		settled.forEach((outcome, i) => {
+			const name = jobSpecs[i].name;
+			if (outcome.status === 'fulfilled') outputs[name] = outcome.value;
+			else failures.push({ label: name, error: toError(outcome.reason) });
+		});
+
+		// The 4 fast sync purges always run, each guarded individually so a
+		// failing purge never prevents the others (or the async jobs) from running.
+		const purgeSpecs = [
+			{ name: 'sessions', run: purgeExpiredSessions },
+			{ name: 'challenges', run: purgeExpiredChallenges },
+			{ name: 'oauth', run: purgeExpiredOauth },
+			{ name: 'tripInvitations', run: purgeExpiredTripInvitations }
+		];
+		const purges: Record<string, unknown> = {};
+		for (const spec of purgeSpecs) {
+			try {
+				const value = spec.run();
+				if (value !== undefined) purges[spec.name] = value;
+			} catch (e) {
+				failures.push({ label: `purges.${spec.name}`, error: toError(e) });
+			}
+		}
+
+		const summary: SchedulerRunSummary & Record<string, unknown> = {};
+		if (outputs.reminders !== undefined)
+			summary.reminders = outputs.reminders as SchedulerRunSummary['reminders'];
+		if (outputs.fareChecks !== undefined)
+			summary.fareChecks = outputs.fareChecks as SchedulerRunSummary['fareChecks'];
+		if (outputs.weatherCache !== undefined)
+			summary.weatherCache = outputs.weatherCache as SchedulerRunSummary['weatherCache'];
+		if (outputs.emailProcessing !== undefined) summary.emailProcessing = outputs.emailProcessing;
+		if (Object.keys(purges).length > 0)
+			summary.purges = purges as SchedulerRunSummary['purges'];
+		if (failures.length > 0) {
+			const errors: Record<string, string> = {};
+			for (const f of failures) errors[f.label] = f.error.message;
+			summary.errors = errors;
+		}
+
+		if (failures.length === 0) {
+			record({ success: true, summary });
+		} else {
+			console.error('[scheduler]', failures[0].error);
+			record({
+				success: false,
+				errorMessage: failures.map((f) => f.error.message).join('; '),
+				summary
+			});
+		}
 	} catch (e) {
 		console.error('[scheduler]', e);
 		record({ success: false, errorMessage: e instanceof Error ? e.message : String(e) });
@@ -129,8 +219,9 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 	// Flush memtables each tick (cheap; enables the incremental-aggregate fast
 	// path) and compact hourly so query latency stays flat over a long uptime.
 	// flushAsync uses per-table native async so the Node event loop can keep
-	// serving requests while memtables spill; compactAll still blocks (no native
-	// async compact), so it stays on the hourly cadence only.
+	// serving requests while memtables spill; compactTablesYielding compacts
+	// table-by-table with setImmediate yields between tables so hourly
+	// compaction does not block the loop in one giant stall.
 	try {
 		await kit.flushAsync();
 	} catch (e) {
@@ -139,7 +230,7 @@ export async function runTick(now: Date, opts: { deadlineMs?: number } = {}) {
 	if (now.getTime() - lastCompactAt >= COMPACT_INTERVAL_MS) {
 		lastCompactAt = now.getTime();
 		try {
-			kit.compactAll();
+			await compactTablesYielding();
 		} catch (e) {
 			console.error('[scheduler] compact failed', e);
 		}

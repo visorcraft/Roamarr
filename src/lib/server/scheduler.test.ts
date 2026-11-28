@@ -25,8 +25,10 @@ vi.mock('./repositories/remindersRepo', async (importOriginal) => {
 });
 
 import { runDueReminders } from './reminders';
+import { runFareChecks } from './fareproviders';
+import { purgeExpiredSessions } from './auth';
 import { startSchedulerRun, finishSchedulerRun } from './repositories/remindersRepo';
-import { startScheduler, runTick } from './scheduler';
+import { startScheduler, runTick, resetSchedulerStateForTests } from './scheduler';
 import { schedulerRuns, weatherCache } from './db/mongrelSchema';
 import { makeUser, makeTrip } from '../../../tests/helpers';
 import { locationKey } from './weather';
@@ -257,5 +259,73 @@ test('the scheduler interval loop keeps ticking when run bookkeeping fails', asy
 		errorSpy.mockRestore();
 		if (previous === undefined) delete g.__roamarr_scheduler;
 		else g.__roamarr_scheduler = previous;
+	}
+});
+
+test('a failing reminders job does not starve other jobs or the purges', async () => {
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	const fareChecks = vi.mocked(runFareChecks);
+	const purgeSessions = vi.mocked(purgeExpiredSessions);
+	fareChecks.mockClear();
+	purgeSessions.mockClear();
+	(runDueReminders as any).mockImplementationOnce(async () => {
+		throw new Error('reminder boom');
+	});
+
+	await runTick(new Date('2026-06-24T12:00:00.000Z'));
+
+	expect(fareChecks).toHaveBeenCalledTimes(1);
+	expect(purgeSessions).toHaveBeenCalledTimes(1);
+	const run = getKit().selectFrom(schedulerRuns).executeSync()[0];
+	expect(run).not.toBeUndefined();
+	expect(run!.success).toBe(false);
+	expect(run!.error_message).toBe('reminder boom');
+	errorSpy.mockRestore();
+});
+
+test('a hung reminders job times out without starving other jobs or the purges', async () => {
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	const fareChecks = vi.mocked(runFareChecks);
+	const purgeSessions = vi.mocked(purgeExpiredSessions);
+	fareChecks.mockClear();
+	purgeSessions.mockClear();
+	(runDueReminders as any).mockImplementationOnce(() => new Promise(() => {}));
+
+	await runTick(new Date('2026-06-24T12:00:00.000Z'), { deadlineMs: 25 });
+
+	expect(fareChecks).toHaveBeenCalledTimes(1);
+	expect(purgeSessions).toHaveBeenCalledTimes(1);
+	const run = getKit().selectFrom(schedulerRuns).executeSync()[0];
+	expect(run).not.toBeUndefined();
+	expect(run!.success).toBe(false);
+	expect(run!.error_message).toMatch(/timed out/);
+	errorSpy.mockRestore();
+});
+
+test('hourly compaction compacts tables individually and survives a failing table', async () => {
+	resetSchedulerStateForTests();
+	const kit = getKit();
+	const tableNames = kit.tableNames();
+	expect(tableNames.length).toBeGreaterThan(1);
+	const compactSpy = vi.spyOn(kit, 'compactTable').mockImplementation((table: string) => {
+		if (table === tableNames[1]) throw new Error('compact boom');
+		return true;
+	});
+	const immediateSpy = vi.spyOn(globalThis, 'setImmediate');
+	const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	try {
+		await runTick(new Date('2026-06-24T12:00:00.000Z'));
+
+		expect(compactSpy).toHaveBeenCalledTimes(tableNames.length);
+		for (const name of tableNames) expect(compactSpy).toHaveBeenCalledWith(name);
+		// One setImmediate yield between each pair of tables.
+		expect(immediateSpy.mock.calls.length).toBeGreaterThanOrEqual(tableNames.length - 1);
+		const run = kit.selectFrom(schedulerRuns).executeSync()[0];
+		expect(run).not.toBeUndefined();
+		expect(run!.success).toBe(true);
+	} finally {
+		compactSpy.mockRestore();
+		immediateSpy.mockRestore();
+		errorSpy.mockRestore();
 	}
 });

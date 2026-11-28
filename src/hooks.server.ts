@@ -20,7 +20,10 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 bootApp();
 
 const PUBLIC = [/^\/setup/, /^\/login/, /^\/register/, /^\/invite\//, /^\/forgot-password/, /^\/reset-password\//, /^\/share\//, /^\/trips\/\d+\/calendar\/feed$/, /^\/api\/webauthn\/auth\//, /^\/auth\/oidc\//, /^\/oauth\/authorize/, /^\/oauth\/register$/, /^\/oauth\/token/, /^\/oauth\/revoke/, /^\/\.well-known\//, /^\/mcp/, /^\/health$/, /^\/health\/deep$/];
-const OAUTH_FORM_ENDPOINTS = new Set(['/oauth/token', '/oauth/revoke']);
+// OAuth/MCP CORS protocol endpoints are exempt from the cross-site check:
+// browser-based MCP clients send cross-origin JSON POSTs to /oauth/register
+// without Bearer tokens, and these endpoints are designed to be called cross-origin.
+const OAUTH_CORS_ENDPOINTS = new Set(['/oauth/token', '/oauth/revoke', '/oauth/register', '/mcp']);
 const FORM_CONTENT_TYPES = new Set([
 	'application/x-www-form-urlencoded',
 	'multipart/form-data',
@@ -28,8 +31,9 @@ const FORM_CONTENT_TYPES = new Set([
 ]);
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function isForbiddenCrossSiteForm(request: Request, url: URL): boolean {
-	if (OAUTH_FORM_ENDPOINTS.has(url.pathname) || !UNSAFE_METHODS.has(request.method)) return false;
+export function isForbiddenCrossSiteRequest(request: Request, url: URL): boolean {
+	if (!UNSAFE_METHODS.has(request.method)) return false;
+	if (OAUTH_CORS_ENDPOINTS.has(url.pathname)) return false;
 	// Cookie-session browser form CSRF only. Mobile/native clients authenticate with
 	// Bearer tokens and often omit Origin (or send a non-site Origin) on multipart
 	// uploads — blocking those breaks poster/receipt uploads from the app.
@@ -38,8 +42,19 @@ export function isForbiddenCrossSiteForm(request: Request, url: URL): boolean {
 	// browser form cannot set (it would require a CORS preflight).
 	if (request.headers.get('x-api-token')) return false;
 	const contentType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
-	return !!contentType && FORM_CONTENT_TYPES.has(contentType) && request.headers.get('origin') !== url.origin;
+	const origin = request.headers.get('origin');
+	if (contentType && FORM_CONTENT_TYPES.has(contentType)) {
+		// Strict rule for form posts: missing or mismatched Origin is forbidden.
+		return origin !== url.origin;
+	}
+	// All other content types (e.g. application/json or empty/omitted Content-Type):
+	// block browser cross-site requests via Sec-Fetch-Site or a mismatched Origin.
+	if (request.headers.get('sec-fetch-site')?.toLowerCase() === 'cross-site') return true;
+	return origin !== null && origin !== url.origin;
 }
+
+// Backwards-compatible alias; existing callers and tests use this name.
+export const isForbiddenCrossSiteForm = isForbiddenCrossSiteRequest;
 
 export function requiredApiScope(path: string, method: string): Scope | null {
 	const access = method === 'GET' || method === 'HEAD' ? 'read' : 'write';
@@ -215,8 +230,8 @@ function redirectResponse(e: Redirect) {
 const appHandle: Handle = async ({ event, resolve }) => {
 	try {
 		const path = event.url.pathname;
-		if (!dev && isForbiddenCrossSiteForm(event.request, event.url)) {
-			return new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
+		if (!dev && isForbiddenCrossSiteRequest(event.request, event.url)) {
+			return new Response(`Cross-site ${event.request.method} requests are forbidden`, {
 				status: 403
 			});
 		}

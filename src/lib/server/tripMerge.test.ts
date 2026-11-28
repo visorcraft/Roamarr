@@ -8,7 +8,7 @@ vi.mock('./db', async () => {
 });
 
 import { mergeTrips } from './tripMerge';
-import { currentTripRev } from './eventBus';
+import { currentTripRev, publishTripChanged } from './eventBus';
 import {
 	attachments, galleryImages, segments, tripCompanions, tripDocuments, tripDocumentLinks,
 	tripDayNotes, tripExpenses, tripInvitations, trips
@@ -196,6 +196,20 @@ test('tripInvitations move to recipient, upgrading permission on email collision
 	expect(byEmail.get('shared@example.com')!.permission).toBe('edit');
 	expect(byEmail.get('distinct@example.com')!.permission).toBe('read');
 	expect(db().selectFrom(tripInvitations).where(eq(tripInvitations.trip_id, BigInt(donor.id))).executeSync()).toHaveLength(0);
+});
+
+test('merge clears the donor trip revision entry', () => {
+	const user = makeUser(db(), { email: 'donor-rev@example.com' });
+	const recipient = makeTrip(db(), user.id, { name: 'Recipient' });
+	const donor = makeTrip(db(), user.id, { name: 'Donor' });
+	publishTripChanged(donor.id);
+	publishTripChanged(donor.id);
+	expect(currentTripRev(donor.id)).toBe(2);
+
+	mergeTrips(user.id, donor.id, recipient.id);
+
+	expect(currentTripRev(donor.id)).toBe(0);
+	expect(currentTripRev(recipient.id)).toBeGreaterThan(0);
 });
 
 test('merge publishes live-event revision bump for the recipient trip', () => {

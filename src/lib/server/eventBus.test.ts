@@ -2,6 +2,7 @@ import { test, expect, afterEach } from 'vitest';
 import {
 	MAX_STREAMS_PER_USER,
 	MAX_STREAMS_TOTAL,
+	clearTripRev,
 	currentTripRev,
 	publishSharesChanged,
 	publishTripChanged,
@@ -91,6 +92,22 @@ test('caps total streams across users', () => {
 	expect(streamCounts().total).toBe(MAX_STREAMS_TOTAL);
 	for (const unsub of unsubs) unsub();
 	expect(streamCounts().total).toBe(0);
+});
+
+test('clearTripRev clears the target trip rev and leaves other trips intact', () => {
+	publishTripChanged(9001);
+	publishTripChanged(9001);
+	publishTripChanged(9002);
+	expect(currentTripRev(9001)).toBe(2);
+
+	clearTripRev(9001);
+
+	expect(currentTripRev(9001)).toBe(0);
+	expect(currentTripRev(9002)).toBe(1);
+	// A cleared trip starts its revision over at 1 on the next publish.
+	expect(publishTripChanged(9001).rev).toBe(1);
+	clearTripRev(9001);
+	clearTripRev(9002);
 });
 
 test('double unsubscribe is a no-op', () => {

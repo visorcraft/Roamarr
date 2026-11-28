@@ -1,4 +1,13 @@
-const store = new Map<string, { count: number; resetAt: number }>();
+const store = new Map<string, { ip: string; route: string; count: number; resetAt: number }>();
+
+/**
+ * Injective, collision-free composite key without JSON serialization.
+ * The ip length prefix makes the split unambiguous, so colons in either
+ * the ip (e.g. IPv6) or the route are safe.
+ */
+function compositeKey(ip: string, route: string): string {
+	return `${ip.length}:${ip}:${route}`;
+}
 
 export const DEFAULT_MAX_ATTEMPTS = 10;
 export const DEFAULT_WINDOW_MS = 60_000;
@@ -59,7 +68,7 @@ export function checkRateLimit(
 	const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 	const windowMs = opts.windowMs ?? DEFAULT_WINDOW_MS;
 	const now = Date.now();
-	const key = JSON.stringify([ip, route]);
+	const key = compositeKey(ip, route);
 	const entry = store.get(key);
 
 	if (!entry) {
@@ -68,13 +77,13 @@ export function checkRateLimit(
 			pruneExpiredRateLimit(now);
 			if (store.size >= MAX_RATE_LIMIT_ENTRIES) evictNearestExpiry();
 		}
-		store.set(key, { count: 1, resetAt: now + windowMs });
+		store.set(key, { ip, route, count: 1, resetAt: now + windowMs });
 		return { allowed: true };
 	}
 
 	if (now >= entry.resetAt) {
 		// Existing key, expired window: reset in place (no growth).
-		store.set(key, { count: 1, resetAt: now + windowMs });
+		store.set(key, { ip, route, count: 1, resetAt: now + windowMs });
 		return { allowed: true };
 	}
 
@@ -90,9 +99,8 @@ export function resetRateLimit(ip?: string, route?: string) {
 		store.clear();
 		return;
 	}
-	for (const key of store.keys()) {
-		const [kIp, kRoute] = JSON.parse(key);
-		if ((!ip || kIp === ip) && (!route || kRoute === route)) {
+	for (const [key, entry] of store) {
+		if ((!ip || entry.ip === ip) && (!route || entry.route === route)) {
 			store.delete(key);
 		}
 	}

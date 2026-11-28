@@ -1,4 +1,4 @@
-import { test, expect, beforeEach } from 'vitest';
+import { test, expect, beforeEach, vi } from 'vitest';
 import {
 	checkRateLimit,
 	resetRateLimit,
@@ -56,6 +56,59 @@ test('resetRateLimit can clear a single route entry', () => {
 	checkRateLimit('1.2.3.4', 'register');
 	resetRateLimit('1.2.3.4', 'login');
 	expect(checkRateLimit('1.2.3.4', 'login').allowed).toBe(true);
+});
+
+test('resetRateLimit by ip only removes that ip across routes (IPv6)', () => {
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('2001:db8::1', 'backup:download');
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('2001:db8::1', 'login');
+	checkRateLimit('2001:db8::2', 'backup:download');
+	expect(checkRateLimit('2001:db8::1', 'backup:download').allowed).toBe(false);
+
+	resetRateLimit('2001:db8::1');
+
+	// Both of that ip's buckets are cleared, and the other ip is untouched.
+	expect(checkRateLimit('2001:db8::1', 'backup:download').allowed).toBe(true);
+	expect(checkRateLimit('2001:db8::1', 'login').allowed).toBe(true);
+	expect(checkRateLimit('2001:db8::2', 'backup:download').allowed).toBe(true);
+});
+
+test('resetRateLimit by route only removes that route across ips (colon in route)', () => {
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('1.2.3.4', 'backup:download');
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('5.6.7.8', 'backup:download');
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('1.2.3.4', 'login');
+	expect(checkRateLimit('1.2.3.4', 'backup:download').allowed).toBe(false);
+
+	resetRateLimit(undefined, 'backup:download');
+
+	// Both ips' buckets for the route are cleared; the other route is untouched.
+	expect(checkRateLimit('1.2.3.4', 'backup:download').allowed).toBe(true);
+	expect(checkRateLimit('5.6.7.8', 'backup:download').allowed).toBe(true);
+	expect(checkRateLimit('1.2.3.4', 'login').allowed).toBe(false);
+});
+
+test('resetRateLimit by ip and route removes only the exact bucket (IPv6 + colon route)', () => {
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('2001:db8::1', 'backup:download');
+	for (let i = 0; i < DEFAULT_MAX_ATTEMPTS; i++) checkRateLimit('2001:db8::1', 'login');
+	expect(checkRateLimit('2001:db8::1', 'backup:download').allowed).toBe(false);
+
+	resetRateLimit('2001:db8::1', 'backup:download');
+
+	expect(checkRateLimit('2001:db8::1', 'backup:download').allowed).toBe(true);
+	expect(checkRateLimit('2001:db8::1', 'login').allowed).toBe(false);
+});
+
+test('checkRateLimit and resetRateLimit never call JSON.parse', () => {
+	const spy = vi.spyOn(JSON, 'parse');
+	try {
+		checkRateLimit('1.2.3.4', 'login');
+		checkRateLimit('2001:db8::1', 'backup:download');
+		resetRateLimit('1.2.3.4');
+		resetRateLimit(undefined, 'backup:download');
+		resetRateLimit('2001:db8::1', 'backup:download');
+		expect(spy).not.toHaveBeenCalled();
+	} finally {
+		spy.mockRestore();
+	}
 });
 
 test('pruneExpiredRateLimit removes only expired buckets and reports the count', async () => {

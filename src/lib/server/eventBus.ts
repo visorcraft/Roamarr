@@ -108,6 +108,14 @@ export function currentTripRev(tripId: number): number {
 	return tripRevs.get(tripId) ?? 0;
 }
 
+/**
+ * Drop a trip's revision entry entirely (e.g. when the trip is deleted).
+ * Without this, the map would grow without bound over the process lifetime.
+ */
+export function clearTripRev(tripId: number): void {
+	tripRevs.delete(tripId);
+}
+
 /** Open-stream counts. Exported for tests/diagnostics. */
 export function streamCounts(): { total: number; perUser: ReadonlyMap<number, number> } {
 	return { total: totalStreams, perUser: streamsPerUser };

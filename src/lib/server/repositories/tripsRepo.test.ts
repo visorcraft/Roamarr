@@ -11,7 +11,7 @@ vi.mock('$lib/server/db', async () => {
 import { eq, type KitDatabase } from '@visorcraft/mongreldb-kit';
 import * as tripsRepo from './tripsRepo';
 import * as usersRepo from './usersRepo';
-import { subscribeUser } from '../eventBus';
+import { subscribeUser, publishTripChanged, currentTripRev } from '../eventBus';
 import { canView } from '$lib/server/sharing';
 import {
 	users,
@@ -69,6 +69,18 @@ test('CRUD trips', () => {
 	tripsRepo.deleteTrip(t.id);
 	expect(tripsRepo.getTripById(t.id)).toBeNull();
 	expect(kit.selectFrom(trips).where(eq(trips.id, BigInt(t.id))).executeSync()[0]).toBeUndefined();
+});
+
+test('deleteTrip clears the trip revision entry', () => {
+	const owner = makeUser('owner-rev@x.c');
+	const t = makeTrip(owner.id, 'Tokyo');
+	publishTripChanged(t.id);
+	publishTripChanged(t.id);
+	expect(currentTripRev(t.id)).toBe(2);
+
+	tripsRepo.deleteTrip(t.id);
+
+	expect(currentTripRev(t.id)).toBe(0);
 });
 
 test('listTripsForUser and getTripById see every owned trip (fullscan-safe)', () => {

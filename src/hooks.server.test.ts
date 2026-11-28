@@ -112,6 +112,64 @@ test('allows Bearer-authenticated multipart API uploads without matching Origin'
 	expect(isForbiddenCrossSiteForm(multiport('/api/mobile/trips/1/poster'), url)).toBe(true);
 });
 
+test('blocks cross-site application/json unsafe requests (mismatched Origin or Sec-Fetch-Site)', () => {
+	const json = (method: string, headers: Record<string, string>) =>
+		new Request('https://roamarr.example/api/cards', {
+			method,
+			headers: { 'content-type': 'application/json', ...headers }
+		});
+	const url = new URL('https://roamarr.example/api/cards');
+	for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+		// Mismatched Origin
+		expect(
+			isForbiddenCrossSiteForm(json(method, { origin: 'https://evil.example' }), url)
+		).toBe(true);
+		// Sec-Fetch-Site: cross-site (no Origin)
+		expect(
+			isForbiddenCrossSiteForm(json(method, { 'sec-fetch-site': 'cross-site' }), url)
+		).toBe(true);
+	}
+});
+
+test('allows same-origin application/json POST and JSON POST without Origin/Sec-Fetch-Site', () => {
+	const json = (headers: Record<string, string>) =>
+		new Request('https://roamarr.example/api/cards', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', ...headers }
+		});
+	const url = new URL('https://roamarr.example/api/cards');
+	expect(isForbiddenCrossSiteForm(json({ origin: 'https://roamarr.example' }), url)).toBe(false);
+	expect(isForbiddenCrossSiteForm(json({}), url)).toBe(false);
+});
+
+test('allows Bearer- and X-Api-Token-authenticated JSON POSTs with cross-site headers', () => {
+	const json = (headers: Record<string, string>) =>
+		new Request('https://roamarr.example/api/cards', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', ...headers }
+		});
+	const url = new URL('https://roamarr.example/api/cards');
+	const cases: Array<Record<string, string>> = [
+		{ authorization: 'Bearer tok', origin: 'https://evil.example' },
+		{ authorization: 'Bearer tok', 'sec-fetch-site': 'cross-site' },
+		{ 'x-api-token': 'rk_x', origin: 'https://evil.example' },
+		{ 'x-api-token': 'rk_x', 'sec-fetch-site': 'cross-site' }
+	];
+	for (const headers of cases) {
+		expect(isForbiddenCrossSiteForm(json(headers), url)).toBe(false);
+	}
+});
+
+test('allows POST /oauth/register with cross-origin Origin and application/json', () => {
+	const request = new Request('https://roamarr.example/oauth/register', {
+		method: 'POST',
+		headers: { 'content-type': 'application/json', origin: 'https://evil.example' }
+	});
+	expect(
+		isForbiddenCrossSiteForm(request, new URL('https://roamarr.example/oauth/register'))
+	).toBe(false);
+});
+
 test('maps mobile API methods to least-privilege scopes', () => {
 	expect(requiredApiScope('/api/cards', 'GET')).toBe('cards:read');
 	expect(requiredApiScope('/api/cards/3', 'DELETE')).toBe('cards:write');

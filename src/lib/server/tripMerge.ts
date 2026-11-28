@@ -10,7 +10,7 @@ import {
 import { requireOwnedTrip } from './ownership';
 import * as tripsRepo from './repositories/tripsRepo';
 import { logAudit } from './audit';
-import { publishSharesChanged, publishTripChanged } from './eventBus';
+import { publishSharesChanged, publishTripChanged, clearTripRev } from './eventBus';
 import { scheduleIndexTrip, scheduleRemoveTrip } from './embeddings/search';
 
 function moveCompanionReferences(donorKey: bigint, from: bigint, to: bigint): void {
@@ -177,6 +177,7 @@ export function mergeTrips(ownerId: number, donorId: number, recipientId: number
 
 	publishTripChanged(recipientId);
 	publishTripChanged(donorId);
+	clearTripRev(donorId);
 	if (affectedUserIds.size > 0) publishSharesChanged(affectedUserIds);
 	scheduleIndexTrip(recipientId);
 	scheduleRemoveTrip(donorId);

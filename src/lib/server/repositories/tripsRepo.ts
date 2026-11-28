@@ -12,7 +12,7 @@ import {
 	reminders
 } from '$lib/server/db/mongrelSchema';
 import type { Row, Insert, Update } from '@visorcraft/mongreldb-kit';
-import { publishSharesChanged, publishTripChanged } from '$lib/server/eventBus';
+import { publishSharesChanged, publishTripChanged, clearTripRev } from '$lib/server/eventBus';
 import { toBigInt as kitId, idFromBigInt as num } from './kitHelpers';
 
 export type KitTrip = Row<typeof trips>;
@@ -294,6 +294,7 @@ export function deleteTrip(id: number): number {
 	const deleted = kit.deleteFrom(trips).where(kitEq(trips.id, kitId(id))).executeSync();
 	if (Number(deleted) > 0) {
 		publishTripChanged(id);
+		clearTripRev(id);
 		void import('$lib/server/embeddings/index')
 			.then((m) => {
 				m.removeTripSearchDocuments(id);

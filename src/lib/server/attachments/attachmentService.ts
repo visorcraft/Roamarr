@@ -34,22 +34,84 @@ export function isGpxFile(file: File): boolean {
 }
 
 /**
- * Content sniff for GPX: after an optional BOM and XML declaration, the root
- * tag must be <gpx>. This rejects HTML or arbitrary XML renamed to .gpx, which
- * matters anywhere a file could otherwise be served with an XML/HTML type.
+ * Content sniff for GPX: after an optional BOM, XML declaration, and XML
+ * comments, the root tag must be <gpx>. This rejects HTML or arbitrary XML
+ * renamed to .gpx, which matters anywhere a file could otherwise be served
+ * with an XML/HTML type. Only the first/last 4096 bytes are read: the whole
+ * file is never loaded into memory.
+ *
+ * Tightened beyond the bare root-tag sniff:
+ *  - rejects DOCTYPE/ENTITY in the head (blocks XXE / DTD entity expansion),
+ *  - rejects <script> in the head or tail (blocks polyglot script payloads),
+ *  - requires the root opening tag's closing `>` within the head,
+ *  - requires the root element to be closed: either the opening tag is
+ *    self-closing (<gpx ... />), or the tail (stripped of trailing whitespace
+ *    and trailing XML comments) ends with </gpx>.
  */
 async function validateGpxContent(file: File): Promise<void> {
 	const head = new TextDecoder().decode(await file.slice(0, 4096).arrayBuffer());
+	const tail = new TextDecoder().decode(
+		await file.slice(Math.max(0, file.size - 4096)).arrayBuffer()
+	);
+
+	const reject = () => {
+		throw error(400, 'File content does not match its extension/content type');
+	};
+
+	// Block XXE / DTD entity expansion anywhere in the head.
+	if (/<!DOCTYPE/i.test(head) || /<!ENTITY/i.test(head)) reject();
+	// Block script payloads in either end of the file.
+	if (/<script/i.test(head) || /<script/i.test(tail)) reject();
+
 	let s = head;
 	if (s.charCodeAt(0) === 0xfeff) s = s.slice(1); // strip UTF-8 BOM
 	s = s.trimStart();
 	if (s.startsWith('<?xml')) {
 		const end = s.indexOf('?>');
-		if (end === -1) throw error(400, 'File content does not match its extension/content type');
+		if (end === -1) reject();
 		s = s.slice(end + 2).trimStart();
 	}
-	if (!s.startsWith('<gpx') || !'/> \t\r\n'.includes(s.charAt(4))) {
-		throw error(400, 'File content does not match its extension/content type');
+	// Strip XML comments before the root element.
+	for (;;) {
+		if (!s.startsWith('<!--')) break;
+		const end = s.indexOf('-->');
+		if (end === -1) reject();
+		s = s.slice(end + 3).trimStart();
+	}
+
+	if (!s.startsWith('<gpx') || !'/> \t\r\n'.includes(s.charAt(4))) reject();
+
+	// The root opening tag must close within the head. Track quotes so a `>`
+	// inside an attribute value is not mistaken for the tag boundary.
+	let gt = -1;
+	let quote: string | null = null;
+	for (let i = 4; i < s.length; i++) {
+		const ch = s[i];
+		if (quote) {
+			if (ch === quote) quote = null;
+		} else if (ch === '"' || ch === "'") {
+			quote = ch;
+		} else if (ch === '>') {
+			gt = i;
+			break;
+		}
+	}
+	if (gt === -1) reject();
+
+	const openingTag = s.slice(0, gt + 1);
+	const isSelfClosing = openingTag.trimEnd().endsWith('/>');
+
+	if (!isSelfClosing) {
+		// Non-self-closing root: tail (minus trailing whitespace/comments)
+		// must end with </gpx>.
+		let t = tail.trimEnd();
+		for (;;) {
+			if (!t.endsWith('-->')) break;
+			const start = t.lastIndexOf('<!--');
+			if (start === -1) break;
+			t = t.slice(0, start).trimEnd();
+		}
+		if (!t.endsWith('</gpx>')) reject();
 	}
 }
 

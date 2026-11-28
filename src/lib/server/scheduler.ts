@@ -9,6 +9,8 @@ import { pruneExpiredRateLimit } from './rateLimit';
 import { pruneExpiredShareWindow } from './emergencyContacts';
 import { pollDueInboxes } from './emailProcessing';
 import { runAutoBackupIfDue } from './autoBackup';
+import { sweepStaleStagingFiles } from './attachments/attachmentStorage';
+import { getAttachmentsPath } from './paths';
 import { kit } from './db';
 import {
 	startSchedulerRun,
@@ -36,9 +38,14 @@ export const SCHEDULER_JOB_DEADLINE_MS = 20_000;
 const COMPACT_INTERVAL_MS = 60 * 60_000;
 let lastCompactAt = 0;
 
+/** Sweep stale `.staging` attachment orphans at most this often. */
+const STAGING_SWEEP_INTERVAL_MS = 60 * 60_000;
+let lastStagingSweepAt = 0;
+
 /** Test hook: reset module-level scheduler state between tests. */
 export function resetSchedulerStateForTests() {
 	lastCompactAt = 0;
+	lastStagingSweepAt = 0;
 }
 
 /** Race a promise against a deadline; clears its timer once settled (no leaks). */
@@ -233,6 +240,16 @@ export async function runTick(
 			await compactTablesYielding();
 		} catch (e) {
 			console.error('[scheduler] compact failed', e);
+		}
+	}
+	// Hourly sweep of orphaned `.staging` attachment files. Runs in the
+	// post-jobs maintenance section so a sweep failure never fails the tick.
+	if (now.getTime() - lastStagingSweepAt >= STAGING_SWEEP_INTERVAL_MS) {
+		lastStagingSweepAt = now.getTime();
+		try {
+			await sweepStaleStagingFiles(getAttachmentsPath(), { now: now.getTime() });
+		} catch (e) {
+			console.error('[scheduler] staging sweep failed', e);
 		}
 	}
 

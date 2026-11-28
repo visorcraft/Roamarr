@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -7,7 +7,9 @@ import {
 	commitAttachment,
 	readEncryptedAttachmentStream,
 	deleteEncryptedAttachment,
-	attachmentPath
+	attachmentPath,
+	sweepStaleStagingFiles,
+	STAGING_ORPHAN_MAX_AGE_MS
 } from './attachmentStorage';
 import { streamToBuffer } from '../../../../tests/helpers';
 
@@ -71,5 +73,44 @@ describe('attachmentStorage', () => {
 	test('attachmentPath rejects invalid storage keys', () => {
 		expect(() => attachmentPath('../../../etc/passwd', dir)).toThrow('invalid attachment storage key');
 		expect(() => attachmentPath('not-a-uuid', dir)).toThrow('invalid attachment storage key');
+	});
+
+	test('sweepStaleStagingFiles deletes stale .staging files in sharded subdirs', async () => {
+		const staleDir = path.join(dir, 'ab', 'cd');
+		mkdirSync(staleDir, { recursive: true });
+		const staleStaging = path.join(staleDir, 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.staging');
+		writeFileSync(staleStaging, 'x');
+		const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+		utimesSync(staleStaging, old, old);
+
+		const now = Date.now();
+		const removed = await sweepStaleStagingFiles(dir, { now });
+
+		expect(removed).toBe(1);
+		expect(existsSync(staleStaging)).toBe(false);
+	});
+
+	test('sweepStaleStagingFiles leaves fresh .staging and committed ciphertext files untouched', async () => {
+		const freshDir = path.join(dir, 'ef', 'gh');
+		mkdirSync(freshDir, { recursive: true });
+		const freshStaging = path.join(freshDir, 'fresh.staging');
+		const committed = path.join(freshDir, 'committed');
+		writeFileSync(freshStaging, 'x');
+		writeFileSync(committed, 'x');
+
+		const removed = await sweepStaleStagingFiles(dir, { now: Date.now() });
+
+		expect(removed).toBe(0);
+		expect(existsSync(freshStaging)).toBe(true);
+		expect(existsSync(committed)).toBe(true);
+	});
+
+	test('sweepStaleStagingFiles returns 0 when baseDir does not exist', async () => {
+		const removed = await sweepStaleStagingFiles(path.join(dir, 'does-not-exist'));
+		expect(removed).toBe(0);
+	});
+
+	test('STAGING_ORPHAN_MAX_AGE_MS is one hour', () => {
+		expect(STAGING_ORPHAN_MAX_AGE_MS).toBe(60 * 60_000);
 	});
 });

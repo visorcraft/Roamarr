@@ -17,7 +17,7 @@ import {
 	addExpense,
 	deleteExpense
 } from './tripExpenses';
-import { tripExpenses, auditLogs } from './db/mongrelSchema';
+import { tripExpenses, tripCompanions, auditLogs } from './db/mongrelSchema';
 import { eq, and } from '@visorcraft/mongreldb-kit';
 import { makeSyncedUser, makeSyncedTrip, makeSyncedCompanion } from '../../../tests/helpers';
 import { makeActionEvent } from '../../../tests/eventHelpers';
@@ -474,4 +474,77 @@ test('addExpense action rejects a non-positive exchange rate', async () => {
 	);
 	expect(result).toMatchObject({ status: 400 });
 	expect(result.data.errors.exchangeRate).toBeDefined();
+});
+
+test('summarizeTripExpenses and computeSettlement tolerate a stale paidByCompanionId', () => {
+	const u = makeSyncedUser(kit, { email: 'stale-payer@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
+
+	addTripExpense(u.id, t.id, {
+		description: 'Dinner',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: a.id,
+		splitAmong: ['owner']
+	});
+
+	// Simulate a stale/missing paidByCompanionId: the expense references a
+	// companion id that matches no companion (e.g. legacy or unmatched row).
+	const staleId = a.id + 1000;
+	const [listed] = listTripExpenses(t.id);
+	const stale = { ...listed, paidByCompanionId: staleId, paidBy: staleId };
+
+	const summary = summarizeTripExpenses([stale], []);
+	const balances = summary.balancesByCurrency.USD;
+	expect(Number.isFinite(balances[staleId])).toBe(true);
+	expect(Number.isInteger(balances[staleId])).toBe(true);
+	expect(balances[staleId]).toBe(10000);
+	expect(Number.isFinite(balances.owner)).toBe(true);
+	expect(balances.owner).toBe(-10000);
+
+	const settlement = computeSettlement([stale], []);
+	const balance = settlement.USD.balances.find((b) => b.companionId === staleId);
+	expect(balance).toBeDefined();
+	expect(balance!.name).toBe('Unknown');
+	expect(balance!.net).toBe(10000);
+	const netSum = settlement.USD.balances.reduce((sum, b) => sum + b.net, 0);
+	expect(netSum).toBe(0);
+	expect(settlement.USD.payments).toEqual([{ from: 'owner', to: staleId, amount: 10000 }]);
+});
+
+test('summarizeTripExpenses and computeSettlement tolerate a stale splitAmong companion', () => {
+	const u = makeSyncedUser(kit, { email: 'stale-split@x.c', passwordHash: 'x', displayName: 'U' });
+	const t = makeSyncedTrip(kit, { ownerId: u.id, name: 'T' });
+	const a = makeSyncedCompanion(kit, { tripId: t.id, name: 'A', category: 'adult' });
+
+	addTripExpense(u.id, t.id, {
+		description: 'Taxi',
+		amount: 10000,
+		currency: 'USD',
+		paidByCompanionId: null,
+		splitAmong: [a.id]
+	});
+
+	// Delete the companion row so the expense references a stale/missing id.
+	kit.deleteFrom(tripCompanions).where(eq(tripCompanions.id, BigInt(a.id))).executeSync();
+
+	const expenses = listTripExpenses(t.id);
+	expect(expenses).toHaveLength(1);
+
+	const summary = summarizeTripExpenses(expenses, []);
+	const balances = summary.balancesByCurrency.USD;
+	expect(Number.isFinite(balances[a.id])).toBe(true);
+	expect(Number.isInteger(balances[a.id])).toBe(true);
+	expect(balances[a.id]).toBe(-10000);
+	expect(balances.owner).toBe(10000);
+
+	const settlement = computeSettlement(expenses, []);
+	const balance = settlement.USD.balances.find((b) => b.companionId === a.id);
+	expect(balance).toBeDefined();
+	expect(balance!.name).toBe('Unknown');
+	expect(balance!.net).toBe(-10000);
+	const netSum = settlement.USD.balances.reduce((sum, b) => sum + b.net, 0);
+	expect(netSum).toBe(0);
+	expect(settlement.USD.payments).toEqual([{ from: a.id, to: 'owner', amount: 10000 }]);
 });

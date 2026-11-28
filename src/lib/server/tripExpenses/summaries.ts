@@ -20,7 +20,7 @@ export function summarizeTripExpenses(
 		}
 
 		const payer: 'owner' | number = e.paidByCompanionId ?? 'owner';
-		balancesByCurrency[e.currency][payer] += e.amount;
+		balancesByCurrency[e.currency][payer] = (balancesByCurrency[e.currency][payer] ?? 0) + e.amount;
 
 		const splitPeople: Array<'owner' | number> =
 			e.splitAmong.length > 0 ? e.splitAmong : [payer];
@@ -31,7 +31,7 @@ export function summarizeTripExpenses(
 		for (let i = 0; i < splitPeople.length; i++) {
 			const person = splitPeople[i];
 			const share = baseShare + (i < remainder ? 1 : 0);
-			balancesByCurrency[e.currency][person] -= share;
+			balancesByCurrency[e.currency][person] = (balancesByCurrency[e.currency][person] ?? 0) - share;
 		}
 	}
 
